@@ -1,0 +1,140 @@
+name: Automatic SEO Analysis
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  seo-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout website
+        uses: actions/checkout@v4
+
+      - name: Checkout SEO AI Models
+        uses: actions/checkout@v4
+        with:
+          repository: Andrew821667/seo-ai-models
+          path: seo-tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd seo-tools
+          pip install -e .
+          pip install playwright beautifulsoup4 lxml tiktoken openai
+          python -m playwright install chromium
+
+      - name: Run SEO analysis
+        run: |
+          mkdir -p seo-reports
+          pip install requests
+          python .github/workflows/analyze_seo.py
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-analysis-report
+          path: seo-reports/
+          retention-days: 90
+
+      - name: Display Summary
+        run: |
+          echo "📊 SEO Analysis Summary:"
+          cat seo-reports/SUMMARY.md
+
+      - name: Create Summary Issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Проверяем наличие файлов
+            if (!fs.existsSync('seo-reports/SUMMARY.md')) {
+              console.log('⚠️ SUMMARY.md не найден, пропускаем создание issues');
+              return;
+            }
+
+            const summary = fs.readFileSync('seo-reports/SUMMARY.md', 'utf8');
+
+            // Читаем JSON отчет для детальных данных
+            const reportFiles = fs.readdirSync('seo-reports').filter(f => f.endsWith('.json'));
+
+            if (reportFiles.length === 0) {
+              console.log('⚠️ JSON отчеты не найдены, создаем issue только с summary');
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `❌ SEO Analysis Failed - ${new Date().toISOString().split('T')[0]}`,
+                body: `${summary}\n\n---\n\n**Status:** Analysis failed to complete\n\n[Check logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+                labels: ['seo', 'error', 'automated']
+              });
+              return;
+            }
+
+            const reportData = JSON.parse(fs.readFileSync(`seo-reports/${reportFiles[0]}`, 'utf8'));
+
+            // Создаем основной issue с summary
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `📊 SEO Report ${new Date().toISOString().split('T')[0]} - Score: ${reportData.overall_score}/100`,
+              body: `${summary}\n\n---\n\n**Predicted Position:** ${reportData.predicted_position}\n**Readability:** ${reportData.seo_analysis.content_metrics.readability * 100}/100\n**E-E-A-T Score:** ${(reportData.seo_analysis.content_metrics.overall_eeat_score * 100).toFixed(0)}/100\n\n[Download full report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['seo', 'report', 'automated']
+            });
+
+      - name: Create Priority Issues
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Проверяем наличие JSON отчетов
+            if (!fs.existsSync('seo-reports')) {
+              console.log('⚠️ Директория seo-reports не найдена, пропускаем');
+              return;
+            }
+
+            const reportFiles = fs.readdirSync('seo-reports').filter(f => f.endsWith('.json'));
+
+            if (reportFiles.length === 0) {
+              console.log('⚠️ JSON отчеты не найдены, пропускаем создание priority issues');
+              return;
+            }
+
+            const reportData = JSON.parse(fs.readFileSync(`seo-reports/${reportFiles[0]}`, 'utf8'));
+
+            // Проверяем наличие priorities
+            if (!reportData.seo_analysis || !reportData.seo_analysis.priorities || reportData.seo_analysis.priorities.length === 0) {
+              console.log('⚠️ Приоритетные задачи не найдены, пропускаем');
+              return;
+            }
+
+            // Берем топ-5 приоритетных задач
+            const topTasks = reportData.seo_analysis.priorities.slice(0, 5);
+
+            for (const task of topTasks) {
+              let label = 'seo-medium';
+              if (task.priority_score >= 0.7) {
+                label = 'seo-critical';
+              } else if (task.priority_score >= 0.5) {
+                label = 'seo-high';
+              }
+
+              const body = `**Priority Score:** ${task.priority_score.toFixed(2)}\n**Impact:** ${task.impact.toFixed(2)}\n**Effort:** ${task.effort.toFixed(2)}\n\n**Feature:** ${task.feature}\n\n---\n\n*Автоматически создано из SEO анализа ${new Date().toISOString().split('T')[0]}*`;
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[SEO] ${task.task}`,
+                body: body,
+                labels: ['seo', 'improvement', label, 'automated']
+              });
+            }

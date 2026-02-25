@@ -1,0 +1,23 @@
+[Unit]
+Description=Legal AI Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/legal-ai-bot
+Environment="PATH=/opt/legal-ai-bot/venv/bin"
+ExecStart=/opt/legal-ai-bot/venv/bin/python3 /opt/legal-ai-bot/bot.py
+Restart=always
+RestartSec=10
+
+# Логирование
+StandardOutput=journal
+StandardError=journal
+
+# Безопасность
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

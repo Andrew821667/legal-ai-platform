@@ -1,0 +1,224 @@
+version: "3.8"
+
+# Production Docker Compose для 2GB RAM сервера
+# Оптимизирован для 3 запусков в день через cron (09:00, 14:00, 18:00 MSK)
+# Базовое потребление памяти: ~600-800 MB
+# Пиковое (с celery worker): ~1.2-1.5 GB
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: legal_ai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-legal_ai_news}
+      POSTGRES_USER: ${POSTGRES_USER:-legal_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=ru_RU.UTF-8"
+      # Оптимизация для 2GB RAM
+      POSTGRES_SHARED_BUFFERS: "64MB"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "256MB"
+      POSTGRES_WORK_MEM: "4MB"
+      POSTGRES_MAINTENANCE_WORK_MEM: "32MB"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legal_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 150M  # Жесткий лимит
+        reservations:
+          memory: 100M  # Минимум
+
+  # Redis Cache/Queue
+  redis:
+    image: redis:7-alpine
+    container_name: legal_ai_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 80mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.7.3
+    container_name: legal_ai_qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: 32
+      QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS: 1
+      QDRANT__STORAGE__PERFORMANCE__OPTIMIZER_CPU_BUDGET: 1
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+
+  # FastAPI Backend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: legal_ai_app:production
+    container_name: legal_ai_app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-legal_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-legal_ai_news}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - DEBUG=${DEBUG:-False}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_ADMIN_ID=${TELEGRAM_ADMIN_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+      - PYTHON_GC_THRESHOLD=700,10,10  # Агрессивная GC для экономии памяти
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: python -m app.main
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+        reservations:
+          memory: 150M
+
+  # Telegram Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: legal_ai_bot:production
+    container_name: legal_ai_bot
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-legal_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-legal_ai_news}
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_ADMIN_ID=${TELEGRAM_ADMIN_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+      - PYTHON_GC_THRESHOLD=700,10,10
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./telegram_bot.session:/app/telegram_bot.session
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m app.bot.handlers
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+        reservations:
+          memory: 150M
+
+  # Celery Worker (on-demand, запускается через cron)
+  # НЕ запускается автоматически, только по требованию
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: legal_ai_celery:production
+    container_name: legal_ai_celery_worker
+    restart: "no"  # Не перезапускать автоматически
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-legal_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-legal_ai_news}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - TELEGRAM_ADMIN_ID=${TELEGRAM_ADMIN_ID}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+      - PERPLEXITY_SEARCH_ENABLED=${PERPLEXITY_SEARCH_ENABLED:-true}
+      - TELEGRAM_FETCH_ENABLED=${TELEGRAM_FETCH_ENABLED:-true}
+      - PYTHON_GC_THRESHOLD=500,5,5  # Еще более агрессивная GC для worker
+      - MALLOC_TRIM_THRESHOLD_=100000  # Освобождать память агрессивно
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./telegram_bot.session:/app/telegram_bot.session
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_tasks inspect ping -d celery@$$HOSTNAME"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    command: celery -A app.tasks.celery_tasks worker --pool=threads --concurrency=1 --loglevel=info --max-tasks-per-child=3
+    deploy:
+      resources:
+        limits:
+          memory: 400M  # Максимум для worker
+        reservations:
+          memory: 200M
+
+volumes:
+  postgres_data:
+    driver: local
+  qdrant_data:
+    driver: local
