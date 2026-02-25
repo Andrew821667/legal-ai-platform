@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Demo Login - Contract AI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: linear-gradient(135deg, #0ea5e9, #d946ef);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .quick-fill {
+            background: #6b7280;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        .info {
+            background: #e0e7ff;
+            border: 1px solid #6366f1;
+            color: #3730a3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        pre {
+            background: #f9fafb;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .credentials-box {
+            background: #fffbeb;
+            border: 1px solid #f59e0b;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .credentials-box h3 {
+            margin-top: 0;
+            color: #92400e;
+        }
+        .credentials-box code {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Demo Login Logic</h1>
+
+        <div class="info">
+            <strong>📝 Test Purpose:</strong> This page tests the exact same login logic used in the Contract AI login page.
+            It checks if demo credentials work correctly without any React/Next.js complexity.
+        </div>
+
+        <div class="credentials-box">
+            <h3>✅ Valid Demo Credentials:</h3>
+            <ul>
+                <li><code>demo@example.com</code> / <code>demo123</code></li>
+                <li><code>admin@example.com</code> / <code>admin123</code></li>
+                <li><code>lawyer@example.com</code> / <code>lawyer123</code></li>
+                <li><code>junior@example.com</code> / <code>junior123</code></li>
+            </ul>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" placeholder="demo@example.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="demo123" required>
+            </div>
+
+            <button type="submit">🔐 Test Login</button>
+            <button type="button" class="quick-fill" onclick="fillDemo()">Quick Fill (demo)</button>
+            <button type="button" class="quick-fill" onclick="fillAdmin()">Quick Fill (admin)</button>
+        </form>
+
+        <div id="result" class="result"></div>
+
+        <div style="margin-top: 30px;">
+            <h3>🔍 Debug Info:</h3>
+            <pre id="debugInfo"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Exact same demo credentials from login/page.tsx
+        const demoCredentials = [
+            { email: 'demo@example.com', password: 'demo123', name: 'Demo User', role: 'demo' },
+            { email: 'admin@example.com', password: 'admin123', name: 'Admin User', role: 'admin' },
+            { email: 'lawyer@example.com', password: 'lawyer123', name: 'Lawyer User', role: 'lawyer' },
+            { email: 'junior@example.com', password: 'junior123', name: 'Junior Lawyer', role: 'junior_lawyer' },
+        ];
+
+        function fillDemo() {
+            document.getElementById('email').value = 'demo@example.com';
+            document.getElementById('password').value = 'demo123';
+        }
+
+        function fillAdmin() {
+            document.getElementById('email').value = 'admin@example.com';
+            document.getElementById('password').value = 'admin123';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            const debugDiv = document.getElementById('debugInfo');
+
+            // Clear previous results
+            resultDiv.style.display = 'none';
+            resultDiv.className = 'result';
+
+            // Build debug info
+            const debugInfo = {
+                input_email: email,
+                input_password: password,
+                credentials_checked: demoCredentials.map(c => c.email),
+                timestamp: new Date().toISOString()
+            };
+
+            // Exact same logic from login/page.tsx lines 28-30
+            const demoUser = demoCredentials.find(
+                u => u.email === email && u.password === password
+            );
+
+            debugInfo.match_found = !!demoUser;
+            debugInfo.matched_user = demoUser || null;
+
+            // Display result
+            if (demoUser) {
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h3>✅ SUCCESS!</h3>
+                    <p><strong>Welcome, ${demoUser.name}!</strong></p>
+                    <p>Role: <code>${demoUser.role}</code></p>
+                    <p>Email: <code>${demoUser.email}</code></p>
+                    <p><strong>🎉 Demo credentials matched successfully!</strong></p>
+                    <p>In the real app, you would now be redirected to the dashboard with a fake token stored in localStorage.</p>
+                `;
+                resultDiv.style.display = 'block';
+
+                // Simulate localStorage (show what would be stored)
+                const fakeToken = 'demo_token_' + Date.now();
+                const fakeUser = {
+                    name: demoUser.name,
+                    email: demoUser.email,
+                    role: demoUser.role
+                };
+
+                debugInfo.would_store = {
+                    access_token: fakeToken,
+                    user: fakeUser
+                };
+                debugInfo.would_redirect_to = '/dashboard';
+
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ FAILED</h3>
+                    <p>No demo user found matching these credentials.</p>
+                    <p>In the real app, this would try the backend API next.</p>
+                `;
+                resultDiv.style.display = 'block';
+
+                debugInfo.error = 'No matching demo credentials';
+            }
+
+            // Display debug info
+            debugDiv.textContent = JSON.stringify(debugInfo, null, 2);
+        });
+
+        // Show initial debug info
+        document.getElementById('debugInfo').textContent = JSON.stringify({
+            demo_credentials_loaded: demoCredentials.length,
+            available_emails: demoCredentials.map(c => c.email),
+            test_ready: true
+        }, null, 2);
+    </script>
+</body>
+</html>

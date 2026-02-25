@@ -1,0 +1,145 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Credentials
+CREDENTIALS.txt
+
+# Process IDs
+.backend.pid
+.frontend.pid
+.admin.pid
+
+# Data directories (A>45@60B ?>;L7>20B5;LA:85 D09;K)
+data/uploads/*
+data/normalized/*
+data/reports/*
+data/exports/*
+!data/uploads/.gitkeep
+!data/normalized/.gitkeep
+!data/reports/.gitkeep
+!data/exports/.gitkeep
+
+# Templates (A>E@0=O5< 2 git B>;L:> ?@8<5@K)
+data/templates/*
+!data/templates/.gitkeep
+!data/templates/example_*.xml
+
+# ChromaDB
+chroma_data/
+*.chroma
+
+# ML Models (generated during training/testing)
+models/
+*.pkl
+
+# Generated Reports
+reports/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Redis
+dump.rdb
+
+# OS
+Thumbs.db
+
+# Streamlit logs
+streamlit.log
+streamlit_error.log
+
+# Temporary development files
+add_*.py
+fix_*.py
+update_*.py
+switch_*.py
+demo_*.py
+create_*.py
+test_batch_*.py
+test_quick*.py
+test_clause_*.py
+test_real_*.py
+test_llm_basic*.py
+test_model_*.py
+*.bak
+*.bak2
+*.bak3
+*.tmp
+
+# Test data (contracts)
+data/contracts/*.pdf
+data/contracts/*.docx
+data/contracts/*.doc
+
+# Temporary MD files
+СРОЧНО_*.md
+ПРОБЛЕМА_*.md
+РЕШЕНИЕ_*.md
+ФИНАЛЬНАЯ_*.md
+ИСПРАВЛЕНИЕ_*.md
+КРИТИЧЕСКИЕ_*.md
+
+# Next.js Frontend
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/next-env.d.ts
+frontend/.next
+frontend/build
+create_test_users.py

@@ -1,0 +1,45 @@
+#!/bin/bash
+# Скрипт остановки админ-панели Contract AI System
+
+echo "⏹️ Остановка Contract AI System Admin Panel..."
+echo "================================================"
+
+# Находим и останавливаем все процессы Streamlit
+PIDS=$(ps aux | grep 'streamlit run' | grep -v grep | awk '{print $2}')
+
+if [ -z "$PIDS" ]; then
+    echo "ℹ️ Процессы Streamlit не найдены (возможно, уже остановлены)"
+else
+    echo "🔍 Найдены процессы Streamlit: $PIDS"
+
+    for PID in $PIDS; do
+        echo "⏹️ Останавливаю процесс $PID..."
+        kill $PID 2>/dev/null
+
+        # Ждем 2 секунды
+        sleep 2
+
+        # Проверяем, завершился ли процесс
+        if ps -p $PID > /dev/null 2>&1; then
+            echo "⚠️ Процесс $PID не завершился, принудительная остановка..."
+            kill -9 $PID 2>/dev/null
+        fi
+    done
+
+    echo "✅ Все процессы Streamlit остановлены"
+fi
+
+# Также останавливаем связанные Python процессы
+PYTHON_PIDS=$(ps aux | grep 'python.*streamlit' | grep -v grep | awk '{print $2}')
+
+if [ ! -z "$PYTHON_PIDS" ]; then
+    echo "🔍 Останавливаю связанные Python процессы..."
+    for PID in $PYTHON_PIDS; do
+        kill $PID 2>/dev/null
+    done
+fi
+
+echo "================================================"
+echo "✅ Остановка завершена"
+echo ""
+read -p "Нажмите Enter для закрытия окна..."
