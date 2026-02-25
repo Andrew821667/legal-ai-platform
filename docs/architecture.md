@@ -36,6 +36,9 @@
 - Claim-паттерн через `FOR UPDATE SKIP LOCKED`:
   - `POST /api/v1/contract-jobs/claim`
   - `POST /api/v1/scheduled-posts/claim`
+- Для `scheduled_posts` поддерживается retry `failed` (с cooldown) и reset stale `publishing`.
+- `news.generate` применяет антидублирование: по `source_url/source_hash` и по семантической похожести текста.
+- Генерация контента проходит quality-gate (обязательные секции и фактура); при провале используется fallback-шаблон.
 - JSON-логирование во всех Python-сервисах.
 - Telegram-алерты для проблем healthcheck и 500 ошибок Core API.
 

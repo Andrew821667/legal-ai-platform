@@ -6,6 +6,8 @@ dependencies = [
     "shared",
     "requests>=2.32",
     "pydantic-settings>=2.7",
+    "openai>=1.0.0",
+    "feedparser>=6.0.11",
 ]
 
 [tool.uv.sources]

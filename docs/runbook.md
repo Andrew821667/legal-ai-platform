@@ -39,11 +39,17 @@ make deploy
 ```cron
 30 23 * * * /opt/legal-ai/infra/scripts/cron_news_generate.sh >> /var/log/news-gen.log 2>&1
 */5 * * * * /opt/legal-ai/infra/scripts/cron_news_publish.sh >> /var/log/news-pub.log 2>&1
+*/10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_posts.sh >> /var/log/stale-posts.log 2>&1
 */5 * * * * /opt/legal-ai/infra/scripts/healthcheck.sh >> /var/log/healthcheck.log 2>&1
 */10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_jobs.sh >> /var/log/stale-jobs.log 2>&1
 */15 * * * * /opt/legal-ai/infra/scripts/disk_monitor.sh
 0 3 * * * /opt/legal-ai/infra/scripts/backup_postgres.sh >> /var/log/backup.log 2>&1
 0 4 * * * /opt/legal-ai/infra/scripts/cron_cleanup_idempotency.sh >> /var/log/cleanup.log 2>&1
+```
+
+Ручная проверка генерации без записи в БД:
+```bash
+uv run --package news python -m news.generate --dry-run --limit 5
 ```
 
 ## Backup/Restore

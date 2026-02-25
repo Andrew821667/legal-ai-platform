@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ActorType, ScheduledPost, ScheduledPostStatus, Scope
 from core_api.schemas import ScheduledPostCreate, ScheduledPostOut, ScheduledPostPatch
@@ -38,12 +39,17 @@ def create_scheduled_post(
 @router.get("", response_model=list[ScheduledPostOut])
 def list_scheduled_posts(
     due: bool = Query(default=False),
+    status: ScheduledPostStatus | None = Query(default=None),
+    newest_first: bool = Query(default=False),
     limit: int = Query(default=20, ge=1, le=100),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> list[ScheduledPost]:
     _ = identity
-    stmt = select(ScheduledPost).order_by(ScheduledPost.publish_at.asc()).limit(limit)
+    order_by = ScheduledPost.publish_at.desc() if newest_first else ScheduledPost.publish_at.asc()
+    stmt = select(ScheduledPost).order_by(order_by).limit(limit)
+    if status is not None:
+        stmt = stmt.where(ScheduledPost.status == status)
     if due:
         stmt = stmt.where(
             and_(
@@ -61,11 +67,21 @@ def claim_scheduled_posts(
     db: Session = Depends(get_db),
 ) -> list[ScheduledPost] | Response:
     now = datetime.now(timezone.utc)
+    retry_failed_after = now - timedelta(minutes=get_settings().news_retry_failed_after_minutes)
     stmt = (
         select(ScheduledPost)
         .where(
-            ScheduledPost.status == ScheduledPostStatus.scheduled,
-            ScheduledPost.publish_at <= now,
+            or_(
+                and_(
+                    ScheduledPost.status == ScheduledPostStatus.scheduled,
+                    ScheduledPost.publish_at <= now,
+                ),
+                and_(
+                    ScheduledPost.status == ScheduledPostStatus.failed,
+                    ScheduledPost.attempts < ScheduledPost.max_attempts,
+                    ScheduledPost.updated_at <= retry_failed_after,
+                ),
+            )
         )
         .order_by(ScheduledPost.publish_at.asc())
         .with_for_update(skip_locked=True)
@@ -107,7 +123,7 @@ def patch_scheduled_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     post.status = payload.status
-    post.last_error = payload.last_error
+    post.last_error = None if payload.status == ScheduledPostStatus.posted else payload.last_error
     post.updated_at = datetime.now(timezone.utc)
     if payload.status == ScheduledPostStatus.failed:
         post.attempts += 1
@@ -125,3 +141,40 @@ def patch_scheduled_post(
     db.commit()
     db.refresh(post)
     return post
+
+
+@router.post("/reset-stale", response_model=dict[str, int])
+def reset_stale_scheduled_posts(
+    older_than_minutes: int = Query(default=30, ge=1, le=240),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    _ = identity
+    threshold = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+    stale_rows = db.execute(
+        select(ScheduledPost).where(
+            ScheduledPost.status == ScheduledPostStatus.publishing,
+            ScheduledPost.updated_at < threshold,
+        )
+    ).scalars().all()
+
+    reset_count = 0
+    for post in stale_rows:
+        post.status = ScheduledPostStatus.failed
+        if post.attempts < post.max_attempts:
+            post.attempts += 1
+        post.last_error = "stale publishing reset"
+        post.updated_at = datetime.now(timezone.utc)
+        db.add(post)
+        write_audit(
+            db,
+            actor_type=ActorType.system,
+            actor_id="cron.reset_stale_posts",
+            action="post.reset_stale",
+            target_type="scheduled_post",
+            target_id=post.id,
+        )
+        reset_count += 1
+
+    db.commit()
+    return {"reset_count": reset_count}

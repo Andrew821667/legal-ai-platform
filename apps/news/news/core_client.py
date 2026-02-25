@@ -26,6 +26,24 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def list_posts(
+        self,
+        limit: int = 20,
+        status: str | None = None,
+        newest_first: bool = False,
+    ) -> requests.Response:
+        params: dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+        if newest_first:
+            params["newest_first"] = True
+        return requests.get(
+            f"{self.base_url}/api/v1/scheduled-posts",
+            params=params,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def patch_post(self, post_id: str, payload: dict[str, Any]) -> requests.Response:
         return requests.patch(
             f"{self.base_url}/api/v1/scheduled-posts/{post_id}",
