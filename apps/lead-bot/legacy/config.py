@@ -23,6 +23,7 @@ class Config:
         self.OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY')
         if not self.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY не установлен в переменных окружения")
+        self.OPENAI_BASE_URL: str = os.getenv('OPENAI_BASE_URL', '').strip()
 
         # Admin Telegram ID
         admin_id = os.getenv('ADMIN_TELEGRAM_ID')
@@ -31,21 +32,27 @@ class Config:
         self.ADMIN_TELEGRAM_ID: int = int(admin_id)
 
         # Настройки AI
-        self.AI_MODEL: str = os.getenv('AI_MODEL', 'gpt-4o-mini')
-        self.OPENAI_MODEL: str = self.AI_MODEL  # Для обратной совместимости
+        # Поддерживаем оба имени переменной для обратной совместимости:
+        # AI_MODEL и OPENAI_MODEL.
+        self.AI_MODEL: str = os.getenv('AI_MODEL') or os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+        self.OPENAI_MODEL: str = self.AI_MODEL
         self.MAX_TOKENS: int = int(os.getenv('MAX_TOKENS', '1000'))
-        self.MAX_COMPLETION_TOKENS: int = self.MAX_TOKENS  # Для обратной совместимости
+        self.MAX_COMPLETION_TOKENS: int = int(os.getenv('MAX_COMPLETION_TOKENS', str(self.MAX_TOKENS)))
         self.TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
         self.MAX_HISTORY_MESSAGES: int = int(os.getenv('MAX_HISTORY_MESSAGES', '10'))
         self.RESPONSE_DELAY: float = float(os.getenv('RESPONSE_DELAY', '0.0'))
 
         # Настройки базы данных
-        self.DB_PATH: str = os.getenv('DB_PATH', 'data/bot.db')
-        self.DATABASE_PATH: str = self.DB_PATH  # Для обратной совместимости
+        self.DB_PATH: str = os.getenv('DB_PATH') or os.getenv('DATABASE_PATH', 'data/bot.db')
+        self.DATABASE_PATH: str = self.DB_PATH
 
         # Настройки логирования
         self.LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
         self.LOG_FILE: str = os.getenv('LOG_FILE', 'logs/bot.log')
+
+        # Куда отправлять уведомления по лидам (если не задано — админу).
+        leads_chat_id = os.getenv('LEADS_CHAT_ID', '').strip()
+        self.LEADS_CHAT_ID: Optional[int] = int(leads_chat_id) if leads_chat_id else None
 
         # Настройки квалификации лидов
         self.LEAD_QUALIFICATION_THRESHOLD: float = float(os.getenv('LEAD_QUALIFICATION_THRESHOLD', '0.7'))

@@ -17,7 +17,7 @@ def test_required_variables():
 
 def test_openai_settings():
     """Проверка настроек OpenAI"""
-    assert config.OPENAI_MODEL in ['gpt-4o-mini', 'gpt-4', 'gpt-3.5-turbo'], "Неверная модель OpenAI"
+    assert config.OPENAI_MODEL, "OPENAI_MODEL не должен быть пустым"
     assert config.MAX_TOKENS > 0, "MAX_TOKENS должен быть положительным"
     assert config.MAX_COMPLETION_TOKENS > 0, "MAX_COMPLETION_TOKENS должен быть положительным"
     assert 0 <= config.TEMPERATURE <= 2, "TEMPERATURE должна быть между 0 и 2"

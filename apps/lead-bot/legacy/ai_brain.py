@@ -18,12 +18,30 @@ class AIBrain:
     """Класс для работы с OpenAI API"""
 
     def __init__(self):
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client_kwargs = {"api_key": config.OPENAI_API_KEY}
+        if config.OPENAI_BASE_URL:
+            client_kwargs["base_url"] = config.OPENAI_BASE_URL
+        self.client = OpenAI(**client_kwargs)
         self.model = config.OPENAI_MODEL
         self.max_tokens = config.MAX_TOKENS
         self.temperature = config.TEMPERATURE
+        self._use_max_tokens_param = "deepseek" in (config.OPENAI_BASE_URL or "").lower()
 
-    async def generate_response_stream(self, conversation_history: List[Dict[str, str]]) -> AsyncGenerator[str, None]:
+    def _completion_token_kwargs(self) -> Dict[str, int]:
+        """
+        Совместимость провайдеров:
+        - OpenAI: max_completion_tokens
+        - DeepSeek (OpenAI-compatible): max_tokens
+        """
+        if self._use_max_tokens_param:
+            return {"max_tokens": config.MAX_COMPLETION_TOKENS}
+        return {"max_completion_tokens": config.MAX_COMPLETION_TOKENS}
+
+    async def generate_response_stream(
+        self,
+        conversation_history: List[Dict[str, str]],
+        funnel_context: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
         """
         Генерация ответа с потоковой передачей (streaming) от OpenAI
 
@@ -36,6 +54,8 @@ class AIBrain:
         try:
             # Преобразуем историю в формат OpenAI
             messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT}]
+            if funnel_context:
+                messages.append({"role": "system", "content": funnel_context})
 
             # Ограничиваем контекст последними 20 сообщениями для избежания обрывов
             limited_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
@@ -53,7 +73,7 @@ class AIBrain:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_completion_tokens=config.MAX_COMPLETION_TOKENS,
+                **self._completion_token_kwargs(),
                 temperature=self.temperature,
                 stream=True  # Включаем потоковую передачу!
             )
@@ -80,7 +100,11 @@ class AIBrain:
             logger.error(f"Error generating streaming response: {e}")
             yield "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз или свяжитесь с нашей командой напрямую."
 
-    def generate_response(self, conversation_history: List[Dict[str, str]]) -> str:
+    def generate_response(
+        self,
+        conversation_history: List[Dict[str, str]],
+        funnel_context: Optional[str] = None,
+    ) -> str:
         """
         Генерация ответа на основе истории диалога + RAG
 
@@ -93,6 +117,8 @@ class AIBrain:
         try:
             # Преобразуем историю в формат OpenAI
             messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT}]
+            if funnel_context:
+                messages.append({"role": "system", "content": funnel_context})
 
             # Ограничиваем контекст последними 20 сообщениями для избежания обрывов
             limited_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
@@ -149,7 +175,7 @@ class AIBrain:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_completion_tokens=config.MAX_COMPLETION_TOKENS,
+                **self._completion_token_kwargs(),
                 temperature=self.temperature
             )
 
@@ -266,11 +292,27 @@ class AIBrain:
 
         has_pain = lead_data.get('pain_point') and len(lead_data.get('pain_point', '')) > 10
         has_contact = lead_data.get('email') or lead_data.get('phone')
+        has_service_signal = lead_data.get('service_category') or lead_data.get('specific_need')
         temperature = lead_data.get('lead_temperature', 'cold')
 
-        should_offer = has_pain and (has_contact or temperature in ['warm', 'hot'])
+        # Более агрессивная лидогенерация:
+        # - при явной боли показываем оффер рано, даже без контакта;
+        # - для warm/hot лидов показываем оффер сразу;
+        # - если уже есть сервисный сигнал + контакт, тоже показываем.
+        should_offer = bool(
+            has_pain
+            or temperature in ['warm', 'hot']
+            or (has_service_signal and has_contact)
+        )
 
-        logger.debug(f"Should offer lead magnet: {should_offer} (pain={has_pain}, contact={has_contact}, temp={temperature})")
+        logger.debug(
+            "Should offer lead magnet: %s (pain=%s, contact=%s, service=%s, temp=%s)",
+            should_offer,
+            has_pain,
+            has_contact,
+            bool(has_service_signal),
+            temperature,
+        )
 
         return should_offer
 

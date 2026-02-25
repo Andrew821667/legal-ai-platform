@@ -18,7 +18,10 @@ import utils
 import email_sender
 import security
 import prompts
+import content
+import funnel
 from handlers.constants import *
+from handlers.helpers import notify_admin_new_lead, extract_email
 
 logger = logging.getLogger(__name__)
 
@@ -64,16 +67,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         
         # Обработка команды /start для бизнес-чата
         if text == "/start":
-            welcome_message = (
-                f"Здравствуйте, {message.from_user.first_name}! 👋\n\n"
-                "Я AI-ассистент команды юристов-практиков с опытом более 20 лет, "
-                "которые САМИ РАЗРАБАТЫВАЮТ программное обеспечение для автоматизации юридической работы.\n\n"
-                "Могу помочь вам:\n"
-                "• Рассказать о наших услугах по разработке AI-решений\n"
-                "• Подобрать решение под ваши задачи\n"
-                "• Ответить на вопросы о технологиях\n\n"
-                "Чем могу помочь вам сегодня?"
-            )
+            welcome_message = content.build_welcome_message(message.from_user.first_name)
             
             # Для бизнес-чатов используем InlineKeyboard (ReplyKeyboard не поддерживается)
             keyboard = [
@@ -107,7 +101,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
-                text="📋 МЕНЮ УСЛУГ:\n\nВыберите интересующую тему:",
+                text=content.MENU_HEADER_TEXT,
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )
@@ -119,6 +113,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             user_data = database.db.get_user_by_telegram_id(user_id)
             if user_data:
                 database.db.clear_conversation_history(user_data['id'])
+                database.db.reset_user_funnel_state(user_data['id'])
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
@@ -126,6 +121,127 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 business_connection_id=message.business_connection_id
             )
             return
+
+        # Явный handoff-запрос
+        if ai_brain.ai_brain.check_handoff_trigger(text):
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=content.HANDOFF_ACK_TEXT,
+                business_connection_id=message.business_connection_id
+            )
+
+            lead = database.db.get_lead_by_user_id(user)
+            if not lead:
+                lead_id = database.db.create_or_update_lead(user, {'name': message.from_user.first_name})
+            else:
+                lead_id = lead['id']
+
+            funnel_state = database.db.get_user_funnel_state(user)
+            previous_stage = funnel_state.get('conversation_stage') or 'discover'
+            cta_variant = funnel_state.get('cta_variant') or funnel.choose_cta_variant(user)
+
+            database.db.update_user_funnel_state(
+                user,
+                conversation_stage='handoff',
+                cta_variant=cta_variant
+            )
+            database.db.update_lead_funnel_state(
+                user,
+                conversation_stage='handoff',
+                cta_variant=cta_variant
+            )
+
+            if previous_stage != 'handoff':
+                try:
+                    database.db.track_event(
+                        user,
+                        "stage_changed",
+                        payload={"from": previous_stage, "to": "handoff"},
+                        lead_id=lead_id
+                    )
+                except Exception as analytics_error:
+                    logger.warning(f"[Business] Failed to track handoff stage change: {analytics_error}")
+
+            admin_interface.admin_interface.send_admin_notification(
+                context.bot,
+                lead_id,
+                'handoff_request',
+                f"Последнее сообщение: {text[:100]}"
+            )
+
+            try:
+                database.db.track_event(
+                    user,
+                    "handoff_done",
+                    payload={"source": "business_trigger", "cta_variant": cta_variant},
+                    lead_id=lead_id
+                )
+            except Exception as analytics_error:
+                logger.warning(f"[Business] Failed to track handoff_done: {analytics_error}")
+            return
+
+        # Pending lead-magnet в business flow: принимаем email и подтверждаем отправку.
+        lead = database.db.get_lead_by_user_id(user)
+        if lead and lead.get("lead_magnet_type") and not lead.get("lead_magnet_delivered"):
+            magnet_type = lead.get("lead_magnet_type")
+            if magnet_type == "demo_analysis":
+                magnet_type = "demo"
+                database.db.create_or_update_lead(user, {"lead_magnet_type": "demo"})
+                lead = database.db.get_lead_by_user_id(user)
+
+            email = extract_email(text) if text else None
+            if email:
+                user_name = lead.get("name") or message.from_user.first_name
+                success = False
+                if magnet_type == "consultation":
+                    success = email_sender.email_sender.send_consultation_confirmation(email, user_name)
+                elif magnet_type == "checklist":
+                    success = email_sender.email_sender.send_checklist(email, user_name)
+                elif magnet_type == "demo":
+                    success = email_sender.email_sender.send_demo_request_confirmation(email, user_name)
+
+                if success:
+                    if not lead.get("email"):
+                        database.db.create_or_update_lead(user, {"email": email})
+                    lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead["id"])
+                    base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
+                    await context.bot.send_message(
+                        chat_id=message.chat.id,
+                        text=f"{base_message}\n\nКонтакт для отправки: {email}",
+                        business_connection_id=message.business_connection_id,
+                    )
+                else:
+                    await context.bot.send_message(
+                        chat_id=message.chat.id,
+                        text=f"Произошла ошибка при отправке email.\n\n{content.DIRECT_CONTACTS_TEXT}",
+                        business_connection_id=message.business_connection_id,
+                    )
+                return
+
+            if magnet_type == "demo" and (getattr(message, "document", None) or getattr(message, "photo", None)):
+                file_marker = "photo"
+                if getattr(message, "document", None):
+                    file_marker = f"document:{message.document.file_name or message.document.file_id}"
+                existing_notes = (lead.get("notes") or "").strip()
+                notes = f"{existing_notes}\nДокумент для демо: {file_marker}".strip()
+                database.db.create_or_update_lead(user, {"notes": notes})
+                await context.bot.send_message(
+                    chat_id=message.chat.id,
+                    text="Документ получил. Теперь укажите email, и команда отправит дальнейшие шаги.",
+                    business_connection_id=message.business_connection_id,
+                )
+                return
+
+        if not text:
+            logger.warning(f"[Business] Skipping non-text message update: {update.update_id}")
+            return
+
+        funnel_state = database.db.get_user_funnel_state(user)
+        current_stage = funnel_state.get('conversation_stage') or 'discover'
+        cta_variant = funnel_state.get('cta_variant') or funnel.choose_cta_variant(user)
+        cta_shown = bool(funnel_state.get('cta_shown'))
+        if not funnel_state.get('cta_variant'):
+            database.db.update_user_funnel_state(user, cta_variant=cta_variant)
         
         # Сохраняем сообщение пользователя
         database.db.add_message(user, 'user', text)
@@ -137,6 +253,24 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         # (в бизнес-чатах клиент не видит /start, начинает сразу с вопроса)
         is_first_message = len(conversation_history) <= 1  # Только его первое сообщение
         show_menu_buttons = is_first_message
+
+        lead_snapshot = database.db.get_lead_by_user_id(user) if user_id != config.ADMIN_TELEGRAM_ID else None
+        lead_id = lead_snapshot["id"] if lead_snapshot else None
+        lead_data = None
+        merged_lead_data = dict(lead_snapshot or {})
+        response_stage = current_stage
+
+        # Готовим stage до генерации ответа, чтобы убрать лаг на 1 шаг.
+        if user_id != config.ADMIN_TELEGRAM_ID:
+            lead_data = ai_brain.ai_brain.extract_lead_data(conversation_history)
+            if lead_data:
+                merged_lead_data.update({k: v for k, v in lead_data.items() if v is not None})
+
+            response_stage = funnel.infer_stage(
+                previous_stage=current_stage,
+                user_message=text,
+                lead_data=merged_lead_data,
+            )
 
         # Получаем ответ от AI с постепенным streaming (как в GPT)
         full_response = ""
@@ -158,7 +292,11 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
 
         # Собираем ответ от OpenAI и постепенно обновляем сообщение
         start_generation = time.time()
-        async for chunk in ai_brain.ai_brain.generate_response_stream(conversation_history):
+        funnel_context = funnel.build_stage_context(response_stage, cta_variant, cta_shown)
+        async for chunk in ai_brain.ai_brain.generate_response_stream(
+            conversation_history,
+            funnel_context=funnel_context
+        ):
             full_response += chunk
             chunk_buffer += chunk
 
@@ -207,6 +345,14 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         # Финальное обновление с полным текстом
         generation_time = time.time() - start_generation
         logger.info(f"[Business] Response generated in {generation_time:.2f}s ({len(full_response)} chars)")
+        full_response = funnel.enforce_leadgen_response(
+            response_text=full_response,
+            stage=response_stage,
+            user_message=text,
+            cta_shown=cta_shown,
+            cta_variant=cta_variant,
+            lead_data=merged_lead_data,
+        )
 
         # Проверяем нужно ли разбить на части (лимит Telegram 4096 символов)
         if len(full_response) > 4096:
@@ -263,6 +409,28 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
 
         # Сохраняем ответ
         database.db.add_message(user, 'assistant', full_response)
+
+        # Аналитика: показ CTA (A/B)
+        if not cta_shown and funnel.is_cta_shown(full_response, cta_variant):
+            database.db.update_user_funnel_state(
+                user,
+                cta_variant=cta_variant,
+                cta_shown=True
+            )
+            database.db.update_lead_funnel_state(
+                user,
+                cta_variant=cta_variant,
+                cta_shown=True
+            )
+            try:
+                database.db.track_event(
+                    user,
+                    "cta_shown",
+                    payload={"variant": cta_variant, "stage": response_stage, "source": "assistant_response"},
+                )
+            except Exception as analytics_error:
+                logger.warning(f"[Business] Failed to track cta_shown: {analytics_error}")
+            cta_shown = True
         
         # ОТПРАВЛЯЕМ КНОПКИ МЕНЮ ОТДЕЛЬНЫМ СООБЩЕНИЕМ при первом сообщении
         if show_menu_buttons:
@@ -277,58 +445,97 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await context.bot.send_message(
                     chat_id=message.chat.id,
-                    text=(
-                        "💡 **Полезная информация:**\n\n"
-                        "Для быстрого доступа к информации используйте кнопки ниже 👇\n\n"
-                        "Также вы всегда можете написать `/menu` чтобы вызвать это меню снова."
-                    ),
+                    text=content.BUSINESS_MENU_HINT_TEXT,
                     reply_markup=reply_markup,
                     business_connection_id=message.business_connection_id,
-                    parse_mode='Markdown'
                 )
                 logger.info(f"[Business] Menu buttons sent to user {user_id}")
             except Exception as e:
                 logger.warning(f"[Business] Failed to send menu buttons: {e}")
         
-        # Извлекаем и сохраняем лид данные (аналогично handle_message)
+        # Сохраняем лид-данные и финализируем funnel-state (без лага по stage).
         if user_id != config.ADMIN_TELEGRAM_ID:
-            lead_data = ai_brain.ai_brain.extract_lead_data(conversation_history)
-            
             if lead_data:
-                # Обрабатываем данные лида
                 lead_id = lead_qualifier.lead_qualifier.process_lead_data(user, lead_data)
-                
+
                 if lead_id:
                     # Уведомляем админа о новом лиде
-                    # ИСПРАВЛЕНИЕ: AI возвращает 'lead_temperature', приводим к 'temperature'
-                    temperature = lead_data.get('temperature') or lead_data.get('lead_temperature', 'cold')
-                    
+                    temperature = lead_data.get("temperature") or lead_data.get("lead_temperature", "cold")
                     should_notify = (
-                        temperature in ['hot', 'warm'] or
-                        (lead_data.get('name') and
-                         (lead_data.get('email') or lead_data.get('phone')) and
-                         lead_data.get('pain_point'))
+                        temperature in ["hot", "warm"]
+                        or (
+                            lead_data.get("name")
+                            and (lead_data.get("email") or lead_data.get("phone"))
+                            and lead_data.get("pain_point")
+                        )
                     )
-                    
                     logger.info(f"[Business] Lead {lead_id}: temperature={temperature}, should_notify={should_notify}")
-                    
+
                     if should_notify:
                         await notify_admin_new_lead(context, lead_id, lead_data, {"id": user, "telegram_id": user_id})
-                
-                # Проверяем нужно ли предложить lead magnet
-                existing_lead = database.db.get_lead_by_user_id(user)
-                lead_magnet_already_offered = existing_lead and existing_lead.get('lead_magnet_type') is not None
-                
-                if not lead_magnet_already_offered and ai_brain.ai_brain.should_offer_lead_magnet(lead_data):
-                    # Формируем сообщение с lead magnet кнопками
-                    lead_magnet_msg = "🎁 Чтобы помочь вам лучше, я подготовил специальные материалы:\n\n"
-                    reply_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
-                    await context.bot.send_message(
-                        chat_id=message.chat.id,
-                        text=lead_magnet_msg,
-                        reply_markup=reply_markup,
-                        business_connection_id=message.business_connection_id
+
+            if lead_id:
+                database.db.update_lead_last_message_time(user)
+
+            next_stage = response_stage
+            database.db.update_user_funnel_state(
+                user,
+                conversation_stage=next_stage,
+                cta_variant=cta_variant,
+            )
+            database.db.update_lead_funnel_state(
+                user,
+                conversation_stage=next_stage,
+                cta_variant=cta_variant,
+            )
+
+            if next_stage != current_stage:
+                try:
+                    database.db.track_event(
+                        user,
+                        "stage_changed",
+                        payload={"from": current_stage, "to": next_stage},
+                        lead_id=lead_id,
                     )
+                except Exception as analytics_error:
+                    logger.warning(f"[Business] Failed to track stage_changed: {analytics_error}")
+
+            # Авто-оффер lead magnet (синхронно с user-flow).
+            existing_lead = database.db.get_lead_by_user_id(user)
+            lead_magnet_already_selected = bool(existing_lead and existing_lead.get("lead_magnet_type"))
+            if (
+                lead_data
+                and not lead_magnet_already_selected
+                and not cta_shown
+                and ai_brain.ai_brain.should_offer_lead_magnet(lead_data)
+            ):
+                reply_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
+                await context.bot.send_message(
+                    chat_id=message.chat.id,
+                    text=content.LEAD_MAGNET_OFFER_TEXT,
+                    reply_markup=reply_markup,
+                    business_connection_id=message.business_connection_id,
+                )
+
+                database.db.update_user_funnel_state(
+                    user,
+                    cta_variant=cta_variant,
+                    cta_shown=True,
+                )
+                database.db.update_lead_funnel_state(
+                    user,
+                    cta_variant=cta_variant,
+                    cta_shown=True,
+                )
+                try:
+                    database.db.track_event(
+                        user,
+                        "cta_shown",
+                        payload={"variant": cta_variant, "stage": next_stage, "source": "lead_magnet_offer"},
+                        lead_id=lead_id,
+                    )
+                except Exception as analytics_error:
+                    logger.warning(f"[Business] Failed to track lead magnet CTA show: {analytics_error}")
 
         logger.info(f"✅ [Business] Response sent to user {user_id}")
         
@@ -343,5 +550,3 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 )
         except:
             pass
-
-

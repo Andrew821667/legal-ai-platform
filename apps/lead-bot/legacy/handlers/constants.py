@@ -26,6 +26,9 @@ LEAD_MAGNET_MENU = [
 # Админ-панель inline кнопки
 ADMIN_PANEL_MENU = [
     [InlineKeyboardButton("📊 Общая статистика", callback_data="admin_stats")],
+    [InlineKeyboardButton("📈 Воронка и A/B", callback_data="admin_funnel_report")],
+    [InlineKeyboardButton("📥 Воронка CSV", callback_data="admin_funnel_export_csv")],
+    [InlineKeyboardButton("📝 Воронка Markdown", callback_data="admin_funnel_export_md")],
     [InlineKeyboardButton("🛡️ Безопасность", callback_data="admin_security")],
     [InlineKeyboardButton("👥 Список лидов", callback_data="admin_leads")],
     [InlineKeyboardButton("📋 Логи (последние)", callback_data="admin_logs")],

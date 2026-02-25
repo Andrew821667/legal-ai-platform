@@ -3,6 +3,8 @@
 """
 import sqlite3
 import logging
+import json
+import os
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 from config import Config
@@ -16,6 +18,9 @@ class Database:
 
     def __init__(self, db_path: str = None):
         self.db_path = db_path or config.DB_PATH
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         self.init_database()
 
     def get_connection(self) -> sqlite3.Connection:
@@ -38,6 +43,10 @@ class Database:
                     username TEXT,
                     first_name TEXT,
                     last_name TEXT,
+                    conversation_stage TEXT DEFAULT 'discover',
+                    cta_variant TEXT,
+                    cta_shown BOOLEAN DEFAULT 0,
+                    cta_shown_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -83,6 +92,9 @@ class Database:
                     temperature TEXT DEFAULT 'cold',
                     status TEXT DEFAULT 'new',
                     notes TEXT,
+                    conversation_stage TEXT DEFAULT 'discover',
+                    cta_variant TEXT,
+                    cta_shown BOOLEAN DEFAULT 0,
 
                     lead_magnet_type TEXT,
                     lead_magnet_delivered BOOLEAN DEFAULT 0,
@@ -116,6 +128,23 @@ class Database:
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_lead_id ON admin_notifications(lead_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_sent_at ON admin_notifications(sent_at)")
+            
+            # Таблица analytics_events
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS analytics_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    lead_id INTEGER,
+                    event_type TEXT NOT NULL,
+                    event_payload TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_user_id ON analytics_events(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON analytics_events(created_at)")
 
             # Миграция: добавляем notification_sent если его нет
             cursor.execute("PRAGMA table_info(leads)")
@@ -138,6 +167,37 @@ class Database:
             if 'last_message_at' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN last_message_at TIMESTAMP")
                 logger.info("Added last_message_at column to leads table")
+            
+            if 'conversation_stage' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN conversation_stage TEXT DEFAULT 'discover'")
+                logger.info("Added conversation_stage column to leads table")
+            
+            if 'cta_variant' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN cta_variant TEXT")
+                logger.info("Added cta_variant column to leads table")
+            
+            if 'cta_shown' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN cta_shown BOOLEAN DEFAULT 0")
+                logger.info("Added cta_shown column to leads table")
+
+            cursor.execute("PRAGMA table_info(users)")
+            user_columns = [column[1] for column in cursor.fetchall()]
+
+            if 'conversation_stage' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN conversation_stage TEXT DEFAULT 'discover'")
+                logger.info("Added conversation_stage column to users table")
+
+            if 'cta_variant' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN cta_variant TEXT")
+                logger.info("Added cta_variant column to users table")
+
+            if 'cta_shown' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN cta_shown BOOLEAN DEFAULT 0")
+                logger.info("Added cta_shown column to users table")
+
+            if 'cta_shown_at' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN cta_shown_at TIMESTAMP")
+                logger.info("Added cta_shown_at column to users table")
 
             conn.commit()
             # Миграция: добавляем таблицу для состояний чатов
@@ -234,6 +294,188 @@ class Database:
                 return dict(row)
             return None
 
+        finally:
+            conn.close()
+    
+    def get_user_funnel_state(self, user_id: int) -> Dict:
+        """
+        Получение состояния воронки пользователя.
+
+        Returns:
+            dict: conversation_stage, cta_variant, cta_shown, cta_shown_at
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                """
+                SELECT conversation_stage, cta_variant, cta_shown, cta_shown_at
+                FROM users
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    "conversation_stage": "discover",
+                    "cta_variant": None,
+                    "cta_shown": False,
+                    "cta_shown_at": None,
+                }
+            data = dict(row)
+            return {
+                "conversation_stage": data.get("conversation_stage") or "discover",
+                "cta_variant": data.get("cta_variant"),
+                "cta_shown": bool(data.get("cta_shown")),
+                "cta_shown_at": data.get("cta_shown_at"),
+            }
+        finally:
+            conn.close()
+
+    def update_user_funnel_state(
+        self,
+        user_id: int,
+        conversation_stage: str = None,
+        cta_variant: str = None,
+        cta_shown: Optional[bool] = None,
+    ) -> None:
+        """Обновление состояния воронки пользователя."""
+        updates = []
+        values: List = []
+
+        if conversation_stage is not None:
+            updates.append("conversation_stage = ?")
+            values.append(conversation_stage)
+
+        if cta_variant is not None:
+            updates.append("cta_variant = ?")
+            values.append(cta_variant)
+
+        if cta_shown is not None:
+            updates.append("cta_shown = ?")
+            values.append(1 if cta_shown else 0)
+            updates.append("cta_shown_at = CURRENT_TIMESTAMP" if cta_shown else "cta_shown_at = NULL")
+
+        if not updates:
+            return
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            values.append(user_id)
+            cursor.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+                values,
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error updating user funnel state: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def reset_user_funnel_state(self, user_id: int) -> None:
+        """Сброс воронки при /reset."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET conversation_stage = 'discover',
+                    cta_shown = 0,
+                    cta_shown_at = NULL
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            cursor.execute(
+                """
+                UPDATE leads
+                SET conversation_stage = 'discover',
+                    cta_shown = 0
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error resetting user funnel state: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def update_lead_funnel_state(
+        self,
+        user_id: int,
+        conversation_stage: str = None,
+        cta_variant: str = None,
+        cta_shown: Optional[bool] = None,
+    ) -> None:
+        """Синхронизация состояния воронки в таблице leads для аналитики."""
+        updates = []
+        values: List = []
+
+        if conversation_stage is not None:
+            updates.append("conversation_stage = ?")
+            values.append(conversation_stage)
+
+        if cta_variant is not None:
+            updates.append("cta_variant = ?")
+            values.append(cta_variant)
+
+        if cta_shown is not None:
+            updates.append("cta_shown = ?")
+            values.append(1 if cta_shown else 0)
+
+        if not updates:
+            return
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            values.append(user_id)
+            cursor.execute(
+                f"UPDATE leads SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+                values,
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error updating lead funnel state: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def track_event(
+        self,
+        user_id: int,
+        event_type: str,
+        payload: Optional[Dict] = None,
+        lead_id: Optional[int] = None,
+    ) -> int:
+        """Запись события аналитики."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            payload_text = json.dumps(payload or {}, ensure_ascii=False)
+            cursor.execute(
+                """
+                INSERT INTO analytics_events (user_id, lead_id, event_type, event_payload)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, lead_id, event_type, payload_text),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"Error tracking analytics event: {e}")
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
@@ -788,11 +1030,182 @@ class Database:
             cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'checklist'")
             stats['checklists'] = cursor.fetchone()[0]
 
-            cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'demo_analysis'")
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type IN ('demo', 'demo_analysis')")
             stats['demos'] = cursor.fetchone()[0]
+
+            # Funnel stages (users)
+            for stage in ['discover', 'diagnose', 'qualify', 'propose', 'handoff']:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE conversation_stage = ?", (stage,))
+                stats[f'stage_{stage}'] = cursor.fetchone()[0]
+
+            # CTA воронки
+            cursor.execute("SELECT COUNT(*) FROM users WHERE cta_shown = 1")
+            stats['cta_shown_users'] = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM analytics_events
+                WHERE event_type = 'cta_clicked'
+            """)
+            stats['cta_clicks'] = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM analytics_events
+                WHERE event_type = 'handoff_done'
+            """)
+            stats['handoff_done'] = cursor.fetchone()[0]
 
             return stats
 
+        finally:
+            conn.close()
+
+    def get_funnel_report(self, days: int = 30) -> Dict:
+        """
+        SQL-отчет по этапам воронки за период.
+        Основан на событиях analytics_events и активности в conversations.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            report: Dict[str, Dict] = {}
+            window = str(days)
+
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT user_id)
+                FROM conversations
+                WHERE timestamp >= datetime('now', '-' || ? || ' days')
+                """,
+                (window,),
+            )
+            discover_users = cursor.fetchone()[0] or 0
+
+            stage_counts = {"discover": discover_users}
+            for stage in ("diagnose", "qualify", "propose", "handoff"):
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT user_id)
+                    FROM analytics_events
+                    WHERE event_type = 'stage_changed'
+                      AND created_at >= datetime('now', '-' || ? || ' days')
+                      AND event_payload LIKE ?
+                    """,
+                    (window, f'%"to": "{stage}"%'),
+                )
+                stage_counts[stage] = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT user_id)
+                FROM analytics_events
+                WHERE event_type = 'cta_shown'
+                  AND created_at >= datetime('now', '-' || ? || ' days')
+                """,
+                (window,),
+            )
+            cta_shown_users = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT user_id)
+                FROM analytics_events
+                WHERE event_type = 'cta_clicked'
+                  AND created_at >= datetime('now', '-' || ? || ' days')
+                """,
+                (window,),
+            )
+            cta_clicked_users = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT user_id)
+                FROM analytics_events
+                WHERE event_type = 'handoff_done'
+                  AND created_at >= datetime('now', '-' || ? || ' days')
+                """,
+                (window,),
+            )
+            handoff_users = cursor.fetchone()[0] or 0
+
+            def _rate(num: int, den: int) -> float:
+                if not den:
+                    return 0.0
+                return round((num / den) * 100.0, 1)
+
+            transitions = {
+                "discover_to_diagnose": _rate(stage_counts["diagnose"], stage_counts["discover"]),
+                "diagnose_to_qualify": _rate(stage_counts["qualify"], stage_counts["diagnose"]),
+                "qualify_to_propose": _rate(stage_counts["propose"], stage_counts["qualify"]),
+                "propose_to_handoff": _rate(stage_counts["handoff"], stage_counts["propose"]),
+                "cta_click_from_shown": _rate(cta_clicked_users, cta_shown_users),
+                "handoff_from_shown": _rate(handoff_users, cta_shown_users),
+            }
+
+            report["stage_counts"] = stage_counts
+            report["event_counts"] = {
+                "cta_shown_users": cta_shown_users,
+                "cta_clicked_users": cta_clicked_users,
+                "handoff_users": handoff_users,
+            }
+            report["transitions"] = transitions
+            report["window_days"] = days
+            return report
+        finally:
+            conn.close()
+
+    def get_ab_cta_report(self, days: int = 30) -> Dict:
+        """
+        SQL-отчет по A/B вариантам CTA за период.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            window = str(days)
+            variants = {}
+
+            def _count_users(event_type: str, pattern: str) -> int:
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT user_id)
+                    FROM analytics_events
+                    WHERE event_type = ?
+                      AND created_at >= datetime('now', '-' || ? || ' days')
+                      AND event_payload LIKE ?
+                    """,
+                    (event_type, window, pattern),
+                )
+                return cursor.fetchone()[0] or 0
+
+            def _rate(num: int, den: int) -> float:
+                if not den:
+                    return 0.0
+                return round((num / den) * 100.0, 1)
+
+            for variant in ("A", "B"):
+                shown = _count_users("cta_shown", f'%"variant": "{variant}"%')
+                clicked = _count_users("cta_clicked", f'%"variant": "{variant}"%')
+                handoff = _count_users("handoff_done", f'%"cta_variant": "{variant}"%')
+                variants[variant] = {
+                    "shown_users": shown,
+                    "clicked_users": clicked,
+                    "handoff_users": handoff,
+                    "click_rate": _rate(clicked, shown),
+                    "handoff_rate": _rate(handoff, shown),
+                }
+
+            total = {
+                "shown_users": variants["A"]["shown_users"] + variants["B"]["shown_users"],
+                "clicked_users": variants["A"]["clicked_users"] + variants["B"]["clicked_users"],
+                "handoff_users": variants["A"]["handoff_users"] + variants["B"]["handoff_users"],
+            }
+            total["click_rate"] = _rate(total["clicked_users"], total["shown_users"])
+            total["handoff_rate"] = _rate(total["handoff_users"], total["shown_users"])
+
+            return {"window_days": days, "variants": variants, "total": total}
         finally:
             conn.close()
 

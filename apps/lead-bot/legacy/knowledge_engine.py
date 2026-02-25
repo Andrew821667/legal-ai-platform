@@ -19,7 +19,10 @@ class KnowledgeEngine:
     """Движок для семантического поиска похожих диалогов"""
     
     def __init__(self):
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client_kwargs = {"api_key": config.OPENAI_API_KEY}
+        if config.OPENAI_BASE_URL:
+            client_kwargs["base_url"] = config.OPENAI_BASE_URL
+        self.client = OpenAI(**client_kwargs)
         self.embedding_model = "text-embedding-3-small"  # Дешёвая и быстрая модель
         logger.info("KnowledgeEngine initialized")
     

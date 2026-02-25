@@ -18,6 +18,7 @@ import utils
 import email_sender
 import security
 import prompts
+import content
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,9 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
     """Отправляет email с lead magnet"""
     try:
         magnet_type = lead.get('lead_magnet_type')
+        if magnet_type == "demo_analysis":
+            magnet_type = "demo"
+            database.db.create_or_update_lead(user_data["id"], {"lead_magnet_type": "demo"})
         user_name = lead.get('name') or user_data.get('first_name')
 
         # Показываем индикатор печатания
@@ -128,42 +132,22 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
             lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead['id'])
 
             # Подтверждение пользователю
-            messages = {
-                'consultation': (
-                    f"✅ Отлично! Подтверждение консультации отправлено на {email}\n\n"
-                    "Наша команда свяжется с вами в ближайшее время для согласования времени.\n\n"
-                    "Если есть еще вопросы - спрашивайте, я на связи!"
-                ),
-                'checklist': (
-                    f"✅ Отлично! Чек-лист отправлен на {email}\n\n"
-                    "Проверьте почту (иногда письма попадают в спам).\n\n"
-                    "Если хотите обсудить автоматизацию - готов ответить на вопросы!"
-                ),
-                'demo': (
-                    f"✅ Отлично! Инструкции отправлены на {email}\n\n"
-                    "Теперь вы можете отправить нам ваш договор для демо-анализа:\n"
-                    "📱 Telegram: @AndrewPopov821667\n"
-                    "📧 Email: a.popov.gv@gmail.com"
-                )
-            }
-
-            await update.message.reply_text(messages.get(magnet_type, "✅ Спасибо! Письмо отправлено."))
+            base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
+            await update.message.reply_text(f"{base_message}\n\nКонтакт для отправки: {email}")
             logger.info(f"Lead magnet {magnet_type} sent to {email}")
         else:
             # Ошибка отправки
             await update.message.reply_text(
-                "Произошла ошибка при отправке email. Пожалуйста, свяжитесь с нами напрямую:\n\n"
-                "📧 a.popov.gv@gmail.com\n"
-                "📱 @AndrewPopov821667\n"
-                "📞 +7 (909) 233-09-09"
+                "Произошла ошибка при отправке email.\n\n"
+                f"{content.DIRECT_CONTACTS_TEXT}"
             )
             logger.error(f"Failed to send lead magnet {magnet_type} to {email}")
 
     except Exception as e:
         logger.error(f"Error in send_lead_magnet_email: {e}")
         await update.message.reply_text(
-            "Произошла ошибка. Пожалуйста, свяжитесь с нами напрямую:\n"
-            "📧 a.popov.gv@gmail.com"
+            "Произошла ошибка.\n\n"
+            f"{content.DIRECT_CONTACTS_TEXT}"
         )
 
 
@@ -275,6 +259,4 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
 
     except Exception as e:
         logger.error(f"Error in notify_admin_new_lead: {e}")
-
-
 

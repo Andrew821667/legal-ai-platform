@@ -18,6 +18,8 @@ import utils
 import email_sender
 import security
 import prompts
+import content
+import funnel
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
@@ -33,50 +35,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         
         callback_data = query.data
         
-        menu_responses = {
-            "menu_services": (
-                "🎯 НАШИ УСЛУГИ:\n\n"
-                "1️⃣ AI для договорной работы (от 150K₽)\n"
-                "2️⃣ AI для судебной работы (от 200K₽)\n"
-                "3️⃣ M&A и корпоративное право (от 300K₽)\n"
-                "4️⃣ Земельное право (от 250K₽)\n"
-                "5️⃣ Комплаенс и риск-менеджмент (от 200K₽)\n"
-                "6️⃣ Аналитические системы (от 150K₽)\n"
-                "7️⃣ Юридический аутсорсинг + AI (от 100K₽/мес)\n"
-                "8️⃣ Кастомная разработка под ключ (от 300K₽)\n\n"
-                "Какое направление интересует подробнее?"
-            ),
-            "menu_prices": (
-                "💰 ЦЕНООБРАЗОВАНИЕ:\n\n"
-                "Стоимость зависит от:\n"
-                "• Объема автоматизации\n"
-                "• Интеграций с вашими системами\n"
-                "• Обучения на ваших данных\n\n"
-                "Примерные цены:\n"
-                "📌 Базовое решение: от 150K₽\n"
-                "📌 Полная автоматизация: от 300K₽\n"
-                "📌 Корпоративное решение: от 500K₽\n\n"
-                "Для точной оценки опишите вашу задачу!"
-            ),
-            "menu_consultation": (
-                "📞 БЕСПЛАТНАЯ КОНСУЛЬТАЦИЯ:\n\n"
-                "Наша команда может провести бесплатную консультацию (30 минут), на которой:\n"
-                "• Разберет вашу ситуацию\n"
-                "• Предложит варианты решений\n"
-                "• Оценит сроки и стоимость\n\n"
-                "Для записи на консультацию укажите ваш email или телефон."
-            ),
-            "menu_help": (
-                "📖 ПОМОЩЬ:\n\n"
-                "Вы можете:\n"
-                "• Задавать вопросы о услугах\n"
-                "• Описать вашу ситуацию\n"
-                "• Запросить консультацию\n\n"
-                "Я работаю 24/7 и всегда рад помочь!"
-            )
-        }
-        
-        response_text = menu_responses.get(callback_data, "Выберите пункт меню")
+        response_text = content.menu_response_by_key(callback_data)
         
         # Проверяем есть ли business_connection_id
         if query.message and hasattr(query.message, 'business_connection_id') and query.message.business_connection_id:
@@ -108,38 +67,87 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         return
 
     magnet_type = query.data.replace("magnet_", "")
-
-    messages = {
-        "consultation": (
-            "Отлично! Наша команда свяжется с вами для согласования времени консультации.\n\n"
-            "Укажите ваш email или телефон для связи:"
-        ),
-        "checklist": (
-            "Отлично! Чек-лист \"15 типовых ошибок в договорах\" будет отправлен вам на email.\n\n"
-            "Укажите ваш email:"
-        ),
-        "demo": (
-            "Отлично! Для демо-анализа вашего договора:\n\n"
-            "1. Отправьте мне договор (файл или фото)\n"
-            "2. Укажите ваш email\n\n"
-            "Анализ будет готов в течение 24 часов."
-        )
-    }
+    if magnet_type == "demo_analysis":
+        magnet_type = "demo"
 
     # Сохраняем выбор lead magnet
     lead = database.db.get_lead_by_user_id(user_data['id'])
-    if lead:
-        lead_qualifier.lead_qualifier.update_lead_magnet(lead['id'], magnet_type)
-
-        # Уведомляем админа
-        admin_interface.admin_interface.send_admin_notification(
-            context.bot,
-            lead['id'],
-            'lead_magnet_requested',
-            f"Запрошен: {magnet_type}"
+    if not lead:
+        lead_id = database.db.create_or_update_lead(
+            user_data["id"],
+            {"name": user.first_name, "lead_magnet_type": magnet_type, "lead_magnet_delivered": False},
         )
+        lead = database.db.get_lead_by_id(lead_id)
+    else:
+        lead_qualifier.lead_qualifier.update_lead_magnet(lead["id"], magnet_type)
+        lead_id = lead["id"]
 
-    await query.message.reply_text(messages.get(magnet_type, "Спасибо!"))
+    # Уведомляем админа
+    admin_interface.admin_interface.send_admin_notification(
+        context.bot,
+        lead_id,
+        "lead_magnet_requested",
+        f"Запрошен: {magnet_type}",
+    )
+
+    funnel_state = database.db.get_user_funnel_state(user_data['id'])
+    cta_variant = funnel_state.get('cta_variant') or funnel.choose_cta_variant(user_data['id'])
+    current_stage = funnel_state.get('conversation_stage') or 'discover'
+    target_stage = 'handoff' if magnet_type == 'consultation' else 'propose'
+    next_stage = funnel.advance_stage(current_stage, target_stage)
+
+    database.db.update_user_funnel_state(
+        user_data['id'],
+        conversation_stage=next_stage,
+        cta_variant=cta_variant,
+        cta_shown=True,
+    )
+    database.db.update_lead_funnel_state(
+        user_data['id'],
+        conversation_stage=next_stage,
+        cta_variant=cta_variant,
+        cta_shown=True,
+    )
+
+    try:
+        if not funnel_state.get("cta_shown"):
+            database.db.track_event(
+                user_data["id"],
+                "cta_shown",
+                payload={"variant": cta_variant, "stage": current_stage, "source": "implicit_by_click"},
+                lead_id=lead_id,
+            )
+
+        database.db.track_event(
+            user_data['id'],
+            "cta_clicked",
+            payload={
+                "variant": cta_variant,
+                "magnet_type": magnet_type,
+                "from_stage": current_stage,
+                "to_stage": next_stage,
+            },
+            lead_id=lead_id
+        )
+        if next_stage != current_stage:
+            database.db.track_event(
+                user_data['id'],
+                "stage_changed",
+                payload={"from": current_stage, "to": next_stage, "reason": "cta_clicked"},
+                lead_id=lead_id
+            )
+    except Exception as analytics_error:
+        logger.warning(f"Failed to track CTA click analytics: {analytics_error}")
+
+    selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо!")
+    if query.message and hasattr(query.message, "business_connection_id") and query.message.business_connection_id:
+        await context.bot.send_message(
+            chat_id=query.message.chat.id,
+            text=selection_text,
+            business_connection_id=query.message.business_connection_id,
+        )
+    else:
+        await query.message.reply_text(selection_text)
 
 
 
@@ -162,6 +170,31 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             # Общая статистика
             stats_message = admin_interface.admin_interface.format_statistics(30)
             await query.message.reply_text(stats_message)
+        
+        elif action == "admin_funnel_report":
+            # Воронка + A/B отчет
+            report_message = admin_interface.admin_interface.format_funnel_report(30)
+            await query.message.reply_text(report_message)
+        
+        elif action == "admin_funnel_export_csv":
+            # Экспорт funnel-отчета в CSV
+            csv_data = admin_interface.admin_interface.export_funnel_report_csv(30)
+            filename = f"funnel_report_{datetime.now().strftime('%Y%m%d')}.csv"
+            await query.message.reply_document(
+                document=csv_data.encode('utf-8'),
+                filename=filename,
+                caption="📥 Funnel report (CSV)"
+            )
+        
+        elif action == "admin_funnel_export_md":
+            # Экспорт funnel-отчета в Markdown
+            md_data = admin_interface.admin_interface.export_funnel_report_markdown(30)
+            filename = f"funnel_report_{datetime.now().strftime('%Y%m%d')}.md"
+            await query.message.reply_document(
+                document=md_data.encode('utf-8'),
+                filename=filename,
+                caption="📝 Funnel report (Markdown)"
+            )
 
         elif action == "admin_security":
             # Статистика безопасности
@@ -391,6 +424,3 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logger.error(f"Error in handle_cleanup_callback: {e}")
         await query.message.reply_text(f"Ошибка: {str(e)}")
-
-
-
