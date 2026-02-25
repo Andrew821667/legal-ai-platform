@@ -1,0 +1,6 @@
+# NOTE:
+# This placeholder lock file is committed to keep monorepo layout stable.
+# In this sandbox environment `uv sync` panics before lock generation,
+# so regenerate with:
+#   uv lock
+# on a normal host before production freeze builds.

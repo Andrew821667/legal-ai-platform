@@ -1,0 +1,50 @@
+# Архитектура legal-ai-platform
+
+## Компоненты
+- `core-api` — единый backend на FastAPI, единственный источник истины.
+- `postgres` — основное хранилище (без включенного pgvector на старте).
+- `lead-bot` — Telegram-бот для сбора лидов, с локальным SQLite fallback-буфером.
+- `news`:
+  - `news.generate` — тяжёлый batch-джоб по расписанию.
+  - `news.publish` — лёгкий cron-паблишер.
+- `contract-worker` — воркер анализа договоров на MacBook.
+- `caddy` — reverse proxy и автогенерация TLS.
+
+## Всегда включено на VPS
+- `caddy`
+- `core-api`
+- `postgres`
+- `lead-bot`
+
+## Cron-задачи
+- Публикация новостей каждые 5 минут (`cron_news_publish.sh`, с `flock`).
+- Генерация новостей ночью (`cron_news_generate.sh`).
+- Healthcheck API каждые 5 минут.
+- Мониторинг диска каждые 15 минут.
+- Сброс stale контрактных задач каждые 10 минут.
+- Очистка idempotency-ключей раз в сутки.
+
+## Поток данных
+1. Telegram/сайт отправляют лиды в `core-api`.
+2. `core-api` сохраняет лиды/события в Postgres.
+3. `news.generate` создаёт `scheduled_posts`.
+4. `news.publish` claim'ит записи и публикует в Telegram.
+5. `contract-worker` claim'ит `contract_jobs`, анализирует, отправляет результат.
+
+## Надёжность
+- Idempotency для `POST /api/v1/leads` и `POST /api/v1/events`.
+- Claim-паттерн через `FOR UPDATE SKIP LOCKED`:
+  - `POST /api/v1/contract-jobs/claim`
+  - `POST /api/v1/scheduled-posts/claim`
+- JSON-логирование во всех Python-сервисах.
+- Telegram-алерты для проблем healthcheck и 500 ошибок Core API.
+
+## Безопасность
+- Scoped API keys: `bot`, `news`, `worker`, `admin`.
+- Ключи хранятся только в виде bcrypt-хэшей.
+- Админ-действия пишутся в `audit_log`.
+- `DELETE /api/v1/leads/{id}` поддерживает удаление персональных данных.
+
+## pgvector
+- Подготовлен отдельной миграцией (`20260225_0002_pgvector.py`).
+- По умолчанию не применяется в production на старте.

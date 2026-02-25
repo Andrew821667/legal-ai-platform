@@ -1,0 +1,106 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: legal-ai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-legalai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c effective_cache_size=1GB
+      -c max_connections=30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legalai} -d ${POSTGRES_DB:-legalai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+    memswap_limit: 1g
+    restart: unless-stopped
+
+  core-api:
+    image: ${CORE_API_IMAGE:-ghcr.io/andrew821667/legal-ai-core-api:latest}
+    container_name: legal-ai-core-api
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
+      TZ: ${TZ:-Europe/Moscow}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+    memswap_limit: 512m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  lead-bot:
+    image: ${LEAD_BOT_IMAGE:-ghcr.io/andrew821667/legal-ai-lead-bot:latest}
+    container_name: legal-ai-lead-bot
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      API_KEY_BOT: ${API_KEY_BOT}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TZ: ${TZ:-Europe/Moscow}
+    depends_on:
+      core-api:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: legal-ai-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on:
+      core-api:
+        condition: service_healthy
+    mem_limit: 128m
+    memswap_limit: 128m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

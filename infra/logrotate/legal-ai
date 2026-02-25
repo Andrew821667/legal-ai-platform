@@ -1,0 +1,9 @@
+/var/log/news-*.log /var/log/healthcheck.log /var/log/stale-jobs.log /var/log/backup.log /var/log/cleanup.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
