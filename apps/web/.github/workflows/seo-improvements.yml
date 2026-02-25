@@ -1,0 +1,79 @@
+name: AI SEO Improvements
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: number
+
+jobs:
+  improve-readability:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'seo-critical') || contains(github.event.issue.labels.*.name, 'seo-high')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install openai beautifulsoup4 lxml PyGithub
+
+      - name: Run AI improvement script
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          python .github/workflows/ai_improve_content.py
+
+      - name: Create Pull Request
+        if: success()
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            fix(seo): AI improvements for issue #${{ github.event.issue.number || inputs.issue_number }}
+
+            🤖 Generated with Claude Code
+          branch: seo-improvements-${{ github.event.issue.number || inputs.issue_number }}
+          delete-branch: true
+          title: '[SEO] AI Improvements: ${{ github.event.issue.title }}'
+          body: |
+            ## 🤖 AI-Generated SEO Improvements
+
+            Closes #${{ github.event.issue.number || inputs.issue_number }}
+
+            ### Changes made:
+            - Improved readability
+            - Shortened sentences
+            - Simplified complex terms
+            - Better structure
+
+            ### Review checklist:
+            - [ ] Content accuracy maintained
+            - [ ] Tone is appropriate
+            - [ ] No information loss
+            - [ ] Improves user experience
+
+            ---
+
+            🤖 Generated automatically from SEO analysis.
+            Please review carefully before merging.
+          labels: |
+            seo
+            ai-generated
+            needs-review

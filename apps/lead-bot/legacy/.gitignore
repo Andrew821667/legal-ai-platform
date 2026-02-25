@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Секретные данные
+.env
+*.env
+!.env.example
+
+# База данных
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.db  # БД в корне тоже игнорировать
+
+# Логи
+logs/*.log
+logs/*.txt
+logs/*.backup*  # Backup'ы логов
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.backup
+*.bak
+bot.log

@@ -1,0 +1,8 @@
+[0;1;32m●[0m postgresql.service - PostgreSQL RDBMS
+     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (exited)[0m since Tue 2025-11-04 08:48:33 UTC; 19s ago
+   Main PID: 1293312 (code=exited, status=0/SUCCESS)
+        CPU: 3ms
+
+Nov 04 08:48:33 vdska systemd[1]: Starting PostgreSQL RDBMS...
+Nov 04 08:48:33 vdska systemd[1]: Finished PostgreSQL RDBMS.

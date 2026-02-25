@@ -1,0 +1,2 @@
+Базовое изображение будет создано автоматически при первом запуске
+или запустите: docker exec -it legal_ai_app python3 create_template.py

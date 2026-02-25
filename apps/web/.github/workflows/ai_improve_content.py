@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""AI-powered content improvement script for SEO optimization - FIXED VERSION"""
+
+import os
+import json
+import re
+from pathlib import Path
+from openai import OpenAI
+from github import Github
+
+# Configuration
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+ISSUE_NUMBER = int(os.environ.get('ISSUE_NUMBER', 0))
+REPO_NAME = os.environ.get('GITHUB_REPOSITORY', 'Andrew821667/legal-ai-website')
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+github = Github(GITHUB_TOKEN)
+repo = github.get_repo(REPO_NAME)
+
+def get_issue_details(issue_num):
+    """Получить детали Issue"""
+    issue = repo.get_issue(issue_num)
+    return {
+        'title': issue.title,
+        'body': issue.body,
+        'labels': [label.name for label in issue.labels]
+    }
+
+def identify_improvement_type(issue):
+    """Определить тип улучшения по Issue"""
+    title = issue['title'].lower()
+
+    if 'читаемость' in title or 'readability' in title:
+        return 'readability'
+    elif 'контент' in title and 'объем' in title:
+        return 'content_length'
+    elif 'доверие' in title or 'trust' in title:
+        return 'trust_signals'
+    else:
+        return 'general'
+
+def improve_component_content(file_path, improvement_type):
+    """Улучшить контент в TSX компоненте - ПРАВИЛЬНЫЙ ПОДХОД"""
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    print(f'📄 Processing: {file_path}')
+    print(f'📏 File size: {len(content)} characters')
+
+    # Проверяем что есть текстовый контент для улучшения
+    # Ищем строки с русским текстом внутри JSX
+    russian_text_pattern = r'>[А-Яа-яЁё\s\-,\.!?]+<|"[А-Яа-яЁё\s\-,\.!?]+"'
+    if not re.search(russian_text_pattern, content):
+        print(f'⏭️  No Russian text found in {file_path}, skipping')
+        return content
+
+    # Формируем промпт для GPT-4
+    prompt = f"""Ты — эксперт по SEO-копирайтингу и React/TypeScript. Твоя задача: ЗНАЧИТЕЛЬНО увеличить объем текстового контента.
+
+ВАЖНЫЕ ПРАВИЛА:
+1. СОХРАНИ ВСЮ структуру JSX/TSX абсолютно неизменной
+2. СОХРАНИ все классы Tailwind CSS
+3. СОХРАНИ все компоненты, импорты, экспорты
+4. СОХРАНИ все переменные, функции, хуки
+5. НЕ добавляй комментарии или пояснения
+
+✅ РАЗРЕШЕНО:
+- Разбивать длинные строки на несколько строк (используй обратные кавычки ` или конкатенацию)
+- Превращать короткий текст в длинные JSX блоки с <p>, <ul>, <li>
+- Добавлять новые параграфы там где было одно предложение
+
+❌ ЗАПРЕЩЕНО:
+- Менять логику кода, переменные, функции
+- Менять классы и стили
+- Удалять компоненты
+
+ЧТО УЛУЧШАТЬ:
+✅ Русский текст внутри тегов: <h1>ЭТОТ ТЕКСТ</h1>
+✅ Русский текст в строках: "ЭТОТ ТЕКСТ" или `ЭТОТ ТЕКСТ`
+✅ Контент параграфов, заголовков, кнопок
+
+КАК УЛУЧШАТЬ (в зависимости от типа):
+{get_improvement_instructions(improvement_type)}
+
+ПРИМЕРЫ ПРАВИЛЬНОГО УВЕЛИЧЕНИЯ:
+
+❌ НЕПРАВИЛЬНО (просто длинная строка):
+description: "Очень длинное описание которое не влезает в одну строку и поэтому будет обрезано"
+
+✅ ПРАВИЛЬНО (разбиваем на блоки):
+description: `Очень длинное описание, которое мы разбиваем на несколько частей.
+  Добавляем конкретные примеры и детали. Например, наша система позволяет экономить
+  до 120-150 часов в месяц. Это значит, что команда из 5 юристов получает эквивалент
+  одной дополнительной штатной единицы бесплатно.`
+
+ИСХОДНЫЙ ФАЙЛ:
+```tsx
+{content}
+```
+
+ВЕРНИ УЛУЧШЕННУЮ ВЕРСИЮ ФАЙЛА ПОЛНОСТЬЮ (без markdown блоков, без пояснений):"""
+
+    try:
+        print(f'🤖 Calling GPT-4 to improve {file_path.name}...')
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Ты эксперт по SEO-копирайтингу и React/TypeScript. Улучшаешь ТОЛЬКО текстовый контент, сохраняя весь код абсолютно неизменным."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.3,  # Низкая температура для точности
+            max_tokens=8000
+        )
+
+        improved_content = response.choices[0].message.content.strip()
+
+        # Убираем markdown code blocks если GPT их добавил
+        if improved_content.startswith('```'):
+            lines = improved_content.split('\n')
+            # Убираем первую строку (```tsx) и последнюю (```)
+            improved_content = '\n'.join(lines[1:-1]) if len(lines) > 2 else improved_content
+
+        # Проверяем что код валидный (хотя бы базово)
+        if 'export default' not in improved_content:
+            print(f'⚠️  Warning: GPT removed export statement, using original')
+            return content
+
+        print(f'✅ Content improved successfully')
+        return improved_content
+
+    except Exception as e:
+        print(f'❌ Error improving {file_path}: {e}')
+        return content  # Возвращаем оригинал при ошибке
+
+def get_improvement_instructions(improvement_type):
+    """Получить инструкции по улучшению в зависимости от типа"""
+
+    instructions = {
+        'readability': """
+🔴 КРИТИЧЕСКИ ВАЖНО: Будь АГРЕССИВНЫМ в улучшениях!
+
+- ПОЛНОСТЬЮ ПЕРЕПИСЫВАЙ длинные предложения (более 25 слов)
+  * Одно длинное предложение → 2-3 коротких (10-15 слов каждое)
+  * Не просто редактируй - ПЕРЕПИСЫВАЙ С НУЛЯ!
+
+- ОБЯЗАТЕЛЬНО упрости ВСЕ сложные термины:
+  * "автоматизация юридической работы" → "автоматизация для юристов"
+  * "мультиагентная система" → "умная система с AI-помощниками"
+  * "Due Diligence" → "тщательная проверка документов при сделках"
+  * "интеллектуальные системы" → "умные AI-системы"
+
+- РАЗБИВАЙ каждый абзац на мелкие части (максимум 2-3 предложения)
+
+- ДОБАВЛЯЙ переходные слова в КАЖДЫЙ абзац: "поэтому", "например", "кроме того", "в результате"
+
+- РАСШИРЯЙ контент на 30-50% - добавляй конкретику и примеры!
+""",
+        'content_length': """
+🔴 КРИТИЧЕСКИ ВАЖНО: Нужно ЗНАЧИТЕЛЬНО увеличить объем!
+
+- УДВОЙ размер каждого абзаца:
+  * Было 2 предложения → должно быть 4-5 предложений
+  * Добавляй КОНКРЕТНЫЕ примеры ("например, ...", "допустим, ...")
+  * Добавляй ДЕТАЛИ и подробности
+
+- Раскрывай каждый пункт ГОРАЗДО подробнее:
+  * Не просто "экономит время" → "экономит до 80% времени юристов, то есть примерно 120-150 часов в месяц для команды из 5 человек"
+  * Добавляй ЦИФРЫ, ФАКТЫ, СРАВНЕНИЯ
+
+- ОБЯЗАТЕЛЬНО добавь:
+  * Конкретные сценарии использования ("Представьте: ваш юрист получает договор...")
+  * Пошаговые описания процессов
+  * Детальные объяснения преимуществ
+
+- НЕ добавляй воду - только ценную, КОНКРЕТНУЮ информацию
+
+Цель: увеличить текст на 50-70%!
+""",
+        'trust_signals': """
+🔴 КРИТИЧЕСКИ ВАЖНО: Добавь МАКСИМУМ конкретики!
+
+- Заменяй общие фразы на МАКСИМАЛЬНО конкретные:
+  * "опытные специалисты" → "юристы с опытом 15-25 лет в топовых компаниях"
+  * "высокое качество" → "точность анализа 95%+, проверено на 1000+ договорах"
+  * "помогаем бизнесу" → "помогли 50+ компаниям сэкономить от 2 до 5 млн рублей в год"
+
+- ОБЯЗАТЕЛЬНО добавляй цифры и данные:
+  * Конкретные результаты проектов
+  * Точные сроки и показатели
+  * Реальные кейсы с цифрами
+
+- Добавляй ссылки на опыт и экспертизу:
+  * "Работали с компаниями из Fortune 500"
+  * "200+ успешных проектов автоматизации"
+  * "24 года практического опыта"
+""",
+        'general': """
+🔴 АГРЕССИВНЫЕ улучшения:
+
+- ПОЛНОСТЬЮ переписывай сложные предложения (более 20 слов)
+- Каждое предложение должно быть простым и понятным (10-15 слов)
+- УПРОЩАЙ все термины до уровня понимания школьника
+- РАСШИРЯЙ контент - добавляй примеры, детали, конкретику
+- Увеличивай объем текста на 40-60%!
+"""
+    }
+
+    return instructions.get(improvement_type, instructions['general'])
+
+def main():
+    print(f'🤖 Starting AI improvements for Issue #{ISSUE_NUMBER}')
+
+    if not OPENAI_API_KEY:
+        print('❌ OPENAI_API_KEY not set')
+        return
+
+    # Получаем детали Issue
+    issue = get_issue_details(ISSUE_NUMBER)
+    print(f'📋 Issue: {issue["title"]}')
+
+    improvement_type = identify_improvement_type(issue)
+    print(f'🎯 Improvement type: {improvement_type}')
+
+    # Находим компоненты для обработки
+    components_dir = Path('components')
+
+    if not components_dir.exists():
+        print(f'❌ Components directory not found')
+        return
+
+    # Обрабатываем только компоненты с контентом
+    # (не трогаем Header, Footer - там мало текста)
+    target_components = [
+        'Hero.tsx',
+        'Features.tsx',
+        'Services.tsx',
+        'CaseStudies.tsx',
+        'AboutTeam.tsx',
+        'LeadMagnets.tsx'
+    ]
+
+    modified_files = []
+
+    for component_name in target_components:
+        component_path = components_dir / component_name
+
+        if not component_path.exists():
+            print(f'⏭️  Skipping {component_name} (not found)')
+            continue
+
+        print(f'\n📝 Processing: {component_name}')
+
+        # Обрабатываем компонент
+        improved_content = improve_component_content(component_path, improvement_type)
+
+        # Сохраняем только если есть изменения
+        with open(component_path, 'r', encoding='utf-8') as f:
+            original_content = f.read()
+
+        if improved_content != original_content:
+            with open(component_path, 'w', encoding='utf-8') as f:
+                f.write(improved_content)
+
+            modified_files.append(str(component_path))
+            print(f'✅ {component_name} updated')
+        else:
+            print(f'⏭️  {component_name} - no changes')
+
+    if not modified_files:
+        print('\n⚠️  No files were modified')
+        return
+
+    print(f'\n✅ Modified {len(modified_files)} files:')
+    for file in modified_files:
+        print(f'  - {file}')
+
+    # Добавляем комментарий к Issue
+    issue_obj = repo.get_issue(ISSUE_NUMBER)
+    issue_obj.create_comment(
+        f'🤖 AI improvements generated!\n\n'
+        f'A Pull Request will be created with the following improvements:\n'
+        f'- Type: {improvement_type}\n'
+        f'- Modified files: {len(modified_files)}\n\n'
+        f'Files changed:\n' +
+        '\n'.join([f'- `{f}`' for f in modified_files]) +
+        f'\n\nPlease review the PR carefully before merging.'
+    )
+
+    print('\n✅ Done!')
+
+if __name__ == '__main__':
+    main()
