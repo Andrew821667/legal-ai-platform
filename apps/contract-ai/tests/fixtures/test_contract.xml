@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<contract>
+  <metadata>
+    <contract_id>7b0f854c-adf6-45ca-a01d-6d6b2d180136</contract_id>
+    <file_name>test_contract.docx</file_name>
+    <creation_date>2025-10-13T11:24:47.688365</creation_date>
+    <version>1.0</version>
+    <format>docx</format>
+    <title>Без названия</title>
+    <author>python-docx</author>
+  </metadata>
+  <parties>
+    <party role="supplier">
+      <name>ООО "Поставщик"</name>
+      <inn>1234567890</inn>
+    </party>
+    <party role="buyer">
+      <name>ООО "Покупатель"</name>
+      <inn>0987654321</inn>
+    </party>
+  </parties>
+  <terms>
+    <financial>
+      <total_amount>1000000</total_amount>
+      <currency>RUB</currency>
+    </financial>
+    <dates>
+      <signature_date>31.12.2025</signature_date>
+    </dates>
+  </terms>
+  <clauses>
+    <clause id="1" type="preamble">
+      <title>Преамбула</title>
+      <content>
+        <paragraph>ДОГОВОР ПОСТАВКИ №123</paragraph>
+        <paragraph>ООО "Поставщик", ИНН 1234567890, именуемое в дальнейшем "Поставщик", в лице Генерального директора Иванова И.И., действующего на основании Устава, с одной стороны, и ООО "Покупатель", ИНН 0987654321, именуемое в дальнейшем "Покупатель", в лице директора Петрова П.П., действующего на основании Устава, с другой стороны, заключили настоящий договор о нижеследующем:</paragraph>
+      </content>
+    </clause>
+    <clause id="2" type="subject">
+      <title>1. Предмет договора</title>
+      <content>
+        <paragraph>1.1. Поставщик обязуется поставить, а Покупатель принять и оплатить товар в количестве и ассортименте согласно Спецификации (Приложение №1).</paragraph>
+        <paragraph>1.2. Наименование товара: Пшеница продовольственная, 3 класс.</paragraph>
+      </content>
+    </clause>
+    <clause id="3" type="financial">
+      <title>2. Цена и порядок расчётов</title>
+      <content>
+        <paragraph>2.1. Общая стоимость товара составляет 1 000 000 рублей (Один миллион рублей).</paragraph>
+        <paragraph>2.2. Оплата производится в следующем порядке: 30% предоплата в течение 5 банковских дней, остальные 70% в течение 10 дней после поставки.</paragraph>
+      </content>
+    </clause>
+    <clause id="4" type="terms">
+      <title>3. Сроки поставки</title>
+      <content>
+        <paragraph>3.1. Поставка товара осуществляется до 31.12.2025.</paragraph>
+      </content>
+    </clause>
+    <clause id="5" type="liability">
+      <title>4. Ответственность сторон</title>
+      <content>
+        <paragraph>4.1. За нарушение сроков поставки Поставщик уплачивает пени в размере 0.1% от стоимости товара за каждый день просрочки.</paragraph>
+      </content>
+    </clause>
+    <clause id="6" type="general">
+      <title>Приложение №1. Спецификация</title>
+      <content>
+        <paragraph>Подписано: 15.10.2025</paragraph>
+      </content>
+    </clause>
+  </clauses>
+  <tables>
+    <table id="1">
+      <row>
+        <cell>№</cell>
+        <cell>Наименование</cell>
+        <cell>Количество</cell>
+        <cell>Цена</cell>
+      </row>
+      <row>
+        <cell>1</cell>
+        <cell>Пшеница 3 класс</cell>
+        <cell>100 тонн</cell>
+        <cell>10 000 руб/тонна</cell>
+      </row>
+      <row>
+        <cell>ИТОГО</cell>
+        <cell></cell>
+        <cell>100 тонн</cell>
+        <cell>1 000 000 руб</cell>
+      </row>
+    </table>
+  </tables>
+</contract>

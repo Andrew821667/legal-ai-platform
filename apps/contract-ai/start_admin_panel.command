@@ -1,0 +1,45 @@
+#!/bin/bash
+# Скрипт запуска админ-панели Contract AI System
+
+cd "$(dirname "$0")"
+
+echo "🚀 Запуск Contract AI System Admin Panel..."
+echo "================================================"
+
+# Активируем виртуальное окружение
+if [ -d "venv" ]; then
+    source venv/bin/activate
+    echo "✅ Виртуальное окружение активировано"
+else
+    echo "⚠️ Виртуальное окружение не найдено. Используем системный Python."
+fi
+
+# Проверяем .env файл
+if [ ! -f ".env" ]; then
+    echo "❌ ОШИБКА: Файл .env не найден!"
+    echo "Создайте файл .env с вашим OPENAI_API_KEY"
+    read -p "Нажмите Enter для выхода..."
+    exit 1
+fi
+
+# Загружаем переменные окружения
+export $(cat .env | grep -v '^#' | xargs)
+
+echo "✅ Переменные окружения загружены"
+echo ""
+echo "📊 Запуск Streamlit..."
+echo "================================================"
+echo "Админ-панель будет доступна по адресу:"
+echo "👉 http://localhost:8501"
+echo ""
+echo "Для остановки используйте кнопку 'Остановить' или нажмите Ctrl+C"
+echo "================================================"
+echo ""
+
+# Запускаем Streamlit (Стеклянный ящик — обработка документов)
+streamlit run admin/pages/1_Process_Documents.py --server.port=8501
+
+# Если Streamlit завершился
+echo ""
+echo "⏹️ Админ-панель остановлена"
+read -p "Нажмите Enter для закрытия окна..."

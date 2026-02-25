@@ -1,0 +1,101 @@
+# LangChain and LangGraph
+langchain==0.1.20
+langgraph==0.0.40
+langchain-community==0.0.38
+
+# LLM APIs
+anthropic==0.18.1
+openai==1.12.0
+# Для Perplexity (использует OpenAI-совместимый API)
+# Для YandexGPT
+yandex-cloud-ml-sdk==0.2.0
+# DeepSeek (OpenAI-совместимый API)
+# Qwen (Alibaba Cloud) - использует dashscope SDK
+dashscope==1.14.0
+
+# Data validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Vector DB and Embeddings
+chromadb>=0.5.0
+sentence-transformers>=2.7.0
+
+# Machine Learning
+scikit-learn==1.3.2
+numpy==1.26.3
+scipy==1.11.4
+
+# Document processing
+python-docx==1.1.0
+PyPDF2==3.0.1
+pdfplumber==0.10.3
+reportlab==4.0.9  # PDF generation
+lxml==5.1.0
+mammoth==1.6.0
+python-magic==0.4.27
+pdf2docx>=0.5.6  # PDF → DOCX с сохранением форматирования
+
+# OCR and additional formats
+pytesseract==0.3.10
+pdf2image==1.17.0
+Pillow==10.2.0
+striprtf==0.0.26
+odfpy==1.4.1
+pypandoc==1.13
+
+# Template processing
+jinja2==3.1.3
+
+# Web framework
+streamlit==1.30.0
+fastapi==0.109.2
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6  # For FastAPI form data
+websockets==12.0  # WebSocket support
+
+# Authentication & Security
+bcrypt==4.1.2
+pyjwt==2.8.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+qrcode[pil]==7.4.2  # For demo link QR codes
+
+# Email & Notifications
+sendgrid==6.11.0  # SendGrid email service (optional)
+
+# Payments
+stripe==7.9.0  # Stripe payment integration
+
+# Utilities
+python-dotenv==1.0.0
+requests>=2.32.3
+tenacity==8.2.3
+python-dateutil==2.8.2
+
+# Visualization
+plotly==5.18.0
+# kaleido==0.2.1  # For plotly static image export
+pandas==2.1.4
+
+# Caching (optional)
+redis==5.0.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-benchmark==4.0.0  # Performance benchmarks
+
+# Code quality
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0
+
+# Logging
+loguru==0.7.2

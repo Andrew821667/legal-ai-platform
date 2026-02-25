@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: contract-ai-postgres
+    environment:
+      POSTGRES_DB: contract_ai
+      POSTGRES_USER: contract_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contract_user -d contract_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contract-ai-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: contract-ai-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme_in_production}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contract-ai-network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contract-ai-backend
+    environment:
+      - DATABASE_URL=postgresql://contract_user:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/contract_ai
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme_in_production}@redis:6379/0
+      - APP_ENV=${APP_ENV:-development}
+      - SECRET_KEY=${SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - YANDEX_API_KEY=${YANDEX_API_KEY:-}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+    volumes:
+      - ./data:/app/data
+      - ./chroma_data:/app/chroma_data
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - contract-ai-network
+    restart: unless-stopped
+
+  # Streamlit Admin UI
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contract-ai-streamlit
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    environment:
+      - DATABASE_URL=postgresql://contract_user:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/contract_ai
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme_in_production}@redis:6379/0
+      - APP_ENV=${APP_ENV:-development}
+      - SECRET_KEY=${SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+    volumes:
+      - ./data:/app/data
+      - ./chroma_data:/app/chroma_data
+      - ./logs:/app/logs
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - contract-ai-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  contract-ai-network:
+    driver: bridge
