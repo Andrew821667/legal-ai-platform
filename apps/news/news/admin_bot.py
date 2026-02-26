@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
@@ -57,6 +58,29 @@ def _parse_post_list_callback(data: str) -> tuple[str, int]:
     if len(parts) >= 3:
         return parts[1], int(parts[2])
     return "scheduled", 0
+
+
+def _compute_quick_publish_at(slot: str) -> datetime:
+    tz = ZoneInfo(settings.tz_name)
+    now_local = datetime.now(tz)
+
+    if slot == "h1":
+        target_local = now_local + timedelta(hours=1)
+    elif slot == "e19":
+        target_local = now_local.replace(hour=19, minute=0, second=0, microsecond=0)
+        if target_local <= now_local:
+            target_local = target_local + timedelta(days=1)
+    elif slot == "t10":
+        target_local = (now_local + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    else:
+        raise ValueError(f"Unsupported schedule slot: {slot}")
+
+    return target_local.astimezone(timezone.utc)
+
+
+def _slot_label(slot: str) -> str:
+    mapping = {"h1": "+1ч", "e19": "сегодня/след. 19:00", "t10": "завтра 10:00"}
+    return mapping.get(slot, slot)
 
 
 def _parse_admin_ids(raw: str) -> set[int]:
@@ -239,6 +263,9 @@ class NewsAdminBot:
             status_badge = _status_badge(str(row.get("status") or status))
             buttons.append([InlineKeyboardButton(f"{idx}. {status_badge} {title[:45]}", callback_data=f"pv:{post_id}:{status}:{offset}")])
 
+        if rows and status in ("draft", "failed"):
+            buttons.append([InlineKeyboardButton("✅ В готовые (все на странице)", callback_data=f"ba:ready:{status}:{offset}")])
+
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
         next_offset = offset + _POSTS_PAGE_SIZE
@@ -275,6 +302,11 @@ class NewsAdminBot:
 
     def _post_card_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = [
+            [
+                InlineKeyboardButton("⏱ +1ч", callback_data=f"pt:{post_id}:{status}:{offset}:h1"),
+                InlineKeyboardButton("🌙 19:00", callback_data=f"pt:{post_id}:{status}:{offset}:e19"),
+            ],
+            [InlineKeyboardButton("🌤 Завтра 10:00", callback_data=f"pt:{post_id}:{status}:{offset}:t10")],
             [InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"pp:{post_id}:{status}:{offset}")],
             [InlineKeyboardButton("✍️ Редактировать вручную", callback_data=f"pm:{post_id}:{status}:{offset}")],
             [InlineKeyboardButton("🤖 Редактировать через LLM", callback_data=f"pa:{post_id}:{status}:{offset}")],
@@ -488,6 +520,21 @@ class NewsAdminBot:
                 )
                 return
 
+            if data.startswith("pt:"):
+                _, post_id, status, offset_raw, slot = data.split(":", maxsplit=4)
+                offset = int(offset_raw)
+                publish_at_utc = _compute_quick_publish_at(slot)
+                self.client.patch_post(
+                    post_id,
+                    {"status": "scheduled", "publish_at": publish_at_utc.isoformat()},
+                ).raise_for_status()
+                post = self._get_post(post_id)
+                await query.edit_message_text(
+                    f"Пост перепланирован: {_slot_label(slot)}.\n\n" + self._post_card_text(post),
+                    reply_markup=self._post_card_keyboard(post_id, status, offset),
+                )
+                return
+
             if data.startswith("pr:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
@@ -496,6 +543,29 @@ class NewsAdminBot:
                 await query.edit_message_text(
                     "Пост переведён в готовые (scheduled).\n\n" + self._posts_text(total, rows, 0, "scheduled"),
                     reply_markup=self._posts_keyboard(total, rows, 0, "scheduled"),
+                )
+                return
+
+            if data.startswith("ba:"):
+                _, action, status, offset_raw = data.split(":", maxsplit=3)
+                if action != "ready":
+                    await query.message.reply_text("Неизвестное пакетное действие.")
+                    return
+                offset = int(offset_raw)
+                total, rows = self._load_posts(status=status, offset=offset)
+                moved = 0
+                for row in rows:
+                    post_id = str(row.get("id"))
+                    try:
+                        self.client.patch_post(post_id, {"status": "scheduled"}).raise_for_status()
+                        moved += 1
+                    except Exception:
+                        logger.exception("batch_move_failed", extra={"post_id": post_id, "from_status": status})
+                total_after, rows_after = self._load_posts(status=status, offset=offset)
+                await query.edit_message_text(
+                    f"Готово: {moved} пост(ов) переведены в scheduled.\n\n"
+                    + self._posts_text(total_after, rows_after, offset, status),
+                    reply_markup=self._posts_keyboard(total_after, rows_after, offset, status),
                 )
                 return
 
@@ -652,7 +722,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pp:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pr:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|px:(?:draft|scheduled|failed):\d+)$",
+                pattern=r"^(pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+:(?:h1|e19|t10)|pp:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pr:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|px:(?:draft|scheduled|failed):\d+|ba:ready:(?:draft|failed):\d+)$",
             )
         )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_edit_text))
