@@ -194,8 +194,9 @@ class NewsAdminBot:
             await query.message.reply_text(f"Ошибка операции: {exc}")
 
     def run(self) -> int:
-        if not settings.telegram_bot_token:
-            logger.error("TELEGRAM_BOT_TOKEN is required")
+        bot_token = settings.news_admin_bot_token or settings.telegram_bot_token
+        if not bot_token:
+            logger.error("NEWS_ADMIN_BOT_TOKEN (or TELEGRAM_BOT_TOKEN) is required")
             return 1
         if not settings.api_key_news:
             logger.error("API_KEY_NEWS is required")
@@ -204,7 +205,7 @@ class NewsAdminBot:
             logger.error("NEWS_ADMIN_IDS is empty; admin bot won't start")
             return 1
 
-        app = Application.builder().token(settings.telegram_bot_token).build()
+        app = Application.builder().token(bot_token).build()
         app.add_handler(CommandHandler("start", self.cmd_panel))
         app.add_handler(CommandHandler("admin", self.cmd_panel))
         app.add_handler(CommandHandler("controls", self.cmd_panel))

@@ -58,6 +58,8 @@ uv run --package news python -m news.admin_bot
 ```
 
 Рекомендуется запускать как отдельный daemon/service (не через cron).
+Для одновременной работы с лид-ботом задайте отдельный токен `NEWS_ADMIN_BOT_TOKEN`
+(иначе оба процесса будут конфликтовать по long polling одного Telegram-бота).
 
 ## Control Plane автоматизаций
 Просмотр активных тумблеров:

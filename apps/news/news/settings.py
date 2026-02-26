@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     core_api_url: str = "http://core-api:8000"
     api_key_news: str = ""
     telegram_bot_token: str = ""
+    news_admin_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_channel_username: str = ""
     news_admin_ids: str = ""
