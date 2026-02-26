@@ -30,6 +30,7 @@ _STATE_DRAFT_EDIT = "draft_edit"
 _STATE_PENDING_PUBLISH_REASON = "pending_publish_reason"
 _STATE_DRAFT_PUBLISH = "draft_publish"
 _POST_LIST_STATUSES = ("draft", "scheduled", "failed")
+_MANUAL_QUEUE_FILTERS = ("due", "all")
 
 
 def _status_label(status: str) -> str:
@@ -60,6 +61,19 @@ def _parse_post_list_callback(data: str) -> tuple[str, int]:
     if len(parts) >= 3:
         return parts[1], int(parts[2])
     return "scheduled", 0
+
+
+def _parse_manual_queue_callback(data: str) -> tuple[str, int]:
+    # Формат: mq:<filter>:<offset>, legacy: mq:<offset>
+    parts = data.split(":")
+    if len(parts) == 2:
+        return "due", int(parts[1])
+    if len(parts) >= 3:
+        queue_filter = parts[1]
+        if queue_filter not in _MANUAL_QUEUE_FILTERS:
+            queue_filter = "due"
+        return queue_filter, int(parts[2])
+    return "due", 0
 
 
 def _compute_quick_publish_at(slot: str) -> datetime:
@@ -125,6 +139,18 @@ def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
     return [part for part in parts if part]
 
 
+def _queue_context_from_filter(queue_filter: str) -> str:
+    return "mq_all" if queue_filter == "all" else "mq_due"
+
+
+def _queue_filter_from_context(context: str) -> str:
+    return "all" if context == "mq_all" else "due"
+
+
+def _is_manual_queue_context(context: str) -> bool:
+    return context.startswith("mq_")
+
+
 def _normalize_operator_note(note: str, limit: int = 500) -> str:
     normalized = " ".join((note or "").split())
     if len(normalized) <= limit:
@@ -183,6 +209,7 @@ class NewsAdminBot:
                 InlineKeyboardButton("🆕 Сгенерированные", callback_data="pl:draft:0"),
                 InlineKeyboardButton("✅ Готовые", callback_data="pl:scheduled:0"),
             ],
+            [InlineKeyboardButton("🚀 Ручная очередь", callback_data="mq:due:0")],
             [
                 InlineKeyboardButton("✅ Включить всё", callback_data="all:1"),
                 InlineKeyboardButton("⛔ Отключить всё", callback_data="all:0"),
@@ -237,6 +264,35 @@ class NewsAdminBot:
         total = len(all_rows)
         return total, all_rows[offset : offset + _POSTS_PAGE_SIZE]
 
+    @staticmethod
+    def _publish_at_utc(row: dict[str, Any]) -> datetime | None:
+        raw_value = row.get("publish_at")
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, datetime):
+            parsed = raw_value
+        else:
+            text = str(raw_value).strip()
+            if not text:
+                return None
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    def _load_manual_queue(self, queue_filter: str, offset: int) -> tuple[int, list[dict[str, Any]], int, int]:
+        response = self.client.list_posts(limit=100, status="scheduled", newest_first=False)
+        response.raise_for_status()
+        all_rows = response.json()
+        now_utc = datetime.now(timezone.utc)
+        due_rows = [row for row in all_rows if (publish_at := self._publish_at_utc(row)) and publish_at <= now_utc]
+        filtered_rows = due_rows if queue_filter == "due" else all_rows
+        total = len(filtered_rows)
+        return total, filtered_rows[offset : offset + _POSTS_PAGE_SIZE], len(due_rows), len(all_rows)
+
     def _get_post(self, post_id: str) -> dict[str, Any]:
         response = self.client.get_post(post_id)
         response.raise_for_status()
@@ -256,6 +312,40 @@ class NewsAdminBot:
             lines.append(f"   ⏰ {publish_at}")
         return "\n".join(lines)
 
+    def _manual_queue_text(
+        self,
+        total: int,
+        rows: list[dict[str, Any]],
+        offset: int,
+        queue_filter: str,
+        due_total: int,
+        scheduled_total: int,
+    ) -> str:
+        filter_label = "к публикации сейчас" if queue_filter == "due" else "все готовые"
+        if not rows:
+            return (
+                "Ручная очередь публикации\n\n"
+                f"Фильтр: {filter_label}\n"
+                f"Готовые сейчас: {due_total} из {scheduled_total}\n\n"
+                "Сейчас записей нет."
+            )
+
+        now_utc = datetime.now(timezone.utc)
+        lines = [
+            "Ручная очередь публикации",
+            f"Фильтр: {filter_label}",
+            f"Готовые сейчас: {due_total} из {scheduled_total}",
+            "",
+        ]
+        for idx, row in enumerate(rows, start=offset + 1):
+            title = str(row.get("title") or "Без заголовка").replace("\n", " ")
+            publish_at = str(row.get("publish_at") or "")
+            publish_at_utc = self._publish_at_utc(row)
+            due_mark = "⚡" if publish_at_utc and publish_at_utc <= now_utc else "🕒"
+            lines.append(f"{idx}. {due_mark} {title[:84]}")
+            lines.append(f"   ⏰ {publish_at}")
+        return "\n".join(lines)
+
     def _posts_keyboard(self, total: int, rows: list[dict[str, Any]], offset: int, status: str) -> InlineKeyboardMarkup:
         buttons: list[list[InlineKeyboardButton]] = []
         buttons.append(
@@ -265,6 +355,7 @@ class NewsAdminBot:
             ]
         )
         buttons.append([InlineKeyboardButton("❌ Ошибки", callback_data="pl:failed:0")])
+        buttons.append([InlineKeyboardButton("🚀 Ручная очередь", callback_data="mq:due:0")])
 
         for idx, row in enumerate(rows, start=offset + 1):
             post_id = str(row.get("id"))
@@ -286,6 +377,39 @@ class NewsAdminBot:
             buttons.append(nav)
 
         buttons.append([InlineKeyboardButton("🔄 Обновить список", callback_data=f"pl:{status}:{offset}")])
+        buttons.append([InlineKeyboardButton("◀️ В админ-панель", callback_data="refresh")])
+        return InlineKeyboardMarkup(buttons)
+
+    def _manual_queue_keyboard(
+        self,
+        total: int,
+        rows: list[dict[str, Any]],
+        offset: int,
+        queue_filter: str,
+    ) -> InlineKeyboardMarkup:
+        buttons: list[list[InlineKeyboardButton]] = [
+            [
+                InlineKeyboardButton("⚡ К публикации сейчас", callback_data="mq:due:0"),
+                InlineKeyboardButton("📚 Все готовые", callback_data="mq:all:0"),
+            ]
+        ]
+        context = _queue_context_from_filter(queue_filter)
+        for idx, row in enumerate(rows, start=offset + 1):
+            post_id = str(row.get("id"))
+            title = str(row.get("title") or "Без заголовка").replace("\n", " ")
+            buttons.append([InlineKeyboardButton(f"{idx}. {title[:45]}", callback_data=f"pv:{post_id}:{context}:{offset}")])
+
+        nav: list[InlineKeyboardButton] = []
+        prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
+        next_offset = offset + _POSTS_PAGE_SIZE
+        if offset > 0:
+            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"mq:{queue_filter}:{prev_offset}"))
+        if next_offset < total:
+            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"mq:{queue_filter}:{next_offset}"))
+        if nav:
+            buttons.append(nav)
+
+        buttons.append([InlineKeyboardButton("🔄 Обновить очередь", callback_data=f"mq:{queue_filter}:{offset}")])
         buttons.append([InlineKeyboardButton("◀️ В админ-панель", callback_data="refresh")])
         return InlineKeyboardMarkup(buttons)
 
@@ -322,7 +446,11 @@ class NewsAdminBot:
         ]
         if status == "draft":
             rows.append([InlineKeyboardButton("✅ В готовые", callback_data=f"pr:{post_id}:{status}:{offset}")])
-        rows.append([InlineKeyboardButton("🔙 К списку", callback_data=f"pl:{status}:{offset}")])
+        if _is_manual_queue_context(status):
+            queue_filter = _queue_filter_from_context(status)
+            rows.append([InlineKeyboardButton("🔙 К очереди", callback_data=f"mq:{queue_filter}:{offset}")])
+        else:
+            rows.append([InlineKeyboardButton("🔙 К списку", callback_data=f"pl:{status}:{offset}")])
         return InlineKeyboardMarkup(rows)
 
     def _publish_confirm_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
@@ -456,6 +584,21 @@ class NewsAdminBot:
             logger.exception("posts_list_failed", extra={"error": str(exc)})
             await update.effective_message.reply_text(f"Ошибка загрузки постов: {exc}")
 
+    async def cmd_queue(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        _ = context
+        if not await self._ensure_admin(update):
+            return
+        try:
+            queue_filter = "due"
+            total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=0)
+            await update.effective_message.reply_text(
+                self._manual_queue_text(total, rows, 0, queue_filter, due_total, scheduled_total),
+                reply_markup=self._manual_queue_keyboard(total, rows, 0, queue_filter),
+            )
+        except Exception as exc:
+            logger.exception("manual_queue_load_failed", extra={"error": str(exc)})
+            await update.effective_message.reply_text(f"Ошибка загрузки ручной очереди: {exc}")
+
     async def cmd_cancel_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_admin(update):
             return
@@ -475,6 +618,7 @@ class NewsAdminBot:
             "/controls — то же\n"
             "/status — статус очереди публикаций\n"
             "/posts — сгенерированные/готовые посты и ручная публикация\n"
+            "/queue — ручная очередь публикации (готовые к выходу)\n"
             "/cancel_edit — отменить редактирование\n"
             "/help — помощь"
         )
@@ -524,6 +668,15 @@ class NewsAdminBot:
         data = query.data or ""
 
         try:
+            if data.startswith("mq:"):
+                queue_filter, offset = _parse_manual_queue_callback(data)
+                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                await query.edit_message_text(
+                    self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                    reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                )
+                return
+
             if data.startswith("pl:"):
                 status, offset = _parse_post_list_callback(data)
                 if status not in _POST_LIST_STATUSES:
@@ -641,12 +794,21 @@ class NewsAdminBot:
                 await self._publish_now(context, post_id, reason)
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
-                total, rows = self._load_posts(status=status, offset=offset)
-                await query.edit_message_text(
-                    f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
-                    + self._posts_text(total, rows, offset, status),
-                    reply_markup=self._posts_keyboard(total, rows, offset, status),
-                )
+                if _is_manual_queue_context(status):
+                    queue_filter = _queue_filter_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    await query.edit_message_text(
+                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    )
+                else:
+                    total, rows = self._load_posts(status=status, offset=offset)
+                    await query.edit_message_text(
+                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        + self._posts_text(total, rows, offset, status),
+                        reply_markup=self._posts_keyboard(total, rows, offset, status),
+                    )
                 return
 
             if data.startswith("pm:"):
@@ -708,11 +870,20 @@ class NewsAdminBot:
                 offset = int(offset_raw)
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 context.user_data.pop(_STATE_PENDING_EDIT, None)
-                total, rows = self._load_posts(status=status, offset=offset)
-                await query.edit_message_text(
-                    "Редактирование отменено.\n\n" + self._posts_text(total, rows, offset, status),
-                    reply_markup=self._posts_keyboard(total, rows, offset, status),
-                )
+                if _is_manual_queue_context(status):
+                    queue_filter = _queue_filter_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    await query.edit_message_text(
+                        "Редактирование отменено.\n\n"
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    )
+                else:
+                    total, rows = self._load_posts(status=status, offset=offset)
+                    await query.edit_message_text(
+                        "Редактирование отменено.\n\n" + self._posts_text(total, rows, offset, status),
+                        reply_markup=self._posts_keyboard(total, rows, offset, status),
+                    )
                 return
         except TelegramError as exc:
             logger.exception("posts_callback_telegram_error", extra={"callback_data": data, "error": str(exc)})
@@ -819,13 +990,14 @@ class NewsAdminBot:
         app.add_handler(CommandHandler("controls", self.cmd_panel))
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("posts", self.cmd_posts))
+        app.add_handler(CommandHandler("queue", self.cmd_queue))
         app.add_handler(CommandHandler("cancel_edit", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("help", self.cmd_help))
         app.add_handler(CallbackQueryHandler(self.cb_controls, pattern=r"^(refresh|status|all:[01]|set:[a-z0-9_.-]+:[01])$"))
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pr:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|px:(?:draft|scheduled|failed):\d+|ba:ready:(?:draft|failed):\d+)$",
+                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pr:[0-9a-f-]{36}:draft:\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|px:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ba:ready:(?:draft|failed):\d+)$",
             )
         )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_edit_text))

@@ -4,8 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
     _compute_quick_publish_at,
+    _is_manual_queue_context,
     _normalize_operator_note,
+    _parse_manual_queue_callback,
     _parse_post_list_callback,
+    _queue_context_from_filter,
+    _queue_filter_from_context,
     _slot_label,
     _status_badge,
     _status_label,
@@ -22,6 +26,24 @@ def test_parse_post_list_callback_new_format() -> None:
     status, offset = _parse_post_list_callback("pl:draft:7")
     assert status == "draft"
     assert offset == 7
+
+
+def test_parse_manual_queue_callback_formats() -> None:
+    queue_filter, offset = _parse_manual_queue_callback("mq:4")
+    assert queue_filter == "due"
+    assert offset == 4
+    queue_filter, offset = _parse_manual_queue_callback("mq:all:12")
+    assert queue_filter == "all"
+    assert offset == 12
+
+
+def test_manual_queue_context_helpers() -> None:
+    assert _queue_context_from_filter("due") == "mq_due"
+    assert _queue_context_from_filter("all") == "mq_all"
+    assert _queue_filter_from_context("mq_due") == "due"
+    assert _queue_filter_from_context("mq_all") == "all"
+    assert _is_manual_queue_context("mq_due")
+    assert not _is_manual_queue_context("scheduled")
 
 
 def test_status_labels_and_badges() -> None:
