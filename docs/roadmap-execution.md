@@ -63,13 +63,13 @@
 - [x] Проверить reset stale (`publishing` / `processing`) через cron-скрипты.
 
 ### День 4: Security и эксплуатация
-- [ ] Проверить scoped API keys (`bot/news/worker/admin`) и audit-лог.
-- [ ] Проверить `/health/detailed` под admin key.
-- [ ] Проверить Telegram-alert на обработчике 500.
+- [x] Проверить scoped API keys (`bot/news/worker/admin`) и audit-лог.
+- [x] Проверить `/health/detailed` под admin key.
+- [x] Проверить Telegram-alert на обработчике 500.
 
 ### День 5: Тесты и release gate
-- [ ] Прогнать `pytest` по `apps/core-api`.
-- [ ] Прогнать smoke сценарий generate/publish/claim локально.
+- [x] Прогнать `pytest` по `apps/core-api`.
+- [x] Прогнать smoke сценарий generate/publish/claim локально.
 - [ ] Сформировать PR с changelog и чеклистом релиза.
 
 ## Правила релизов
