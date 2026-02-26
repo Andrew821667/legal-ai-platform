@@ -29,6 +29,8 @@ _STATE_PENDING_EDIT = "pending_edit"
 _STATE_DRAFT_EDIT = "draft_edit"
 _STATE_PENDING_PUBLISH_REASON = "pending_publish_reason"
 _STATE_DRAFT_PUBLISH = "draft_publish"
+_STATE_PENDING_BATCH_PUBLISH_REASON = "pending_batch_publish_reason"
+_STATE_DRAFT_BATCH_PUBLISH = "draft_batch_publish"
 _POST_LIST_STATUSES = ("draft", "scheduled", "failed")
 _MANUAL_QUEUE_FILTERS = ("due", "all")
 
@@ -399,6 +401,9 @@ class NewsAdminBot:
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             buttons.append([InlineKeyboardButton(f"{idx}. {title[:45]}", callback_data=f"pv:{post_id}:{context}:{offset}")])
 
+        if rows:
+            buttons.append([InlineKeyboardButton("🚀 Опубликовать страницу", callback_data=f"mbp:{queue_filter}:{offset}")])
+
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
         next_offset = offset + _POSTS_PAGE_SIZE
@@ -463,6 +468,17 @@ class NewsAdminBot:
 
     def _publish_reason_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")]])
+
+    def _batch_publish_reason_keyboard(self, queue_filter: str, offset: int) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}")]])
+
+    def _batch_publish_confirm_keyboard(self, queue_filter: str, offset: int) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("✅ Подтвердить пакетную публикацию", callback_data=f"mbc:{queue_filter}:{offset}")],
+                [InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}")],
+            ]
+        )
 
     async def _send_to_telegram(self, context: ContextTypes.DEFAULT_TYPE, text: str, media_urls: list[str] | None) -> None:
         chat_id = settings.telegram_channel_id or settings.telegram_channel_username
@@ -606,6 +622,8 @@ class NewsAdminBot:
         context.user_data.pop(_STATE_DRAFT_EDIT, None)
         context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
         context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+        context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+        context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
         await update.effective_message.reply_text("Режимы редактирования/публикации отменены.")
 
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -618,7 +636,7 @@ class NewsAdminBot:
             "/controls — то же\n"
             "/status — статус очереди публикаций\n"
             "/posts — сгенерированные/готовые посты и ручная публикация\n"
-            "/queue — ручная очередь публикации (готовые к выходу)\n"
+            "/queue — ручная очередь публикации (в т.ч. пакетная)\n"
             "/cancel_edit — отменить редактирование\n"
             "/help — помощь"
         )
@@ -673,6 +691,91 @@ class NewsAdminBot:
                 total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
                 await query.edit_message_text(
                     self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                    reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                )
+                return
+
+            if data.startswith("mbp:"):
+                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
+                if queue_filter not in _MANUAL_QUEUE_FILTERS:
+                    queue_filter = "due"
+                offset = int(offset_raw)
+                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                post_ids = [str(row.get("id")) for row in rows if row.get("id")]
+                if not post_ids:
+                    await query.edit_message_text(
+                        self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    )
+                    return
+                context.user_data[_STATE_PENDING_BATCH_PUBLISH_REASON] = {
+                    "queue_filter": queue_filter,
+                    "offset": offset,
+                    "post_ids": post_ids,
+                }
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
+                await query.edit_message_text(
+                    "Пакетная публикация: шаг 1 из 2\n\n"
+                    f"Выбрано постов: {len(post_ids)}\n"
+                    f"Фильтр: {'к публикации сейчас' if queue_filter == 'due' else 'все готовые'}\n\n"
+                    "Напишите причину пакетной публикации одним сообщением.",
+                    reply_markup=self._batch_publish_reason_keyboard(queue_filter, offset),
+                )
+                return
+
+            if data.startswith("mbc:"):
+                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
+                if queue_filter not in _MANUAL_QUEUE_FILTERS:
+                    queue_filter = "due"
+                offset = int(offset_raw)
+                draft = context.user_data.get(_STATE_DRAFT_BATCH_PUBLISH)
+                if not draft:
+                    await query.message.reply_text("Черновик пакетной публикации не найден. Запустите действие заново.")
+                    return
+                post_ids = [str(item) for item in draft.get("post_ids", []) if item]
+                reason = _normalize_operator_note(str(draft.get("reason") or ""))
+                if not post_ids or not reason:
+                    await query.message.reply_text("Недостаточно данных для пакетной публикации. Запустите действие заново.")
+                    return
+
+                success_count = 0
+                failed: list[str] = []
+                for post_id in post_ids:
+                    try:
+                        await self._publish_now(context, post_id, reason)
+                        success_count += 1
+                    except Exception:
+                        failed.append(post_id)
+
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
+                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                result_lines = [
+                    f"Пакетная публикация завершена.",
+                    f"Успешно: {success_count}",
+                    f"С ошибкой: {len(failed)}",
+                ]
+                if failed:
+                    result_lines.append("ID с ошибками: " + ", ".join(failed[:5]))
+                result_lines.append("")
+                await query.edit_message_text(
+                    "\n".join(result_lines)
+                    + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                    reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                )
+                return
+
+            if data.startswith("mbn:"):
+                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
+                if queue_filter not in _MANUAL_QUEUE_FILTERS:
+                    queue_filter = "due"
+                offset = int(offset_raw)
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
+                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                await query.edit_message_text(
+                    "Пакетная публикация отменена.\n\n"
+                    + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
                     reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
                 )
                 return
@@ -758,6 +861,8 @@ class NewsAdminBot:
                     "offset": offset,
                 }
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
                 await query.edit_message_text(
                     "Ручная публикация: шаг 1 из 2\n\n"
                     f"Пост: {title[:120]}\n"
@@ -773,6 +878,8 @@ class NewsAdminBot:
                 offset = int(offset_raw)
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
                 post = self._get_post(post_id)
                 await query.edit_message_text(
                     self._post_card_text(post),
@@ -821,6 +928,8 @@ class NewsAdminBot:
                 }
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Пришлите новый текст поста одним сообщением.\n"
@@ -838,6 +947,8 @@ class NewsAdminBot:
                 }
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Напишите инструкцию для LLM-редактирования.\n"
@@ -897,6 +1008,39 @@ class NewsAdminBot:
             return
 
         message_text = (update.effective_message.text or "").strip()
+        pending_batch_reason = context.user_data.get(_STATE_PENDING_BATCH_PUBLISH_REASON)
+        if pending_batch_reason:
+            reason = _normalize_operator_note(message_text)
+            if not reason:
+                await update.effective_message.reply_text("Причина не должна быть пустой. Пришлите сообщение ещё раз.")
+                return
+
+            queue_filter = str(pending_batch_reason.get("queue_filter") or "due")
+            if queue_filter not in _MANUAL_QUEUE_FILTERS:
+                queue_filter = "due"
+            offset = int(pending_batch_reason.get("offset") or 0)
+            post_ids = [str(item) for item in pending_batch_reason.get("post_ids", []) if item]
+            if not post_ids:
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                await update.effective_message.reply_text("Список постов пуст. Запустите пакетную публикацию заново.")
+                return
+
+            context.user_data[_STATE_DRAFT_BATCH_PUBLISH] = {
+                "queue_filter": queue_filter,
+                "offset": offset,
+                "post_ids": post_ids,
+                "reason": reason,
+            }
+            context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+            await update.effective_message.reply_text(
+                "Пакетная публикация: шаг 2 из 2\n\n"
+                f"Постов к публикации: {len(post_ids)}\n"
+                f"Причина: {reason}\n\n"
+                "Подтвердите запуск пакетной публикации:",
+                reply_markup=self._batch_publish_confirm_keyboard(queue_filter, offset),
+            )
+            return
+
         pending_publish_reason = context.user_data.get(_STATE_PENDING_PUBLISH_REASON)
         if pending_publish_reason:
             reason = _normalize_operator_note(message_text)
@@ -997,7 +1141,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pr:[0-9a-f-]{36}:draft:\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|px:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ba:ready:(?:draft|failed):\d+)$",
+                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|mbp:(?:due|all):\d+|mbc:(?:due|all):\d+|mbn:(?:due|all):\d+|pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pr:[0-9a-f-]{36}:draft:\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|px:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ba:ready:(?:draft|failed):\d+)$",
             )
         )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_edit_text))
