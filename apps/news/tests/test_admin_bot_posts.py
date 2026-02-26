@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
     _compute_quick_publish_at,
+    _normalize_operator_note,
     _parse_post_list_callback,
     _slot_label,
     _status_badge,
@@ -39,3 +40,9 @@ def test_compute_quick_publish_at_h1_is_future_utc() -> None:
 def test_slot_label_mapping() -> None:
     assert _slot_label("h1") == "+1ч"
     assert _slot_label("e19") == "сегодня/след. 19:00"
+
+
+def test_normalize_operator_note() -> None:
+    assert _normalize_operator_note("  срочно   для  клиента ") == "срочно для клиента"
+    assert _normalize_operator_note("a" * 700).endswith("…")
+    assert len(_normalize_operator_note("a" * 700)) == 500

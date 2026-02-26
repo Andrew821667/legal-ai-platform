@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 _POSTS_PAGE_SIZE = 8
 _STATE_PENDING_EDIT = "pending_edit"
 _STATE_DRAFT_EDIT = "draft_edit"
+_STATE_PENDING_PUBLISH_REASON = "pending_publish_reason"
+_STATE_DRAFT_PUBLISH = "draft_publish"
 _POST_LIST_STATUSES = ("draft", "scheduled", "failed")
 
 
@@ -121,6 +123,13 @@ def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
         parts.append(rest[:cut].strip())
         rest = rest[cut:].strip()
     return [part for part in parts if part]
+
+
+def _normalize_operator_note(note: str, limit: int = 500) -> str:
+    normalized = " ".join((note or "").split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1].rstrip() + "…"
 
 
 class NewsAdminBot:
@@ -324,6 +333,9 @@ class NewsAdminBot:
             ]
         )
 
+    def _publish_reason_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")]])
+
     async def _send_to_telegram(self, context: ContextTypes.DEFAULT_TYPE, text: str, media_urls: list[str] | None) -> None:
         chat_id = settings.telegram_channel_id or settings.telegram_channel_username
         if not chat_id:
@@ -343,14 +355,17 @@ class NewsAdminBot:
         for part in _split_text_for_telegram(text):
             await context.bot.send_message(chat_id=chat_id, text=part)
 
-    async def _publish_now(self, context: ContextTypes.DEFAULT_TYPE, post_id: str) -> None:
+    async def _publish_now(self, context: ContextTypes.DEFAULT_TYPE, post_id: str, reason: str | None = None) -> None:
         post = self._get_post(post_id)
+        operator_note = _normalize_operator_note(reason or "")
         self.client.patch_post(post_id, {"status": "publishing", "last_error": None}).raise_for_status()
         try:
             await self._send_to_telegram(context, str(post.get("text") or ""), post.get("media_urls"))
             self.client.patch_post(post_id, {"status": "posted", "last_error": None}).raise_for_status()
+            logger.info("manual_publish_success", extra={"post_id": post_id, "operator_note": operator_note})
         except Exception as exc:
             self.client.patch_post(post_id, {"status": "failed", "last_error": str(exc)[:500]}).raise_for_status()
+            logger.exception("manual_publish_failed", extra={"post_id": post_id, "operator_note": operator_note})
             raise
 
     def _get_openai_client(self) -> Any:
@@ -446,7 +461,9 @@ class NewsAdminBot:
             return
         context.user_data.pop(_STATE_PENDING_EDIT, None)
         context.user_data.pop(_STATE_DRAFT_EDIT, None)
-        await update.effective_message.reply_text("Режим редактирования отменён.")
+        context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+        context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+        await update.effective_message.reply_text("Режимы редактирования/публикации отменены.")
 
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         _ = context
@@ -582,18 +599,27 @@ class NewsAdminBot:
                 offset = int(offset_raw)
                 post = self._get_post(post_id)
                 title = str(post.get("title") or "Без заголовка").replace("\n", " ")
+                context.user_data[_STATE_PENDING_PUBLISH_REASON] = {
+                    "post_id": post_id,
+                    "status": status,
+                    "offset": offset,
+                }
+                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 await query.edit_message_text(
-                    "Подтверждение публикации\n\n"
+                    "Ручная публикация: шаг 1 из 2\n\n"
                     f"Пост: {title[:120]}\n"
                     f"ID: {post_id}\n\n"
-                    "Опубликовать сейчас в канал?",
-                    reply_markup=self._publish_confirm_keyboard(post_id, status, offset),
+                    "Напишите одним сообщением причину ручной публикации "
+                    "(например: «Срочный разбор для консультации с клиентом»).",
+                    reply_markup=self._publish_reason_keyboard(post_id, status, offset),
                 )
                 return
 
             if data.startswith("ppn:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
+                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 post = self._get_post(post_id)
                 await query.edit_message_text(
                     self._post_card_text(post),
@@ -604,10 +630,21 @@ class NewsAdminBot:
             if data.startswith("ppy:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
-                await self._publish_now(context, post_id)
+                draft = context.user_data.get(_STATE_DRAFT_PUBLISH)
+                if not draft or str(draft.get("post_id")) != post_id:
+                    await query.message.reply_text("Причина публикации не найдена. Нажмите «Опубликовать сейчас» заново.")
+                    return
+                reason = _normalize_operator_note(str(draft.get("reason") or ""))
+                if not reason:
+                    await query.message.reply_text("Причина публикации пустая. Повторите запуск публикации.")
+                    return
+                await self._publish_now(context, post_id, reason)
+                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 total, rows = self._load_posts(status=status, offset=offset)
                 await query.edit_message_text(
-                    "Пост успешно опубликован вручную.\n\n" + self._posts_text(total, rows, offset, status),
+                    f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                    + self._posts_text(total, rows, offset, status),
                     reply_markup=self._posts_keyboard(total, rows, offset, status),
                 )
                 return
@@ -620,6 +657,8 @@ class NewsAdminBot:
                     "offset": int(offset_raw),
                     "status": status,
                 }
+                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Пришлите новый текст поста одним сообщением.\n"
@@ -635,6 +674,8 @@ class NewsAdminBot:
                     "offset": int(offset_raw),
                     "status": status,
                 }
+                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Напишите инструкцию для LLM-редактирования.\n"
@@ -684,11 +725,41 @@ class NewsAdminBot:
         if not await self._ensure_admin(update):
             return
 
+        message_text = (update.effective_message.text or "").strip()
+        pending_publish_reason = context.user_data.get(_STATE_PENDING_PUBLISH_REASON)
+        if pending_publish_reason:
+            reason = _normalize_operator_note(message_text)
+            if not reason:
+                await update.effective_message.reply_text("Причина не должна быть пустой. Пришлите сообщение ещё раз.")
+                return
+
+            post_id = str(pending_publish_reason.get("post_id"))
+            status = str(pending_publish_reason.get("status") or "scheduled")
+            offset = int(pending_publish_reason.get("offset") or 0)
+            context.user_data[_STATE_DRAFT_PUBLISH] = {
+                "post_id": post_id,
+                "status": status,
+                "offset": offset,
+                "reason": reason,
+            }
+            context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
+            post = self._get_post(post_id)
+            title = str(post.get("title") or "Без заголовка").replace("\n", " ")
+            await update.effective_message.reply_text(
+                "Ручная публикация: шаг 2 из 2\n\n"
+                f"Пост: {title[:120]}\n"
+                f"ID: {post_id}\n"
+                f"Причина: {reason}\n\n"
+                "Подтвердите публикацию в канал:",
+                reply_markup=self._publish_confirm_keyboard(post_id, status, offset),
+            )
+            return
+
         pending = context.user_data.get(_STATE_PENDING_EDIT)
         if not pending:
             return
 
-        instruction_or_text = (update.effective_message.text or "").strip()
+        instruction_or_text = message_text
         if not instruction_or_text:
             await update.effective_message.reply_text("Пустой текст не подходит. Пришлите сообщение ещё раз.")
             return
