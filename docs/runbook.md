@@ -87,6 +87,7 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 Через Telegram admin-bot:
 - `/admin` или `/controls` — открыть панель;
 - `Статус очереди` — оперативный статус draft/scheduled/failed;
+- `/posts` — вкладки постов (`draft`/`scheduled`/`failed`) с ручной публикацией и редактированием (manual/LLM);
 - `Включить всё/Отключить всё` — массовое управление news-автоматизациями.
 
 ## Backup/Restore
