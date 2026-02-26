@@ -6,6 +6,7 @@ from news.admin_bot import (
     _batch_mode_label,
     _batch_mode_limit,
     _compute_quick_publish_at,
+    _is_batch_mode_allowed,
     _is_manual_queue_context,
     _normalize_operator_note,
     _parse_batch_publish_callback,
@@ -65,6 +66,9 @@ def test_batch_mode_helpers() -> None:
     assert _batch_mode_limit("top3") == 3
     assert _batch_mode_limit("top5") == 5
     assert _batch_mode_label("top3") == "топ-3"
+    assert _is_batch_mode_allowed("due", "top3")
+    assert not _is_batch_mode_allowed("all", "top3")
+    assert _is_batch_mode_allowed("all", "page")
 
 
 def test_status_labels_and_badges() -> None:

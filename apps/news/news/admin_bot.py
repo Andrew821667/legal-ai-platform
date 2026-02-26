@@ -111,6 +111,12 @@ def _batch_mode_label(mode: str) -> str:
     return mapping.get(mode, mode)
 
 
+def _is_batch_mode_allowed(queue_filter: str, mode: str) -> bool:
+    if mode in ("top3", "top5") and queue_filter != "due":
+        return False
+    return True
+
+
 def _compute_quick_publish_at(slot: str) -> datetime:
     tz = ZoneInfo(settings.tz_name)
     now_local = datetime.now(tz)
@@ -370,6 +376,7 @@ class NewsAdminBot:
             "Ручная очередь публикации",
             f"Фильтр: {filter_label}",
             f"Готовые сейчас: {due_total} из {scheduled_total}",
+            "Режимы топ-3/топ-5 доступны только в фильтре «К публикации сейчас».",
             "",
         ]
         for idx, row in enumerate(rows, start=offset + 1):
@@ -435,13 +442,16 @@ class NewsAdminBot:
             buttons.append([InlineKeyboardButton(f"{idx}. {title[:45]}", callback_data=f"pv:{post_id}:{context}:{offset}")])
 
         if rows:
-            buttons.append(
-                [
-                    InlineKeyboardButton("🚀 Страница", callback_data=f"mbp:{queue_filter}:{offset}:page"),
-                    InlineKeyboardButton("⚡ Топ-3", callback_data=f"mbp:{queue_filter}:{offset}:top3"),
-                    InlineKeyboardButton("🔥 Топ-5", callback_data=f"mbp:{queue_filter}:{offset}:top5"),
-                ]
-            )
+            if queue_filter == "due":
+                buttons.append(
+                    [
+                        InlineKeyboardButton("🚀 Страница", callback_data=f"mbp:{queue_filter}:{offset}:page"),
+                        InlineKeyboardButton("⚡ Топ-3", callback_data=f"mbp:{queue_filter}:{offset}:top3"),
+                        InlineKeyboardButton("🔥 Топ-5", callback_data=f"mbp:{queue_filter}:{offset}:top5"),
+                    ]
+                )
+            else:
+                buttons.append([InlineKeyboardButton("🚀 Опубликовать страницу", callback_data=f"mbp:{queue_filter}:{offset}:page")])
 
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
@@ -736,6 +746,14 @@ class NewsAdminBot:
 
             if data.startswith("mbp:"):
                 queue_filter, offset, mode = _parse_batch_publish_callback(data)
+                if not _is_batch_mode_allowed(queue_filter, mode):
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    await query.edit_message_text(
+                        "Режимы топ-3/топ-5 доступны только для фильтра «К публикации сейчас».\n\n"
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    )
+                    return
                 total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
                 selected_rows = rows
                 limit = _batch_mode_limit(mode)
@@ -783,6 +801,16 @@ class NewsAdminBot:
                 mode = str(draft.get("mode") or mode)
                 if mode not in _BATCH_PUBLISH_MODES:
                     mode = "page"
+                if not _is_batch_mode_allowed(queue_filter, mode):
+                    context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                    context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    await query.edit_message_text(
+                        "Пакетная публикация отменена: режим топ-3/топ-5 доступен только для фильтра «К публикации сейчас».\n\n"
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    )
+                    return
 
                 success_count = 0
                 failed: list[str] = []
@@ -1066,6 +1094,12 @@ class NewsAdminBot:
             mode = str(pending_batch_reason.get("mode") or "page")
             if mode not in _BATCH_PUBLISH_MODES:
                 mode = "page"
+            if not _is_batch_mode_allowed(queue_filter, mode):
+                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
+                await update.effective_message.reply_text(
+                    "Режимы топ-3/топ-5 доступны только в фильтре «К публикации сейчас». Запустите действие заново."
+                )
+                return
             post_ids = [str(item) for item in pending_batch_reason.get("post_ids", []) if item]
             if not post_ids:
                 context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
