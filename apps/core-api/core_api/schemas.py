@@ -210,3 +210,24 @@ class ApiKeyCreateResponse(BaseModel):
     name: str
     scope: Scope
     api_key: str
+
+
+class AutomationControlPatch(BaseModel):
+    scope: Scope | None = None
+    title: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
+    config: dict[str, Any] | None = None
+
+
+class AutomationControlOut(BaseModel):
+    key: str
+    scope: Scope | None
+    title: str
+    description: str | None
+    enabled: bool
+    config: dict[str, Any]
+    updated_at: datetime
+    updated_by: str | None
+
+    model_config = {"from_attributes": True}

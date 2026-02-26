@@ -272,3 +272,20 @@ class WorkerHeartbeat(Base):
     worker_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class AutomationControl(Base):
+    __tablename__ = "automation_controls"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    scope: Mapped[Scope | None] = mapped_column(Enum(Scope, name="scope_enum"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'::jsonb"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (Index("ix_automation_controls_scope", "scope"),)

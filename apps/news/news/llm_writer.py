@@ -34,6 +34,31 @@ _SYSTEM_PROMPT = """
   "hashtags": ["#LegalAI", "#AI", "#LegalTech"]
 }
 """.strip()
+_FORMAT_HINTS = {
+    "signal": "Формат signal: 450-700 символов, только ключевые факты и 2-3 действия.",
+    "standard": "Формат standard: 900-1400 символов, полный разбор по структуре.",
+    "deep": "Формат deep: 1600-2200 символов, глубже анализ рисков и сценариев внедрения.",
+    "digest": "Формат digest: 1200-1900 символов, структурируй как недельный обзор с 5-7 пунктами внутри блока 'Что произошло'.",
+}
+_FORMAT_MIN_CHARS = {
+    "signal": 420,
+    "standard": 750,
+    "deep": 1100,
+    "digest": 950,
+}
+_CTA_LIBRARY = {
+    "soft": "Если нужен шаблон для внедрения в вашей функции, напишите «шаблон».",
+    "mid": "Если хотите чек-лист адаптации под ваш процесс, напишите «чек-лист».",
+    "hard": "Если нужен быстрый аудит процесса и дорожная карта внедрения, напишите «аудит».",
+}
+_DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
+_DEFAULT_RUBRIC_BY_PILLAR = {
+    "regulation": "regulation",
+    "case": "legal_ops",
+    "implementation": "legal_ops",
+    "tools": "market",
+    "market": "market",
+}
 
 
 class LLMNewsWriter:
@@ -89,9 +114,22 @@ class LLMNewsWriter:
                 return json.loads(text[left : right + 1])
             raise
 
-    def _format_post(self, data: dict[str, Any], article_url: str, fallback_title: str) -> tuple[str, str, str]:
+    @staticmethod
+    def _cta_text(cta_type: str) -> str:
+        return _CTA_LIBRARY.get(cta_type, _CTA_LIBRARY["soft"])
+
+    def _format_post(
+        self,
+        data: dict[str, Any],
+        article_url: str,
+        fallback_title: str,
+        format_type: str,
+        cta_type: str,
+        pillar: str,
+    ) -> tuple[str, str, str]:
         title = self._shorten(data.get("title") or fallback_title, 110)
-        rubric = self._shorten(data.get("rubric") or "legal_ai", 100)
+        default_rubric = _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")
+        rubric = self._shorten(data.get("rubric") or default_rubric, 100)
         what_happened = self._shorten(data.get("what_happened") or "", 900)
         business_effect = self._shorten(data.get("business_effect") or "", 900)
         legal_risks = self._shorten(data.get("legal_risks") or "", 900)
@@ -112,9 +150,10 @@ class LLMNewsWriter:
                 if tag and tag.startswith("#"):
                     hashtags.append(tag)
         if not hashtags:
-            hashtags = ["#LegalAI", "#LegalTech", "#AI"]
+            hashtags = list(_DEFAULT_HASHTAGS)
 
         steps_block = "\n".join(f"• {item}" for item in steps) if steps else "• Проверить применимость кейса к текущим процессам."
+        cta_line = self._cta_text(cta_type)
 
         text = normalize_post_text(
             f"{title}\n\n"
@@ -122,16 +161,18 @@ class LLMNewsWriter:
             f"Бизнес-эффект\n{business_effect or 'Сценарий влияет на скорость процессов, стоимость операций и управляемость качества сервиса.'}\n\n"
             f"Юридические риски\n{legal_risks or 'Требуется проверить обработку данных, модель ответственности и регуляторные ограничения.'}\n\n"
             f"Что делать\n{steps_block}\n\n"
+            f"Следующий шаг\n{cta_line}\n\n"
             f"Источник: {article_url}\n"
             f"{' '.join(hashtags[:4])}"
         )
         return title, text, rubric
 
     @staticmethod
-    def _passes_quality_gate(text: str) -> bool:
+    def _passes_quality_gate(text: str, format_type: str) -> bool:
         normalized = (text or "").strip()
-        required_markers = ("Что произошло", "Бизнес-эффект", "Юридические риски", "Что делать", "Источник:")
-        if len(normalized) < 550:
+        required_markers = ("Что произошло", "Бизнес-эффект", "Юридические риски", "Что делать", "Следующий шаг", "Источник:")
+        min_chars = _FORMAT_MIN_CHARS.get(format_type, _FORMAT_MIN_CHARS["standard"])
+        if len(normalized) < min_chars:
             return False
         for marker in required_markers:
             if marker not in normalized:
@@ -141,28 +182,46 @@ class LLMNewsWriter:
             return False
         return True
 
-    def _fallback_post(self, article: ArticleCandidate) -> dict[str, str]:
+    def _fallback_post(self, article: ArticleCandidate, format_type: str, cta_type: str, pillar: str) -> dict[str, str]:
         title = self._shorten(article.title or "Обзор новости", 110)
         summary = self._shorten(article.summary, 1300)
         summary = summary or "Источник сообщил о новом кейсе внедрения AI в юридическом процессе."
         base = {
             "title": title,
-            "rubric": "legal_ai",
+            "rubric": _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai"),
             "what_happened": summary[:450],
             "business_effect": "Кейс показывает, как сократить ручную работу и повысить скорость обработки типовых задач.",
             "legal_risks": "Нужно заранее определить границы автоматизации, требования к защите данных и юридическую ответственность.",
             "next_steps": "Описать текущий процесс в цифрах; выбрать 1-2 этапа для пилота; согласовать критерии качества и контроля",
-            "hashtags": ["#LegalAI", "#LegalTech", "#AI"],
+            "hashtags": list(_DEFAULT_HASHTAGS),
         }
-        _, text, rubric = self._format_post(base, article.article_url, title)
+        _, text, rubric = self._format_post(
+            base,
+            article.article_url,
+            title,
+            format_type=format_type,
+            cta_type=cta_type,
+            pillar=pillar,
+        )
         return {"title": title, "text": text, "rubric": rubric}
 
-    def generate_post(self, article: ArticleCandidate, rag_examples: list[RAGExample]) -> dict[str, str]:
+    def generate_post(
+        self,
+        article: ArticleCandidate,
+        rag_examples: list[RAGExample],
+        format_type: str = "standard",
+        cta_type: str = "soft",
+        pillar: str = "implementation",
+    ) -> dict[str, str]:
+        format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         user_prompt = (
             f"Источник: {article.source_url}\n"
             f"URL статьи: {article.article_url}\n"
             f"Заголовок: {article.title}\n"
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
+            f"Целевая смысловая корзина: {pillar}\n"
+            f"{format_hint}\n"
+            f"CTA-уровень: {cta_type}\n\n"
             f"Краткое содержание статьи:\n{article.summary[:3000]}\n\n"
             f"{self._build_context(rag_examples)}"
         )
@@ -180,12 +239,22 @@ class LLMNewsWriter:
         raw = response.choices[0].message.content or ""
         try:
             data = self._extract_json(raw)
-            title, text, rubric = self._format_post(data, article.article_url, article.title[:110])
-            if not self._passes_quality_gate(text):
-                logger.warning("llm_post_failed_quality_gate", extra={"title": title[:80], "rubric": rubric})
-                return self._fallback_post(article)
-            logger.info("llm_post_generated", extra={"title": title[:80], "rubric": rubric})
+            title, text, rubric = self._format_post(
+                data,
+                article.article_url,
+                article.title[:110],
+                format_type=format_type,
+                cta_type=cta_type,
+                pillar=pillar,
+            )
+            if not self._passes_quality_gate(text, format_type):
+                logger.warning(
+                    "llm_post_failed_quality_gate",
+                    extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
+                )
+                return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+            logger.info("llm_post_generated", extra={"title": title[:80], "rubric": rubric, "format_type": format_type})
             return {"title": title[:160], "text": text, "rubric": rubric[:100]}
         except Exception as exc:
-            logger.warning("llm_post_parse_failed", extra={"error": str(exc)})
-            return self._fallback_post(article)
+            logger.warning("llm_post_parse_failed", extra={"error": str(exc), "format_type": format_type})
+            return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)

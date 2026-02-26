@@ -8,6 +8,7 @@ from news.pipeline import (
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
+    normalize_rubric_to_pillar,
     parse_schedule_slots,
     select_rag_examples,
 )
@@ -95,3 +96,8 @@ def test_select_rag_examples_returns_related_texts() -> None:
     )
     assert len(selected) == 1
     assert selected[0].title == "AI комплаенс"
+
+
+def test_normalize_rubric_to_pillar() -> None:
+    assert normalize_rubric_to_pillar("compliance") == "regulation"
+    assert normalize_rubric_to_pillar("unknown", "Рынок AI и инвестиции в LegalTech") == "market"

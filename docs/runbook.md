@@ -52,6 +52,28 @@ make deploy
 uv run --package news python -m news.generate --dry-run --limit 5
 ```
 
+## Control Plane автоматизаций
+Просмотр активных тумблеров:
+```bash
+curl -s "$CORE_API_URL/api/v1/automation-controls?scope=news" -H "X-API-Key: $API_KEY_ADMIN"
+```
+
+Отключить автогенерацию контента:
+```bash
+curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" \
+  -H "X-API-Key: $API_KEY_ADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":false}'
+```
+
+Включить обратно:
+```bash
+curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" \
+  -H "X-API-Key: $API_KEY_ADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true}'
+```
+
 ## Backup/Restore
 Бэкап:
 ```bash

@@ -113,6 +113,16 @@ def main() -> int:
         return 1
 
     client = CoreClient(settings.core_api_url, settings.api_key_news)
+    try:
+        controls_response = client.list_automation_controls(scope="news")
+        controls_response.raise_for_status()
+        controls = {row.get("key"): bool(row.get("enabled", True)) for row in controls_response.json()}
+        if controls.get("news.publish.enabled") is False:
+            logger.info("publish_disabled_by_control_plane")
+            return 0
+    except Exception as exc:
+        logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
+
     claim_response = client.claim_posts(limit=10)
     if claim_response.status_code == 204:
         logger.info("no_due_posts")

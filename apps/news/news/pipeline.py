@@ -48,6 +48,92 @@ _STOP_WORDS = {
 }
 
 _WORD_RE = re.compile(r"[A-Za-zА-Яа-я0-9_]{3,}")
+PILLARS = ("regulation", "case", "implementation", "tools", "market")
+_DEFAULT_PILLAR_TARGETS: dict[str, float] = {
+    "regulation": 0.35,
+    "case": 0.25,
+    "implementation": 0.2,
+    "tools": 0.1,
+    "market": 0.1,
+}
+_PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "regulation": (
+        "регуля",
+        "закон",
+        "норм",
+        "суд",
+        "штраф",
+        "gdpr",
+        "комплаенс",
+        "compliance",
+        "governance",
+    ),
+    "case": (
+        "кейс",
+        "внедр",
+        "компан",
+        "roi",
+        "сократ",
+        "увелич",
+        "автоматиз",
+        "case study",
+    ),
+    "implementation": (
+        "процесс",
+        "шаг",
+        "playbook",
+        "чек-лист",
+        "workflow",
+        "practice",
+        "best practice",
+        "framework",
+    ),
+    "tools": (
+        "модел",
+        "платформ",
+        "api",
+        "copilot",
+        "openai",
+        "deepseek",
+        "llm",
+        "tool",
+    ),
+    "market": (
+        "рынок",
+        "инвест",
+        "funding",
+        "m&a",
+        "acquisition",
+        "valuation",
+        "стратег",
+    ),
+}
+_RUBRIC_TO_PILLAR: dict[str, str] = {
+    "regulation": "regulation",
+    "ai_law": "regulation",
+    "compliance": "regulation",
+    "privacy": "regulation",
+    "litigation": "regulation",
+    "case": "case",
+    "cases": "case",
+    "market": "market",
+    "legal_ops": "implementation",
+    "implementation": "implementation",
+    "contracts": "implementation",
+    "tools": "tools",
+}
+_URGENT_KEYWORDS = (
+    "штраф",
+    "запрет",
+    "исков",
+    "утечк",
+    "суд",
+    "принял закон",
+    "регулятор",
+    "lawsuit",
+    "ban",
+    "penalty",
+)
 
 
 @dataclass(slots=True)
@@ -136,6 +222,54 @@ def keyword_score(text: str) -> float:
     return score
 
 
+def default_pillar_targets() -> dict[str, float]:
+    return dict(_DEFAULT_PILLAR_TARGETS)
+
+
+def infer_pillar(text: str) -> str:
+    normalized = _normalize_text(text)
+    best_pillar = "implementation"
+    best_score = -1.0
+    for pillar, keywords in _PILLAR_KEYWORDS.items():
+        score = 0.0
+        for keyword in keywords:
+            if keyword in normalized:
+                score += 1.0
+        if score > best_score:
+            best_score = score
+            best_pillar = pillar
+    return best_pillar
+
+
+def normalize_rubric_to_pillar(rubric: str | None, fallback_text: str = "") -> str:
+    normalized_rubric = (rubric or "").strip().lower()
+    if normalized_rubric in _RUBRIC_TO_PILLAR:
+        return _RUBRIC_TO_PILLAR[normalized_rubric]
+    return infer_pillar(fallback_text)
+
+
+def pillar_for_article(article: ArticleCandidate) -> str:
+    return infer_pillar(f"{article.title}\n{article.summary}")
+
+
+def urgency_score(article: ArticleCandidate, now_utc: datetime) -> float:
+    score = 0.0
+    normalized = _normalize_text(f"{article.title}\n{article.summary}")
+    for keyword in _URGENT_KEYWORDS:
+        if keyword in normalized:
+            score += 1.0
+    if article.published_at:
+        age_hours = max(
+            0.0,
+            (now_utc - article.published_at.astimezone(timezone.utc)).total_seconds() / 3600,
+        )
+        if age_hours <= 24:
+            score += 1.0
+        elif age_hours <= 48:
+            score += 0.5
+    return score
+
+
 def article_score(
     article: ArticleCandidate,
     now_utc: datetime,
@@ -171,27 +305,55 @@ def choose_top_articles(
     now_utc: datetime,
     priority_domains: set[str] | None = None,
     max_per_source: int = 2,
+    recent_pillar_counts: dict[str, int] | None = None,
+    target_pillar_shares: dict[str, float] | None = None,
 ) -> list[ArticleCandidate]:
-    scored: list[tuple[ArticleCandidate, float, float]] = []
+    scored: list[tuple[ArticleCandidate, float, float, str]] = []
     for candidate in candidates:
         base = keyword_score(f"{candidate.title}\n{candidate.summary}")
         total = article_score(candidate, now_utc, priority_domains=priority_domains)
-        scored.append((candidate, total, base))
+        pillar = pillar_for_article(candidate)
+        scored.append((candidate, total, base, pillar))
     scored.sort(key=lambda x: x[1], reverse=True)
 
+    recent_counts = dict(recent_pillar_counts or {})
+    target_shares = dict(target_pillar_shares or _DEFAULT_PILLAR_TARGETS)
     selected: list[ArticleCandidate] = []
     source_count: dict[str, int] = {}
-    for candidate, score, base in scored:
-        if len(selected) >= limit:
+    selected_pillar_counts: dict[str, int] = {}
+
+    remaining = list(scored)
+    while remaining and len(selected) < limit:
+        best_idx: int | None = None
+        best_adjusted = -10_000.0
+        for idx, (candidate, total, base, pillar) in enumerate(remaining):
+            if base < 1.0:
+                continue
+            source_key = extract_domain(candidate.source_url or candidate.article_url)
+            already = source_count.get(source_key, 0)
+            if already >= max(1, max_per_source):
+                continue
+
+            observed_total = max(1, sum(recent_counts.values()) + sum(selected_pillar_counts.values()))
+            observed_share = (
+                (recent_counts.get(pillar, 0) + selected_pillar_counts.get(pillar, 0))
+                / observed_total
+            )
+            target_share = target_shares.get(pillar, 1.0 / len(PILLARS))
+            pillar_balance_bonus = (target_share - observed_share) * 2.5
+            adjusted = total + pillar_balance_bonus
+            if adjusted > best_adjusted:
+                best_adjusted = adjusted
+                best_idx = idx
+
+        if best_idx is None:
             break
-        if base < 1.0:
-            continue
-        source_key = extract_domain(candidate.source_url or candidate.article_url)
-        already = source_count.get(source_key, 0)
-        if already >= max(1, max_per_source):
-            continue
+
+        candidate, total, base, pillar = remaining.pop(best_idx)
         selected.append(candidate)
-        source_count[source_key] = already + 1
+        source_key = extract_domain(candidate.source_url or candidate.article_url)
+        source_count[source_key] = source_count.get(source_key, 0) + 1
+        selected_pillar_counts[pillar] = selected_pillar_counts.get(pillar, 0) + 1
 
     return selected
 

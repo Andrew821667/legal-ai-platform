@@ -44,6 +44,17 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def list_automation_controls(self, scope: str | None = None) -> requests.Response:
+        params: dict[str, Any] = {}
+        if scope:
+            params["scope"] = scope
+        return requests.get(
+            f"{self.base_url}/api/v1/automation-controls",
+            params=params,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def patch_post(self, post_id: str, payload: dict[str, Any]) -> requests.Response:
         return requests.patch(
             f"{self.base_url}/api/v1/scheduled-posts/{post_id}",

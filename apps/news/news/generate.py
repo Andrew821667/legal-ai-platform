@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-from datetime import datetime, time, timedelta, timezone
+import re
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
@@ -10,15 +11,20 @@ from news.core_client import CoreClient
 from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.pipeline import (
+    ArticleCandidate,
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
+    default_pillar_targets,
     lexical_similarity,
-    parse_schedule_slots,
+    normalize_rubric_to_pillar,
+    pillar_for_article,
+    urgency_score,
 )
 from news.rag import PostedContentRAG
 from news.rss_fetcher import fetch_rss_articles
 from news.settings import settings
+from news.strategy import build_publish_plan
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -46,9 +52,34 @@ def _parse_priority_domains() -> set[str]:
     return domains
 
 
-def _collect_history(client: CoreClient) -> tuple[list[str], set[str]]:
+def _load_controls(client: CoreClient) -> dict[str, bool]:
+    try:
+        response = client.list_automation_controls(scope="news")
+        response.raise_for_status()
+        rows = response.json()
+    except Exception as exc:
+        logger.warning("automation_controls_fetch_failed", extra={"error": str(exc)})
+        return {}
+
+    controls: dict[str, bool] = {}
+    for row in rows:
+        key = str(row.get("key") or "").strip()
+        if not key:
+            continue
+        controls[key] = bool(row.get("enabled", True))
+    return controls
+
+
+def _is_enabled(controls: dict[str, bool], key: str, default: bool = True) -> bool:
+    return controls.get(key, default)
+
+
+def _collect_history(client: CoreClient) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]]]:
     texts: list[str] = []
     source_urls: set[str] = set()
+    recent_pillar_counts: dict[str, int] = {}
+    posted_items: list[dict[str, str]] = []
+
     for status in ("posted", "scheduled", "publishing"):
         try:
             response = client.list_posts(
@@ -58,33 +89,58 @@ def _collect_history(client: CoreClient) -> tuple[list[str], set[str]]:
             )
             response.raise_for_status()
             rows = response.json()
-            for row in rows:
-                text = (row.get("text") or "").strip()
-                if text:
-                    texts.append(text)
-                url = canonicalize_url(row.get("source_url") or "")
-                if url:
-                    source_urls.add(url)
         except Exception as exc:
             logger.warning("history_scan_failed", extra={"status": status, "error": str(exc)})
-    return texts, source_urls
+            continue
 
+        for row in rows:
+            title = (row.get("title") or "").strip()
+            text = (row.get("text") or "").strip()
+            if text:
+                texts.append(text)
 
-def _build_schedule(now_local: datetime, count: int, slots: list[tuple[int, int]]) -> list[datetime]:
-    sorted_slots = sorted(slots)
-    plan: list[datetime] = []
+            url = canonicalize_url(row.get("source_url") or "")
+            if url:
+                source_urls.add(url)
 
-    for day_offset in range(0, 14):
-        day = (now_local + timedelta(days=day_offset)).date()
-        for hour, minute in sorted_slots:
-            candidate = datetime.combine(day, time(hour=hour, minute=minute), tzinfo=now_local.tzinfo)
-            if candidate <= now_local:
+            if status != "posted":
                 continue
-            plan.append(candidate)
-            if len(plan) >= count:
-                return plan
+            pillar = normalize_rubric_to_pillar(row.get("rubric"), f"{title}\n{text}")
+            recent_pillar_counts[pillar] = recent_pillar_counts.get(pillar, 0) + 1
+            posted_items.append(
+                {
+                    "title": title,
+                    "text": text,
+                    "source_url": row.get("source_url") or "",
+                    "publish_at": row.get("publish_at") or "",
+                }
+            )
 
-    raise RuntimeError("Unable to build publish schedule for generated posts")
+    return texts, source_urls, recent_pillar_counts, posted_items
+
+
+def _build_digest_candidate(now_utc: datetime, posted_items: list[dict[str, str]]) -> ArticleCandidate | None:
+    if not posted_items:
+        return None
+
+    highlights = posted_items[:7]
+    lines: list[str] = []
+    for idx, item in enumerate(highlights, start=1):
+        title = re.sub(r"\s+", " ", (item.get("title") or "").strip())
+        text = re.sub(r"\s+", " ", (item.get("text") or "").strip())
+        if len(text) > 190:
+            text = text[:190].rsplit(" ", maxsplit=1)[0] + "..."
+        title = title or f"Пункт {idx}"
+        lines.append(f"{idx}. {title}: {text}")
+
+    year, week, _ = now_utc.isocalendar()
+    return ArticleCandidate(
+        source_url="internal://weekly-digest",
+        article_url=f"internal://weekly-digest/{year}-W{week}",
+        title=f"Недельный дайджест Legal AI (W{week})",
+        summary="Ключевые публикации недели:\n" + "\n".join(lines),
+        published_at=now_utc,
+    )
 
 
 def main() -> int:
@@ -100,79 +156,121 @@ def main() -> int:
         logger.error("OPENAI_API_KEY is required for content generation")
         return 1
 
+    top_limit = max(1, min(args.limit, 20))
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(ZoneInfo(settings.tz_name))
+
+    core_client = CoreClient(settings.core_api_url, settings.api_key_news)
+    controls = _load_controls(core_client)
+    if not _is_enabled(controls, "news.generate.enabled", True):
+        logger.info("generation_disabled_by_control_plane")
+        return 0
+
     source_urls = _parse_sources()
     if not source_urls:
         logger.error("NEWS_SOURCE_URLS is empty; generator cannot run")
         return 1
 
-    now_utc = datetime.now(timezone.utc)
-    now_local = now_utc.astimezone(ZoneInfo(settings.tz_name))
+    history_texts, existing_source_urls, recent_pillar_counts, posted_items = _collect_history(core_client)
+    digest_enabled = _is_enabled(controls, "news.digest.enabled", True)
+    digest_candidate = _build_digest_candidate(now_utc, posted_items) if digest_enabled else None
 
     articles = fetch_rss_articles(source_urls)
-    if not articles:
-        logger.info("No articles fetched from sources")
-        return 0
-
     priority_domains = _parse_priority_domains()
-    top_limit = max(1, min(args.limit, 20))
+    selection_limit = min(60, top_limit * 6)
     selected_articles = choose_top_articles(
         articles,
-        limit=top_limit,
+        limit=selection_limit,
         now_utc=now_utc,
         priority_domains=priority_domains,
         max_per_source=settings.news_max_per_source,
+        recent_pillar_counts=recent_pillar_counts,
+        target_pillar_shares=default_pillar_targets(),
     )
-    if not selected_articles:
-        logger.info("No relevant articles selected")
+
+    if not selected_articles and digest_candidate is None:
+        logger.info("no_candidates_for_generation")
         return 0
 
-    slots = parse_schedule_slots(settings.news_schedule_slots)
-    schedule = _build_schedule(now_local, len(selected_articles), slots)
+    allow_alert_slot = (
+        _is_enabled(controls, "news.alert_slot.enabled", settings.news_enable_alert_slot)
+        and any(urgency_score(article, now_utc) >= 2.0 for article in selected_articles[:20])
+    )
+    publish_plan = build_publish_plan(now_local, top_limit, allow_alert_slot=allow_alert_slot)
+    if not publish_plan:
+        logger.info("no_available_publish_slots")
+        return 0
 
-    core_client = CoreClient(settings.core_api_url, settings.api_key_news)
     rag = PostedContentRAG(core_client)
     writer = LLMNewsWriter()
-    history_texts, existing_source_urls = _collect_history(core_client)
 
+    article_queue = list(selected_articles)
+    digest_used = False
     created = 0
     previewed = 0
     duplicates = 0
     failed = 0
+    skipped_slots = 0
 
-    slot_idx = 0
-    for article in selected_articles:
-        try:
+    for slot in publish_plan:
+        slot_done = False
+        format_type = slot.format_type
+        cta_type = slot.cta_type
+
+        if format_type == "digest" and not digest_enabled:
+            format_type = "standard"
+
+        for _ in range(0, 80):
+            digest_for_slot = False
+            if format_type == "digest":
+                if digest_used or digest_candidate is None:
+                    format_type = "standard"
+                    continue
+                article = digest_candidate
+                digest_for_slot = True
+            else:
+                if not article_queue:
+                    break
+                article = article_queue.pop(0)
+
             article_canonical_url = canonicalize_url(article.article_url)
-            if article_canonical_url and article_canonical_url in existing_source_urls:
+            if not digest_for_slot and article_canonical_url and article_canonical_url in existing_source_urls:
                 duplicates += 1
                 logger.info("source_url_duplicate_skipped", extra={"source_url": article.article_url})
                 continue
 
             query_text = f"{article.title}\n{article.summary}"
             rag_context = rag.find_context(query_text, history_limit=50, top_k=3)
-            generated = writer.generate_post(article, rag_context)
+            pillar = pillar_for_article(article)
+            generated = writer.generate_post(
+                article,
+                rag_context,
+                format_type=format_type,
+                cta_type=cta_type,
+                pillar=pillar,
+            )
 
             max_similarity = 0.0
             if history_texts:
                 max_similarity = max(lexical_similarity(generated["text"], prev_text) for prev_text in history_texts)
-            if max_similarity >= settings.news_similarity_threshold:
+            similarity_threshold = settings.news_similarity_threshold + (0.15 if digest_for_slot else 0.0)
+            if max_similarity >= similarity_threshold:
                 duplicates += 1
                 logger.info(
                     "semantic_duplicate_skipped",
                     extra={
                         "source_url": article.article_url,
+                        "format_type": format_type,
                         "similarity": round(max_similarity, 4),
-                        "threshold": settings.news_similarity_threshold,
+                        "threshold": similarity_threshold,
                     },
                 )
+                if digest_for_slot:
+                    break
                 continue
 
             source_hash = build_source_hash(article.article_url, article.title, article.published_at)
-            if slot_idx >= len(schedule):
-                logger.warning("schedule_slots_exhausted")
-                break
-            publish_at_utc = schedule[slot_idx].astimezone(timezone.utc)
-
+            publish_at_utc = slot.publish_at_local.astimezone(timezone.utc)
             payload = {
                 "title": generated["title"],
                 "text": generated["text"],
@@ -187,59 +285,74 @@ def main() -> int:
 
             if args.dry_run:
                 previewed += 1
+                slot_done = True
                 history_texts.append(generated["text"])
                 if article_canonical_url:
                     existing_source_urls.add(article_canonical_url)
+                if digest_for_slot:
+                    digest_used = True
                 logger.info(
                     "dry_run_preview",
                     extra={
                         "source_url": article.article_url,
                         "title": generated["title"][:120],
+                        "format_type": format_type,
+                        "cta_type": cta_type,
                         "publish_at": payload["publish_at"],
                         "text_preview": generated["text"][:700],
                     },
                 )
-                slot_idx += 1
-                continue
+                break
 
             response = core_client.create_scheduled_post(payload)
             if response.status_code in (200, 201):
                 created += 1
-                slot_idx += 1
+                slot_done = True
                 history_texts.append(generated["text"])
                 if article_canonical_url:
                     existing_source_urls.add(article_canonical_url)
+                if digest_for_slot:
+                    digest_used = True
                 logger.info(
                     "scheduled_post_created",
                     extra={
                         "source_url": article.article_url,
+                        "format_type": format_type,
+                        "cta_type": cta_type,
                         "publish_at": payload["publish_at"],
-                        "dry_run": args.dry_run,
                     },
                 )
-            elif response.status_code == 409:
+                break
+
+            if response.status_code == 409:
                 duplicates += 1
                 logger.info("duplicate_post_skipped", extra={"source_url": article.article_url})
-            else:
-                failed += 1
-                logger.error(
-                    "scheduled_post_create_failed",
-                    extra={"status": response.status_code, "body": response.text[:500]},
-                )
+                if digest_for_slot:
+                    break
+                continue
 
-        except Exception as exc:
             failed += 1
-            logger.exception("article_generation_failed", extra={"article_url": article.article_url, "error": str(exc)})
+            slot_done = True
+            logger.error(
+                "scheduled_post_create_failed",
+                extra={"status": response.status_code, "body": response.text[:500]},
+            )
+            break
+
+        if not slot_done:
+            skipped_slots += 1
 
     logger.info(
         "generation_completed",
         extra={
             "fetched": len(articles),
-            "selected": len(selected_articles),
+            "pool_selected": len(selected_articles),
+            "slots_planned": len(publish_plan),
             "created": created,
             "previewed": previewed,
             "duplicates": duplicates,
             "failed": failed,
+            "skipped_slots": skipped_slots,
             "dry_run": args.dry_run,
         },
     )

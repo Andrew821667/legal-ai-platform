@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     news_similarity_threshold: float = 0.48
     news_priority_domains: str = ""
     news_history_scan_limit: int = 120
+    news_weekday_slots: str = "10:00,16:30"
+    news_saturday_slots: str = "11:00"
+    news_sunday_slots: str = ""
+    news_alert_slot: str = "19:00"
+    news_enable_alert_slot: bool = True
+    news_deep_days: str = "tue,thu"
+    news_digest_weekday: int = 5
+    news_cta_sequence: str = "soft,soft,soft,soft,soft,soft,soft,mid,mid,hard"
 
 
 settings = Settings()
