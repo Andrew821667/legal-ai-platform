@@ -69,7 +69,7 @@
 
 Проверка:
 1. Убедиться, что запущен процесс `python -m news.admin_bot`.
-2. Проверить `TELEGRAM_BOT_TOKEN`, `API_KEY_NEWS`, `NEWS_ADMIN_IDS`.
+2. Проверить `NEWS_ADMIN_BOT_TOKEN` (или fallback `TELEGRAM_BOT_TOKEN`), `API_KEY_NEWS`, `NEWS_ADMIN_IDS`.
 3. Проверить доступность `GET /api/v1/automation-controls?scope=news`.
 
 ## Зависшие посты scheduled_posts

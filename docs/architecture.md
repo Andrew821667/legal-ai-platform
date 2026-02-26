@@ -34,6 +34,13 @@
 5. `news.admin_bot` позволяет включать/выключать автоматизации из Telegram (для разрешённых admin ID).
 6. `contract-worker` claim'ит `contract_jobs`, анализирует, отправляет результат.
 
+## Ключевые API-endpoints
+- `GET /health` — быстрый liveness для Caddy/Docker/monitoring (вне version prefix).
+- `GET /health/detailed` — расширенный health для админов (вне version prefix).
+- `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
+- `POST /api/v1/contract-jobs/claim` — атомарный claim одной задачи worker'ом.
+- `POST /api/v1/scheduled-posts/claim?limit=10` — атомарный claim пачки постов паблишером.
+
 ## Надёжность
 - Idempotency для `POST /api/v1/leads` и `POST /api/v1/events`.
 - Claim-паттерн через `FOR UPDATE SKIP LOCKED`:

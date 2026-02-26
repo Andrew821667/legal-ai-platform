@@ -60,6 +60,7 @@ uv run --package news python -m news.admin_bot
 Рекомендуется запускать как отдельный daemon/service (не через cron).
 Для одновременной работы с лид-ботом задайте отдельный токен `NEWS_ADMIN_BOT_TOKEN`
 (иначе оба процесса будут конфликтовать по long polling одного Telegram-бота).
+Если `NEWS_ADMIN_BOT_TOKEN` не задан, будет использован fallback `TELEGRAM_BOT_TOKEN`.
 
 ## Control Plane автоматизаций
 Просмотр активных тумблеров:
@@ -124,3 +125,4 @@ caffeinate -i uv run --package contract-worker python -m contract_worker.run
 - Core API 500: проверить логи и `/health/detailed`.
 - Бот буферизует лиды: проверить файл SQLite и доступность Core API.
 - Нет worker heartbeat: проверить процесс на MacBook и сеть.
+- Проверить живость worker'ов API-методом: `GET /api/v1/workers/status`.
