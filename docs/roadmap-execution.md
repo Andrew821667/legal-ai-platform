@@ -58,9 +58,9 @@
 - [x] Убедиться, что уникальные/служебные индексы покрывают claim-сценарии.
 
 ### День 3: Конкурентность и failover
-- [ ] Прогнать конкурентный claim для posts/jobs (параллельные воркеры).
-- [ ] Проверить retry/cooldown для failed posts.
-- [ ] Проверить reset stale (`publishing` / `processing`) через cron-скрипты.
+- [x] Прогнать конкурентный claim для posts/jobs (параллельные воркеры).
+- [x] Проверить retry/cooldown для failed posts.
+- [x] Проверить reset stale (`publishing` / `processing`) через cron-скрипты.
 
 ### День 4: Security и эксплуатация
 - [ ] Проверить scoped API keys (`bot/news/worker/admin`) и audit-лог.
