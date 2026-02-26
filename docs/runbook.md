@@ -52,6 +52,13 @@ make deploy
 uv run --package news python -m news.generate --dry-run --limit 5
 ```
 
+Запуск Telegram админ-панели контент-бота:
+```bash
+uv run --package news python -m news.admin_bot
+```
+
+Рекомендуется запускать как отдельный daemon/service (не через cron).
+
 ## Control Plane автоматизаций
 Просмотр активных тумблеров:
 ```bash
@@ -73,6 +80,11 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
   -H "Content-Type: application/json" \
   -d '{"enabled":true}'
 ```
+
+Через Telegram admin-bot:
+- `/admin` или `/controls` — открыть панель;
+- `Статус очереди` — оперативный статус draft/scheduled/failed;
+- `Включить всё/Отключить всё` — массовое управление news-автоматизациями.
 
 ## Backup/Restore
 Бэкап:

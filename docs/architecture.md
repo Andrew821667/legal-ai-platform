@@ -7,6 +7,7 @@
 - `news`:
   - `news.generate` — тяжёлый batch-джоб по расписанию.
   - `news.publish` — лёгкий cron-паблишер.
+  - `news.admin_bot` — Telegram админ-панель управления автоматизациями.
 - `contract-worker` — воркер анализа договоров на MacBook.
 - `caddy` — reverse proxy и автогенерация TLS.
 - `automation control plane` — таблица `automation_controls` + API для runtime-тумблеров автоматизаций.
@@ -30,7 +31,8 @@
 2. `core-api` сохраняет лиды/события в Postgres.
 3. `news.generate` читает control plane, строит контент-план (форматы/CTA/слоты) и создаёт `scheduled_posts`.
 4. `news.publish` читает control plane, claim'ит записи и публикует в Telegram.
-5. `contract-worker` claim'ит `contract_jobs`, анализирует, отправляет результат.
+5. `news.admin_bot` позволяет включать/выключать автоматизации из Telegram (для разрешённых admin ID).
+6. `contract-worker` claim'ит `contract_jobs`, анализирует, отправляет результат.
 
 ## Надёжность
 - Idempotency для `POST /api/v1/leads` и `POST /api/v1/events`.

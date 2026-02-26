@@ -135,11 +135,22 @@ def bootstrap_automation_controls(
 def upsert_automation_control(
     control_key: str,
     payload: AutomationControlPatch,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.news, Scope.worker, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> AutomationControl:
     row = db.get(AutomationControl, control_key)
     created = False
+    is_admin = identity.scope == Scope.admin
+
+    if row is None and not is_admin:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    if row is not None and not is_admin:
+        if row.scope != identity.scope:
+            raise HTTPException(status_code=403, detail="Insufficient scope for this control")
+        if payload.scope is not None or payload.title is not None or payload.description is not None:
+            raise HTTPException(status_code=403, detail="Only enabled/config can be changed with scoped key")
+
     if row is None:
         template = _DEFAULT_BY_KEY.get(control_key)
         if template is None and payload.scope is None:

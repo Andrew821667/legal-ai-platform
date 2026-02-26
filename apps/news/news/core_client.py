@@ -55,6 +55,14 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def update_automation_control(self, key: str, payload: dict[str, Any]) -> requests.Response:
+        return requests.put(
+            f"{self.base_url}/api/v1/automation-controls/{key}",
+            json=payload,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def patch_post(self, post_id: str, payload: dict[str, Any]) -> requests.Response:
         return requests.patch(
             f"{self.base_url}/api/v1/scheduled-posts/{post_id}",

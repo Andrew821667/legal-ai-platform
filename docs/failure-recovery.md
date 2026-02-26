@@ -60,6 +60,18 @@
 2. Выключить нужный флаг (`news.generate.enabled`, `news.publish.enabled`, и т.д.).
 3. Проверить логи соответствующего сервиса: он должен завершить цикл с сообщением `disabled_by_control_plane`.
 
+Альтернатива:
+- Через Telegram `news.admin_bot` выполнить выключение в чате (`/admin`).
+
+## Недоступна Telegram админ-панель news.admin_bot
+Симптомы:
+- Бот не отвечает на `/admin`.
+
+Проверка:
+1. Убедиться, что запущен процесс `python -m news.admin_bot`.
+2. Проверить `TELEGRAM_BOT_TOKEN`, `API_KEY_NEWS`, `NEWS_ADMIN_IDS`.
+3. Проверить доступность `GET /api/v1/automation-controls?scope=news`.
+
 ## Зависшие посты scheduled_posts
 Симптомы:
 - Есть записи `status=publishing`, которые не меняются длительное время.

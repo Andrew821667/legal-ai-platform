@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_channel_username: str = ""
+    news_admin_ids: str = ""
     news_source_urls: str = ""
     tz_name: str = "Europe/Moscow"
     openai_api_key: str = ""
