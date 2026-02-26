@@ -3,9 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
+    _batch_mode_label,
+    _batch_mode_limit,
     _compute_quick_publish_at,
     _is_manual_queue_context,
     _normalize_operator_note,
+    _parse_batch_publish_callback,
     _parse_manual_queue_callback,
     _parse_post_list_callback,
     _queue_context_from_filter,
@@ -44,6 +47,24 @@ def test_manual_queue_context_helpers() -> None:
     assert _queue_filter_from_context("mq_all") == "all"
     assert _is_manual_queue_context("mq_due")
     assert not _is_manual_queue_context("scheduled")
+
+
+def test_parse_batch_publish_callback_formats() -> None:
+    queue_filter, offset, mode = _parse_batch_publish_callback("mbp:due:8")
+    assert queue_filter == "due"
+    assert offset == 8
+    assert mode == "page"
+    queue_filter, offset, mode = _parse_batch_publish_callback("mbp:all:16:top5")
+    assert queue_filter == "all"
+    assert offset == 16
+    assert mode == "top5"
+
+
+def test_batch_mode_helpers() -> None:
+    assert _batch_mode_limit("page") is None
+    assert _batch_mode_limit("top3") == 3
+    assert _batch_mode_limit("top5") == 5
+    assert _batch_mode_label("top3") == "топ-3"
 
 
 def test_status_labels_and_badges() -> None:

@@ -33,6 +33,7 @@ _STATE_PENDING_BATCH_PUBLISH_REASON = "pending_batch_publish_reason"
 _STATE_DRAFT_BATCH_PUBLISH = "draft_batch_publish"
 _POST_LIST_STATUSES = ("draft", "scheduled", "failed")
 _MANUAL_QUEUE_FILTERS = ("due", "all")
+_BATCH_PUBLISH_MODES = ("page", "top3", "top5")
 
 
 def _status_label(status: str) -> str:
@@ -76,6 +77,38 @@ def _parse_manual_queue_callback(data: str) -> tuple[str, int]:
             queue_filter = "due"
         return queue_filter, int(parts[2])
     return "due", 0
+
+
+def _parse_batch_publish_callback(data: str) -> tuple[str, int, str]:
+    # Формат: mbp|mbc|mbn:<filter>:<offset>[:mode]
+    parts = data.split(":")
+    queue_filter = "due"
+    offset = 0
+    mode = "page"
+    if len(parts) >= 2 and parts[1] in _MANUAL_QUEUE_FILTERS:
+        queue_filter = parts[1]
+    if len(parts) >= 3:
+        offset = int(parts[2])
+    if len(parts) >= 4 and parts[3] in _BATCH_PUBLISH_MODES:
+        mode = parts[3]
+    return queue_filter, offset, mode
+
+
+def _batch_mode_limit(mode: str) -> int | None:
+    if mode == "top3":
+        return 3
+    if mode == "top5":
+        return 5
+    return None
+
+
+def _batch_mode_label(mode: str) -> str:
+    mapping = {
+        "page": "вся страница",
+        "top3": "топ-3",
+        "top5": "топ-5",
+    }
+    return mapping.get(mode, mode)
 
 
 def _compute_quick_publish_at(slot: str) -> datetime:
@@ -402,7 +435,13 @@ class NewsAdminBot:
             buttons.append([InlineKeyboardButton(f"{idx}. {title[:45]}", callback_data=f"pv:{post_id}:{context}:{offset}")])
 
         if rows:
-            buttons.append([InlineKeyboardButton("🚀 Опубликовать страницу", callback_data=f"mbp:{queue_filter}:{offset}")])
+            buttons.append(
+                [
+                    InlineKeyboardButton("🚀 Страница", callback_data=f"mbp:{queue_filter}:{offset}:page"),
+                    InlineKeyboardButton("⚡ Топ-3", callback_data=f"mbp:{queue_filter}:{offset}:top3"),
+                    InlineKeyboardButton("🔥 Топ-5", callback_data=f"mbp:{queue_filter}:{offset}:top5"),
+                ]
+            )
 
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
@@ -469,14 +508,14 @@ class NewsAdminBot:
     def _publish_reason_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")]])
 
-    def _batch_publish_reason_keyboard(self, queue_filter: str, offset: int) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}")]])
+    def _batch_publish_reason_keyboard(self, queue_filter: str, offset: int, mode: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}:{mode}")]])
 
-    def _batch_publish_confirm_keyboard(self, queue_filter: str, offset: int) -> InlineKeyboardMarkup:
+    def _batch_publish_confirm_keyboard(self, queue_filter: str, offset: int, mode: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("✅ Подтвердить пакетную публикацию", callback_data=f"mbc:{queue_filter}:{offset}")],
-                [InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}")],
+                [InlineKeyboardButton("✅ Подтвердить пакетную публикацию", callback_data=f"mbc:{queue_filter}:{offset}:{mode}")],
+                [InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}:{mode}")],
             ]
         )
 
@@ -696,12 +735,13 @@ class NewsAdminBot:
                 return
 
             if data.startswith("mbp:"):
-                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
-                if queue_filter not in _MANUAL_QUEUE_FILTERS:
-                    queue_filter = "due"
-                offset = int(offset_raw)
+                queue_filter, offset, mode = _parse_batch_publish_callback(data)
                 total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
-                post_ids = [str(row.get("id")) for row in rows if row.get("id")]
+                selected_rows = rows
+                limit = _batch_mode_limit(mode)
+                if limit is not None:
+                    selected_rows = rows[:limit]
+                post_ids = [str(row.get("id")) for row in selected_rows if row.get("id")]
                 if not post_ids:
                     await query.edit_message_text(
                         self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
@@ -711,6 +751,7 @@ class NewsAdminBot:
                 context.user_data[_STATE_PENDING_BATCH_PUBLISH_REASON] = {
                     "queue_filter": queue_filter,
                     "offset": offset,
+                    "mode": mode,
                     "post_ids": post_ids,
                 }
                 context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
@@ -718,16 +759,14 @@ class NewsAdminBot:
                     "Пакетная публикация: шаг 1 из 2\n\n"
                     f"Выбрано постов: {len(post_ids)}\n"
                     f"Фильтр: {'к публикации сейчас' if queue_filter == 'due' else 'все готовые'}\n\n"
+                    f"Режим: {_batch_mode_label(mode)}\n\n"
                     "Напишите причину пакетной публикации одним сообщением.",
-                    reply_markup=self._batch_publish_reason_keyboard(queue_filter, offset),
+                    reply_markup=self._batch_publish_reason_keyboard(queue_filter, offset, mode),
                 )
                 return
 
             if data.startswith("mbc:"):
-                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
-                if queue_filter not in _MANUAL_QUEUE_FILTERS:
-                    queue_filter = "due"
-                offset = int(offset_raw)
+                queue_filter, offset, mode = _parse_batch_publish_callback(data)
                 draft = context.user_data.get(_STATE_DRAFT_BATCH_PUBLISH)
                 if not draft:
                     await query.message.reply_text("Черновик пакетной публикации не найден. Запустите действие заново.")
@@ -737,6 +776,13 @@ class NewsAdminBot:
                 if not post_ids or not reason:
                     await query.message.reply_text("Недостаточно данных для пакетной публикации. Запустите действие заново.")
                     return
+                queue_filter = str(draft.get("queue_filter") or queue_filter)
+                if queue_filter not in _MANUAL_QUEUE_FILTERS:
+                    queue_filter = "due"
+                offset = int(draft.get("offset") or offset)
+                mode = str(draft.get("mode") or mode)
+                if mode not in _BATCH_PUBLISH_MODES:
+                    mode = "page"
 
                 success_count = 0
                 failed: list[str] = []
@@ -754,6 +800,7 @@ class NewsAdminBot:
                     f"Пакетная публикация завершена.",
                     f"Успешно: {success_count}",
                     f"С ошибкой: {len(failed)}",
+                    f"Режим: {_batch_mode_label(mode)}",
                 ]
                 if failed:
                     result_lines.append("ID с ошибками: " + ", ".join(failed[:5]))
@@ -766,10 +813,7 @@ class NewsAdminBot:
                 return
 
             if data.startswith("mbn:"):
-                _, queue_filter, offset_raw = data.split(":", maxsplit=2)
-                if queue_filter not in _MANUAL_QUEUE_FILTERS:
-                    queue_filter = "due"
-                offset = int(offset_raw)
+                queue_filter, offset, _ = _parse_batch_publish_callback(data)
                 context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
                 total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
@@ -1019,6 +1063,9 @@ class NewsAdminBot:
             if queue_filter not in _MANUAL_QUEUE_FILTERS:
                 queue_filter = "due"
             offset = int(pending_batch_reason.get("offset") or 0)
+            mode = str(pending_batch_reason.get("mode") or "page")
+            if mode not in _BATCH_PUBLISH_MODES:
+                mode = "page"
             post_ids = [str(item) for item in pending_batch_reason.get("post_ids", []) if item]
             if not post_ids:
                 context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
@@ -1028,6 +1075,7 @@ class NewsAdminBot:
             context.user_data[_STATE_DRAFT_BATCH_PUBLISH] = {
                 "queue_filter": queue_filter,
                 "offset": offset,
+                "mode": mode,
                 "post_ids": post_ids,
                 "reason": reason,
             }
@@ -1035,9 +1083,10 @@ class NewsAdminBot:
             await update.effective_message.reply_text(
                 "Пакетная публикация: шаг 2 из 2\n\n"
                 f"Постов к публикации: {len(post_ids)}\n"
+                f"Режим: {_batch_mode_label(mode)}\n"
                 f"Причина: {reason}\n\n"
                 "Подтвердите запуск пакетной публикации:",
-                reply_markup=self._batch_publish_confirm_keyboard(queue_filter, offset),
+                reply_markup=self._batch_publish_confirm_keyboard(queue_filter, offset, mode),
             )
             return
 
@@ -1141,7 +1190,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|mbp:(?:due|all):\d+|mbc:(?:due|all):\d+|mbn:(?:due|all):\d+|pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pr:[0-9a-f-]{36}:draft:\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|px:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ba:ready:(?:draft|failed):\d+)$",
+                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|pr:[0-9a-f-]{36}:draft:\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed|mq_due|mq_all):\d+|px:(?:draft|scheduled|failed|mq_due|mq_all):\d+|ba:ready:(?:draft|failed):\d+)$",
             )
         )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_edit_text))
