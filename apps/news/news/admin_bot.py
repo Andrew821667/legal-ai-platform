@@ -307,7 +307,7 @@ class NewsAdminBot:
                 InlineKeyboardButton("🌙 19:00", callback_data=f"pt:{post_id}:{status}:{offset}:e19"),
             ],
             [InlineKeyboardButton("🌤 Завтра 10:00", callback_data=f"pt:{post_id}:{status}:{offset}:t10")],
-            [InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"pp:{post_id}:{status}:{offset}")],
+            [InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"ppc:{post_id}:{status}:{offset}")],
             [InlineKeyboardButton("✍️ Редактировать вручную", callback_data=f"pm:{post_id}:{status}:{offset}")],
             [InlineKeyboardButton("🤖 Редактировать через LLM", callback_data=f"pa:{post_id}:{status}:{offset}")],
         ]
@@ -315,6 +315,14 @@ class NewsAdminBot:
             rows.append([InlineKeyboardButton("✅ В готовые", callback_data=f"pr:{post_id}:{status}:{offset}")])
         rows.append([InlineKeyboardButton("🔙 К списку", callback_data=f"pl:{status}:{offset}")])
         return InlineKeyboardMarkup(rows)
+
+    def _publish_confirm_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("✅ Подтвердить публикацию", callback_data=f"ppy:{post_id}:{status}:{offset}")],
+                [InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")],
+            ]
+        )
 
     async def _send_to_telegram(self, context: ContextTypes.DEFAULT_TYPE, text: str, media_urls: list[str] | None) -> None:
         chat_id = settings.telegram_channel_id or settings.telegram_channel_username
@@ -569,7 +577,31 @@ class NewsAdminBot:
                 )
                 return
 
-            if data.startswith("pp:"):
+            if data.startswith("ppc:"):
+                _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                offset = int(offset_raw)
+                post = self._get_post(post_id)
+                title = str(post.get("title") or "Без заголовка").replace("\n", " ")
+                await query.edit_message_text(
+                    "Подтверждение публикации\n\n"
+                    f"Пост: {title[:120]}\n"
+                    f"ID: {post_id}\n\n"
+                    "Опубликовать сейчас в канал?",
+                    reply_markup=self._publish_confirm_keyboard(post_id, status, offset),
+                )
+                return
+
+            if data.startswith("ppn:"):
+                _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                offset = int(offset_raw)
+                post = self._get_post(post_id)
+                await query.edit_message_text(
+                    self._post_card_text(post),
+                    reply_markup=self._post_card_keyboard(post_id, status, offset),
+                )
+                return
+
+            if data.startswith("ppy:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
                 await self._publish_now(context, post_id)
@@ -722,7 +754,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+:(?:h1|e19|t10)|pp:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pr:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|px:(?:draft|scheduled|failed):\d+|ba:ready:(?:draft|failed):\d+)$",
+                pattern=r"^(pl:(?:draft|scheduled|failed):\d+|pl:\d+|pv:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pt:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ppy:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ppn:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pm:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pa:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|pr:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|scheduled|failed):\d+|px:(?:draft|scheduled|failed):\d+|ba:ready:(?:draft|failed):\d+)$",
             )
         )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_edit_text))
