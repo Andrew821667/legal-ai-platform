@@ -49,8 +49,20 @@ def _services_inline_menu_markup() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
             [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
             [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
+            [InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact")],
             [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
+            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
             [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
+        ]
+    )
+
+
+def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📲 Оставить номер телефона", callback_data="menu_contact_send_phone")],
+            [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
+            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
         ]
     )
 
@@ -83,6 +95,77 @@ def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("admin_lookup_field", None)
 
 
+async def _create_and_notify_instant_contact_lead(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_db_id: int,
+    user,
+    *,
+    source: str,
+    lead_magnet_type: str,
+    note: str,
+) -> tuple[int, bool]:
+    """
+    Создает новый лид в 1 клик по кнопке "Оставить контакт" и сразу уведомляет админа.
+    """
+    previous_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+    user_state = database.db.get_user_funnel_state(user_db_id)
+    cta_variant = user_state.get("cta_variant") or funnel.choose_cta_variant(user_db_id)
+
+    payload = {
+        "name": user.first_name if user else None,
+        "email": previous_lead.get("email"),
+        "phone": previous_lead.get("phone"),
+        "company": previous_lead.get("company"),
+        "pain_point": note,
+        "temperature": "warm",
+        "status": "new",
+        "notification_sent": 0,
+        "lead_magnet_type": lead_magnet_type,
+        "lead_magnet_delivered": 1,
+        "notes": f"[ONE_CLICK_CONTACT] {source}",
+    }
+    lead_id = database.db.create_new_lead(user_db_id, payload)
+
+    database.db.update_user_funnel_state(
+        user_db_id,
+        conversation_stage="handoff",
+        cta_variant=cta_variant,
+        cta_shown=True,
+    )
+    database.db.update_lead_funnel_state_by_id(
+        lead_id,
+        conversation_stage="handoff",
+        cta_variant=cta_variant,
+        cta_shown=True,
+    )
+
+    try:
+        database.db.track_event(
+            user_db_id,
+            "one_click_contact",
+            payload={"source": source, "lead_magnet_type": lead_magnet_type},
+            lead_id=lead_id,
+        )
+    except Exception as analytics_error:
+        logger.warning(f"Failed to track one_click_contact: {analytics_error}")
+
+    lead_payload = database.db.get_lead_by_id(lead_id) or {}
+    await notify_admin_new_lead(
+        context=context,
+        lead_id=lead_id,
+        lead_data=lead_payload,
+        user_data={
+            "id": user_db_id,
+            "telegram_id": user.id if user else None,
+            "username": user.username if user else None,
+            "first_name": user.first_name if user else None,
+        },
+        is_update=False,
+    )
+    has_phone = bool((lead_payload.get("phone") or "").strip())
+    return lead_id, has_phone
+
+
 async def handle_business_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обработчик inline кнопок меню для бизнес-чатов
@@ -97,6 +180,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         callback_data = query.data or ""
         response_text = content.menu_response_by_key(callback_data)
         menu_markup = _services_inline_menu_markup()
+        contact_actions = {"menu_consultation", "menu_personal_request", "menu_leave_contact"}
 
         is_business = bool(
             query.message
@@ -104,20 +188,185 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             and query.message.business_connection_id
         )
 
-        if callback_data in {"menu_consultation", "menu_personal_request"}:
+        user = query.from_user
+        user_db_id = None
+        if user:
+            user_db_id = database.db.create_or_update_user(
+                telegram_id=user.id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+            )
+
+        if callback_data not in contact_actions:
+            context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
+            context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+
+        if callback_data == "menu_restart":
+            if user_db_id:
+                database.db.clear_conversation_history(user_db_id)
+                database.db.reset_user_funnel_state(user_db_id)
+            restart_text = "Историю очистил. Начинаем заново. Опишите задачу одним сообщением."
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=restart_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=menu_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    restart_text,
+                    reply_markup=menu_markup,
+                    action="menu_restart",
+                )
+            return
+
+        if callback_data in {"menu_contact_send_phone", "menu_contact_telegram_only"}:
+            if not user_db_id:
+                await utils.safe_reply_text(
+                    query.message,
+                    "Не удалось определить пользователя. Нажмите /start и повторите.",
+                    action="contact_choice_no_user",
+                )
+                return
+
+            if callback_data == "menu_contact_send_phone":
+                latest_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+                source = "personal_request" if latest_lead.get("lead_magnet_type") == "personal_request" else "consultation"
+                context.user_data[BUSINESS_AWAITING_CONTACT_KEY] = True
+                context.user_data[BUSINESS_AWAITING_CONTACT_SOURCE_KEY] = source
+                response_text = (
+                    "Отлично, пришлите номер телефона одним сообщением.\n"
+                    "Пример: +7 999 123-45-67."
+                )
+                response_markup = menu_markup if is_business else _consultation_contact_markup()
+            else:
+                context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
+                context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+                latest_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+                if latest_lead:
+                    notes = (latest_lead.get("notes") or "").strip()
+                    notes = f"{notes}\n[CONTACT_MODE] Клиент выбрал связь через Telegram без телефона".strip()
+                    database.db.create_or_update_lead(user_db_id, {"notes": notes, "notification_sent": 0})
+                    refreshed_lead = database.db.get_lead_by_user_id(user_db_id) or latest_lead
+                    await notify_admin_new_lead(
+                        context=context,
+                        lead_id=refreshed_lead["id"],
+                        lead_data=refreshed_lead,
+                        user_data={
+                            "id": user_db_id,
+                            "telegram_id": user.id if user else None,
+                            "username": user.username if user else None,
+                            "first_name": user.first_name if user else None,
+                        },
+                        is_update=True,
+                    )
+                response_text = (
+                    "Принято. Передал команде, что с вами лучше связаться в Telegram.\n"
+                    "Если захотите ускорить связь, можете в любой момент отправить номер."
+                )
+                response_markup = menu_markup
+
             if is_business:
                 await context.bot.send_message(
                     chat_id=query.message.chat.id,
                     text=response_text,
                     business_connection_id=query.message.business_connection_id,
-                    reply_markup=menu_markup,
+                    reply_markup=response_markup,
                 )
             else:
                 await utils.safe_reply_text(
                     query.message,
                     response_text,
                     action=f"{callback_data}_reply",
-                    reply_markup=_consultation_contact_markup(),
+                    reply_markup=response_markup,
+                )
+            return
+
+        if callback_data in contact_actions:
+            if not user_db_id:
+                await utils.safe_reply_text(
+                    query.message,
+                    "Не удалось определить пользователя. Нажмите /start и повторите.",
+                    action="contact_action_no_user",
+                )
+                return
+            contact_source = "consultation"
+            notes = None
+            lead_magnet_type = "consultation"
+            if callback_data == "menu_personal_request":
+                lead_magnet_type = "personal_request"
+                notes = "Личное обращение к Андрею Попову"
+                contact_source = "personal_request"
+            elif callback_data == "menu_leave_contact":
+                existing_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+                if existing_lead.get("lead_magnet_type") == "personal_request":
+                    lead_magnet_type = "personal_request"
+                    notes = existing_lead.get("notes") or "Личное обращение к Андрею Попову"
+                    contact_source = "personal_request"
+
+            if callback_data == "menu_leave_contact":
+                instant_note = (
+                    "Клиент нажал кнопку «Оставить контакт» и запросил связь с командой."
+                    if lead_magnet_type != "personal_request"
+                    else "Клиент нажал кнопку «Оставить контакт» для личного обращения."
+                )
+                _, has_phone = await _create_and_notify_instant_contact_lead(
+                    context=context,
+                    user_db_id=user_db_id,
+                    user=user,
+                    source=contact_source,
+                    lead_magnet_type=lead_magnet_type,
+                    note=instant_note,
+                )
+                context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
+                context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+                if has_phone:
+                    response_text = (
+                        "✅ Контакт передан команде.\n\n"
+                        "Мы свяжемся с вами в ближайшее рабочее время."
+                    )
+                    response_markup = menu_markup
+                else:
+                    response_text = (
+                        "⚠️ Контакт передан, но номер телефона не удалось получить "
+                        "(он может быть скрыт в настройках Telegram).\n\n"
+                        "Выберите, как удобнее продолжить:"
+                    )
+                    response_markup = _contact_visibility_choice_markup()
+            else:
+                lead_payload = {
+                    "name": user.first_name if user else None,
+                    "lead_magnet_type": lead_magnet_type,
+                    "lead_magnet_delivered": False,
+                    "notification_sent": 0,
+                }
+                if notes:
+                    lead_payload["notes"] = notes
+                database.db.create_or_update_lead(user_db_id, lead_payload)
+
+                context.user_data[BUSINESS_AWAITING_CONTACT_KEY] = True
+                context.user_data[BUSINESS_AWAITING_CONTACT_SOURCE_KEY] = contact_source
+
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=response_markup if callback_data == "menu_leave_contact" else menu_markup,
+                )
+            else:
+                await utils.safe_reply_text(
+                    query.message,
+                    response_text,
+                    action=f"{callback_data}_reply",
+                    reply_markup=(
+                        response_markup
+                        if callback_data == "menu_leave_contact"
+                        else _consultation_contact_markup()
+                    ),
                 )
             return
 
@@ -354,7 +603,6 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
 
         welcome_message = content.build_welcome_message(user.first_name)
         if user.id == config.ADMIN_TELEGRAM_ID:
-            welcome_message += "\n\n⚙️ Доступна админ-панель!"
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
@@ -387,7 +635,6 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
 
         welcome_message = content.build_welcome_message(user.first_name)
         if user.id == config.ADMIN_TELEGRAM_ID:
-            welcome_message += "\n\n⚙️ Доступна админ-панель!"
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)

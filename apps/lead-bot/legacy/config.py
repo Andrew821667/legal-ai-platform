@@ -4,11 +4,21 @@
 """
 
 import os
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения
-load_dotenv()
+# Загружаем переменные окружения детерминированно:
+# 1) сначала локальный .env этого бота (приоритетный),
+# 2) затем корневой .env репозитория как fallback для недостающих ключей.
+_THIS_DIR = Path(__file__).resolve().parent
+_LOCAL_ENV = _THIS_DIR / ".env"
+_ROOT_ENV = _THIS_DIR.parents[2] / ".env"
+
+if _LOCAL_ENV.exists():
+    load_dotenv(_LOCAL_ENV, override=False)
+if _ROOT_ENV.exists():
+    load_dotenv(_ROOT_ENV, override=False)
 
 class Config:
     """Класс конфигурации"""

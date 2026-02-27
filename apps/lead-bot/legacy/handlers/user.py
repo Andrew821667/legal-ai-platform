@@ -67,7 +67,9 @@ def _services_inline_menu_markup() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
             [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
             [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
+            [InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact")],
             [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
+            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
             [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
         ]
     )
@@ -364,9 +366,33 @@ def _schedule_typing_indicator(chat, user_telegram_id: int) -> None:
     asyncio.create_task(_send_typing())
 
 
+def _append_profile_name_context(base_context: str, profile_first_name: Optional[str]) -> str:
+    name = (profile_first_name or "").strip()
+    if name:
+        return (
+            f"{base_context}\n"
+            f"Имя пользователя в профиле Telegram: {name}.\n"
+            "Если обращаешься по имени, используй только это имя профиля Telegram. "
+            "Не извлекай имя из текста сообщения клиента."
+        )
+    return (
+        f"{base_context}\n"
+        "Если обращаешься к пользователю, используй нейтральную форму без имени. "
+        "Не извлекай имя из текста сообщения клиента."
+    )
+
+
 def _extract_phone_candidate(text: str) -> Optional[str]:
-    match = PHONE_RE.search(text or "")
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    match = PHONE_RE.search(raw)
     if not match:
+        if re.fullmatch(r"[\d\s()+\-]{10,20}", raw):
+            digits = re.sub(r"\D", "", raw)
+            if 10 <= len(digits) <= 12:
+                return digits
         return None
     return match.group(0)
 
@@ -384,6 +410,73 @@ def _persist_fasttrack_contact(user_db_id: int, user, message_text: str) -> None
     if payload:
         payload.setdefault("name", user.first_name)
         database.db.create_or_update_lead(user_db_id, payload)
+
+
+def _looks_like_ack_only(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return True
+    return normalized in {
+        "ок", "окей", "понял", "принял", "ясно", "спасибо", "благодарю",
+        "хорошо", "договорились", "супер", "круто",
+    }
+
+
+def _looks_like_plain_greeting(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in {
+        "привет",
+        "здравствуйте",
+        "добрый день",
+        "добрый вечер",
+        "доброе утро",
+        "hello",
+        "hi",
+    }
+
+
+def _looks_like_new_topic_after_handoff(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    if _looks_like_ack_only(normalized):
+        return False
+    if _extract_phone_candidate(normalized):
+        return False
+    if normalized in {
+        "/menu", "menu", "/меню", "меню",
+        "/reset", "reset", "сброс",
+        "📋 меню услуг", "📞 консультация", "✉️ заказать консультацию",
+        "✉️ личное обращение", "👤 мой профиль", "📚 документы",
+        "🔄 начать заново", "⚙️ админ-панель",
+    }:
+        return False
+    return len(normalized) >= 3
+
+
+def _build_new_phone_lead_payload(
+    previous_lead: Optional[Dict],
+    *,
+    first_name: str,
+    phone: str,
+    source: str,
+) -> Dict:
+    lead = previous_lead or {}
+    notes = (lead.get("notes") or "").strip()
+    notes = f"{notes}\n[PHONE_CAPTURE] source={source}".strip()
+    return {
+        "name": first_name,
+        "email": lead.get("email"),
+        "phone": phone,
+        "company": lead.get("company"),
+        "pain_point": lead.get("pain_point"),
+        "temperature": "warm",
+        "status": "new",
+        "lead_magnet_type": "consultation",
+        "lead_magnet_delivered": True,
+        "notification_sent": 0,
+        "notes": notes,
+    }
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -414,13 +507,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Приветственное сообщение
         welcome_message = content.build_welcome_message(user.first_name)
-
-        # Админу показываем расширенное меню с кнопкой админ-панели
-        if user.id == config.ADMIN_TELEGRAM_ID:
-            reply_markup = _main_menu_markup(user.id)
-            welcome_message += "\n\n⚙️ Доступна админ-панель!"
-        else:
-            reply_markup = _main_menu_markup(user.id)
+        reply_markup = _main_menu_markup(user.id)
 
         await utils.safe_reply_text(
             update.message,
@@ -684,14 +771,23 @@ async def _handle_non_text_input(
     if allow_lead_processing and getattr(message, "contact", None):
         phone = message.contact.phone_number or ""
         if phone and utils.validate_phone(phone):
-            payload = {
-                "name": update.effective_user.first_name if update.effective_user else None,
-                "phone": utils.format_phone(phone),
-                "lead_magnet_type": "consultation",
-                "lead_magnet_delivered": True,
-            }
-            database.db.create_or_update_lead(user_data["id"], payload)
-            await handle_handoff_request(update, context, source="consultation_contact")
+            formatted_phone = utils.format_phone(phone)
+            new_lead_id = database.db.create_new_lead(
+                user_data["id"],
+                _build_new_phone_lead_payload(
+                    lead,
+                    first_name=update.effective_user.first_name if update.effective_user else "",
+                    phone=formatted_phone,
+                    source="consultation_contact_telegram",
+                ),
+            )
+            await handle_handoff_request(
+                update,
+                context,
+                source="consultation_contact",
+                lead_id_override=new_lead_id,
+                is_update_override=False,
+            )
             return True
 
     if not lead or not lead.get("lead_magnet_type") or lead.get("lead_magnet_delivered"):
@@ -781,6 +877,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # На самом первом входящем сообщении-приветствии всегда отдаем
+        # фиксированное приветствие, а не LLM-генерацию.
+        if message_text and _looks_like_plain_greeting(message_text):
+            await utils.safe_reply_text(
+                original_message,
+                content.build_welcome_message(user.first_name),
+                reply_markup=_main_menu_markup(user.id),
+                action="fixed_welcome_on_greeting",
+            )
+            return
+
         # В non-text ветке поддерживаем сценарий демо (документ + email).
         if not message_text:
             await _handle_non_text_input(update, context, user_data, lead, allow_lead_processing)
@@ -866,15 +973,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if normalized == "consultation":
                 phone_candidate = _extract_phone_candidate(message_text)
                 if phone_candidate and utils.validate_phone(phone_candidate):
-                    database.db.create_or_update_lead(
+                    formatted_phone = utils.format_phone(phone_candidate)
+                    new_lead_id = database.db.create_new_lead(
                         user_data["id"],
-                        {
-                            "name": user.first_name,
-                            "phone": utils.format_phone(phone_candidate),
-                            "lead_magnet_delivered": True,
-                        },
+                        _build_new_phone_lead_payload(
+                            lead,
+                            first_name=user.first_name,
+                            phone=formatted_phone,
+                            source="consultation_phone_text",
+                        ),
                     )
-                    await handle_handoff_request(update, context, source="consultation_phone_text")
+                    await handle_handoff_request(
+                        update,
+                        context,
+                        source="consultation_phone_text",
+                        lead_id_override=new_lead_id,
+                        is_update_override=False,
+                    )
                     return
 
             email = extract_email(message_text)
@@ -889,6 +1004,73 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cta_shown = bool(funnel_state.get("cta_shown"))
         if not funnel_state.get("cta_variant"):
             database.db.update_user_funnel_state(user_data["id"], cta_variant=cta_variant)
+
+        # После handoff любое новое предметное сообщение считаем новым обращением:
+        # открываем отдельный лид, чтобы не смешивать боли/задачи.
+        if (
+            allow_lead_processing
+            and lead
+            and current_stage == "handoff"
+            and _looks_like_new_topic_after_handoff(message_text)
+        ):
+            carried_lead = dict(lead)
+            new_lead_payload = {
+                "name": user.first_name,
+                "email": carried_lead.get("email"),
+                "phone": carried_lead.get("phone"),
+                "company": carried_lead.get("company"),
+                "pain_point": message_text[:1000],
+                "temperature": "cold",
+                "status": "new",
+                "notification_sent": 0,
+                "lead_magnet_type": None,
+                "lead_magnet_delivered": 0,
+                "notes": (
+                    f"{(carried_lead.get('notes') or '').strip()}\n"
+                    f"[NEW_TOPIC] Новый кейс после handoff: {message_text[:300]}"
+                ).strip(),
+            }
+            new_lead_id = database.db.create_new_lead(user_data["id"], new_lead_payload)
+            database.db.update_user_funnel_state(
+                user_data["id"],
+                conversation_stage="discover",
+                cta_variant=cta_variant,
+                cta_shown=False,
+            )
+            database.db.update_lead_funnel_state_by_id(
+                new_lead_id,
+                conversation_stage="discover",
+                cta_variant=cta_variant,
+                cta_shown=False,
+            )
+
+            try:
+                database.db.track_event(
+                    user_data["id"],
+                    "new_topic_after_handoff",
+                    payload={"message": message_text[:300], "from_stage": "handoff", "to_stage": "discover"},
+                    lead_id=new_lead_id,
+                )
+            except Exception as analytics_error:
+                logger.warning(f"Failed to track new_topic_after_handoff: {analytics_error}")
+
+            new_lead_payload_db = database.db.get_lead_by_id(new_lead_id) or {}
+            await notify_admin_new_lead(
+                context=context,
+                lead_id=new_lead_id,
+                lead_data=new_lead_payload_db,
+                user_data={
+                    "id": user_data["id"],
+                    "telegram_id": user.id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                },
+                is_update=False,
+            )
+            lead = new_lead_payload_db
+            current_stage = "discover"
+            cta_shown = False
+            logger.info("New lead %s created from new topic after handoff for user %s", new_lead_id, user.id)
 
         # Обработка кнопок reply-меню
         if message_text == "📋 Меню услуг" or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
@@ -1030,7 +1212,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         start_generation = time.time()
         preview_enabled = config.STREAMING_PREVIEW
-        funnel_context = funnel.build_stage_context(response_stage, cta_variant, cta_shown)
+        funnel_context = _append_profile_name_context(
+            funnel.build_stage_context(response_stage, cta_variant, cta_shown),
+            user_data.get("first_name") or user.first_name,
+        )
         async for chunk in ai_brain.ai_brain.generate_response_stream(
             conversation_history,
             funnel_context=funnel_context,
@@ -1214,6 +1399,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not extracted:
                         return
 
+                    telegram_profile_name = (user_data.get("first_name") or user.first_name or "").strip()
+                    if telegram_profile_name:
+                        extracted["name"] = telegram_profile_name
+
                     merged_snapshot.update({k: v for k, v in extracted.items() if v is not None})
                     processed_lead_id = lead_qualifier.lead_qualifier.process_lead_data(user_db_id, extracted)
                     if processed_lead_id:
@@ -1294,6 +1483,8 @@ async def handle_handoff_request(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     source: str = "trigger",
+    lead_id_override: Optional[int] = None,
+    is_update_override: Optional[bool] = None,
 ):
     """Обработка запроса на передачу админу"""
     try:
@@ -1312,14 +1503,23 @@ async def handle_handoff_request(
             action="handoff_ack",
         )
 
-        # Создаем или обновляем лид
+        # Создаем лид только если его нет, либо используем явно переданный lead_id.
         lead = database.db.get_lead_by_user_id(user_data['id'])
-        if not lead:
-            lead_id = database.db.create_or_update_lead(user_data['id'], {
-                'name': user.first_name
-            })
+        if lead_id_override is not None:
+            lead_id = lead_id_override
+            lead_payload_override = database.db.get_lead_by_id(lead_id)
+            if lead_payload_override:
+                lead = lead_payload_override
+            is_update = bool(is_update_override) if is_update_override is not None else False
         else:
-            lead_id = lead['id']
+            if not lead:
+                lead_id = database.db.create_or_update_lead(user_data['id'], {
+                    'name': user.first_name
+                })
+                is_update = bool(is_update_override) if is_update_override is not None else False
+            else:
+                lead_id = lead['id']
+                is_update = bool(is_update_override) if is_update_override is not None else True
 
         funnel_state = database.db.get_user_funnel_state(user_data['id'])
         previous_stage = funnel_state.get('conversation_stage') or 'discover'
@@ -1330,11 +1530,18 @@ async def handle_handoff_request(
             conversation_stage='handoff',
             cta_variant=cta_variant
         )
-        database.db.update_lead_funnel_state(
-            user_data['id'],
-            conversation_stage='handoff',
-            cta_variant=cta_variant
-        )
+        if lead_id_override is not None:
+            database.db.update_lead_funnel_state_by_id(
+                lead_id,
+                conversation_stage='handoff',
+                cta_variant=cta_variant
+            )
+        else:
+            database.db.update_lead_funnel_state(
+                user_data['id'],
+                conversation_stage='handoff',
+                cta_variant=cta_variant
+            )
 
         if previous_stage != 'handoff':
             try:
@@ -1353,7 +1560,7 @@ async def handle_handoff_request(
             lead_id=lead_id,
             lead_data=lead_payload,
             user_data=user_data,
-            is_update=bool(lead),
+            is_update=is_update,
         )
 
         try:
