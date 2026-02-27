@@ -24,7 +24,7 @@ LEAD_MAGNET_MENU = [
 ]
 
 CONSENT_PDN_MENU = [
-    [InlineKeyboardButton("✅ Даю согласие", callback_data="consent_pdn_yes")],
+    [InlineKeyboardButton("✅ Даю согласие (ПД + трансграничная)", callback_data="consent_pdn_yes")],
     [InlineKeyboardButton("❌ Отказаться", callback_data="consent_pdn_no")],
     [InlineKeyboardButton("📄 Политика ПД", callback_data="consent_doc_privacy")],
 ]

@@ -68,13 +68,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            if not bool(consent_state.get("transborder_consent")):
-                await update.message.reply_text(
-                    content.CONSENT_TRANSBORDER_TEXT,
-                    reply_markup=_transborder_consent_markup(),
-                )
-                return
-
         # Приветственное сообщение
         welcome_message = content.build_welcome_message(user.first_name)
 

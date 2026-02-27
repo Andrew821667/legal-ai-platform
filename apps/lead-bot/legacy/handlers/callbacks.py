@@ -204,10 +204,19 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
 
     if action == "consent_pdn_yes":
         database.db.grant_user_consent(user_data["id"])
+        database.db.set_user_transborder_consent(user_data["id"], True)
         await query.message.edit_text(
-            content.CONSENT_TRANSBORDER_TEXT,
-            reply_markup=InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU),
+            "✅ Согласие на обработку ПД и трансграничную передачу сохранено.\n\n"
+            "AI-режим включен. Можно описать задачу в свободной форме."
         )
+
+        welcome_message = content.build_welcome_message(user.first_name)
+        if user.id == config.ADMIN_TELEGRAM_ID:
+            welcome_message += "\n\n⚙️ Доступна админ-панель!"
+            reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
+        else:
+            reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
+        await query.message.reply_text(welcome_message, reply_markup=reply_markup)
         return
 
     if action in ("consent_transborder_yes", "consent_transborder_no"):
