@@ -275,6 +275,156 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     await utils.safe_reply_text(query.message, "Неизвестное действие согласия. Попробуйте /start.", action="consent_unknown")
 
 
+def _documents_panel_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(DOCUMENTS_MENU)
+
+
+def _documents_panel_text(selected_title: str | None = None, selected_body: str | None = None) -> str:
+    base = (
+        "📚 Документы и права пользователя\n\n"
+        "Выберите пункт в меню ниже."
+    )
+    if not selected_title:
+        return base
+    return (
+        f"{base}\n\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"{selected_title}\n\n"
+        f"{selected_body or ''}"
+    ).strip()
+
+
+def _clip_for_edit(text: str, limit: int = 3900) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}\n\n…\n(Сокращено для экрана. Полная версия доступна через соответствующую команду.)"
+
+
+def _admin_users_list_markup(users: list[dict], page: int, total_pages: int) -> InlineKeyboardMarkup:
+    rows = []
+    for user in users:
+        telegram_id = user.get("telegram_id")
+        username = user.get("username")
+        label = f"👤 ID {telegram_id} - @{username}" if username else f"👤 ID {telegram_id}"
+        rows.append([InlineKeyboardButton(label[:60], callback_data=f"admin_user_detail_{telegram_id}")])
+
+    nav_row = []
+    if page > 1:
+        nav_row.append(InlineKeyboardButton("◀️", callback_data=f"admin_users_page_{page - 1}"))
+    nav_row.append(InlineKeyboardButton(f"{page}/{total_pages}", callback_data="admin_users_page_noop"))
+    if page < total_pages:
+        nav_row.append(InlineKeyboardButton("▶️", callback_data=f"admin_users_page_{page + 1}"))
+    rows.append(nav_row)
+    rows.append([InlineKeyboardButton("◀️ Назад в раздел пользователей", callback_data="admin_section_users")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _admin_user_detail_markup(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🧾 Экспорт данных", callback_data=f"admin_user_export_{telegram_id}")],
+            [InlineKeyboardButton("🔄 Сбросить диалог", callback_data=f"admin_user_reset_dialog_{telegram_id}")],
+            [InlineKeyboardButton("🗑️ Очистить данные", callback_data=f"admin_user_clear_confirm_{telegram_id}")],
+            [InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")],
+        ]
+    )
+
+
+def _admin_user_clear_confirm_markup(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Да, очистить", callback_data=f"admin_user_clear_{telegram_id}"),
+                InlineKeyboardButton("❌ Отмена", callback_data=f"admin_user_detail_{telegram_id}"),
+            ]
+        ]
+    )
+
+
+def _fetch_users_page(page: int = 1, per_page: int = 5) -> tuple[list[dict], int, int]:
+    page = max(1, page)
+    offset = (page - 1) * per_page
+
+    conn = database.db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) AS total FROM users")
+        total = int((cursor.fetchone() or {"total": 0})["total"])
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+            offset = (page - 1) * per_page
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM users
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (per_page, offset),
+        )
+        users = [dict(row) for row in cursor.fetchall()]
+        return users, total, total_pages
+    finally:
+        conn.close()
+
+
+def _build_admin_users_page_text(users: list[dict], page: int, total_pages: int, total_users: int) -> str:
+    lines = [
+        "👥 Пользователи",
+        "",
+        f"Всего пользователей: {total_users}",
+        f"Страница: {page}/{total_pages}",
+        "",
+        "Нажмите на пользователя для подробной карточки.",
+        "Поиск вручную: /pdn_user <telegram_id>",
+        "",
+    ]
+    for user in users:
+        username = f"@{user.get('username')}" if user.get("username") else "без username"
+        lines.append(
+            f"ID {user.get('telegram_id')} | {username}\n"
+            f"Имя: {user.get('first_name') or '—'} {user.get('last_name') or ''}\n"
+            f"Создан: {user.get('created_at') or '—'}\n"
+        )
+    return "\n".join(lines).strip()
+
+
+def _get_user_conversation_count(user_id: int) -> int:
+    conn = database.db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) AS total FROM conversations WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        return int((row or {"total": 0})["total"])
+    finally:
+        conn.close()
+
+
+def _build_admin_user_detail_text(target_user: dict, lead: dict | None, consent: dict, conversations_count: int) -> str:
+    lead = lead or {}
+    return (
+        f"👤 Карточка пользователя ID {target_user.get('telegram_id')}\n\n"
+        f"Username: @{target_user.get('username') or '—'}\n"
+        f"Имя: {target_user.get('first_name') or '—'} {target_user.get('last_name') or ''}\n"
+        f"Регистрация: {target_user.get('created_at') or '—'}\n"
+        f"Последняя активность: {target_user.get('last_interaction') or '—'}\n\n"
+        f"Сообщений в диалоге: {conversations_count}\n\n"
+        "Lead:\n"
+        f"• Имя: {lead.get('name') or '—'}\n"
+        f"• Email: {lead.get('email') or '—'}\n"
+        f"• Телефон: {lead.get('phone') or '—'}\n"
+        f"• Компания: {lead.get('company') or '—'}\n"
+        f"• Температура: {lead.get('temperature') or '—'}\n"
+        f"• Статус: {lead.get('status') or '—'}\n\n"
+        "Согласия:\n"
+        f"• ПД: {'✅' if consent.get('consent_given') else '❌'}\n"
+        f"• Трансграничная передача: {'✅' if consent.get('transborder_consent') else '❌'}\n"
+        f"• Отзыв: {'✅' if consent.get('consent_revoked') else '❌'}"
+    )
+
+
 async def handle_documents_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback для раздела документов/прав пользователя."""
     _ = context
@@ -288,42 +438,97 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
     user_data = database.db.get_user_by_telegram_id(user.id)
     action = query.data or ""
 
+    if action == "doc_menu":
+        await utils.safe_edit_text(
+            query.message,
+            _documents_panel_text(),
+            reply_markup=_documents_panel_markup(),
+            action="doc_menu",
+        )
+        return
+
     if action == "doc_privacy":
-        await utils.safe_reply_text(query.message, content.privacy_policy_text(), action="doc_privacy")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(_documents_panel_text("📄 Политика ПД", content.privacy_policy_text())),
+            reply_markup=_documents_panel_markup(),
+            action="doc_privacy",
+        )
         return
     if action == "doc_transborder":
-        await utils.safe_reply_text(query.message, content.transborder_policy_text(), action="doc_transborder")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(_documents_panel_text("🌍 Трансграничная передача", content.transborder_policy_text())),
+            reply_markup=_documents_panel_markup(),
+            action="doc_transborder",
+        )
         return
     if action == "doc_user_agreement":
-        await utils.safe_reply_text(query.message, content.user_agreement_text(), action="doc_user_agreement")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(_documents_panel_text("📜 Пользовательское соглашение", content.user_agreement_text())),
+            reply_markup=_documents_panel_markup(),
+            action="doc_user_agreement",
+        )
         return
     if action == "doc_ai_policy":
-        await utils.safe_reply_text(query.message, content.ai_policy_text(), action="doc_ai_policy")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(_documents_panel_text("🤖 Политика ИИ", content.ai_policy_text())),
+            reply_markup=_documents_panel_markup(),
+            action="doc_ai_policy",
+        )
         return
     if action == "doc_marketing_consent":
-        await utils.safe_reply_text(query.message, content.marketing_consent_text(), action="doc_marketing_consent")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(
+                _documents_panel_text(
+                    "📣 Согласие на рассылки",
+                    content.marketing_consent_text(),
+                )
+            ),
+            reply_markup=_documents_panel_markup(),
+            action="doc_marketing_consent",
+        )
         if user_data:
             database.db.set_user_marketing_consent(user_data["id"], True)
         return
 
     if not user_data:
-        await utils.safe_reply_text(query.message, "Сначала выполните /start.", action="doc_no_user")
+        await utils.safe_edit_text(
+            query.message,
+            _documents_panel_text("⚠️ Ошибка", "Сначала выполните /start."),
+            reply_markup=_documents_panel_markup(),
+            action="doc_no_user",
+        )
         return
 
     if action == "doc_consent_status":
         consent_state = database.db.get_user_consent_state(user_data["id"])
-        await utils.safe_reply_text(
+        await utils.safe_edit_text(
             query.message,
-            content.consent_status_text(consent_state),
+            _clip_for_edit(_documents_panel_text("📑 Статус согласий", content.consent_status_text(consent_state))),
+            reply_markup=_documents_panel_markup(),
             action="doc_consent_status",
         )
         return
     if action == "doc_export_data":
         payload = database.db.export_user_data(user_data["id"])
-        await utils.safe_reply_text(query.message, content.export_data_text(payload), action="doc_export_data")
+        await utils.safe_edit_text(
+            query.message,
+            _clip_for_edit(_documents_panel_text("📊 Экспорт данных", content.export_data_text(payload))),
+            reply_markup=_documents_panel_markup(),
+            action="doc_export_data",
+        )
         return
 
-    await utils.safe_reply_text(query.message, "Неизвестное действие. Используйте /documents.", action="doc_unknown")
+    await utils.safe_edit_text(
+        query.message,
+        _documents_panel_text("⚠️ Неизвестное действие", "Используйте /documents."),
+        reply_markup=_documents_panel_markup(),
+        action="doc_unknown",
+    )
 
 
 def _format_users_for_admin(title: str, users: list[dict]) -> str:
@@ -362,86 +567,268 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
     action = query.data
 
     try:
-        if action == "admin_section_leads":
-            leads_section_message = (
-                "📊 РАЗДЕЛ: ЛИДЫ И ВОРОНКА\n\n"
-                "Выберите срез для просмотра:"
+        users_page_match = re.fullmatch(r"admin_users_page_(\d+)", action or "")
+        user_detail_match = re.fullmatch(r"admin_user_detail_(\d+)", action or "")
+        user_export_match = re.fullmatch(r"admin_user_export_(\d+)", action or "")
+        user_reset_match = re.fullmatch(r"admin_user_reset_dialog_(\d+)", action or "")
+        user_clear_confirm_match = re.fullmatch(r"admin_user_clear_confirm_(\d+)", action or "")
+        user_clear_match = re.fullmatch(r"admin_user_clear_(\d+)", action or "")
+
+        if action == "admin_users_page_noop":
+            return
+
+        if action == "admin_users_list" or users_page_match:
+            requested_page = int(users_page_match.group(1)) if users_page_match else 1
+            users, total_users, total_pages = _fetch_users_page(page=requested_page, per_page=5)
+            current_page = min(max(1, requested_page), total_pages)
+            users_text = _build_admin_users_page_text(users, current_page, total_pages, total_users)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(users_text),
+                reply_markup=_admin_users_list_markup(users, current_page, total_pages),
+                action=f"admin_users_list_{current_page}",
             )
-            reply_markup = InlineKeyboardMarkup(ADMIN_LEADS_MENU)
-            await query.message.edit_text(leads_section_message, reply_markup=reply_markup)
+            return
+
+        if user_detail_match:
+            telegram_id = int(user_detail_match.group(1))
+            target_user = database.db.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_detail_not_found",
+                )
+                return
+
+            lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
+            consent = database.db.get_user_consent_state(target_user["id"])
+            conversations_count = _get_user_conversation_count(target_user["id"])
+            detail_text = _build_admin_user_detail_text(target_user, lead, consent, conversations_count)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(detail_text),
+                reply_markup=_admin_user_detail_markup(telegram_id),
+                action="admin_user_detail",
+            )
+            return
+
+        if user_export_match:
+            telegram_id = int(user_export_match.group(1))
+            target_user = database.db.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_export_not_found",
+                )
+                return
+
+            payload = database.db.export_user_data(target_user["id"])
+            export_text = (
+                f"🧾 Экспорт данных пользователя ID {telegram_id}\n\n"
+                f"{content.export_data_text(payload)}"
+            )
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(export_text),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("◀️ К карточке", callback_data=f"admin_user_detail_{telegram_id}")],
+                        [InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")],
+                    ]
+                ),
+                action="admin_user_export",
+            )
+            return
+
+        if user_reset_match:
+            telegram_id = int(user_reset_match.group(1))
+            target_user = database.db.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_reset_not_found",
+                )
+                return
+
+            database.db.clear_conversation_history(target_user["id"])
+            database.db.reset_user_funnel_state(target_user["id"])
+
+            lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
+            consent = database.db.get_user_consent_state(target_user["id"])
+            detail_text = (
+                "✅ Диалог пользователя сброшен.\n\n"
+                + _build_admin_user_detail_text(target_user, lead, consent, 0)
+            )
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(detail_text),
+                reply_markup=_admin_user_detail_markup(telegram_id),
+                action="admin_user_reset_dialog",
+            )
+            return
+
+        if user_clear_confirm_match:
+            telegram_id = int(user_clear_confirm_match.group(1))
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"⚠️ Подтвердите очистку данных пользователя ID {telegram_id}\n\n"
+                    "Будут удалены сообщения диалога и анонимизированы данные лида.\n"
+                    "Действие необратимо."
+                ),
+                reply_markup=_admin_user_clear_confirm_markup(telegram_id),
+                action="admin_user_clear_confirm",
+            )
+            return
+
+        if user_clear_match:
+            telegram_id = int(user_clear_match.group(1))
+            target_user = database.db.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_clear_not_found",
+                )
+                return
+
+            result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"✅ Данные пользователя ID {telegram_id} очищены.\n\n"
+                    f"Изменено профилей: {result.get('users_updated', 0)}\n"
+                    f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
+                    f"Удалено сообщений: {result.get('messages_deleted', 0)}"
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("◀️ К карточке", callback_data=f"admin_user_detail_{telegram_id}")],
+                        [InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")],
+                    ]
+                ),
+                action="admin_user_clear",
+            )
+            return
+
+        if action == "admin_section_leads":
+            await utils.safe_edit_text(
+                query.message,
+                "📊 РАЗДЕЛ: ЛИДЫ И ВОРОНКА\n\nВыберите срез для просмотра:",
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_section_leads",
+            )
 
         elif action == "admin_section_users":
-            users_section_message = (
-                "👥 РАЗДЕЛ: ПОЛЬЗОВАТЕЛИ\n\n"
-                "Выберите действие:"
+            await utils.safe_edit_text(
+                query.message,
+                "👥 РАЗДЕЛ: ПОЛЬЗОВАТЕЛИ\n\nВыберите действие:",
+                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                action="admin_section_users",
             )
-            reply_markup = InlineKeyboardMarkup(ADMIN_USERS_MENU)
-            await query.message.edit_text(users_section_message, reply_markup=reply_markup)
 
         elif action == "admin_section_export":
-            export_section_message = (
-                "📥 РАЗДЕЛ: ЭКСПОРТ И ЛОГИ\n\n"
-                "Выберите действие:"
+            await utils.safe_edit_text(
+                query.message,
+                "📥 РАЗДЕЛ: ЭКСПОРТ И ЛОГИ\n\nВыберите действие:",
+                reply_markup=InlineKeyboardMarkup(ADMIN_EXPORT_MENU),
+                action="admin_section_export",
             )
-            reply_markup = InlineKeyboardMarkup(ADMIN_EXPORT_MENU)
-            await query.message.edit_text(export_section_message, reply_markup=reply_markup)
 
         elif action == "admin_section_commands":
-            await query.message.reply_text(
-                "🧭 КОМАНДЫ И ПОИСК\n\n"
-                "Поиск/карточка пользователя:\n"
-                "/pdn_user <telegram_id>\n"
-                "/view_conversation <telegram_id>\n\n"
-                "Редактирование ПД:\n"
-                "/edit_pdn <telegram_id> <field> <value>\n"
-                "/revoke_user_consent <telegram_id>\n\n"
-                "Поля:\n"
-                "user: first_name, last_name, username\n"
-                "lead: name, email, phone, company"
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🧭 КОМАНДЫ И ПОИСК\n\n"
+                    "Поиск/карточка пользователя:\n"
+                    "/pdn_user <telegram_id>\n"
+                    "/view_conversation <telegram_id>\n\n"
+                    "Редактирование ПД:\n"
+                    "/edit_pdn <telegram_id> <field> <value>\n"
+                    "/revoke_user_consent <telegram_id>\n\n"
+                    "Поля:\n"
+                    "user: first_name, last_name, username\n"
+                    "lead: name, email, phone, company"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                action="admin_section_commands",
             )
 
         elif action == "admin_users_recent":
             users = database.db.get_recent_users(limit=20)
-            await query.message.reply_text(
-                _format_users_for_admin("🕒 ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ (20)", users),
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(_format_users_for_admin("🕒 ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ (20)", users)),
                 reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                action="admin_users_recent",
             )
 
         elif action == "admin_users_no_consent":
             users = database.db.get_users_without_consent(limit=20)
-            await query.message.reply_text(
-                _format_users_for_admin("⚠️ ПОЛЬЗОВАТЕЛИ БЕЗ СОГЛАСИЯ ПД (20)", users),
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(_format_users_for_admin("⚠️ ПОЛЬЗОВАТЕЛИ БЕЗ СОГЛАСИЯ ПД (20)", users)),
                 reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                action="admin_users_no_consent",
             )
 
         elif action == "admin_users_revoked":
             users = database.db.get_users_with_revoked_consent(limit=20)
-            await query.message.reply_text(
-                _format_users_for_admin("🗑️ ОТОЗВАЛИ СОГЛАСИЕ (20)", users),
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(_format_users_for_admin("🗑️ ОТОЗВАЛИ СОГЛАСИЕ (20)", users)),
                 reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                action="admin_users_revoked",
             )
 
         elif action == "admin_users_lookup_help":
-            await query.message.reply_text(
-                "🔎 Поиск пользователя по ID\n\n"
-                "Используйте команды:\n"
-                "/pdn_user <telegram_id>\n"
-                "/view_conversation <telegram_id>\n"
-                "/edit_pdn <telegram_id> <field> <value>"
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🔎 Поиск пользователя по ID\n\n"
+                    "Используйте команды:\n"
+                    "/pdn_user <telegram_id>\n"
+                    "/view_conversation <telegram_id>\n"
+                    "/edit_pdn <telegram_id> <field> <value>"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                action="admin_users_lookup_help",
             )
 
         elif action == "admin_stats":
-            # Общая статистика
             stats_message = admin_interface.admin_interface.format_statistics(30)
-            await query.message.reply_text(stats_message)
-        
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(stats_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_stats",
+            )
+
         elif action == "admin_funnel_report":
-            # Воронка + A/B отчет
             report_message = admin_interface.admin_interface.format_funnel_report(30)
-            await query.message.reply_text(report_message)
-        
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(report_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_funnel_report",
+            )
+
         elif action == "admin_funnel_export_csv":
-            # Экспорт funnel-отчета в CSV
             csv_data = admin_interface.admin_interface.export_funnel_report_csv(30)
             filename = f"funnel_report_{datetime.now().strftime('%Y%m%d')}.csv"
             await query.message.reply_document(
@@ -449,9 +836,8 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 filename=filename,
                 caption="📥 Funnel report (CSV)"
             )
-        
+
         elif action == "admin_funnel_export_md":
-            # Экспорт funnel-отчета в Markdown
             md_data = admin_interface.admin_interface.export_funnel_report_markdown(30)
             filename = f"funnel_report_{datetime.now().strftime('%Y%m%d')}.md"
             await query.message.reply_document(
@@ -461,12 +847,8 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_security":
-            # Статистика безопасности
             stats = security.security_manager.get_stats()
-
-            # Форматируем время начала статистики
             stats_since = stats['stats_start_time'].strftime("%d.%m.%Y %H:%M")
-
             stats_message = (
                 "🛡️ СТАТИСТИКА БЕЗОПАСНОСТИ\n\n"
                 f"📅 Статистика с: {stats_since}\n\n"
@@ -485,33 +867,60 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 f"• Cooldown: {security.security_manager.COOLDOWN_SECONDS} сек\n"
                 f"• Макс длина сообщения: {security.security_manager.MAX_MESSAGE_LENGTH} символов"
             )
-            await query.message.reply_text(stats_message)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(stats_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                action="admin_security",
+            )
 
         elif action == "admin_leads":
-            # Список всех лидов
             leads_message = admin_interface.admin_interface.format_leads_list(limit=20)
-            await query.message.reply_text(leads_message)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(leads_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_leads",
+            )
 
         elif action == "admin_hot_leads":
-            # Только горячие лиды
             leads_message = admin_interface.admin_interface.format_leads_list(temperature='hot', limit=10)
-            await query.message.reply_text(leads_message)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(leads_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_hot_leads",
+            )
 
         elif action == "admin_warm_leads":
             leads_message = admin_interface.admin_interface.format_leads_list(temperature='warm', limit=10)
-            await query.message.reply_text(leads_message)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(leads_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_warm_leads",
+            )
 
         elif action == "admin_cold_leads":
             leads_message = admin_interface.admin_interface.format_leads_list(temperature='cold', limit=10)
-            await query.message.reply_text(leads_message)
+            await utils.safe_edit_text(
+                query.message,
+                _clip_for_edit(leads_message),
+                reply_markup=InlineKeyboardMarkup(ADMIN_LEADS_MENU),
+                action="admin_cold_leads",
+            )
 
         elif action == "admin_logs":
-            # Последние строки логов отправляем файлом, чтобы не упираться в Markdown/лимиты.
             import subprocess
             result = subprocess.run(['tail', '-50', config.LOG_FILE], capture_output=True, text=True)
             logs = result.stdout
             if not logs.strip():
-                await query.message.reply_text("📋 Логи пусты.")
+                await utils.safe_edit_text(
+                    query.message,
+                    "📋 Логи пусты.",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_EXPORT_MENU),
+                    action="admin_logs_empty",
+                )
             else:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 await query.message.reply_document(
@@ -521,9 +930,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
 
         elif action == "admin_export":
-            # Экспорт лидов в CSV
             csv_data = admin_interface.admin_interface.export_leads_to_csv()
-
             if csv_data:
                 await query.message.reply_document(
                     document=csv_data.encode('utf-8') if isinstance(csv_data, str) else csv_data,
@@ -531,63 +938,91 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                     caption="📥 Экспорт лидов"
                 )
             else:
-                await query.message.reply_text("Ошибка при экспорте данных")
+                await utils.safe_edit_text(
+                    query.message,
+                    "Ошибка при экспорте данных",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_EXPORT_MENU),
+                    action="admin_export_error",
+                )
 
         elif action == "admin_cleanup":
-            # Меню очистки данных
             cleanup_message = (
                 "🗑️ ОЧИСТКА ДАННЫХ\n\n"
                 "⚠️ ВНИМАНИЕ: Данные будут удалены безвозвратно!\n\n"
                 "Выберите что очистить:"
             )
             reply_markup = InlineKeyboardMarkup(ADMIN_CLEANUP_MENU)
-            await query.message.edit_text(cleanup_message, reply_markup=reply_markup)
+            await utils.safe_edit_text(
+                query.message,
+                cleanup_message,
+                reply_markup=reply_markup,
+                action="admin_cleanup",
+            )
 
         elif action == "admin_commands":
-            await query.message.reply_text(
-                "🧭 ДОСТУПНЫЕ АДМИН-КОМАНДЫ\n\n"
-                "/stats — общая статистика\n"
-                "/leads [hot|warm|cold] — список лидов\n"
-                "/export — выгрузка лидов в CSV\n"
-                "/view_conversation <telegram_id> — история диалога\n"
-                "/security_stats — статистика безопасности\n"
-                "/blacklist <telegram_id> [причина] — блокировка пользователя\n"
-                "/unblacklist <telegram_id> — снять блокировку\n"
-                "/pdn_user <telegram_id> — карточка ПД и согласий\n"
-                "/edit_pdn <telegram_id> <field> <value> — правка ПД\n"
-                "/revoke_user_consent <telegram_id> — отзыв согласия + очистка\n\n"
-                "Эти функции работают и доступны даже если не вынесены отдельной кнопкой."
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🧭 ДОСТУПНЫЕ АДМИН-КОМАНДЫ\n\n"
+                    "/stats — общая статистика\n"
+                    "/leads [hot|warm|cold] — список лидов\n"
+                    "/export — выгрузка лидов в CSV\n"
+                    "/view_conversation <telegram_id> — история диалога\n"
+                    "/security_stats — статистика безопасности\n"
+                    "/blacklist <telegram_id> [причина] — блокировка пользователя\n"
+                    "/unblacklist <telegram_id> — снять блокировку\n"
+                    "/pdn_user <telegram_id> — карточка ПД и согласий\n"
+                    "/edit_pdn <telegram_id> <field> <value> — правка ПД\n"
+                    "/revoke_user_consent <telegram_id> — отзыв согласия + очистка\n\n"
+                    "Эти функции работают и доступны даже если не вынесены отдельной кнопкой."
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                action="admin_commands",
             )
 
         elif action == "admin_panel":
-            # Вернуться в главное меню админ-панели
             admin_panel_message = (
                 "⚙️ АДМИН-ПАНЕЛЬ\n\n"
                 "Выберите действие:"
             )
             reply_markup = InlineKeyboardMarkup(ADMIN_PANEL_MENU)
-            await query.message.edit_text(admin_panel_message, reply_markup=reply_markup)
+            await utils.safe_edit_text(
+                query.message,
+                admin_panel_message,
+                reply_markup=reply_markup,
+                action="admin_panel",
+            )
 
         elif action == "admin_close":
-            # Закрыть админ-панель
-            await query.message.edit_text("⚙️ Админ-панель закрыта")
+            await utils.safe_edit_text(query.message, "⚙️ Админ-панель закрыта", action="admin_close")
+
+        else:
+            await utils.safe_edit_text(
+                query.message,
+                "⚠️ Неизвестное действие админ-панели.",
+                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                action="admin_unknown_action",
+            )
 
     except Exception as e:
         logger.error(f"Error in handle_admin_panel_callback: {e}")
-        await query.message.reply_text(f"Ошибка: {str(e)}")
+        await utils.safe_reply_text(query.message, f"Ошибка: {str(e)}", action="admin_panel_error")
 
 
 
 async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик cleanup операций"""
     query = update.callback_query
-    await query.answer()
+    try:
+        await utils.safe_answer_callback(query, action="cleanup_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer cleanup callback: {answer_error}")
 
     user = query.from_user
 
     # Проверка что это админ
     if user.id != config.ADMIN_TELEGRAM_ID:
-        await query.message.reply_text("У вас нет доступа к этой функции")
+        await utils.safe_reply_text(query.message, "У вас нет доступа к этой функции", action="cleanup_access_denied")
         return
 
     action = query.data
@@ -602,7 +1037,12 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 conn.commit()
                 count = cursor.rowcount
 
-                await query.message.reply_text(f"✅ Удалено {count} сообщений из диалогов")
+                await utils.safe_edit_text(
+                    query.message,
+                    f"✅ Удалено {count} сообщений из диалогов",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                    action="cleanup_conversations",
+                )
                 logger.info(f"Admin {user.id} cleared {count} conversations")
             finally:
                 conn.close()
@@ -616,7 +1056,12 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 conn.commit()
                 count = cursor.rowcount
 
-                await query.message.reply_text(f"✅ Удалено {count} лидов")
+                await utils.safe_edit_text(
+                    query.message,
+                    f"✅ Удалено {count} лидов",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                    action="cleanup_leads",
+                )
                 logger.info(f"Admin {user.id} cleared {count} leads")
             finally:
                 conn.close()
@@ -625,10 +1070,20 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
             # Очистка логов без rename, чтобы FileHandler не потерял текущий файл.
             backup_file = _backup_and_truncate_log(config.LOG_FILE)
             if backup_file:
-                await query.message.reply_text(f"✅ Логи очищены\nBackup: {backup_file}")
+                await utils.safe_edit_text(
+                    query.message,
+                    f"✅ Логи очищены\nBackup: {backup_file}",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                    action="cleanup_logs",
+                )
                 logger.info(f"Admin {user.id} cleared logs, backup: {backup_file}")
             else:
-                await query.message.reply_text("Файл логов не найден")
+                await utils.safe_edit_text(
+                    query.message,
+                    "Файл логов не найден",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                    action="cleanup_logs_not_found",
+                )
 
         elif action == "cleanup_security":
             # Сброс счетчиков безопасности
@@ -641,7 +1096,12 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
             security.security_manager.reset_stats_time()
 
             new_time = security.security_manager.stats_start_time.strftime("%d.%m.%Y %H:%M")
-            await query.message.reply_text(f"✅ Счетчики безопасности сброшены\n📅 Статистика теперь с: {new_time}")
+            await utils.safe_edit_text(
+                query.message,
+                f"✅ Счетчики безопасности сброшены\n📅 Статистика теперь с: {new_time}",
+                reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                action="cleanup_security",
+            )
             logger.info(f"Admin {user.id} reset security counters")
 
         elif action == "cleanup_all":
@@ -689,9 +1149,14 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 f"🗑️ Счетчики безопасности: сброшены"
             )
 
-            await query.message.reply_text(result_message)
+            await utils.safe_edit_text(
+                query.message,
+                result_message,
+                reply_markup=InlineKeyboardMarkup(ADMIN_CLEANUP_MENU),
+                action="cleanup_all",
+            )
             logger.warning(f"Admin {user.id} cleared ALL data")
 
     except Exception as e:
         logger.error(f"Error in handle_cleanup_callback: {e}")
-        await query.message.reply_text(f"Ошибка: {str(e)}")
+        await utils.safe_reply_text(query.message, f"Ошибка: {str(e)}", action="cleanup_error")

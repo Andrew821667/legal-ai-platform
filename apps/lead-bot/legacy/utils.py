@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
-from telegram.error import NetworkError, RetryAfter, TimedOut
+from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 
 logger = logging.getLogger(__name__)
 
@@ -237,10 +237,16 @@ async def safe_edit_text(message, text: str, action: str = "edit_text", **kwargs
     Для edit ограничиваем размер, чтобы не поймать Telegram лимит.
     """
     prepared_text = text if len(text) <= 4000 else f"{text[:3990]}…"
-    return await telegram_call_with_retry(
-        lambda: message.edit_text(prepared_text, **kwargs),
-        action=action,
-    )
+    try:
+        return await telegram_call_with_retry(
+            lambda: message.edit_text(prepared_text, **kwargs),
+            action=action,
+        )
+    except BadRequest as error:
+        if "message is not modified" in str(error).lower():
+            logger.debug("Skipped edit for %s: message not modified", action)
+            return None
+        raise
 
 
 def format_ai_text_as_plain_symbols(text: str) -> str:

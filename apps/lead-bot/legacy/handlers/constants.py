@@ -81,6 +81,7 @@ ADMIN_LEADS_MENU = [
 ]
 
 ADMIN_USERS_MENU = [
+    [InlineKeyboardButton("👥 Список пользователей", callback_data="admin_users_list")],
     [InlineKeyboardButton("🕒 Последние пользователи", callback_data="admin_users_recent")],
     [InlineKeyboardButton("⚠️ Без согласия ПД", callback_data="admin_users_no_consent")],
     [InlineKeyboardButton("🗑️ Отозвали согласие", callback_data="admin_users_revoked")],
