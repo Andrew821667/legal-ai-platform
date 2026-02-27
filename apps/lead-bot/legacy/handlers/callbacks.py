@@ -2,6 +2,8 @@
 Handlers: callbacks
 """
 import logging
+import os
+import shutil
 import time
 import re
 import asyncio
@@ -23,6 +25,21 @@ import funnel
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
+
+
+def _backup_and_truncate_log(log_file: str) -> str | None:
+    """
+    Создает backup лог-файла и очищает текущий файл без rename.
+    Так FileHandler продолжает писать в тот же inode.
+    """
+    if not os.path.exists(log_file):
+        return None
+
+    backup_file = f"{log_file}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    shutil.copy2(log_file, backup_file)
+    with open(log_file, "w", encoding="utf-8"):
+        pass
+    return backup_file
 
 
 async def handle_business_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,28 +250,28 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             leads_message = admin_interface.admin_interface.format_leads_list(temperature='hot', limit=10)
             await query.message.reply_text(leads_message)
 
+        elif action == "admin_warm_leads":
+            leads_message = admin_interface.admin_interface.format_leads_list(temperature='warm', limit=10)
+            await query.message.reply_text(leads_message)
+
+        elif action == "admin_cold_leads":
+            leads_message = admin_interface.admin_interface.format_leads_list(temperature='cold', limit=10)
+            await query.message.reply_text(leads_message)
+
         elif action == "admin_logs":
-            # Последние строки логов
+            # Последние строки логов отправляем файлом, чтобы не упираться в Markdown/лимиты.
             import subprocess
             result = subprocess.run(['tail', '-50', config.LOG_FILE], capture_output=True, text=True)
             logs = result.stdout
-
-            # Добавляем цветные индикаторы для ошибок и предупреждений
-            formatted_lines = []
-            for line in logs.split('\n'):
-                if ' - ERROR - ' in line:
-                    formatted_lines.append(f"🔴 {line}")  # Красный индикатор для ошибок
-                elif ' - WARNING - ' in line:
-                    formatted_lines.append(f"⚠️ {line}")  # Желтый индикатор для предупреждений
-                else:
-                    formatted_lines.append(line)
-
-            formatted_logs = '\n'.join(formatted_lines)
-
-            if len(formatted_logs) > 4000:
-                formatted_logs = formatted_logs[-4000:]  # Telegram limit
-
-            await query.message.reply_text(f"📋 ПОСЛЕДНИЕ ЛОГИ:\n\n```\n{formatted_logs}\n```", parse_mode="Markdown")
+            if not logs.strip():
+                await query.message.reply_text("📋 Логи пусты.")
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                await query.message.reply_document(
+                    document=logs.encode("utf-8"),
+                    filename=f"lead_bot_logs_tail_{timestamp}.txt",
+                    caption="📋 Последние 50 строк логов",
+                )
 
         elif action == "admin_export":
             # Экспорт лидов в CSV
@@ -278,6 +295,19 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
             reply_markup = InlineKeyboardMarkup(ADMIN_CLEANUP_MENU)
             await query.message.edit_text(cleanup_message, reply_markup=reply_markup)
+
+        elif action == "admin_commands":
+            await query.message.reply_text(
+                "🧭 ДОСТУПНЫЕ АДМИН-КОМАНДЫ\n\n"
+                "/stats — общая статистика\n"
+                "/leads [hot|warm|cold] — список лидов\n"
+                "/export — выгрузка лидов в CSV\n"
+                "/view_conversation <telegram_id> — история диалога\n"
+                "/security_stats — статистика безопасности\n"
+                "/blacklist <telegram_id> [причина] — блокировка пользователя\n"
+                "/unblacklist <telegram_id> — снять блокировку\n\n"
+                "Эти функции работают и доступны даже если не вынесены отдельной кнопкой."
+            )
 
         elif action == "admin_panel":
             # Вернуться в главное меню админ-панели
@@ -342,14 +372,9 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 conn.close()
 
         elif action == "cleanup_logs":
-            # Очистка логов
-            import os
-            if os.path.exists(config.LOG_FILE):
-                # Создаем backup
-                backup_file = f"{config.LOG_FILE}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                os.rename(config.LOG_FILE, backup_file)
-                # Создаем новый пустой файл
-                open(config.LOG_FILE, 'w').close()
+            # Очистка логов без rename, чтобы FileHandler не потерял текущий файл.
+            backup_file = _backup_and_truncate_log(config.LOG_FILE)
+            if backup_file:
                 await query.message.reply_text(f"✅ Логи очищены\nBackup: {backup_file}")
                 logger.info(f"Admin {user.id} cleared logs, backup: {backup_file}")
             else:
@@ -395,11 +420,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 conn.close()
 
             # Логи
-            import os
-            if os.path.exists(config.LOG_FILE):
-                backup_file = f"{config.LOG_FILE}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                os.rename(config.LOG_FILE, backup_file)
-                open(config.LOG_FILE, 'w').close()
+            backup_file = _backup_and_truncate_log(config.LOG_FILE)
 
             # Безопасность
             security.security_manager.message_timestamps.clear()
@@ -414,7 +435,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 f"🗑️ Диалоги: {conv_count}\n"
                 f"🗑️ Лиды: {leads_count}\n"
                 f"🗑️ Уведомления: {notif_count}\n"
-                f"🗑️ Логи: очищены (backup создан)\n"
+                f"🗑️ Логи: {'очищены (backup создан)' if backup_file else 'файл не найден'}\n"
                 f"🗑️ Счетчики безопасности: сброшены"
             )
 

@@ -30,10 +30,17 @@ ADMIN_PANEL_MENU = [
     [InlineKeyboardButton("📥 Воронка CSV", callback_data="admin_funnel_export_csv")],
     [InlineKeyboardButton("📝 Воронка Markdown", callback_data="admin_funnel_export_md")],
     [InlineKeyboardButton("🛡️ Безопасность", callback_data="admin_security")],
-    [InlineKeyboardButton("👥 Список лидов", callback_data="admin_leads")],
+    [
+        InlineKeyboardButton("👥 Все лиды", callback_data="admin_leads"),
+        InlineKeyboardButton("🔥 Горячие", callback_data="admin_hot_leads"),
+    ],
+    [
+        InlineKeyboardButton("♨️ Теплые", callback_data="admin_warm_leads"),
+        InlineKeyboardButton("❄️ Холодные", callback_data="admin_cold_leads"),
+    ],
     [InlineKeyboardButton("📋 Логи (последние)", callback_data="admin_logs")],
-    [InlineKeyboardButton("🔥 Горячие лиды", callback_data="admin_hot_leads")],
     [InlineKeyboardButton("📥 Экспорт данных", callback_data="admin_export")],
+    [InlineKeyboardButton("🧭 Команды админа", callback_data="admin_commands")],
     [InlineKeyboardButton("🗑️ Очистка данных", callback_data="admin_cleanup")],
     [InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
 ]
