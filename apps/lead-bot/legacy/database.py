@@ -43,6 +43,14 @@ class Database:
                     username TEXT,
                     first_name TEXT,
                     last_name TEXT,
+                    consent_given BOOLEAN DEFAULT 0,
+                    consent_date TIMESTAMP,
+                    consent_revoked BOOLEAN DEFAULT 0,
+                    consent_revoked_at TIMESTAMP,
+                    transborder_consent BOOLEAN DEFAULT 0,
+                    transborder_consent_date TIMESTAMP,
+                    marketing_consent BOOLEAN DEFAULT 0,
+                    marketing_consent_date TIMESTAMP,
                     conversation_stage TEXT DEFAULT 'discover',
                     cta_variant TEXT,
                     cta_shown BOOLEAN DEFAULT 0,
@@ -199,6 +207,38 @@ class Database:
                 cursor.execute("ALTER TABLE users ADD COLUMN cta_shown_at TIMESTAMP")
                 logger.info("Added cta_shown_at column to users table")
 
+            if 'consent_given' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN consent_given BOOLEAN DEFAULT 0")
+                logger.info("Added consent_given column to users table")
+
+            if 'consent_date' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN consent_date TIMESTAMP")
+                logger.info("Added consent_date column to users table")
+
+            if 'consent_revoked' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN consent_revoked BOOLEAN DEFAULT 0")
+                logger.info("Added consent_revoked column to users table")
+
+            if 'consent_revoked_at' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN consent_revoked_at TIMESTAMP")
+                logger.info("Added consent_revoked_at column to users table")
+
+            if 'transborder_consent' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN transborder_consent BOOLEAN DEFAULT 0")
+                logger.info("Added transborder_consent column to users table")
+
+            if 'transborder_consent_date' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN transborder_consent_date TIMESTAMP")
+                logger.info("Added transborder_consent_date column to users table")
+
+            if 'marketing_consent' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN marketing_consent BOOLEAN DEFAULT 0")
+                logger.info("Added marketing_consent column to users table")
+
+            if 'marketing_consent_date' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN marketing_consent_date TIMESTAMP")
+                logger.info("Added marketing_consent_date column to users table")
+
             conn.commit()
             # Миграция: добавляем таблицу для состояний чатов
             cursor.execute("""
@@ -294,6 +334,211 @@ class Database:
                 return dict(row)
             return None
 
+        finally:
+            conn.close()
+
+    def get_user_consent_state(self, user_id: int) -> Dict:
+        """Получение статуса согласий пользователя."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT
+                    consent_given,
+                    consent_date,
+                    consent_revoked,
+                    consent_revoked_at,
+                    transborder_consent,
+                    transborder_consent_date,
+                    marketing_consent,
+                    marketing_consent_date
+                FROM users
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {}
+            return dict(row)
+        finally:
+            conn.close()
+
+    def grant_user_consent(self, user_id: int) -> None:
+        """Выдать согласие на обработку ПД."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET consent_given = 1,
+                    consent_date = CURRENT_TIMESTAMP,
+                    consent_revoked = 0,
+                    consent_revoked_at = NULL,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def set_user_transborder_consent(self, user_id: int, granted: bool) -> None:
+        """Обновить согласие на трансграничную передачу."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET transborder_consent = ?,
+                    transborder_consent_date = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (1 if granted else 0, 1 if granted else 0, user_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def set_user_marketing_consent(self, user_id: int, granted: bool) -> None:
+        """Обновить согласие на рассылки."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET marketing_consent = ?,
+                    marketing_consent_date = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (1 if granted else 0, 1 if granted else 0, user_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def revoke_user_consent_and_delete_data(self, user_id: int) -> Dict:
+        """
+        Отзыв согласий + анонимизация ПД в анкете + удаление истории диалога.
+        Возвращает сводку по измененным записям.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET consent_given = 0,
+                    consent_revoked = 1,
+                    consent_revoked_at = CURRENT_TIMESTAMP,
+                    transborder_consent = 0,
+                    transborder_consent_date = NULL,
+                    marketing_consent = 0,
+                    marketing_consent_date = NULL,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            users_updated = cursor.rowcount
+
+            cursor.execute(
+                """
+                UPDATE leads
+                SET name = 'Анонимизировано',
+                    email = NULL,
+                    phone = NULL,
+                    company = NULL,
+                    notes = COALESCE(notes, '') || '\n[PDN] Анонимизировано по запросу пользователя',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            leads_anonymized = cursor.rowcount
+
+            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+            messages_deleted = cursor.rowcount
+
+            conn.commit()
+            return {
+                "users_updated": users_updated,
+                "leads_anonymized": leads_anonymized,
+                "messages_deleted": messages_deleted,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def export_user_data(self, user_id: int) -> Dict:
+        """Экспорт данных пользователя и связанной анкеты."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                return {}
+
+            cursor.execute(
+                "SELECT * FROM leads WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT 1",
+                (user_id,),
+            )
+            lead = cursor.fetchone()
+
+            return {
+                "user": dict(user),
+                "lead": dict(lead) if lead else {},
+                "consent": {
+                    "consent_given": bool(user["consent_given"]),
+                    "consent_date": user["consent_date"],
+                    "consent_revoked": bool(user["consent_revoked"]),
+                    "consent_revoked_at": user["consent_revoked_at"],
+                    "transborder_consent": bool(user["transborder_consent"]),
+                    "transborder_consent_date": user["transborder_consent_date"],
+                    "marketing_consent": bool(user["marketing_consent"]),
+                    "marketing_consent_date": user["marketing_consent_date"],
+                },
+            }
+        finally:
+            conn.close()
+
+    def update_user_fields(self, user_id: int, fields: Dict[str, str]) -> bool:
+        """Обновление полей профиля пользователя."""
+        if not fields:
+            return False
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            set_clause = ", ".join(f"{key} = ?" for key in fields.keys())
+            values = list(fields.values()) + [user_id]
+            cursor.execute(
+                f"UPDATE users SET {set_clause}, last_interaction = CURRENT_TIMESTAMP WHERE id = ?",
+                values,
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
     

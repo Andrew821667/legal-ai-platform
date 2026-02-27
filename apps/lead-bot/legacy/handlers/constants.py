@@ -23,6 +23,18 @@ LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("🎯 Демо-анализ договора", callback_data="magnet_demo")]
 ]
 
+CONSENT_PDN_MENU = [
+    [InlineKeyboardButton("✅ Даю согласие", callback_data="consent_pdn_yes")],
+    [InlineKeyboardButton("❌ Отказаться", callback_data="consent_pdn_no")],
+    [InlineKeyboardButton("📄 Политика ПД", callback_data="consent_doc_privacy")],
+]
+
+CONSENT_TRANSBORDER_MENU = [
+    [InlineKeyboardButton("✅ Согласен на трансграничную передачу", callback_data="consent_transborder_yes")],
+    [InlineKeyboardButton("❌ Отказаться от ИИ-режима", callback_data="consent_transborder_no")],
+    [InlineKeyboardButton("📄 Условия трансграничной передачи", callback_data="consent_doc_transborder")],
+]
+
 # Админ-панель inline кнопки
 ADMIN_PANEL_MENU = [
     [InlineKeyboardButton("📊 Общая статистика", callback_data="admin_stats")],

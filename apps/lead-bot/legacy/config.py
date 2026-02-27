@@ -54,6 +54,20 @@ class Config:
         leads_chat_id = os.getenv('LEADS_CHAT_ID', '').strip()
         self.LEADS_CHAT_ID: Optional[int] = int(leads_chat_id) if leads_chat_id else None
 
+        # Compliance / документы
+        self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://legalaipro.ru/privacy')
+        self.TRANSBORDER_CONSENT_URL: str = os.getenv(
+            'TRANSBORDER_CONSENT_URL',
+            'https://legalaipro.ru/transborder-consent',
+        )
+        self.USER_AGREEMENT_URL: str = os.getenv('USER_AGREEMENT_URL', 'https://legalaipro.ru/user-agreement')
+        self.AI_POLICY_URL: str = os.getenv('AI_POLICY_URL', 'https://legalaipro.ru/ai-policy')
+        self.MARKETING_CONSENT_URL: str = os.getenv(
+            'MARKETING_CONSENT_URL',
+            'https://legalaipro.ru/marketing-consent',
+        )
+        self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'privacy@legalaipro.ru')
+
         # Настройки квалификации лидов
         self.LEAD_QUALIFICATION_THRESHOLD: float = float(os.getenv('LEAD_QUALIFICATION_THRESHOLD', '0.7'))
 

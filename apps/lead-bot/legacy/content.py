@@ -6,6 +6,11 @@
 
 from __future__ import annotations
 
+from config import Config
+
+
+config = Config()
+
 
 CONTACTS = {
     "manager_name": "Андрей Попов",
@@ -60,6 +65,17 @@ HELP_MESSAGE = (
     "/help - показать помощь\n"
     "/reset - очистить историю\n"
     "/menu - открыть меню\n\n"
+    "Документы и управление данными:\n"
+    "/privacy - политика обработки ПД\n"
+    "/transborder_consent - условия трансграничной передачи\n"
+    "/user_agreement - пользовательское соглашение\n"
+    "/ai_policy - политика использования ИИ\n"
+    "/marketing_consent - условия рассылок\n"
+    "/consent_status - статус ваших согласий\n"
+    "/export_data - экспорт ваших данных\n"
+    "/correct_data <текст> - запрос на исправление данных\n"
+    "/revoke_consent - отзыв согласия\n"
+    "/delete_data - удалить персональные данные\n\n"
     "Можно просто написать вашу задачу в свободной форме."
 )
 
@@ -185,3 +201,128 @@ REPEAT_LOOP_FALLBACK_TEXT = (
     "Если срочно, используйте контакты:\n"
     f"{contact_lines()}"
 )
+
+
+CONSENT_STEP_1_TEXT = (
+    "📋 Согласие на обработку персональных данных\n\n"
+    "Чтобы продолжить, нужно согласие на обработку ПД:\n"
+    "• имя и контакты для связи по вашему запросу\n"
+    "• данные о задаче для подготовки консультации\n"
+    "• хранение в защищенной базе до отзыва согласия\n\n"
+    "Ваши права:\n"
+    "• запросить экспорт данных\n"
+    "• запросить исправление\n"
+    "• отозвать согласие и удалить данные\n\n"
+    "Нажимая кнопку ниже, вы подтверждаете согласие."
+)
+
+
+CONSENT_TRANSBORDER_TEXT = (
+    "🌍 Согласие на трансграничную передачу данных для ИИ\n\n"
+    "Для AI-ответов сообщения отправляются в внешние LLM-сервисы.\n"
+    "Перед отправкой мы не передаем ваши контактные данные как отдельные поля.\n\n"
+    "Если не дать это согласие:\n"
+    "• можно пользоваться меню и оставить заявку\n"
+    "• AI-режим анализа кейса будет отключен\n\n"
+    "Разрешаете использовать ИИ-режим с трансграничной передачей?"
+)
+
+
+TRANSBORDER_REQUIRED_TEXT = (
+    "⚠️ Для AI-анализа вашего кейса нужно согласие на трансграничную передачу данных.\n\n"
+    "Без него доступны: меню, консультация и ручная передача запроса команде."
+)
+
+
+CONSENT_DENIED_TEXT = (
+    "Понял. Без согласия на обработку ПД я не могу продолжить персональный сценарий.\n\n"
+    "Когда будете готовы, отправьте /start."
+)
+
+
+CONSENT_REVOKED_TEXT = (
+    "✅ Согласие отозвано.\n\n"
+    "Персональные данные в анкете анонимизированы, история диалога удалена.\n"
+    "Для повторного запуска отправьте /start."
+)
+
+
+def consent_status_text(consent: dict) -> str:
+    consent_given = bool(consent.get("consent_given"))
+    transborder = bool(consent.get("transborder_consent"))
+    revoked = bool(consent.get("consent_revoked"))
+    consent_date = consent.get("consent_date") or "—"
+    transborder_date = consent.get("transborder_consent_date") or "—"
+    revoked_date = consent.get("consent_revoked_at") or "—"
+    return (
+        "📑 Статус согласий\n\n"
+        f"• Обработка ПД: {'✅' if consent_given else '❌'}\n"
+        f"• Дата согласия: {consent_date}\n"
+        f"• Трансграничная передача: {'✅' if transborder else '❌'}\n"
+        f"• Дата трансграничного согласия: {transborder_date}\n"
+        f"• Согласие отозвано: {'✅' if revoked else '❌'}\n"
+        f"• Дата отзыва: {revoked_date}"
+    )
+
+
+def privacy_policy_text() -> str:
+    return (
+        "📄 Политика обработки персональных данных\n\n"
+        "Оператор обрабатывает только данные, необходимые для связи и консультации.\n"
+        "Подробная версия:\n"
+        f"{config.PRIVACY_POLICY_URL}\n\n"
+        f"Контакт по вопросам ПД: {config.PRIVACY_CONTACT_EMAIL}"
+    )
+
+
+def transborder_policy_text() -> str:
+    return (
+        "📄 Согласие на трансграничную передачу данных\n\n"
+        "Нужно для работы ИИ-функций (LLM-сервисы).\n"
+        "Подробная версия:\n"
+        f"{config.TRANSBORDER_CONSENT_URL}"
+    )
+
+
+def user_agreement_text() -> str:
+    return (
+        "📄 Пользовательское соглашение\n\n"
+        "Актуальная редакция:\n"
+        f"{config.USER_AGREEMENT_URL}"
+    )
+
+
+def ai_policy_text() -> str:
+    return (
+        "📄 Политика использования ИИ\n\n"
+        "Актуальная редакция:\n"
+        f"{config.AI_POLICY_URL}"
+    )
+
+
+def marketing_consent_text() -> str:
+    return (
+        "📄 Согласие на информационные/маркетинговые рассылки\n\n"
+        "Актуальная редакция:\n"
+        f"{config.MARKETING_CONSENT_URL}"
+    )
+
+
+def export_data_text(payload: dict) -> str:
+    user = payload.get("user") or {}
+    lead = payload.get("lead") or {}
+    consent = payload.get("consent") or {}
+    return (
+        "📊 Ваши данные в системе\n\n"
+        "Профиль:\n"
+        f"• Telegram ID: {user.get('telegram_id')}\n"
+        f"• Username: @{user.get('username') or 'не указан'}\n"
+        f"• Имя: {user.get('first_name') or 'не указано'}\n"
+        f"• Фамилия: {user.get('last_name') or 'не указана'}\n\n"
+        "Анкета лида:\n"
+        f"• Имя: {lead.get('name') or 'не указано'}\n"
+        f"• Email: {lead.get('email') or 'не указан'}\n"
+        f"• Телефон: {lead.get('phone') or 'не указан'}\n"
+        f"• Компания: {lead.get('company') or 'не указана'}\n\n"
+        f"{consent_status_text(consent)}"
+    )

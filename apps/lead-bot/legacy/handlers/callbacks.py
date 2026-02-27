@@ -168,6 +168,75 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
 
 
 
+async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик callback для согласий на ПД и трансграничную передачу."""
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        user_id = database.db.create_or_update_user(
+            telegram_id=user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+        )
+        user_data = database.db.get_user_by_id(user_id)
+
+    if not user_data:
+        await query.message.reply_text("Ошибка инициализации профиля. Нажмите /start еще раз.")
+        return
+
+    action = query.data or ""
+
+    if action == "consent_doc_privacy":
+        await query.message.reply_text(content.privacy_policy_text())
+        return
+
+    if action == "consent_doc_transborder":
+        await query.message.reply_text(content.transborder_policy_text())
+        return
+
+    if action == "consent_pdn_no":
+        await query.message.edit_text(content.CONSENT_DENIED_TEXT)
+        return
+
+    if action == "consent_pdn_yes":
+        database.db.grant_user_consent(user_data["id"])
+        await query.message.edit_text(
+            content.CONSENT_TRANSBORDER_TEXT,
+            reply_markup=InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU),
+        )
+        return
+
+    if action in ("consent_transborder_yes", "consent_transborder_no"):
+        transborder_enabled = action == "consent_transborder_yes"
+        database.db.set_user_transborder_consent(user_data["id"], transborder_enabled)
+        if transborder_enabled:
+            await query.message.edit_text(
+                "✅ Согласия сохранены. AI-режим включен.\n\n"
+                "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг."
+            )
+        else:
+            await query.message.edit_text(
+                "✅ Согласие на обработку ПД сохранено.\n"
+                "ИИ-режим отключен до вашего разрешения на трансграничную передачу.\n\n"
+                "Можно пользоваться меню и оставить заявку на консультацию."
+            )
+
+        welcome_message = content.build_welcome_message(user.first_name)
+        if user.id == config.ADMIN_TELEGRAM_ID:
+            welcome_message += "\n\n⚙️ Доступна админ-панель!"
+            reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
+        else:
+            reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
+        await query.message.reply_text(welcome_message, reply_markup=reply_markup)
+        return
+
+    await query.message.reply_text("Неизвестное действие согласия. Попробуйте /start.")
+
+
 async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback кнопок админ-панели"""
     query = update.callback_query
@@ -305,7 +374,10 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 "/view_conversation <telegram_id> — история диалога\n"
                 "/security_stats — статистика безопасности\n"
                 "/blacklist <telegram_id> [причина] — блокировка пользователя\n"
-                "/unblacklist <telegram_id> — снять блокировку\n\n"
+                "/unblacklist <telegram_id> — снять блокировку\n"
+                "/pdn_user <telegram_id> — карточка ПД и согласий\n"
+                "/edit_pdn <telegram_id> <field> <value> — правка ПД\n"
+                "/revoke_user_consent <telegram_id> — отзыв согласия + очистка\n\n"
                 "Эти функции работают и доступны даже если не вынесены отдельной кнопкой."
             )
 

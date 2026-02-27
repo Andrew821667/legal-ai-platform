@@ -30,8 +30,11 @@ import database
 from config import Config
 from handlers.admin import (
     blacklist_command,
+    edit_pdn_command,
     export_command,
     leads_command,
+    pdn_user_command,
+    revoke_user_consent_command,
     security_stats_command,
     stats_command,
     unblacklist_command,
@@ -42,11 +45,28 @@ from handlers.callbacks import (
     handle_admin_panel_callback,
     handle_business_menu_callback,
     handle_cleanup_callback,
+    handle_consent_callback,
     handle_lead_magnet_callback,
 )
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
-from handlers.user import help_command, menu_command, reset_command, start_command, handle_message
+from handlers.user import (
+    ai_policy_command,
+    consent_status_command,
+    correct_data_command,
+    delete_data_command,
+    export_data_command,
+    handle_message,
+    help_command,
+    marketing_consent_command,
+    menu_command,
+    privacy_command,
+    reset_command,
+    revoke_consent_command,
+    start_command,
+    transborder_consent_command,
+    user_agreement_command,
+)
 
 config = Config()
 
@@ -112,6 +132,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = query.data or ""
     if data.startswith("menu_"):
         await handle_business_menu_callback(update, context)
+    elif data.startswith("consent_"):
+        await handle_consent_callback(update, context)
     elif data.startswith("magnet_"):
         await handle_lead_magnet_callback(update, context)
     elif data.startswith("cleanup_"):
@@ -171,6 +193,16 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("menu", menu_command))
+    application.add_handler(CommandHandler("privacy", privacy_command))
+    application.add_handler(CommandHandler("transborder_consent", transborder_consent_command))
+    application.add_handler(CommandHandler("user_agreement", user_agreement_command))
+    application.add_handler(CommandHandler("ai_policy", ai_policy_command))
+    application.add_handler(CommandHandler("marketing_consent", marketing_consent_command))
+    application.add_handler(CommandHandler("consent_status", consent_status_command))
+    application.add_handler(CommandHandler("export_data", export_data_command))
+    application.add_handler(CommandHandler("revoke_consent", revoke_consent_command))
+    application.add_handler(CommandHandler("delete_data", delete_data_command))
+    application.add_handler(CommandHandler("correct_data", correct_data_command))
 
     # Админские команды
     application.add_handler(CommandHandler("stats", stats_command))
@@ -180,6 +212,9 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("security_stats", security_stats_command))
     application.add_handler(CommandHandler("blacklist", blacklist_command))
     application.add_handler(CommandHandler("unblacklist", unblacklist_command))
+    application.add_handler(CommandHandler("pdn_user", pdn_user_command))
+    application.add_handler(CommandHandler("edit_pdn", edit_pdn_command))
+    application.add_handler(CommandHandler("revoke_user_consent", revoke_user_consent_command))
 
     # Сообщения и callbacks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))

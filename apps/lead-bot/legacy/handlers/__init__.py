@@ -20,10 +20,20 @@ from handlers.helpers import (
 
 # Пользовательские обработчики
 from handlers.user import (
+    ai_policy_command,
+    consent_status_command,
+    correct_data_command,
+    delete_data_command,
+    export_data_command,
     start_command,
     help_command,
+    marketing_consent_command,
     reset_command,
     menu_command,
+    privacy_command,
+    revoke_consent_command,
+    transborder_consent_command,
+    user_agreement_command,
     handle_message,
     handle_menu_button,
     offer_lead_magnet,
@@ -32,9 +42,12 @@ from handlers.user import (
 
 # Админские обработчики
 from handlers.admin import (
+    edit_pdn_command,
     stats_command,
     leads_command,
     export_command,
+    pdn_user_command,
+    revoke_user_consent_command,
     view_conversation_command,
     security_stats_command,
     blacklist_command,
@@ -44,6 +57,7 @@ from handlers.admin import (
 
 # Callback обработчики
 from handlers.callbacks import (
+    handle_consent_callback,
     handle_business_menu_callback,
     handle_lead_magnet_callback,
     handle_admin_panel_callback,
@@ -76,6 +90,16 @@ __all__ = [
     # User
     'start_command',
     'help_command',
+    'privacy_command',
+    'transborder_consent_command',
+    'user_agreement_command',
+    'ai_policy_command',
+    'marketing_consent_command',
+    'consent_status_command',
+    'export_data_command',
+    'correct_data_command',
+    'revoke_consent_command',
+    'delete_data_command',
     'reset_command',
     'menu_command',
     'handle_message',
@@ -86,12 +110,16 @@ __all__ = [
     'stats_command',
     'leads_command',
     'export_command',
+    'pdn_user_command',
+    'edit_pdn_command',
+    'revoke_user_consent_command',
     'view_conversation_command',
     'security_stats_command',
     'blacklist_command',
     'unblacklist_command',
     'show_admin_panel',
     # Callbacks
+    'handle_consent_callback',
     'handle_business_menu_callback',
     'handle_lead_magnet_callback',
     'handle_admin_panel_callback',

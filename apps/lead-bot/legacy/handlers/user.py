@@ -32,6 +32,18 @@ def get_show_admin_panel():
     return show_admin_panel
 
 
+def _pdn_consent_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(CONSENT_PDN_MENU)
+
+
+def _transborder_consent_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
+
+
+def _is_pdn_consent_granted(consent_state: Dict) -> bool:
+    return bool(consent_state.get("consent_given")) and not bool(consent_state.get("consent_revoked"))
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     try:
@@ -45,6 +57,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             first_name=user.first_name,
             last_name=user.last_name
         )
+
+        # Для пользователей (кроме админа) сначала обязателен сбор согласия на ПД.
+        if user.id != config.ADMIN_TELEGRAM_ID:
+            consent_state = database.db.get_user_consent_state(user_id)
+            if not _is_pdn_consent_granted(consent_state):
+                await update.message.reply_text(
+                    content.CONSENT_STEP_1_TEXT,
+                    reply_markup=_pdn_consent_markup(),
+                )
+                return
+
+            if not bool(consent_state.get("transborder_consent")):
+                await update.message.reply_text(
+                    content.CONSENT_TRANSBORDER_TEXT,
+                    reply_markup=_transborder_consent_markup(),
+                )
+                return
 
         # Приветственное сообщение
         welcome_message = content.build_welcome_message(user.first_name)
@@ -68,6 +97,132 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
     await update.message.reply_text(content.HELP_MESSAGE)
 
+
+
+async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /privacy - политика обработки ПД."""
+    _ = context
+    await update.message.reply_text(content.privacy_policy_text())
+
+
+async def user_agreement_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /user_agreement - пользовательское соглашение."""
+    _ = context
+    await update.message.reply_text(content.user_agreement_text())
+
+
+async def ai_policy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /ai_policy - политика использования ИИ."""
+    _ = context
+    await update.message.reply_text(content.ai_policy_text())
+
+
+async def marketing_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /marketing_consent - условия рассылок."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if user_data:
+        database.db.set_user_marketing_consent(user_data["id"], True)
+    await update.message.reply_text(content.marketing_consent_text())
+
+
+async def transborder_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /transborder_consent - условия и управление согласием."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await update.message.reply_text("Сначала выполните /start.")
+        return
+    consent_state = database.db.get_user_consent_state(user_data["id"])
+    message = content.transborder_policy_text()
+    if bool(consent_state.get("transborder_consent")):
+        await update.message.reply_text(f"{message}\n\nСтатус: ✅ согласие активно.")
+        return
+    await update.message.reply_text(
+        f"{message}\n\nСтатус: ❌ согласие не дано.",
+        reply_markup=_transborder_consent_markup(),
+    )
+
+
+async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /consent_status - текущий статус согласий пользователя."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await update.message.reply_text("Сначала выполните /start.")
+        return
+    consent_state = database.db.get_user_consent_state(user_data["id"])
+    await update.message.reply_text(content.consent_status_text(consent_state))
+
+
+async def export_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /export_data - выгрузка данных пользователя."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await update.message.reply_text("Сначала выполните /start.")
+        return
+    payload = database.db.export_user_data(user_data["id"])
+    if not payload:
+        await update.message.reply_text("Данные пользователя не найдены.")
+        return
+    await update.message.reply_text(content.export_data_text(payload))
+
+
+async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /revoke_consent - отзыв согласий и удаление ПД."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await update.message.reply_text("Сначала выполните /start.")
+        return
+
+    result = database.db.revoke_user_consent_and_delete_data(user_data["id"])
+    await update.message.reply_text(
+        f"{content.CONSENT_REVOKED_TEXT}\n\n"
+        f"Изменено профилей: {result.get('users_updated', 0)}\n"
+        f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
+        f"Удалено сообщений диалога: {result.get('messages_deleted', 0)}"
+    )
+
+
+async def delete_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /delete_data - алиас для /revoke_consent."""
+    await revoke_consent_command(update, context)
+
+
+async def correct_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /correct_data - запрос на исправление данных пользователем."""
+    user = update.effective_user
+    text = " ".join(context.args).strip()
+    if not text:
+        await update.message.reply_text(
+            "Использование:\n"
+            "/correct_data <что исправить>\n\n"
+            "Пример:\n"
+            "/correct_data Исправьте email на example@mail.ru"
+        )
+        return
+
+    admin_text = (
+        "📝 Запрос на исправление данных\n\n"
+        f"User ID: {user.id}\n"
+        f"Username: @{user.username or '—'}\n"
+        f"Имя: {user.first_name or '—'}\n\n"
+        f"Запрос:\n{text}"
+    )
+
+    try:
+        await context.bot.send_message(chat_id=config.ADMIN_TELEGRAM_ID, text=admin_text)
+    except Exception as e:
+        logger.warning(f"Failed to notify admin about correct_data request: {e}")
+
+    await update.message.reply_text("✅ Запрос на исправление данных отправлен команде.")
 
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -204,6 +359,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         lead = database.db.get_lead_by_user_id(user_data["id"])
+        consent_state = database.db.get_user_consent_state(user_data["id"])
+        has_pdn_consent = _is_pdn_consent_granted(consent_state)
+        has_transborder_consent = bool(consent_state.get("transborder_consent"))
+
+        if user.id != config.ADMIN_TELEGRAM_ID and not has_pdn_consent:
+            await original_message.reply_text(
+                content.CONSENT_STEP_1_TEXT,
+                reply_markup=_pdn_consent_markup(),
+            )
+            return
 
         # В non-text ветке поддерживаем сценарий демо (документ + email).
         if not message_text:
@@ -263,6 +428,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Проверяем триггеры передачи админу
         if ai_brain.ai_brain.check_handoff_trigger(message_text):
             await handle_handoff_request(update, context)
+            return
+
+        if user.id != config.ADMIN_TELEGRAM_ID and not has_transborder_consent:
+            await original_message.reply_text(
+                content.TRANSBORDER_REQUIRED_TEXT,
+                reply_markup=_transborder_consent_markup(),
+            )
             return
 
         # ПРОВЕРКА: если клиент повторяет одно и то же сообщение 3+ раза

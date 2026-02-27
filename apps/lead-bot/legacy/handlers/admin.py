@@ -22,6 +22,9 @@ from handlers.constants import *
 
 logger = logging.getLogger(__name__)
 
+_EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
+_EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
+
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /stats - статистика (только для админа)"""
@@ -244,6 +247,129 @@ async def unblacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 
+async def pdn_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /pdn_user <telegram_id> - карточка ПД и согласий пользователя."""
+    try:
+        user = update.effective_user
+        if user.id != config.ADMIN_TELEGRAM_ID:
+            await update.message.reply_text("У вас нет доступа к этой команде")
+            return
+
+        args = context.args
+        if not args:
+            await update.message.reply_text("Использование: /pdn_user <telegram_id>")
+            return
+
+        telegram_id = int(args[0])
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await update.message.reply_text("Пользователь не найден")
+            return
+
+        lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
+        consent = database.db.get_user_consent_state(target_user["id"])
+        text = (
+            "🗂️ Карточка ПД пользователя\n\n"
+            f"Telegram ID: {target_user.get('telegram_id')}\n"
+            f"Username: @{target_user.get('username') or '—'}\n"
+            f"Имя: {target_user.get('first_name') or '—'} {target_user.get('last_name') or ''}\n\n"
+            f"Lead name: {lead.get('name') or '—'}\n"
+            f"Email: {lead.get('email') or '—'}\n"
+            f"Телефон: {lead.get('phone') or '—'}\n"
+            f"Компания: {lead.get('company') or '—'}\n\n"
+            f"Согласие ПД: {'✅' if consent.get('consent_given') else '❌'}\n"
+            f"Трансграничное: {'✅' if consent.get('transborder_consent') else '❌'}\n"
+            f"Отзыв: {'✅' if consent.get('consent_revoked') else '❌'}"
+        )
+        await update.message.reply_text(text)
+    except ValueError:
+        await update.message.reply_text("Неверный telegram_id")
+    except Exception as e:
+        logger.error(f"Error in pdn_user_command: {e}")
+        await update.message.reply_text("Ошибка при получении карточки ПД")
+
+
+async def edit_pdn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /edit_pdn <telegram_id> <field> <value> - редактирование ПД."""
+    try:
+        user = update.effective_user
+        if user.id != config.ADMIN_TELEGRAM_ID:
+            await update.message.reply_text("У вас нет доступа к этой команде")
+            return
+
+        args = context.args
+        if len(args) < 3:
+            await update.message.reply_text(
+                "Использование: /edit_pdn <telegram_id> <field> <value>\n\n"
+                "Поля user: first_name, last_name, username\n"
+                "Поля lead: name, email, phone, company"
+            )
+            return
+
+        telegram_id = int(args[0])
+        field = args[1].strip().lower()
+        value = " ".join(args[2:]).strip()
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await update.message.reply_text("Пользователь не найден")
+            return
+
+        if field in _EDITABLE_USER_FIELDS:
+            updated = database.db.update_user_fields(target_user["id"], {field: value})
+            if not updated:
+                await update.message.reply_text("Профиль пользователя не обновлен")
+                return
+        elif field in _EDITABLE_LEAD_FIELDS:
+            database.db.create_or_update_lead(target_user["id"], {field: value})
+        else:
+            await update.message.reply_text(
+                "Недопустимое поле.\n"
+                "user: first_name, last_name, username\n"
+                "lead: name, email, phone, company"
+            )
+            return
+
+        await update.message.reply_text(f"✅ Поле {field} обновлено для пользователя {telegram_id}")
+    except ValueError:
+        await update.message.reply_text("Неверный telegram_id")
+    except Exception as e:
+        logger.error(f"Error in edit_pdn_command: {e}")
+        await update.message.reply_text("Ошибка редактирования ПД")
+
+
+async def revoke_user_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /revoke_user_consent <telegram_id> - отзыв согласия и анонимизация."""
+    try:
+        user = update.effective_user
+        if user.id != config.ADMIN_TELEGRAM_ID:
+            await update.message.reply_text("У вас нет доступа к этой команде")
+            return
+
+        args = context.args
+        if not args:
+            await update.message.reply_text("Использование: /revoke_user_consent <telegram_id>")
+            return
+
+        telegram_id = int(args[0])
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await update.message.reply_text("Пользователь не найден")
+            return
+
+        result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
+        await update.message.reply_text(
+            "✅ Согласия отозваны, данные очищены.\n\n"
+            f"Изменено профилей: {result.get('users_updated', 0)}\n"
+            f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
+            f"Удалено сообщений: {result.get('messages_deleted', 0)}"
+        )
+    except ValueError:
+        await update.message.reply_text("Неверный telegram_id")
+    except Exception as e:
+        logger.error(f"Error in revoke_user_consent_command: {e}")
+        await update.message.reply_text("Ошибка при отзыве согласия")
+
+
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показ админ-панели"""
     try:
@@ -258,6 +384,4 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in show_admin_panel: {e}")
         await update.message.reply_text("Ошибка при открытии админ-панели")
-
-
 

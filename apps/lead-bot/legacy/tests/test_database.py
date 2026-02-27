@@ -121,3 +121,44 @@ def test_get_statistics(test_db):
     assert stats is not None, "Статистика не получена"
     assert stats['total_users'] >= 1, "Количество пользователей некорректно"
     assert stats['total_messages'] >= 1, "Количество сообщений некорректно"
+
+
+def test_consent_flow_and_data_export(test_db):
+    """Проверка цикла согласия/экспорта/отзыва согласия."""
+    user_id = test_db.create_or_update_user(
+        telegram_id=777000111,
+        username="consent_user",
+        first_name="Consent",
+        last_name="Tester",
+    )
+    test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Consent Tester",
+            "email": "consent@example.com",
+            "phone": "+79001234567",
+            "company": "Legal AI",
+        },
+    )
+    test_db.add_message(user_id, "user", "test message")
+
+    state_before = test_db.get_user_consent_state(user_id)
+    assert not bool(state_before["consent_given"])
+    assert not bool(state_before["transborder_consent"])
+
+    test_db.grant_user_consent(user_id)
+    test_db.set_user_transborder_consent(user_id, True)
+
+    payload = test_db.export_user_data(user_id)
+    assert payload["user"]["telegram_id"] == 777000111
+    assert payload["lead"]["email"] == "consent@example.com"
+    assert payload["consent"]["consent_given"] is True
+    assert payload["consent"]["transborder_consent"] is True
+
+    cleanup = test_db.revoke_user_consent_and_delete_data(user_id)
+    assert cleanup["users_updated"] == 1
+    assert cleanup["messages_deleted"] >= 1
+
+    lead_after = test_db.get_lead_by_user_id(user_id)
+    assert lead_after["email"] is None
+    assert lead_after["phone"] is None
