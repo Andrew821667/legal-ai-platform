@@ -24,6 +24,10 @@ $COMPOSE run --rm core-api python -m core_api.cli create-admin-key --name "deplo
 $COMPOSE pull
 $COMPOSE up -d --no-deps core-api
 $COMPOSE up -d --no-deps lead-bot || true
+$COMPOSE up -d --no-deps news-generate || true
+$COMPOSE up -d --no-deps news-publish || true
+$COMPOSE up -d --no-deps news-admin-bot || true
+$COMPOSE up -d --no-deps news-reader-bot || true
 
 sleep 5
 curl -sf http://localhost:8000/health >/dev/null

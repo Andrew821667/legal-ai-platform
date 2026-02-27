@@ -75,6 +75,121 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  news-generate:
+    build:
+      context: ../..
+      dockerfile: apps/news/Dockerfile
+    container_name: legal-ai-news-generate
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      API_KEY_NEWS: ${API_KEY_NEWS}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      /bin/sh -lc
+      "while true; do
+         uv run --package news python -m news.generate --limit ${NEWS_GENERATE_LIMIT:-5};
+         sleep ${NEWS_GENERATE_INTERVAL_SECONDS:-1800};
+       done"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    mem_limit: 384m
+    memswap_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-publish:
+    build:
+      context: ../..
+      dockerfile: apps/news/Dockerfile
+    container_name: legal-ai-news-publish
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      API_KEY_NEWS: ${API_KEY_NEWS}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      /bin/sh -lc
+      "while true; do
+         uv run --package news python -m news.publish;
+         sleep ${NEWS_PUBLISH_INTERVAL_SECONDS:-300};
+       done"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-admin-bot:
+    build:
+      context: ../..
+      dockerfile: apps/news/Dockerfile
+    container_name: legal-ai-news-admin-bot
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      API_KEY_NEWS: ${API_KEY_NEWS}
+      NEWS_ADMIN_BOT_TOKEN: ${NEWS_ADMIN_BOT_TOKEN}
+      NEWS_ADMIN_IDS: ${NEWS_ADMIN_IDS}
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["uv", "run", "python", "-m", "news.admin_bot"]
+    depends_on:
+      core-api:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-reader-bot:
+    build:
+      context: ../..
+      dockerfile: apps/news/legacy/Dockerfile.reader
+    container_name: legal-ai-news-reader-bot
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-legalai}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
+      READER_BOT_TOKEN: ${READER_BOT_TOKEN}
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["python", "-u", "-m", "app.reader_bot"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      core-api:
+        condition: service_healthy
+    mem_limit: 384m
+    memswap_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   caddy:
     image: caddy:2-alpine
     container_name: legal-ai-caddy

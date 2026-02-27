@@ -5,7 +5,8 @@
 ## Компоненты
 - `apps/core-api` — единый backend (FastAPI + Postgres)
 - `apps/lead-bot` — Telegram-бот захвата лидов
-- `apps/news` — генератор и паблишер новостей
+- `apps/news` — генератор, паблишер и admin-бот новостей
+- `apps/news/legacy` — reader-бот канала (персонализация/поиск/сохранённое)
 - `apps/contract-worker` — воркер анализа договоров (MacBook)
 - `apps/web` — сайт
 - `packages/shared` — общие схемы/типы

@@ -18,6 +18,8 @@ curl http://localhost:8000/health
 ```bash
 make prod
 ```
+Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-publish`,
+`news-admin-bot`, `news-reader-bot`, `caddy`.
 3. Применить миграции и создать первый admin-key:
 ```bash
 docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
@@ -35,10 +37,12 @@ make deploy
 - перезапускает только изменившиеся сервисы.
 
 ## Ночные и периодические задачи (cron)
+News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
+по интервалам `NEWS_GENERATE_INTERVAL_SECONDS` и `NEWS_PUBLISH_INTERVAL_SECONDS`.
+
+Cron оставляем для служебных задач:
 Пример crontab:
 ```cron
-30 23 * * * /opt/legal-ai/infra/scripts/cron_news_generate.sh >> /var/log/news-gen.log 2>&1
-*/5 * * * * /opt/legal-ai/infra/scripts/cron_news_publish.sh >> /var/log/news-pub.log 2>&1
 */10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_posts.sh >> /var/log/stale-posts.log 2>&1
 */5 * * * * /opt/legal-ai/infra/scripts/healthcheck.sh >> /var/log/healthcheck.log 2>&1
 */10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_jobs.sh >> /var/log/stale-jobs.log 2>&1
@@ -57,10 +61,15 @@ uv run --package news python -m news.generate --dry-run --limit 5
 uv run --package news python -m news.admin_bot
 ```
 
-Рекомендуется запускать как отдельный daemon/service (не через cron).
+В production админ-бот поднимается сервисом `news-admin-bot`.
 Для одновременной работы с лид-ботом задайте отдельный токен `NEWS_ADMIN_BOT_TOKEN`
 (иначе оба процесса будут конфликтовать по long polling одного Telegram-бота).
-Если `NEWS_ADMIN_BOT_TOKEN` не задан, будет использован fallback `TELEGRAM_BOT_TOKEN`.
+
+Запуск reader-бота (локально):
+```bash
+cd apps/news/legacy
+python -u -m app.reader_bot
+```
 
 ## Control Plane автоматизаций
 Просмотр активных тумблеров:
