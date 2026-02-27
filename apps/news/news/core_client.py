@@ -70,3 +70,31 @@ class CoreClient:
             headers=self.headers,
             timeout=self.timeout,
         )
+
+    def get_post(self, post_id: str) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/scheduled-posts/{post_id}",
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def workers_status(self) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/workers/status",
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def reset_stale_scheduled_posts(self, older_than_minutes: int = 30) -> requests.Response:
+        return requests.post(
+            f"{self.base_url}/api/v1/scheduled-posts/reset-stale?older_than_minutes={older_than_minutes}",
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def reset_stale_contract_jobs(self, older_than_minutes: int = 30) -> requests.Response:
+        return requests.post(
+            f"{self.base_url}/api/v1/contract-jobs/reset-stale?older_than_minutes={older_than_minutes}",
+            headers=self.headers,
+            timeout=self.timeout,
+        )

@@ -199,10 +199,44 @@ def _normalize_operator_note(note: str, limit: int = 500) -> str:
     return normalized[: limit - 1].rstrip() + "…"
 
 
+def _format_workers_status(payload: dict[str, Any]) -> str:
+    any_active = bool(payload.get("any_active"))
+    workers = payload.get("workers") or []
+
+    lines = [
+        "Статус воркеров",
+        "",
+        f"Активные воркеры: {'да' if any_active else 'нет'}",
+    ]
+
+    if not workers:
+        lines.append("Список пуст.")
+        return "\n".join(lines)
+
+    lines.append("")
+    for row in workers[:20]:
+        worker_id = str(row.get("worker_id") or "unknown")
+        active = bool(row.get("active"))
+        mark = "🟢" if active else "⚪"
+        last_seen = str(row.get("last_seen_at") or "n/a")
+        lines.append(f"{mark} {worker_id}")
+        lines.append(f"   last_seen: {last_seen}")
+
+    return "\n".join(lines)
+
+
+def _is_scope_error(exc: Exception) -> bool:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    return bool(status_code == 403)
+
+
 class NewsAdminBot:
     def __init__(self) -> None:
         self.admin_ids = _parse_admin_ids(settings.news_admin_ids)
         self.client = CoreClient(settings.core_api_url, settings.api_key_news)
+        admin_key = (settings.api_key_admin or "").strip() or settings.api_key_news
+        self.admin_client = CoreClient(settings.core_api_url, admin_key)
         self._openai_client: Any | None = None
         self._use_max_tokens_param = "deepseek" in (settings.openai_base_url or "").lower()
 
@@ -251,6 +285,10 @@ class NewsAdminBot:
                 InlineKeyboardButton("✅ Готовые", callback_data="pl:scheduled:0"),
             ],
             [InlineKeyboardButton("🚀 Ручная очередь", callback_data="mq:due:0")],
+            [
+                InlineKeyboardButton("👷 Воркеры", callback_data="workers"),
+                InlineKeyboardButton("🧹 Сброс stale", callback_data="resetstale"),
+            ],
             [
                 InlineKeyboardButton("✅ Включить всё", callback_data="all:1"),
                 InlineKeyboardButton("⛔ Отключить всё", callback_data="all:0"),
@@ -664,6 +702,23 @@ class NewsAdminBot:
             logger.exception("manual_queue_load_failed", extra={"error": str(exc)})
             await update.effective_message.reply_text(f"Ошибка загрузки ручной очереди: {exc}")
 
+    async def cmd_workers(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        _ = context
+        if not await self._ensure_admin(update):
+            return
+        try:
+            response = self.admin_client.workers_status()
+            response.raise_for_status()
+            await update.effective_message.reply_text(_format_workers_status(response.json()))
+        except Exception as exc:
+            if _is_scope_error(exc):
+                await update.effective_message.reply_text(
+                    "Для команды /workers нужен ключ со scope `admin` или `worker`.\n"
+                    "Добавьте `API_KEY_ADMIN` в .env для admin-бота."
+                )
+            else:
+                await update.effective_message.reply_text(f"Ошибка получения статуса воркеров: {exc}")
+
     async def cmd_cancel_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_admin(update):
             return
@@ -686,6 +741,7 @@ class NewsAdminBot:
             "/status — статус очереди публикаций\n"
             "/posts — сгенерированные/готовые посты и ручная публикация\n"
             "/queue — ручная очередь публикации (в т.ч. пакетная)\n"
+            "/workers — статус воркеров\n"
             "/cancel_edit — отменить редактирование\n"
             "/help — помощь"
         )
@@ -702,6 +758,25 @@ class NewsAdminBot:
             if data == "status":
                 await query.message.reply_text(await self._queue_text())
                 return
+
+            if data == "workers":
+                response = self.admin_client.workers_status()
+                response.raise_for_status()
+                await query.message.reply_text(_format_workers_status(response.json()))
+                return
+
+            if data == "resetstale":
+                reset_posts = self.admin_client.reset_stale_scheduled_posts(older_than_minutes=30)
+                reset_posts.raise_for_status()
+                reset_contract = self.admin_client.reset_stale_contract_jobs(older_than_minutes=30)
+                reset_contract.raise_for_status()
+                body_posts = reset_posts.json()
+                body_contract = reset_contract.json()
+                await query.message.reply_text(
+                    "Сброс зависших задач выполнен.\n"
+                    f"scheduled_posts: {body_posts.get('reset_count', 0)}\n"
+                    f"contract_jobs: {body_contract.get('reset_count', 0)}"
+                )
 
             if data.startswith("all:"):
                 enabled = data.split(":", maxsplit=1)[1] == "1"
@@ -724,7 +799,13 @@ class NewsAdminBot:
             )
         except Exception as exc:
             logger.exception("admin_callback_failed", extra={"callback_data": data, "error": str(exc)})
-            await query.message.reply_text(f"Ошибка операции: {exc}")
+            if _is_scope_error(exc):
+                await query.message.reply_text(
+                    "Операция требует ключ со scope `admin`.\n"
+                    "Укажите `API_KEY_ADMIN` в .env и перезапустите admin-бот."
+                )
+            else:
+                await query.message.reply_text(f"Ошибка операции: {exc}")
 
     async def cb_posts(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_admin(update):
@@ -1218,9 +1299,15 @@ class NewsAdminBot:
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("posts", self.cmd_posts))
         app.add_handler(CommandHandler("queue", self.cmd_queue))
+        app.add_handler(CommandHandler("workers", self.cmd_workers))
         app.add_handler(CommandHandler("cancel_edit", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("help", self.cmd_help))
-        app.add_handler(CallbackQueryHandler(self.cb_controls, pattern=r"^(refresh|status|all:[01]|set:[a-z0-9_.-]+:[01])$"))
+        app.add_handler(
+            CallbackQueryHandler(
+                self.cb_controls,
+                pattern=r"^(refresh|status|workers|resetstale|all:[01]|set:[a-z0-9_.-]+:[01])$",
+            )
+        )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,

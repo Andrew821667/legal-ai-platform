@@ -4,14 +4,18 @@ Reader Bot Service Layer.
 Functions for managing reader profiles, feedback, and interactions.
 """
 
+import logging
 from datetime import datetime, timedelta
+from uuid import UUID
 from typing import Optional, List, Dict
-from sqlalchemy import select, func, and_, or_, desc
-from sqlalchemy.orm import joinedload
+from sqlalchemy import select, func, and_, or_, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.models.reader_models import UserProfile, LeadProfile, UserFeedback, UserInteraction, SavedArticle
-from app.models.database import Publication, PostDraft
+from app.models.reader_publications import ReaderPublication
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== User Profile Management ====================
@@ -41,9 +45,17 @@ async def create_user_profile(
         is_active=True
     )
     db.add(profile)
-    await db.commit()
-    await db.refresh(profile)
-    return profile
+    try:
+        await db.commit()
+        await db.refresh(profile)
+        return profile
+    except IntegrityError:
+        # Idempotent create: profile may already exist due duplicate updates/retries.
+        await db.rollback()
+        existing = await get_user_profile(user_id, db)
+        if existing:
+            return existing
+        raise
 
 
 async def update_user_profile(
@@ -254,7 +266,7 @@ async def get_personalized_feed(
     user_id: int,
     limit: int = 5,
     db: AsyncSession = None
-) -> List[Publication]:
+) -> List[ReaderPublication]:
     """
     Get personalized article feed based on user's topics.
     Returns recent publications matching user interests.
@@ -270,12 +282,11 @@ async def get_personalized_feed(
     # For now, simple filter by topics in draft content/title
     # TODO: Enhance with vector similarity search using Qdrant
     query = (
-        select(Publication)
-        .join(PostDraft, Publication.draft_id == PostDraft.id)
-        .options(joinedload(Publication.draft))
-        .where(Publication.published_at >= since)
-        .order_by(desc(Publication.published_at))
-        .limit(limit * 2)  # Get more, then filter
+        select(ReaderPublication)
+        .where(cast(ReaderPublication.status, String) == "posted")
+        .where(ReaderPublication.publish_at >= since)
+        .order_by(desc(ReaderPublication.publish_at))
+        .limit(limit * 2)
     )
 
     result = await db.execute(query)
@@ -293,10 +304,7 @@ async def get_personalized_feed(
 
     filtered = []
     for pub in publications:
-        if not pub.draft:
-            continue
-
-        content_lower = (pub.draft.title + ' ' + pub.draft.content).lower()
+        content_lower = ((pub.title or "") + " " + (pub.text or "")).lower()
 
         # Check if any user topic matches
         for user_topic in profile.topics:
@@ -311,12 +319,12 @@ async def get_personalized_feed(
     return filtered[:limit]
 
 
-async def get_recent_publications(limit: int, db: AsyncSession) -> List[Publication]:
+async def get_recent_publications(limit: int, db: AsyncSession) -> List[ReaderPublication]:
     """Get most recent publications (fallback for users without preferences)."""
     query = (
-        select(Publication)
-        .options(joinedload(Publication.draft))
-        .order_by(desc(Publication.published_at))
+        select(ReaderPublication)
+        .where(cast(ReaderPublication.status, String) == "posted")
+        .order_by(desc(ReaderPublication.publish_at))
         .limit(limit)
     )
     result = await db.execute(query)
@@ -330,23 +338,22 @@ async def search_publications(
     user_id: Optional[int] = None,
     limit: int = 10,
     db: AsyncSession = None
-) -> List[Publication]:
+) -> List[ReaderPublication]:
     """
     Full-text search publications by query.
     Optionally tracks search interaction.
     """
     # Search in title and content
     search_query = (
-        select(Publication)
-        .join(PostDraft, Publication.draft_id == PostDraft.id)
-        .options(joinedload(Publication.draft))
+        select(ReaderPublication)
         .where(
             or_(
-                PostDraft.title.ilike(f'%{query}%'),
-                PostDraft.content.ilike(f'%{query}%')
+                ReaderPublication.title.ilike(f"%{query}%"),
+                ReaderPublication.text.ilike(f"%{query}%"),
             )
         )
-        .order_by(desc(Publication.published_at))
+        .where(cast(ReaderPublication.status, String) == "posted")
+        .order_by(desc(ReaderPublication.publish_at))
         .limit(limit)
     )
 
@@ -368,20 +375,37 @@ async def search_publications(
 
 # ==================== Feedback ====================
 
+def _parse_publication_id(publication_id: str | UUID) -> UUID:
+    """Normalize callback/public API publication IDs to UUID."""
+    if isinstance(publication_id, UUID):
+        return publication_id
+    return UUID(str(publication_id))
+
+
+def _publication_match(column, publication_uuid: UUID):
+    """
+    Compatibility comparison by string representation.
+    Works for uuid/bigint legacy columns without operator mismatch errors.
+    """
+    return cast(column, String) == str(publication_uuid)
+
+
 async def save_user_feedback(
     user_id: int,
-    publication_id: int,
+    publication_id: str | UUID,
     is_useful: bool,
     feedback_type: Optional[str] = None,
     db: AsyncSession = None
 ):
     """Save user feedback (like/dislike) on article."""
+    publication_uuid = _parse_publication_id(publication_id)
+
     # Check if feedback exists
     existing = await db.execute(
         select(UserFeedback).where(
             and_(
                 UserFeedback.user_id == user_id,
-                UserFeedback.publication_id == publication_id
+                _publication_match(UserFeedback.publication_id, publication_uuid),
             )
         )
     )
@@ -395,7 +419,7 @@ async def save_user_feedback(
         # Create new
         feedback = UserFeedback(
             user_id=user_id,
-            publication_id=publication_id,
+            publication_id=publication_uuid,
             is_useful=is_useful,
             feedback_type=feedback_type
         )
@@ -411,14 +435,16 @@ async def save_user_feedback(
 
 # ==================== Saved Articles ====================
 
-async def save_article(user_id: int, publication_id: int, db: AsyncSession):
+async def save_article(user_id: int, publication_id: str | UUID, db: AsyncSession):
     """Bookmark article for user."""
+    publication_uuid = _parse_publication_id(publication_id)
+
     # Check if already saved
     existing = await db.execute(
         select(SavedArticle).where(
             and_(
                 SavedArticle.user_id == user_id,
-                SavedArticle.publication_id == publication_id
+                _publication_match(SavedArticle.publication_id, publication_uuid),
             )
         )
     )
@@ -428,14 +454,14 @@ async def save_article(user_id: int, publication_id: int, db: AsyncSession):
 
     saved = SavedArticle(
         user_id=user_id,
-        publication_id=publication_id
+        publication_id=publication_uuid
     )
     db.add(saved)
 
     # Track interaction
     interaction = UserInteraction(
         user_id=user_id,
-        publication_id=publication_id,
+        publication_id=publication_uuid,
         action='save'
     )
     db.add(interaction)
@@ -443,28 +469,33 @@ async def save_article(user_id: int, publication_id: int, db: AsyncSession):
     await db.commit()
 
 
-async def get_saved_articles(user_id: int, limit: int = 20, db: AsyncSession = None) -> List[Publication]:
+async def get_saved_articles(user_id: int, limit: int = 20, db: AsyncSession = None) -> List[ReaderPublication]:
     """Get user's saved articles."""
     query = (
-        select(Publication)
-        .join(SavedArticle, SavedArticle.publication_id == Publication.id)
-        .options(joinedload(Publication.draft))
+        select(ReaderPublication)
+        .join(SavedArticle, cast(SavedArticle.publication_id, String) == cast(ReaderPublication.id, String))
+        .where(cast(ReaderPublication.status, String) == "posted")
         .where(SavedArticle.user_id == user_id)
         .order_by(desc(SavedArticle.created_at))
         .limit(limit)
     )
+    try:
+        result = await db.execute(query)
+        return result.scalars().all()
+    except Exception:
+        logger.exception("get_saved_articles_failed", extra={"user_id": user_id})
+        return []
 
-    result = await db.execute(query)
-    return result.scalars().all()
 
-
-async def unsave_article(user_id: int, publication_id: int, db: AsyncSession):
+async def unsave_article(user_id: int, publication_id: str | UUID, db: AsyncSession):
     """Remove article from saved."""
+    publication_uuid = _parse_publication_id(publication_id)
+
     result = await db.execute(
         select(SavedArticle).where(
             and_(
                 SavedArticle.user_id == user_id,
-                SavedArticle.publication_id == publication_id
+                _publication_match(SavedArticle.publication_id, publication_uuid),
             )
         )
     )

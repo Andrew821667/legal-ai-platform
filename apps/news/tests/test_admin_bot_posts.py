@@ -6,6 +6,7 @@ from news.admin_bot import (
     _batch_mode_label,
     _batch_mode_limit,
     _compute_quick_publish_at,
+    _format_workers_status,
     _is_batch_mode_allowed,
     _is_manual_queue_context,
     _normalize_operator_note,
@@ -93,3 +94,20 @@ def test_normalize_operator_note() -> None:
     assert _normalize_operator_note("  срочно   для  клиента ") == "срочно для клиента"
     assert _normalize_operator_note("a" * 700).endswith("…")
     assert len(_normalize_operator_note("a" * 700)) == 500
+
+
+def test_format_workers_status_payload() -> None:
+    text = _format_workers_status(
+        {
+            "any_active": True,
+            "workers": [
+                {
+                    "worker_id": "news-publish",
+                    "active": True,
+                    "last_seen_at": "2026-02-27T09:00:00+00:00",
+                }
+            ],
+        }
+    )
+    assert "Активные воркеры: да" in text
+    assert "news-publish" in text

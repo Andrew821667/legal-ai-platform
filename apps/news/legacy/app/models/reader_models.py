@@ -14,6 +14,7 @@ from sqlalchemy import (
     Column, BigInteger, String, Integer, Boolean, TIMESTAMP,
     Text, ARRAY, ForeignKey, UniqueConstraint, Index
 )
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from app.models.database import Base
 
@@ -118,7 +119,7 @@ class UserFeedback(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('user_profiles.user_id', ondelete='CASCADE'), nullable=False)
-    publication_id = Column(Integer, ForeignKey('publications.id', ondelete='CASCADE'), nullable=False)
+    publication_id = Column(PGUUID(as_uuid=True), ForeignKey('scheduled_posts.id', ondelete='CASCADE'), nullable=False)
 
     # Feedback
     is_useful = Column(Boolean, nullable=False)  # TRUE = 👍, FALSE = 👎
@@ -128,7 +129,7 @@ class UserFeedback(Base):
 
     # Relationships
     user = relationship("UserProfile", back_populates="feedback")
-    publication = relationship("Publication")
+    publication = relationship("ReaderPublication")
 
     # Constraints
     __table_args__ = (
@@ -148,7 +149,7 @@ class UserInteraction(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('user_profiles.user_id', ondelete='CASCADE'), nullable=False)
-    publication_id = Column(Integer, ForeignKey('publications.id', ondelete='CASCADE'), nullable=True)
+    publication_id = Column(PGUUID(as_uuid=True), ForeignKey('scheduled_posts.id', ondelete='CASCADE'), nullable=True)
 
     # Interaction
     action = Column(String(50), nullable=False)  # 'view', 'save', 'share', 'search', 'digest_open'
@@ -159,7 +160,7 @@ class UserInteraction(Base):
 
     # Relationships
     user = relationship("UserProfile", back_populates="interactions")
-    publication = relationship("Publication")
+    publication = relationship("ReaderPublication")
 
     # Indexes
     __table_args__ = (
@@ -180,13 +181,13 @@ class SavedArticle(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('user_profiles.user_id', ondelete='CASCADE'), nullable=False)
-    publication_id = Column(Integer, ForeignKey('publications.id', ondelete='CASCADE'), nullable=False)
+    publication_id = Column(PGUUID(as_uuid=True), ForeignKey('scheduled_posts.id', ondelete='CASCADE'), nullable=False)
 
     created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=False)
 
     # Relationships
     user = relationship("UserProfile", back_populates="saved_articles")
-    publication = relationship("Publication")
+    publication = relationship("ReaderPublication")
 
     # Constraints
     __table_args__ = (

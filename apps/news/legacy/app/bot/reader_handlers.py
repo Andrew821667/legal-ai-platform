@@ -9,11 +9,13 @@ Handles user interactions:
 """
 
 from typing import Optional
+from uuid import UUID
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import structlog
@@ -38,7 +40,7 @@ from app.services.reader_service import (
     increment_questions_asked,
     calculate_lead_score
 )
-from app.models.database import Publication
+from app.models.reader_publications import ReaderPublication
 
 
 router = Router()
@@ -67,7 +69,17 @@ class LeadMagnetStates(StatesGroup):
 
 # ==================== Helper Functions ====================
 
-def format_article_message(article: Publication, index: Optional[int] = None) -> str:
+
+async def _safe_get_saved_articles(user_id: int, db: AsyncSession, limit: int = 20) -> list[ReaderPublication]:
+    """Never break handler flow if saved-articles query fails."""
+    try:
+        return await get_saved_articles(user_id, limit=limit, db=db)
+    except Exception:
+        logger.exception("saved_articles_fetch_failed", user_id=user_id)
+        return []
+
+
+def format_article_message(article: ReaderPublication, index: Optional[int] = None) -> str:
     """Format article for display."""
     if not article.draft:
         return "Статья не найдена"
@@ -90,7 +102,7 @@ def format_article_message(article: Publication, index: Optional[int] = None) ->
     )
 
 
-def get_article_keyboard(publication_id: int, user_saved: bool = False, show_read_button: bool = True) -> InlineKeyboardMarkup:
+def get_article_keyboard(publication_id: str, user_saved: bool = False, show_read_button: bool = True) -> InlineKeyboardMarkup:
     """Get keyboard for article with like/dislike/save buttons."""
     save_text = "❌ Удалить из сохранённых" if user_saved else "🔖 Сохранить"
     save_action = f"unsave:{publication_id}" if user_saved else f"save:{publication_id}"
@@ -128,6 +140,7 @@ async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
     if profile:
         # Existing user - show main menu
         lead_profile = await get_lead_profile(user_id, db)
+        saved_articles = await _safe_get_saved_articles(user_id, db=db)
         lead_magnet_text = ""
         if lead_profile and lead_profile.lead_magnet_completed:
             lead_magnet_text = "✅ Лид-магнит выполнен"
@@ -139,7 +152,7 @@ async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
             f"Что хотите сделать?\n\n"
             f"/today - Персональные новости за сегодня\n"
             f"/search - Поиск по архиву\n"
-            f"/saved - Сохранённые статьи ({len(await get_saved_articles(user_id, db=db))})\n"
+            f"/saved - Сохранённые статьи ({len(saved_articles)})\n"
             f"/settings - Настройки профиля\n"
             f"{lead_magnet_text}"
         )
@@ -468,7 +481,7 @@ async def cmd_today(message: Message, db: AsyncSession):
     # Send each article with keyboard
     for i, article in enumerate(articles, 1):
         text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(article.id)
+        keyboard = get_article_keyboard(str(article.id))
 
         await message.answer(
             text,
@@ -514,7 +527,7 @@ async def cmd_search(message: Message, db: AsyncSession):
 
     for i, article in enumerate(results, 1):
         text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(article.id)
+        keyboard = get_article_keyboard(str(article.id))
 
         await message.answer(
             text,
@@ -553,7 +566,7 @@ async def handle_search_reply(message: Message, db: AsyncSession):
 
         for i, article in enumerate(results, 1):
             text = format_article_message(article, index=i)
-            keyboard = get_article_keyboard(article.id)
+            keyboard = get_article_keyboard(str(article.id))
 
             await message.answer(
                 text,
@@ -568,7 +581,7 @@ async def handle_search_reply(message: Message, db: AsyncSession):
 async def cmd_saved(message: Message, db: AsyncSession):
     """Show saved articles."""
     user_id = message.from_user.id
-    saved = await get_saved_articles(user_id, limit=20, db=db)
+    saved = await _safe_get_saved_articles(user_id, db=db, limit=20)
 
     if not saved:
         await message.answer(
@@ -584,7 +597,7 @@ async def cmd_saved(message: Message, db: AsyncSession):
 
     for i, article in enumerate(saved, 1):
         text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(article.id, user_saved=True)
+        keyboard = get_article_keyboard(str(article.id), user_saved=True)
 
         await message.answer(
             text,
@@ -604,12 +617,16 @@ async def process_feedback(callback: CallbackQuery, db: AsyncSession):
     is_useful = (action == "like")
 
     # Save feedback
-    await save_user_feedback(
-        user_id=user_id,
-        publication_id=int(article_id),
-        is_useful=is_useful,
-        db=db
-    )
+    try:
+        await save_user_feedback(
+            user_id=user_id,
+            publication_id=article_id,
+            is_useful=is_useful,
+            db=db,
+        )
+    except ValueError:
+        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        return
 
     if is_useful:
         await callback.answer("✅ Спасибо за отзыв!")
@@ -636,13 +653,17 @@ async def save_feedback_type(callback: CallbackQuery, db: AsyncSession):
     user_id = callback.from_user.id
 
     # Update feedback with type
-    await save_user_feedback(
-        user_id=user_id,
-        publication_id=int(article_id),
-        is_useful=False,
-        feedback_type=feedback_type,
-        db=db
-    )
+    try:
+        await save_user_feedback(
+            user_id=user_id,
+            publication_id=article_id,
+            is_useful=False,
+            feedback_type=feedback_type,
+            db=db,
+        )
+    except ValueError:
+        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        return
 
     await callback.message.delete()
     await callback.answer("✅ Спасибо! Учтем в рекомендациях")
@@ -653,13 +674,17 @@ async def save_feedback_type(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("save:"))
 async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Save article to bookmarks."""
-    article_id = int(callback.data.split(":")[1])
+    article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
-    await save_article(user_id, article_id, db)
+    try:
+        await save_article(user_id, article_id, db)
+    except ValueError:
+        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        return
 
     # Update keyboard
-    keyboard = get_article_keyboard(article_id, user_saved=True)
+    keyboard = get_article_keyboard(str(article_id), user_saved=True)
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
     await callback.answer("✅ Сохранено!")
@@ -668,13 +693,17 @@ async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("unsave:"))
 async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Remove article from bookmarks."""
-    article_id = int(callback.data.split(":")[1])
+    article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
-    await unsave_article(user_id, article_id, db)
+    try:
+        await unsave_article(user_id, article_id, db)
+    except ValueError:
+        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        return
 
     # Update keyboard
-    keyboard = get_article_keyboard(article_id, user_saved=False)
+    keyboard = get_article_keyboard(str(article_id), user_saved=False)
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
     await callback.answer("❌ Удалено из сохранённых")
@@ -683,18 +712,17 @@ async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("view:"))
 async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Show full article text."""
-    article_id = int(callback.data.split(":")[1])
+    article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
-    # Get publication with draft
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
-    from app.models.database import Publication
+    try:
+        article_uuid = UUID(article_id)
+    except ValueError:
+        await callback.answer("❌ Некорректный ID статьи", show_alert=True)
+        return
 
     result = await db.execute(
-        select(Publication)
-        .options(joinedload(Publication.draft))
-        .where(Publication.id == article_id)
+        select(ReaderPublication).where(ReaderPublication.id == article_uuid)
     )
     article = result.scalar_one_or_none()
 
@@ -703,9 +731,8 @@ async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
         return
 
     # Check if saved
-    from app.services.reader_service import get_saved_articles
-    saved_articles = await get_saved_articles(user_id, db=db)
-    user_saved = any(s.id == article_id for s in saved_articles)
+    saved_articles = await _safe_get_saved_articles(user_id, db=db)
+    user_saved = any(str(s.id) == str(article_uuid) for s in saved_articles)
 
     # Format full article
     published_date = article.published_at.strftime("%d.%m.%Y")
@@ -717,7 +744,7 @@ async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
     )
 
     # Show full text with keyboard (without "Read more" button)
-    keyboard = get_article_keyboard(article_id, user_saved=user_saved, show_read_button=False)
+    keyboard = get_article_keyboard(str(article_uuid), user_saved=user_saved, show_read_button=False)
 
     await callback.message.edit_text(
         full_text,
@@ -1104,3 +1131,47 @@ async def handle_question(message: Message, state: FSMContext, db: AsyncSession)
 
     # Clear state
     await state.clear()
+
+
+@router.message(F.text)
+async def fallback_text_message(message: Message, db: AsyncSession):
+    """Fallback for plain text so the bot never looks silent."""
+    text = (message.text or "").strip()
+    if not text:
+        return
+
+    # Unknown slash-command hint
+    if text.startswith("/"):
+        await message.answer(
+            "Неизвестная команда.\n\n"
+            "Доступно: /start, /today, /search, /saved, /settings, /lead_magnet"
+        )
+        return
+
+    user_id = message.from_user.id
+    profile = await get_user_profile(user_id, db)
+    if not profile:
+        await message.answer(
+            "Сначала запустите /start, чтобы настроить профиль.\n"
+            "После этого смогу подобрать релевантные новости."
+        )
+        return
+
+    results = await search_publications(text, user_id=user_id, limit=3, db=db)
+    if not results:
+        await message.answer(
+            "По этому запросу пока ничего не найдено.\n"
+            "Попробуйте /today или /search с другим запросом."
+        )
+        return
+
+    await message.answer(
+        f"Найдено {len(results)} статей по запросу: <b>{text}</b>",
+        parse_mode="HTML",
+    )
+    for i, article in enumerate(results, 1):
+        await message.answer(
+            format_article_message(article, index=i),
+            parse_mode="HTML",
+            reply_markup=get_article_keyboard(str(article.id)),
+        )
