@@ -57,3 +57,28 @@ def test_enforce_leadgen_response_keeps_propose_text_without_contact_push():
 
 def test_is_cta_shown_accepts_mini_audit_pattern():
     assert funnel.is_cta_shown("Могу провести мини-аудит, оставьте email.", "A")
+
+
+def test_enforce_leadgen_response_does_not_add_second_question_block():
+    result = funnel.enforce_leadgen_response(
+        response_text=(
+            "Вижу основную проблему в разрозненных каналах.\n"
+            "Что сейчас для вас критичнее?\n"
+            "1) Скорость\n"
+            "2) Контроль сроков\n"
+            "3) Снижение потерь"
+        ),
+        stage="discover",
+        user_message="теряем заявки",
+        cta_shown=False,
+        cta_variant="A",
+        lead_data={},
+    )
+    assert result.count("1)") == 1
+
+
+def test_should_fast_track_handoff_when_contact_and_consultation_requested():
+    assert funnel.should_fast_track_handoff(
+        "Готов на консультацию, мой телефон +7 909 233-09-09",
+        {},
+    ) is True

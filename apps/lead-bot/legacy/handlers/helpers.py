@@ -227,19 +227,34 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         
         notification_message += f"🌡️ Температура: {temperature.upper()}"
 
-        # Отправляем в Telegram
-        # Если задан LEADS_CHAT_ID - отправляем в отдельный чат, иначе напрямую админу
-        target_chat_id = config.LEADS_CHAT_ID if config.LEADS_CHAT_ID else config.ADMIN_TELEGRAM_ID
+        # Отправляем в Telegram с retry и fallback в личный чат админа.
+        targets = []
+        if config.LEADS_CHAT_ID and config.LEADS_CHAT_ID != config.ADMIN_TELEGRAM_ID:
+            targets.append(config.LEADS_CHAT_ID)
+        targets.append(config.ADMIN_TELEGRAM_ID)
 
-        await context.bot.send_message(
-            chat_id=target_chat_id,
-            text=notification_message
-        )
+        sent_any = False
+        for target_chat_id in targets:
+            try:
+                await utils.telegram_call_with_retry(
+                    lambda target_chat_id=target_chat_id: context.bot.send_message(
+                        chat_id=target_chat_id,
+                        text=notification_message,
+                    ),
+                    action=f"lead_notification_{target_chat_id}",
+                    max_retries=3,
+                    base_delay=1.0,
+                )
+                sent_any = True
+                logger.info(f"Lead notification sent to chat {target_chat_id} for lead {lead_id}")
+            except Exception as send_error:
+                logger.warning(f"Failed to send lead notification to chat {target_chat_id}: {send_error}")
 
-        # Помечаем что уведомление отправлено
-        database.db.mark_lead_notification_sent(lead_id)
-
-        logger.info(f"Lead notification sent to chat {target_chat_id} for lead {lead_id}")
+        if sent_any:
+            # Помечаем что уведомление отправлено
+            database.db.mark_lead_notification_sent(lead_id)
+        else:
+            logger.error(f"Lead notification was not delivered to any target for lead {lead_id}")
 
         # Отправляем на email (если настроен SMTP)
         if config.SMTP_USER and config.SMTP_PASSWORD:
@@ -259,4 +274,3 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
 
     except Exception as e:
         logger.error(f"Error in notify_admin_new_lead: {e}")
-

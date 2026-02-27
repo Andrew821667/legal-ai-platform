@@ -21,17 +21,43 @@ CONTACTS = {
 }
 
 
-SERVICE_CARDS = [
-    "1) Договорная работа и документооборот (от 150 000 ₽)",
-    "2) Судебная работа и процессуальные документы (от 200 000 ₽)",
-    "3) Корпоративное право, M&A, Due Diligence (от 300 000 ₽)",
-    "4) Комплаенс, риски и мониторинг изменений (от 200 000 ₽)",
-    "5) Кастомная разработка и интеграции 1C/CRM/ERP (от 300 000 ₽)",
-    "6) Юридический аутсорсинг + AI (от 100 000 ₽/мес)",
-]
+MODULE_CATALOG = {
+    "consultation_30m": "Консультация 30 минут по кейсу",
+    "process_audit": "Диагностика процесса и roadmap внедрения",
+    "lead_intake_pilot": "Пилот автоматизации входящих заявок",
+    "contract_review_assist": "AI-помощник по договорной работе",
+    "litigation_assist": "AI-помощник по судебным документам",
+    "compliance_monitoring": "Комплаенс-мониторинг и контроль рисков",
+    "legal_ops_outsource": "Юридический аутсорсинг с AI-поддержкой",
+    "custom_integrations": "Кастомные интеграции (CRM/1C/ERP)",
+}
 
 
-SERVICE_CATALOG_TEXT = "\n".join(f"• {item}" for item in SERVICE_CARDS)
+def _build_service_cards() -> list[str]:
+    configured = config.AVAILABLE_SERVICE_MODULES
+    if not configured:
+        return []
+
+    cards: list[str] = []
+    index = 1
+    for key in configured:
+        title = MODULE_CATALOG.get(key)
+        if not title:
+            continue
+        cards.append(f"{index}) {title}")
+        index += 1
+    return cards
+
+
+SERVICE_CARDS = _build_service_cards()
+HAS_CONFIRMED_MODULES = bool(SERVICE_CARDS)
+if HAS_CONFIRMED_MODULES:
+    SERVICE_CATALOG_TEXT = "\n".join(f"• {item}" for item in SERVICE_CARDS)
+else:
+    SERVICE_CATALOG_TEXT = (
+        "• На текущем окружении нет подтвержденного списка готовых модулей.\n"
+        "• Сначала фиксируем задачу и контакты, затем команда подтверждает доступные варианты."
+    )
 
 
 def contact_lines(include_github: bool = False) -> str:
@@ -89,7 +115,7 @@ MENU_RESPONSES = {
     "menu_services": (
         "🎯 НАПРАВЛЕНИЯ РАБОТЫ:\n\n"
         f"{SERVICE_CATALOG_TEXT}\n\n"
-        "Если хотите, подскажу 1-2 наиболее подходящих варианта под вашу задачу."
+        "Показываю только подтвержденные варианты. Если списка нет, предложу безопасный следующий шаг."
     ),
     "menu_prices": (
         "💰 ОРИЕНТИРЫ ПО БЮДЖЕТУ:\n\n"
@@ -140,13 +166,13 @@ CONSULTATION_CTA_TEXT = (
     "Если хотите, можем перейти к следующему практическому шагу."
 )
 
-CONSULTATION_CTA_BUTTON_TEXT = "📞 Заказать консультацию 30 мин"
+CONSULTATION_CTA_BUTTON_TEXT = "📞 Заказать консультацию"
 
 
 LEAD_MAGNET_SELECTION_MESSAGES = {
     "consultation": (
         "Отличный выбор.\n\n"
-        "Оставьте email или телефон, и команда согласует время консультации."
+        "Отправьте номер телефона, и команда согласует время консультации."
     ),
     "checklist": (
         "Отлично, отправим чек-лист.\n\n"

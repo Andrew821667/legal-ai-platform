@@ -5,14 +5,14 @@ from telegram import KeyboardButton, InlineKeyboardButton
 
 # Меню кнопок
 MAIN_MENU = [
-    [KeyboardButton("📋 Меню услуг"), KeyboardButton("✉️ Заказать консультацию")],
+    [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
     [KeyboardButton("🔄 Начать заново")]
 ]
 
 # Админское меню (видно только админу)
 ADMIN_MENU = [
-    [KeyboardButton("📋 Меню услуг"), KeyboardButton("✉️ Заказать консультацию")],
+    [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
     [KeyboardButton("⚙️ Админ-панель"), KeyboardButton("🔄 Начать заново")]
 ]
@@ -36,7 +36,7 @@ CONSENT_TRANSBORDER_MENU = [
 ]
 
 CONSULTATION_CTA_MENU = [
-    [InlineKeyboardButton("📞 Заказать консультацию 30 мин", callback_data="magnet_consultation")],
+    [InlineKeyboardButton("📞 Заказать консультацию", callback_data="magnet_consultation")],
 ]
 
 DOCUMENTS_MENU = [

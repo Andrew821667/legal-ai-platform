@@ -4,7 +4,7 @@ AI Brain - интеграция с OpenAI GPT + RAG
 import logging
 from typing import List, Dict, Optional, AsyncGenerator
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from config import Config
 config = Config()
 import prompts
@@ -21,6 +21,12 @@ class AIBrain:
         client_kwargs = {"api_key": config.OPENAI_API_KEY}
         if config.OPENAI_BASE_URL:
             client_kwargs["base_url"] = config.OPENAI_BASE_URL
+        client_kwargs["timeout"] = config.LLM_TIMEOUT_SECONDS
+        client_kwargs["max_retries"] = config.LLM_MAX_RETRIES
+
+        # Async клиент используется на боевом пути (handlers/*),
+        # sync клиент оставлен для совместимости со скриптами/тестами.
+        self.async_client = AsyncOpenAI(**client_kwargs)
         self.client = OpenAI(**client_kwargs)
         self.model = config.OPENAI_MODEL
         self.max_tokens = config.MAX_TOKENS
@@ -70,7 +76,7 @@ class AIBrain:
 
             # Запрос к OpenAI с включенным streaming
             # ВАЖНО: max_completion_tokens = лимит ТОЛЬКО на ответ (не включает prompt и историю!)
-            response = self.client.chat.completions.create(
+            response = await self.async_client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 **self._completion_token_kwargs(),
@@ -80,7 +86,7 @@ class AIBrain:
 
             # Отдаем части ответа по мере их поступления
             finish_reason = None
-            for chunk in response:
+            async for chunk in response:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
 
@@ -99,6 +105,54 @@ class AIBrain:
         except Exception as e:
             logger.error(f"Error generating streaming response: {e}")
             yield "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз или свяжитесь с нашей командой напрямую."
+
+    async def extract_lead_data_async(self, conversation_history: List[Dict[str, str]]) -> Optional[Dict]:
+        """
+        Async-вариант извлечения данных лида.
+        Используется в async handlers, чтобы не блокировать event loop.
+        """
+        response_text = ""
+        try:
+            conversation_text = "\n".join([
+                f"{msg['role']}: {msg.get('content') or msg.get('message')}"
+                for msg in conversation_history
+            ])
+
+            messages = [
+                {"role": "system", "content": prompts.EXTRACT_DATA_PROMPT},
+                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
+            ]
+
+            logger.debug("Extracting lead data from conversation (async)")
+
+            response = await self.async_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=500,
+                temperature=0.3
+            )
+
+            response_text = response.choices[0].message.content
+            logger.debug(f"Received async extraction response: {response_text[:100]}")
+
+            response_text = response_text.strip()
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                response_text = "\n".join(lines[1:-1])
+
+            lead_data = json.loads(response_text)
+            logger.info(f"✅ Lead data extracted: temperature={lead_data.get('lead_temperature')}")
+            logger.info(f"📊 Service: category={lead_data.get('service_category')}, need={lead_data.get('specific_need')}")
+            logger.info(f"🔍 Full lead data: {json.dumps(lead_data, ensure_ascii=False)}")
+
+            return lead_data
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing JSON response: {e}, response: {response_text}")
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting lead data (async): {e}")
+            return None
 
     def generate_response(
         self,
@@ -204,6 +258,7 @@ class AIBrain:
         Returns:
             Словарь с данными лида или None в случае ошибки
         """
+        response_text = ""
         try:
             # Формируем контекст диалога
             conversation_text = "\n".join([

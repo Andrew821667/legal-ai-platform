@@ -23,6 +23,7 @@ import prompts
 import content
 import funnel
 from handlers.constants import *
+from handlers.helpers import notify_admin_new_lead
 
 logger = logging.getLogger(__name__)
 
@@ -105,12 +106,13 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         lead_qualifier.lead_qualifier.update_lead_magnet(lead["id"], magnet_type)
         lead_id = lead["id"]
 
-    # Уведомляем админа
-    admin_interface.admin_interface.send_admin_notification(
-        context.bot,
-        lead_id,
-        "lead_magnet_requested",
-        f"Запрошен: {magnet_type}",
+    lead_payload = database.db.get_lead_by_id(lead_id) or {}
+    await notify_admin_new_lead(
+        context=context,
+        lead_id=lead_id,
+        lead_data=lead_payload,
+        user_data=user_data,
+        is_update=bool(lead),
     )
 
     funnel_state = database.db.get_user_funnel_state(user_data['id'])
@@ -163,6 +165,16 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         logger.warning(f"Failed to track CTA click analytics: {analytics_error}")
 
     selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо!")
+    consultation_markup = None
+    if magnet_type == "consultation" and (not query.message or not getattr(query.message, "business_connection_id", None)):
+        consultation_markup = ReplyKeyboardMarkup(
+            [
+                [KeyboardButton("📲 Отправить телефон", request_contact=True)],
+                [KeyboardButton("⬅️ Отмена")],
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
     if query.message and hasattr(query.message, "business_connection_id") and query.message.business_connection_id:
         await context.bot.send_message(
             chat_id=query.message.chat.id,
@@ -170,7 +182,12 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
             business_connection_id=query.message.business_connection_id,
         )
     else:
-        await utils.safe_reply_text(query.message, selection_text, action="lead_magnet_selection")
+        await utils.safe_reply_text(
+            query.message,
+            selection_text,
+            action="lead_magnet_selection",
+            reply_markup=consultation_markup,
+        )
 
 
 

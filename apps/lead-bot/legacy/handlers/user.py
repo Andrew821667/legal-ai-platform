@@ -12,7 +12,6 @@ from telegram.ext import ContextTypes
 import database
 import ai_brain
 import lead_qualifier
-import admin_interface
 from config import Config
 config = Config()
 import utils
@@ -22,9 +21,10 @@ import prompts
 import content
 import funnel
 from handlers.constants import *
-from handlers.helpers import extract_email, send_lead_magnet_email
+from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin_new_lead
 
 logger = logging.getLogger(__name__)
+PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
 
 # Import admin panel function (avoid at module level due to potential circular import)
 def get_show_admin_panel():
@@ -46,6 +46,21 @@ def _consultation_cta_markup() -> InlineKeyboardMarkup:
 
 def _documents_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(DOCUMENTS_MENU)
+
+
+def _consultation_contact_markup() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("📲 Отправить телефон", request_contact=True)],
+            [KeyboardButton("⬅️ Отмена")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU, resize_keyboard=True)
 
 
 def _is_pdn_consent_granted(consent_state: Dict) -> bool:
@@ -71,6 +86,41 @@ def _format_profile_text(user_data: Dict, lead: Optional[Dict], consent_state: D
         f"• Статус: {lead.get('status') or 'new'}\n\n"
         f"{content.consent_status_text(consent_state)}"
     )
+
+
+def _schedule_typing_indicator(chat, user_telegram_id: int) -> None:
+    """Неблокирующий typing, чтобы сетевые лаги Telegram не тормозили ответ."""
+
+    async def _send_typing() -> None:
+        try:
+            await asyncio.wait_for(chat.send_action(action="typing"), timeout=1.5)
+            logger.info(f"Typing indicator sent for user {user_telegram_id}")
+        except Exception as error:
+            logger.debug(f"Typing indicator skipped for user {user_telegram_id}: {error}")
+
+    asyncio.create_task(_send_typing())
+
+
+def _extract_phone_candidate(text: str) -> Optional[str]:
+    match = PHONE_RE.search(text or "")
+    if not match:
+        return None
+    return match.group(0)
+
+
+def _persist_fasttrack_contact(user_db_id: int, user, message_text: str) -> None:
+    payload: Dict[str, str] = {}
+    email = extract_email(message_text)
+    if email:
+        payload["email"] = email
+
+    phone = _extract_phone_candidate(message_text)
+    if phone and utils.validate_phone(phone):
+        payload["phone"] = utils.format_phone(phone)
+
+    if payload:
+        payload.setdefault("name", user.first_name)
+        database.db.create_or_update_lead(user_db_id, payload)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,10 +154,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Админу показываем расширенное меню с кнопкой админ-панели
         if user.id == config.ADMIN_TELEGRAM_ID:
-            reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
+            reply_markup = _main_menu_markup(user.id)
             welcome_message += "\n\n⚙️ Доступна админ-панель!"
         else:
-            reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
+            reply_markup = _main_menu_markup(user.id)
 
         await utils.safe_reply_text(
             update.message,
@@ -356,8 +406,10 @@ def _normalize_magnet_type(value: Optional[str]) -> str:
 
 async def _handle_non_text_input(
     update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
     user_data: Dict,
     lead: Optional[Dict],
+    allow_lead_processing: bool,
 ) -> bool:
     """
     Обрабатывает non-text сообщения в сценарии lead magnet.
@@ -366,6 +418,19 @@ async def _handle_non_text_input(
     message = update.effective_message
     if not message:
         return True
+
+    if allow_lead_processing and getattr(message, "contact", None):
+        phone = message.contact.phone_number or ""
+        if phone and utils.validate_phone(phone):
+            payload = {
+                "name": update.effective_user.first_name if update.effective_user else None,
+                "phone": utils.format_phone(phone),
+                "lead_magnet_type": "consultation",
+                "lead_magnet_delivered": True,
+            }
+            database.db.create_or_update_lead(user_data["id"], payload)
+            await handle_handoff_request(update, context, source="consultation_contact")
+            return True
 
     if not lead or not lead.get("lead_magnet_type") or lead.get("lead_magnet_delivered"):
         logger.warning(f"Skipping non-text message update type: {update.update_id}")
@@ -380,6 +445,15 @@ async def _handle_non_text_input(
     email = extract_email(caption_text)
     if email:
         await send_lead_magnet_email(update, user_data, lead, email)
+        return True
+
+    if magnet_type == "consultation":
+        await utils.safe_reply_text(
+            message,
+            "Для заявки на консультацию отправьте номер телефона кнопкой ниже.",
+            reply_markup=_consultation_contact_markup(),
+            action="consultation_phone_prompt_non_text",
+        )
         return True
 
     if magnet_type == "demo" and (message.document or message.photo):
@@ -430,8 +504,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         consent_state = database.db.get_user_consent_state(user_data["id"])
         has_pdn_consent = _is_pdn_consent_granted(consent_state)
         has_transborder_consent = bool(consent_state.get("transborder_consent"))
+        is_admin = user.id == config.ADMIN_TELEGRAM_ID
+        allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
 
-        if user.id != config.ADMIN_TELEGRAM_ID and not has_pdn_consent:
+        if not is_admin and not has_pdn_consent:
             await original_message.reply_text(
                 content.CONSENT_STEP_1_TEXT,
                 reply_markup=_pdn_consent_markup(),
@@ -440,7 +516,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # В non-text ветке поддерживаем сценарий демо (документ + email).
         if not message_text:
-            await _handle_non_text_input(update, user_data, lead)
+            await _handle_non_text_input(update, context, user_data, lead, allow_lead_processing)
             return
 
         # 🛡️ ПРОВЕРКА БЕЗОПАСНОСТИ (только для текстовых сообщений)
@@ -456,6 +532,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if normalized != lead.get("lead_magnet_type"):
                 database.db.create_or_update_lead(user_data["id"], {"lead_magnet_type": normalized})
                 lead = database.db.get_lead_by_user_id(user_data["id"])
+
+            if normalized == "consultation":
+                phone_candidate = _extract_phone_candidate(message_text)
+                if phone_candidate and utils.validate_phone(phone_candidate):
+                    database.db.create_or_update_lead(
+                        user_data["id"],
+                        {
+                            "name": user.first_name,
+                            "phone": utils.format_phone(phone_candidate),
+                            "lead_magnet_delivered": True,
+                        },
+                    )
+                    await handle_handoff_request(update, context, source="consultation_phone_text")
+                    return
 
             email = extract_email(message_text)
             if email:
@@ -475,10 +565,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await menu_command(update, context)
             return
 
-        if message_text == "✉️ Заказать консультацию":
-            await original_message.reply_text(
-                content.CONSULTATION_CTA_TEXT,
-                reply_markup=_consultation_cta_markup(),
+        if message_text in {"📞 Консультация", "✉️ Заказать консультацию"}:
+            if allow_lead_processing:
+                database.db.create_or_update_lead(
+                    user_data["id"],
+                    {
+                        "name": user.first_name,
+                        "lead_magnet_type": "consultation",
+                        "lead_magnet_delivered": False,
+                    },
+                )
+            await utils.safe_reply_text(
+                original_message,
+                "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
+                reply_markup=_consultation_contact_markup(),
+                action="consultation_phone_prompt",
+            )
+            return
+
+        if message_text == "⬅️ Отмена":
+            await utils.safe_reply_text(
+                original_message,
+                "Ок, вернул основное меню.",
+                reply_markup=_main_menu_markup(user.id),
+                action="cancel_to_main_menu",
             )
             return
 
@@ -505,10 +615,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Проверяем триггеры передачи админу
         if ai_brain.ai_brain.check_handoff_trigger(message_text):
-            await handle_handoff_request(update, context)
+            if allow_lead_processing:
+                _persist_fasttrack_contact(user_data["id"], user, message_text)
+            await handle_handoff_request(update, context, source="trigger")
             return
 
-        if user.id != config.ADMIN_TELEGRAM_ID and not has_transborder_consent:
+        if allow_lead_processing and funnel.should_fast_track_handoff(message_text, lead):
+            database.db.add_message(user_data["id"], "user", message_text)
+            _persist_fasttrack_contact(user_data["id"], user, message_text)
+            await handle_handoff_request(update, context, source="fasttrack")
+            return
+
+        if not is_admin and not has_transborder_consent:
             await original_message.reply_text(
                 content.TRANSBORDER_REQUIRED_TEXT,
                 reply_markup=_transborder_consent_markup(),
@@ -542,12 +660,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         merged_lead_data = dict(lead or {})
         response_stage = current_stage
 
-        # Готовим стадию ДО генерации ответа, чтобы убрать лаг на 1 шаг.
-        if user.id != config.ADMIN_TELEGRAM_ID:
-            lead_data = ai_brain.ai_brain.extract_lead_data(conversation_history)
-            if lead_data:
-                merged_lead_data.update({k: v for k, v in lead_data.items() if v is not None})
-
+        # Стадию ответа считаем без дополнительного LLM-запроса,
+        # чтобы не задерживать пользовательский ответ.
+        if allow_lead_processing:
             response_stage = funnel.infer_stage(
                 previous_stage=current_stage,
                 user_message=message_text,
@@ -561,13 +676,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         last_update_length = 0
         last_update_time = 0
 
-        try:
-            await original_message.chat.send_action(action="typing")
-            logger.info(f"Typing indicator sent for user {user_data['telegram_id']}")
-        except Exception as e:
-            logger.warning(f"Failed to send typing indicator: {e}")
+        _schedule_typing_indicator(original_message.chat, user_data["telegram_id"])
 
         start_generation = time.time()
+        preview_enabled = config.STREAMING_PREVIEW
         funnel_context = funnel.build_stage_context(response_stage, cta_variant, cta_shown)
         async for chunk in ai_brain.ai_brain.generate_response_stream(
             conversation_history,
@@ -582,12 +694,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 or (len(chunk_buffer) > 300 and current_time - last_update_time >= 3.0)
             )
 
-            if should_update:
+            if preview_enabled and should_update:
                 if sent_message is None:
                     if len(full_response.strip()) >= 100:
                         try:
                             preview_text = utils.format_ai_text_as_plain_symbols(full_response)
-                            sent_message = await original_message.reply_text(preview_text)
+                            sent_message = await utils.safe_reply_text(
+                                original_message,
+                                preview_text,
+                                action="streaming_initial_preview",
+                            )
                             last_update_length = len(preview_text)
                             last_update_time = current_time
                             chunk_buffer = ""
@@ -597,7 +713,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     try:
                         preview_text = utils.format_ai_text_as_plain_symbols(full_response)
-                        await sent_message.edit_text(preview_text)
+                        await utils.safe_edit_text(
+                            sent_message,
+                            preview_text,
+                            action="streaming_preview_update",
+                        )
                         last_update_length = len(preview_text)
                         last_update_time = current_time
                         chunk_buffer = ""
@@ -638,12 +758,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             if sent_message:
                 try:
-                    await sent_message.edit_text(full_response)
+                    await utils.safe_edit_text(
+                        sent_message,
+                        full_response,
+                        action="streaming_final_update",
+                    )
                     logger.debug("Final message update sent")
                 except Exception:
                     pass
             else:
-                await original_message.reply_text(full_response)
+                await utils.safe_reply_text(
+                    original_message,
+                    full_response,
+                    action="assistant_final_message",
+                )
 
         if show_consultation_button:
             try:
@@ -696,13 +824,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"system={system_tokens}, total={total_tokens}"
         )
 
-        # Извлекаем/сохраняем данные лида (только если это НЕ админ)
-        if user.id != config.ADMIN_TELEGRAM_ID:
-            if lead_data:
-                lead_id = lead_qualifier.lead_qualifier.process_lead_data(user_data["id"], lead_data)
-                if lead_id:
-                    logger.info(f"Lead {lead_id} updated, waiting for conversation to finish before notifying admin")
-
+        # Обновляем воронку сразу после ответа, чтобы следующий апдейт
+        # не ждал завершения LLM-экстракции данных лида.
+        if allow_lead_processing:
             if lead_id:
                 database.db.update_lead_last_message_time(user_data["id"])
 
@@ -729,35 +853,70 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as analytics_error:
                     logger.warning(f"Failed to track stage_changed event: {analytics_error}")
 
-            # Авто-оффер lead magnet в user-flow (как в business-flow).
-            lead_after = database.db.get_lead_by_user_id(user_data["id"])
-            lead_magnet_already_selected = bool(lead_after and lead_after.get("lead_magnet_type"))
-            if (
-                lead_data
-                and not lead_magnet_already_selected
-                and not cta_shown
-                and ai_brain.ai_brain.should_offer_lead_magnet(lead_data)
-            ):
-                await offer_lead_magnet(update, context)
-                database.db.update_user_funnel_state(
-                    user_data["id"],
-                    cta_variant=cta_variant,
-                    cta_shown=True,
-                )
-                database.db.update_lead_funnel_state(
-                    user_data["id"],
-                    cta_variant=cta_variant,
-                    cta_shown=True,
-                )
+            cta_was_shown = cta_shown
+            merged_snapshot = dict(merged_lead_data)
+            conversation_snapshot = list(conversation_history)
+            user_db_id = user_data["id"]
+
+            async def _post_response_lead_processing() -> None:
                 try:
-                    database.db.track_event(
-                        user_data["id"],
-                        "cta_shown",
-                        payload={"variant": cta_variant, "stage": next_stage, "source": "lead_magnet_offer"},
-                        lead_id=lead_id,
-                    )
-                except Exception as analytics_error:
-                    logger.warning(f"Failed to track lead magnet CTA show: {analytics_error}")
+                    extracted = await ai_brain.ai_brain.extract_lead_data_async(conversation_snapshot)
+                    if not extracted:
+                        return
+
+                    merged_snapshot.update({k: v for k, v in extracted.items() if v is not None})
+                    processed_lead_id = lead_qualifier.lead_qualifier.process_lead_data(user_db_id, extracted)
+                    if processed_lead_id:
+                        database.db.update_lead_last_message_time(user_db_id)
+                        logger.info(f"Lead {processed_lead_id} updated in background")
+                        temperature = extracted.get("temperature") or extracted.get("lead_temperature", "cold")
+                        should_notify = (
+                            temperature in ["hot", "warm"]
+                            or (
+                                extracted.get("name")
+                                and (extracted.get("email") or extracted.get("phone"))
+                                and extracted.get("pain_point")
+                            )
+                        )
+                        if should_notify:
+                            await notify_admin_new_lead(
+                                context=context,
+                                lead_id=processed_lead_id,
+                                lead_data=extracted,
+                                user_data=user_data,
+                            )
+
+                    lead_after = database.db.get_lead_by_user_id(user_db_id)
+                    lead_magnet_already_selected = bool(lead_after and lead_after.get("lead_magnet_type"))
+                    if (
+                        not lead_magnet_already_selected
+                        and not cta_was_shown
+                        and ai_brain.ai_brain.should_offer_lead_magnet(extracted)
+                    ):
+                        await offer_lead_magnet(update, context)
+                        database.db.update_user_funnel_state(
+                            user_db_id,
+                            cta_variant=cta_variant,
+                            cta_shown=True,
+                        )
+                        database.db.update_lead_funnel_state(
+                            user_db_id,
+                            cta_variant=cta_variant,
+                            cta_shown=True,
+                        )
+                        try:
+                            database.db.track_event(
+                                user_db_id,
+                                "cta_shown",
+                                payload={"variant": cta_variant, "stage": next_stage, "source": "lead_magnet_offer"},
+                                lead_id=processed_lead_id,
+                            )
+                        except Exception as analytics_error:
+                            logger.warning(f"Failed to track lead magnet CTA show: {analytics_error}")
+                except Exception as background_error:
+                    logger.warning(f"Background lead processing failed for user {user_db_id}: {background_error}")
+
+            asyncio.create_task(_post_response_lead_processing())
 
     except Exception as e:
         if "Peer_id_invalid" not in str(e):
@@ -796,7 +955,12 @@ async def handle_handoff_request(
             return
 
         # Уведомляем пользователя
-        await update.message.reply_text(content.HANDOFF_ACK_TEXT)
+        await utils.safe_reply_text(
+            update.message,
+            content.HANDOFF_ACK_TEXT,
+            reply_markup=_main_menu_markup(user.id),
+            action="handoff_ack",
+        )
 
         # Создаем или обновляем лид
         lead = database.db.get_lead_by_user_id(user_data['id'])
@@ -833,13 +997,13 @@ async def handle_handoff_request(
             except Exception as analytics_error:
                 logger.warning(f"Failed to track handoff stage change: {analytics_error}")
 
-        # Уведомляем админа
-        last_message = update.message.text[:100] if update.message and update.message.text else "n/a"
-        admin_interface.admin_interface.send_admin_notification(
-            context.bot,
-            lead_id,
-            'handoff_request',
-            f"Последнее сообщение: {last_message}"
+        lead_payload = database.db.get_lead_by_id(lead_id) or {}
+        await notify_admin_new_lead(
+            context=context,
+            lead_id=lead_id,
+            lead_data=lead_payload,
+            user_data=user_data,
+            is_update=bool(lead),
         )
 
         try:

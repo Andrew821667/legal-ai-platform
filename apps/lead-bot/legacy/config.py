@@ -41,6 +41,9 @@ class Config:
         self.TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
         self.MAX_HISTORY_MESSAGES: int = int(os.getenv('MAX_HISTORY_MESSAGES', '10'))
         self.RESPONSE_DELAY: float = float(os.getenv('RESPONSE_DELAY', '0.0'))
+        self.LLM_TIMEOUT_SECONDS: float = float(os.getenv('LLM_TIMEOUT_SECONDS', '25'))
+        self.LLM_MAX_RETRIES: int = int(os.getenv('LLM_MAX_RETRIES', '1'))
+        self.STREAMING_PREVIEW: bool = os.getenv('STREAMING_PREVIEW', '0').strip().lower() in {'1', 'true', 'yes'}
 
         # Настройки базы данных
         self.DB_PATH: str = os.getenv('DB_PATH') or os.getenv('DATABASE_PATH', 'data/bot.db')
@@ -53,6 +56,9 @@ class Config:
         # Куда отправлять уведомления по лидам (если не задано — админу).
         leads_chat_id = os.getenv('LEADS_CHAT_ID', '').strip()
         self.LEADS_CHAT_ID: Optional[int] = int(leads_chat_id) if leads_chat_id else None
+        self.ALLOW_ADMIN_TEST_LEADS: bool = os.getenv('ALLOW_ADMIN_TEST_LEADS', '1').strip().lower() in {'1', 'true', 'yes'}
+        modules_raw = os.getenv('AVAILABLE_SERVICE_MODULES', '').strip()
+        self.AVAILABLE_SERVICE_MODULES: list[str] = [item.strip() for item in modules_raw.split(',') if item.strip()]
 
         # Compliance / документы
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://legalaipro.ru/privacy')

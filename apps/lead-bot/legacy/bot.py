@@ -235,16 +235,16 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def build_application() -> Application:
     request = HTTPXRequest(
-        connect_timeout=15.0,
-        read_timeout=30.0,
-        write_timeout=30.0,
-        pool_timeout=5.0,
+        connect_timeout=8.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+        pool_timeout=3.0,
     )
     get_updates_request = HTTPXRequest(
-        connect_timeout=15.0,
+        connect_timeout=8.0,
         read_timeout=45.0,
-        write_timeout=30.0,
-        pool_timeout=5.0,
+        write_timeout=20.0,
+        pool_timeout=3.0,
     )
 
     application = (
@@ -287,6 +287,9 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("admin", show_admin_panel))
 
     # Сообщения и callbacks
+    # Важно: контакт/документы/фото приходят не как TEXT, но должны обрабатываться
+    # в едином user-flow (например, кнопка "Отправить телефон").
+    application.add_handler(MessageHandler((filters.CONTACT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, message_router))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
     application.add_handler(CallbackQueryHandler(callback_router))
 
