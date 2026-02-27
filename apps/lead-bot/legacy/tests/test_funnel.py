@@ -40,7 +40,7 @@ def test_enforce_leadgen_response_adds_missing_qualification_question():
     assert "1-3" in result
 
 
-def test_enforce_leadgen_response_adds_cta_on_propose():
+def test_enforce_leadgen_response_keeps_propose_text_without_contact_push():
     result = funnel.enforce_leadgen_response(
         response_text="Предлагаю начать с пилотного сценария.",
         stage="propose",
@@ -50,8 +50,9 @@ def test_enforce_leadgen_response_adds_cta_on_propose():
         lead_data={},
     )
 
-    assert "консультация 30 минут" in result.lower()
-    assert "email или телефон" in result.lower()
+    assert result == "Предлагаю начать с пилотного сценария."
+    assert funnel.should_show_consultation_button("propose", False) is True
+    assert "email или телефон" not in result.lower()
 
 
 def test_is_cta_shown_accepts_mini_audit_pattern():

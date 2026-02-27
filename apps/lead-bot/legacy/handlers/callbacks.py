@@ -246,6 +246,68 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.message.reply_text("Неизвестное действие согласия. Попробуйте /start.")
 
 
+async def handle_documents_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик callback для раздела документов/прав пользователя."""
+    _ = context
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    action = query.data or ""
+
+    if action == "doc_privacy":
+        await query.message.reply_text(content.privacy_policy_text())
+        return
+    if action == "doc_transborder":
+        await query.message.reply_text(content.transborder_policy_text())
+        return
+    if action == "doc_user_agreement":
+        await query.message.reply_text(content.user_agreement_text())
+        return
+    if action == "doc_ai_policy":
+        await query.message.reply_text(content.ai_policy_text())
+        return
+    if action == "doc_marketing_consent":
+        if user_data:
+            database.db.set_user_marketing_consent(user_data["id"], True)
+        await query.message.reply_text(content.marketing_consent_text())
+        return
+
+    if not user_data:
+        await query.message.reply_text("Сначала выполните /start.")
+        return
+
+    if action == "doc_consent_status":
+        consent_state = database.db.get_user_consent_state(user_data["id"])
+        await query.message.reply_text(content.consent_status_text(consent_state))
+        return
+    if action == "doc_export_data":
+        payload = database.db.export_user_data(user_data["id"])
+        await query.message.reply_text(content.export_data_text(payload))
+        return
+
+    await query.message.reply_text("Неизвестное действие. Используйте /documents.")
+
+
+def _format_users_for_admin(title: str, users: list[dict]) -> str:
+    if not users:
+        return f"{title}\n\nПользователи не найдены."
+
+    lines = [title, ""]
+    for user in users:
+        consent = "✅" if user.get("consent_given") else "❌"
+        revoked = "🗑️" if user.get("consent_revoked") else "—"
+        username = f"@{user.get('username')}" if user.get("username") else "без username"
+        lines.append(
+            f"ID: {user.get('telegram_id')} | {username}\n"
+            f"Имя: {user.get('first_name') or '—'} {user.get('last_name') or ''}\n"
+            f"Согласие ПД: {consent} | Отзыв: {revoked}\n"
+            f"Последняя активность: {user.get('last_interaction') or user.get('created_at') or '—'}\n"
+        )
+    return "\n".join(lines).strip()
+
+
 async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback кнопок админ-панели"""
     query = update.callback_query
@@ -261,7 +323,75 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
     action = query.data
 
     try:
-        if action == "admin_stats":
+        if action == "admin_section_leads":
+            leads_section_message = (
+                "📊 РАЗДЕЛ: ЛИДЫ И ВОРОНКА\n\n"
+                "Выберите срез для просмотра:"
+            )
+            reply_markup = InlineKeyboardMarkup(ADMIN_LEADS_MENU)
+            await query.message.edit_text(leads_section_message, reply_markup=reply_markup)
+
+        elif action == "admin_section_users":
+            users_section_message = (
+                "👥 РАЗДЕЛ: ПОЛЬЗОВАТЕЛИ\n\n"
+                "Выберите действие:"
+            )
+            reply_markup = InlineKeyboardMarkup(ADMIN_USERS_MENU)
+            await query.message.edit_text(users_section_message, reply_markup=reply_markup)
+
+        elif action == "admin_section_export":
+            export_section_message = (
+                "📥 РАЗДЕЛ: ЭКСПОРТ И ЛОГИ\n\n"
+                "Выберите действие:"
+            )
+            reply_markup = InlineKeyboardMarkup(ADMIN_EXPORT_MENU)
+            await query.message.edit_text(export_section_message, reply_markup=reply_markup)
+
+        elif action == "admin_section_commands":
+            await query.message.reply_text(
+                "🧭 КОМАНДЫ И ПОИСК\n\n"
+                "Поиск/карточка пользователя:\n"
+                "/pdn_user <telegram_id>\n"
+                "/view_conversation <telegram_id>\n\n"
+                "Редактирование ПД:\n"
+                "/edit_pdn <telegram_id> <field> <value>\n"
+                "/revoke_user_consent <telegram_id>\n\n"
+                "Поля:\n"
+                "user: first_name, last_name, username\n"
+                "lead: name, email, phone, company"
+            )
+
+        elif action == "admin_users_recent":
+            users = database.db.get_recent_users(limit=20)
+            await query.message.reply_text(
+                _format_users_for_admin("🕒 ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ (20)", users),
+                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+            )
+
+        elif action == "admin_users_no_consent":
+            users = database.db.get_users_without_consent(limit=20)
+            await query.message.reply_text(
+                _format_users_for_admin("⚠️ ПОЛЬЗОВАТЕЛИ БЕЗ СОГЛАСИЯ ПД (20)", users),
+                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+            )
+
+        elif action == "admin_users_revoked":
+            users = database.db.get_users_with_revoked_consent(limit=20)
+            await query.message.reply_text(
+                _format_users_for_admin("🗑️ ОТОЗВАЛИ СОГЛАСИЕ (20)", users),
+                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+            )
+
+        elif action == "admin_users_lookup_help":
+            await query.message.reply_text(
+                "🔎 Поиск пользователя по ID\n\n"
+                "Используйте команды:\n"
+                "/pdn_user <telegram_id>\n"
+                "/view_conversation <telegram_id>\n"
+                "/edit_pdn <telegram_id> <field> <value>"
+            )
+
+        elif action == "admin_stats":
             # Общая статистика
             stats_message = admin_interface.admin_interface.format_statistics(30)
             await query.message.reply_text(stats_message)

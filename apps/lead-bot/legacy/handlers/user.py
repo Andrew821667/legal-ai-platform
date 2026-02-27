@@ -40,8 +40,37 @@ def _transborder_consent_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
 
 
+def _consultation_cta_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(CONSULTATION_CTA_MENU)
+
+
+def _documents_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(DOCUMENTS_MENU)
+
+
 def _is_pdn_consent_granted(consent_state: Dict) -> bool:
     return bool(consent_state.get("consent_given")) and not bool(consent_state.get("consent_revoked"))
+
+
+def _format_profile_text(user_data: Dict, lead: Optional[Dict], consent_state: Dict, is_admin: bool) -> str:
+    lead = lead or {}
+    status = "Администратор" if is_admin else "Пользователь"
+    return (
+        "👤 Ваш профиль\n\n"
+        f"Статус: {status}\n"
+        f"Имя: {user_data.get('first_name') or 'не указано'}\n"
+        f"Фамилия: {user_data.get('last_name') or 'не указана'}\n"
+        f"Username: @{user_data.get('username') or 'не указан'}\n"
+        f"Telegram ID: {user_data.get('telegram_id')}\n\n"
+        "Данные по заявке:\n"
+        f"• Имя: {lead.get('name') or 'не указано'}\n"
+        f"• Компания: {lead.get('company') or 'не указана'}\n"
+        f"• Email: {lead.get('email') or 'не указан'}\n"
+        f"• Телефон: {lead.get('phone') or 'не указан'}\n"
+        f"• Температура: {lead.get('temperature') or 'не определена'}\n"
+        f"• Статус: {lead.get('status') or 'new'}\n\n"
+        f"{content.consent_status_text(consent_state)}"
+    )
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,6 +118,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
     await update.message.reply_text(content.HELP_MESSAGE)
+
+
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /profile - карточка пользователя."""
+    _ = context
+    user = update.effective_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await update.message.reply_text("Сначала выполните /start.")
+        return
+
+    lead = database.db.get_lead_by_user_id(user_data["id"])
+    consent_state = database.db.get_user_consent_state(user_data["id"])
+    is_admin = user.id == config.ADMIN_TELEGRAM_ID
+    await update.message.reply_text(_format_profile_text(user_data, lead, consent_state, is_admin))
+
+
+async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /documents - список документов и действий по данным."""
+    _ = context
+    await update.message.reply_text(
+        content.documents_list_text(),
+        reply_markup=_documents_markup(),
+    )
 
 
 
@@ -249,7 +302,6 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
             [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
             [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -395,14 +447,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not funnel_state.get("cta_variant"):
             database.db.update_user_funnel_state(user_data["id"], cta_variant=cta_variant)
 
-        # Обработка кнопок меню
-        if message_text in ["📋 Услуги", "💰 Цены", "📞 Консультация", "❓ Помощь"]:
-            await handle_menu_button(update, context, message_text)
+        # Обработка кнопок reply-меню
+        if message_text == "📋 Меню услуг" or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
+            await menu_command(update, context)
             return
 
-        # Обработка команды /menu (на случай если CommandHandler не сработал)
-        if message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
-            await menu_command(update, context)
+        if message_text == "✉️ Заказать консультацию":
+            await original_message.reply_text(
+                content.CONSULTATION_CTA_TEXT,
+                reply_markup=_consultation_cta_markup(),
+            )
+            return
+
+        if message_text == "👤 Мой профиль":
+            await profile_command(update, context)
+            return
+
+        if message_text == "📚 Документы":
+            await documents_command(update, context)
             return
 
         if message_text == "🔄 Начать заново":
@@ -501,8 +563,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if sent_message is None:
                     if len(full_response.strip()) >= 100:
                         try:
-                            sent_message = await original_message.reply_text(full_response)
-                            last_update_length = len(full_response)
+                            preview_text = utils.format_ai_text_as_plain_symbols(full_response)
+                            sent_message = await original_message.reply_text(preview_text)
+                            last_update_length = len(preview_text)
                             last_update_time = current_time
                             chunk_buffer = ""
                             logger.debug(f"Initial message sent: {len(full_response)} chars")
@@ -510,8 +573,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             logger.warning(f"Failed to send initial message: {e}")
                 else:
                     try:
-                        await sent_message.edit_text(full_response)
-                        last_update_length = len(full_response)
+                        preview_text = utils.format_ai_text_as_plain_symbols(full_response)
+                        await sent_message.edit_text(preview_text)
+                        last_update_length = len(preview_text)
                         last_update_time = current_time
                         chunk_buffer = ""
                         logger.debug(f"Message updated: {len(full_response)} chars")
@@ -528,6 +592,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cta_variant=cta_variant,
             lead_data=merged_lead_data,
         )
+        full_response = utils.format_ai_text_as_plain_symbols(full_response)
+        show_consultation_button = funnel.should_show_consultation_button(response_stage, cta_shown)
+        consultation_button_sent = False
 
         if len(full_response) > 4096:
             logger.warning(f"Response too long ({len(full_response)} chars), splitting into parts")
@@ -555,10 +622,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await original_message.reply_text(full_response)
 
+        if show_consultation_button:
+            try:
+                await original_message.reply_text(
+                    content.CONSULTATION_CTA_TEXT,
+                    reply_markup=_consultation_cta_markup(),
+                )
+                consultation_button_sent = True
+            except Exception as cta_error:
+                logger.warning(f"Failed to send consultation CTA button: {cta_error}")
+
         database.db.add_message(user_data["id"], "assistant", full_response)
 
-        # Аналитика: показ CTA (A/B) внутри ответа ассистента
-        if not cta_shown and funnel.is_cta_shown(full_response, cta_variant):
+        # Аналитика: показ CTA (кнопка консультации / fallback в тексте)
+        cta_visible_now = consultation_button_sent or funnel.is_cta_shown(full_response, cta_variant)
+        if not cta_shown and cta_visible_now:
             database.db.update_user_funnel_state(
                 user_data["id"],
                 cta_variant=cta_variant,
@@ -574,7 +652,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 database.db.track_event(
                     user_data["id"],
                     "cta_shown",
-                    payload={"variant": cta_variant, "stage": response_stage, "source": "assistant_response"},
+                    payload={
+                        "variant": cta_variant,
+                        "stage": response_stage,
+                        "source": "consultation_button" if consultation_button_sent else "assistant_response",
+                    },
                     lead_id=lead_id,
                 )
             except Exception as analytics_error:

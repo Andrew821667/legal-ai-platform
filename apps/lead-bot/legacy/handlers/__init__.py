@@ -6,8 +6,13 @@ from handlers.constants import (
     MAIN_MENU,
     ADMIN_MENU,
     LEAD_MAGNET_MENU,
+    DOCUMENTS_MENU,
+    CONSULTATION_CTA_MENU,
     ADMIN_PANEL_MENU,
-    ADMIN_CLEANUP_MENU
+    ADMIN_LEADS_MENU,
+    ADMIN_USERS_MENU,
+    ADMIN_EXPORT_MENU,
+    ADMIN_CLEANUP_MENU,
 )
 
 # Вспомогательные функции
@@ -24,12 +29,14 @@ from handlers.user import (
     consent_status_command,
     correct_data_command,
     delete_data_command,
+    documents_command,
     export_data_command,
     start_command,
     help_command,
     marketing_consent_command,
     reset_command,
     menu_command,
+    profile_command,
     privacy_command,
     revoke_consent_command,
     transborder_consent_command,
@@ -58,6 +65,7 @@ from handlers.admin import (
 # Callback обработчики
 from handlers.callbacks import (
     handle_consent_callback,
+    handle_documents_callback,
     handle_business_menu_callback,
     handle_lead_magnet_callback,
     handle_admin_panel_callback,
@@ -80,7 +88,12 @@ __all__ = [
     'MAIN_MENU',
     'ADMIN_MENU',
     'LEAD_MAGNET_MENU',
+    'DOCUMENTS_MENU',
+    'CONSULTATION_CTA_MENU',
     'ADMIN_PANEL_MENU',
+    'ADMIN_LEADS_MENU',
+    'ADMIN_USERS_MENU',
+    'ADMIN_EXPORT_MENU',
     'ADMIN_CLEANUP_MENU',
     # Helpers
     'extract_email',
@@ -102,6 +115,8 @@ __all__ = [
     'delete_data_command',
     'reset_command',
     'menu_command',
+    'profile_command',
+    'documents_command',
     'handle_message',
     'handle_menu_button',
     'offer_lead_magnet',
@@ -120,6 +135,7 @@ __all__ = [
     'show_admin_panel',
     # Callbacks
     'handle_consent_callback',
+    'handle_documents_callback',
     'handle_business_menu_callback',
     'handle_lead_magnet_callback',
     'handle_admin_panel_callback',

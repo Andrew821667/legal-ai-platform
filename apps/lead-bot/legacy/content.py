@@ -65,6 +65,8 @@ HELP_MESSAGE = (
     "/help - показать помощь\n"
     "/reset - очистить историю\n"
     "/menu - открыть меню\n\n"
+    "/profile - мой профиль\n"
+    "/documents - список документов\n\n"
     "Документы и управление данными:\n"
     "/privacy - политика обработки ПД\n"
     "/transborder_consent - условия трансграничной передачи\n"
@@ -80,7 +82,7 @@ HELP_MESSAGE = (
 )
 
 
-MENU_HEADER_TEXT = "📋 МЕНЮ\n\nВыберите интересующую тему:"
+MENU_HEADER_TEXT = "📋 МЕНЮ УСЛУГ\n\nВыберите интересующую тему:"
 
 
 MENU_RESPONSES = {
@@ -98,14 +100,6 @@ MENU_RESPONSES = {
         "• комплексная автоматизация: от 500 000 ₽\n\n"
         "Опишите текущий процесс, и я предложу реалистичный диапазон."
     ),
-    "menu_consultation": (
-        "📞 КОНСУЛЬТАЦИЯ (30 МИН):\n\n"
-        "На встрече разберем:\n"
-        "• где сейчас теряется время команды\n"
-        "• какой сценарий автоматизировать первым\n"
-        "• примерный план запуска и бюджет\n\n"
-        "Оставьте email или телефон, и команда согласует удобное время."
-    ),
     "menu_help": (
         "❓ КАК Я ПОМОГАЮ:\n\n"
         "• отвечаю по направлениям и формату работ\n"
@@ -119,7 +113,6 @@ MENU_RESPONSES = {
 BUTTON_TO_MENU_KEY = {
     "📋 Услуги": "menu_services",
     "💰 Цены": "menu_prices",
-    "📞 Консультация": "menu_consultation",
     "❓ Помощь": "menu_help",
 }
 
@@ -142,6 +135,12 @@ LEAD_MAGNET_OFFER_TEXT = (
     "🎯 Демо-анализ вашего договора\n\n"
     "Выберите, что будет полезнее именно сейчас."
 )
+
+CONSULTATION_CTA_TEXT = (
+    "Если хотите, можем перейти к следующему практическому шагу."
+)
+
+CONSULTATION_CTA_BUTTON_TEXT = "📞 Заказать консультацию 30 мин"
 
 
 LEAD_MAGNET_SELECTION_MESSAGES = {
@@ -282,6 +281,24 @@ def transborder_policy_text() -> str:
         "Нужно для работы ИИ-функций (LLM-сервисы).\n"
         "Подробная версия:\n"
         f"{config.TRANSBORDER_CONSENT_URL}"
+    )
+
+
+def documents_list_text() -> str:
+    return (
+        "📚 Документы и права пользователя\n\n"
+        "Выберите документ кнопками ниже или используйте команды:\n"
+        "/privacy\n"
+        "/transborder_consent\n"
+        "/user_agreement\n"
+        "/ai_policy\n"
+        "/marketing_consent\n\n"
+        "Управление данными:\n"
+        "/consent_status\n"
+        "/export_data\n"
+        "/correct_data <текст>\n"
+        "/revoke_consent\n"
+        "/delete_data"
     )
 
 

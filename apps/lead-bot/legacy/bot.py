@@ -36,6 +36,7 @@ from handlers.admin import (
     pdn_user_command,
     revoke_user_consent_command,
     security_stats_command,
+    show_admin_panel,
     stats_command,
     unblacklist_command,
     view_conversation_command,
@@ -46,6 +47,7 @@ from handlers.callbacks import (
     handle_business_menu_callback,
     handle_cleanup_callback,
     handle_consent_callback,
+    handle_documents_callback,
     handle_lead_magnet_callback,
 )
 from handlers.common import error_handler
@@ -55,11 +57,13 @@ from handlers.user import (
     consent_status_command,
     correct_data_command,
     delete_data_command,
+    documents_command,
     export_data_command,
     handle_message,
     help_command,
     marketing_consent_command,
     menu_command,
+    profile_command,
     privacy_command,
     reset_command,
     revoke_consent_command,
@@ -134,6 +138,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_business_menu_callback(update, context)
     elif data.startswith("consent_"):
         await handle_consent_callback(update, context)
+    elif data.startswith("doc_"):
+        await handle_documents_callback(update, context)
     elif data.startswith("magnet_"):
         await handle_lead_magnet_callback(update, context)
     elif data.startswith("cleanup_"):
@@ -193,6 +199,8 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("menu", menu_command))
+    application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("documents", documents_command))
     application.add_handler(CommandHandler("privacy", privacy_command))
     application.add_handler(CommandHandler("transborder_consent", transborder_consent_command))
     application.add_handler(CommandHandler("user_agreement", user_agreement_command))
@@ -215,6 +223,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("pdn_user", pdn_user_command))
     application.add_handler(CommandHandler("edit_pdn", edit_pdn_command))
     application.add_handler(CommandHandler("revoke_user_consent", revoke_user_consent_command))
+    application.add_handler(CommandHandler("admin", show_admin_panel))
 
     # Сообщения и callbacks
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))

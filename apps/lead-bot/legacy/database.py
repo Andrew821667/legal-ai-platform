@@ -337,6 +337,65 @@ class Database:
         finally:
             conn.close()
 
+    def get_recent_users(self, limit: int = 20) -> List[Dict]:
+        """Получение последних активных пользователей."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT *
+                FROM users
+                ORDER BY COALESCE(last_interaction, created_at) DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def get_users_without_consent(self, limit: int = 20) -> List[Dict]:
+        """Пользователи без активного согласия на обработку ПД."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE COALESCE(consent_given, 0) = 0
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def get_users_with_revoked_consent(self, limit: int = 20) -> List[Dict]:
+        """Пользователи, которые отозвали согласие."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE COALESCE(consent_revoked, 0) = 1
+                ORDER BY COALESCE(consent_revoked_at, updated_at, created_at) DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
     def get_user_consent_state(self, user_id: int) -> Dict:
         """Получение статуса согласий пользователя."""
         conn = self.get_connection()

@@ -148,6 +148,32 @@ def split_long_message(text: str, max_length: int = 4096) -> list:
     return parts
 
 
+def format_ai_text_as_plain_symbols(text: str) -> str:
+    """
+    Преобразует markdown-подобную разметку в plain-текст со спецсимволами.
+    Это убирает сырые **/__ и делает ответы аккуратными в Telegram без parse_mode.
+    """
+    if not text:
+        return text
+
+    result = text
+
+    # Заголовки markdown -> маркер пункта
+    result = re.sub(r'^\s{0,3}#{1,6}\s*(.+)$', r'▸ \1', result, flags=re.MULTILINE)
+
+    # Выделения -> спецсимволы
+    result = re.sub(r'\*\*(.+?)\*\*', r'«\1»', result, flags=re.DOTALL)
+    result = re.sub(r'__(.+?)__', r'«\1»', result, flags=re.DOTALL)
+    result = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'‹\1›', result, flags=re.DOTALL)
+    result = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'‹\1›', result, flags=re.DOTALL)
+    result = re.sub(r'`(.+?)`', r'「\1」', result, flags=re.DOTALL)
+
+    # Если модель вернула незакрытые маркеры, убираем их.
+    result = result.replace("**", "").replace("__", "")
+
+    return result.strip()
+
+
 def is_hot_lead(lead_data: dict) -> bool:
     """
     Определение горячего лида по критериям

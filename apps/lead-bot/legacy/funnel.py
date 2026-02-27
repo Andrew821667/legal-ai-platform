@@ -67,8 +67,6 @@ _CTA_HINTS = (
     "консультац",
     "созвон",
     "аудит",
-    "оставьте email",
-    "оставьте телефон",
     "следующий шаг",
     "передам команде",
     "свяж",
@@ -171,9 +169,9 @@ def build_stage_context(stage: str, cta_variant: str, cta_shown: bool) -> str:
         lines.append("Цель: предложить один релевантный формат решения и закрыть на действие.")
         if not cta_shown:
             if variant == "A":
-                lines.append("В конце добавь CTA: консультация 30 минут + запрос контакта.")
+                lines.append("В конце добавь мягкий переход к консультации 30 минут без запроса контактов в тексте.")
             else:
-                lines.append("В конце добавь CTA: быстрый аудит процесса + консультация 30 минут + запрос контакта.")
+                lines.append("В конце добавь мягкий переход: быстрый аудит процесса + консультация 30 минут, без запроса контактов.")
     else:
         lines.append("Цель: подтвердить передачу команде и зафиксировать следующий контакт.")
         lines.append("Ответ должен быть коротким и конкретным.")
@@ -230,7 +228,7 @@ def _first_qualification_question(lead_data: Optional[Dict]) -> str:
             "4) 500K+"
         )
     if not (lead_data.get("email") or lead_data.get("phone")):
-        return "Оставьте email или телефон, и я отправлю мини-план внедрения под ваш кейс."
+        return "Если готовы к следующему шагу, можем перейти к консультации 30 минут по вашему кейсу."
 
     return (
         "Если ок, следующий шаг: мини-аудит процесса + консультация 30 минут.\n"
@@ -259,7 +257,6 @@ def enforce_leadgen_response(
 
     additions: list[str] = []
     has_structured_options = "1)" in text_lower or "2)" in text_lower
-    has_cta = _contains_any(text_lower, _CTA_HINTS)
     pain_signal = _contains_any(user_lower, _PAIN_HINTS)
 
     if pain_signal and "типич" not in text_lower and "узкое место" not in text_lower:
@@ -279,22 +276,19 @@ def enforce_leadgen_response(
     if normalized_stage == "qualify" and not has_structured_options:
         additions.append(_first_qualification_question(lead_data))
 
-    if normalized_stage in ("qualify", "propose") and not cta_shown and not has_cta:
-        if cta_variant == "B":
-            additions.append(
-                "Могу сразу запустить мини-аудит процесса и по его итогам провести консультацию 30 минут. "
-                "Оставьте email или телефон."
-            )
-        else:
-            additions.append(
-                "Если удобно, перейдем к следующему шагу: консультация 30 минут и план запуска. "
-                "Оставьте email или телефон."
-            )
-
-    if normalized_stage == "handoff" and "email" not in text_lower and "телефон" not in text_lower:
-        additions.append("Для ускорения пришлите email или телефон и удобное окно для связи.")
+    # CTA в тексте минимизируем: следующий шаг показывается интерфейсной кнопкой.
 
     if not additions:
         return text
 
     return f"{text}\n\n" + "\n\n".join(additions)
+
+
+def should_show_consultation_button(stage: str, cta_shown: bool) -> bool:
+    """
+    Показываем отдельную кнопку консультации вместо навязчивого CTA в тексте.
+    """
+    if cta_shown:
+        return False
+    normalized_stage = normalize_stage(stage)
+    return normalized_stage in ("qualify", "propose", "handoff")
