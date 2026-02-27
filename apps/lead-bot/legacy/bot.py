@@ -53,6 +53,7 @@ from handlers.callbacks import (
     handle_consent_callback,
     handle_documents_callback,
     handle_lead_magnet_callback,
+    handle_profile_callback,
 )
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
@@ -142,6 +143,36 @@ def _extract_incoming_message(update: Update) -> Any:
     return update.message
 
 
+def _business_skip_reason(message: Any, bot_id: int) -> str | None:
+    from_user = getattr(message, "from_user", None)
+    if from_user is None:
+        return "missing_from_user"
+    if getattr(from_user, "is_bot", False):
+        return "from_user_is_bot"
+    if from_user.id == bot_id:
+        return "self_message"
+    if str(from_user.id) == str(config.ADMIN_TELEGRAM_ID):
+        return "owner_message"
+    if getattr(message, "sender_business_bot", None) is not None:
+        return "sender_business_bot"
+    if getattr(message, "via_bot", None) is not None:
+        return "via_bot_message"
+    if getattr(message, "is_from_offline", False):
+        return "offline_message"
+
+    chat = getattr(message, "chat", None)
+    chat_id = getattr(chat, "id", None)
+    chat_type = str(getattr(chat, "type", "")).lower()
+    # В private business-чатах входящее от клиента должно иметь from_user.id == chat.id.
+    if chat_id is not None and chat_type == "private":
+        try:
+            if int(chat_id) != int(from_user.id):
+                return "outgoing_private_message"
+        except (TypeError, ValueError):
+            return "invalid_sender_chat_ids"
+    return None
+
+
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Общий роутер входящих сообщений.
@@ -150,20 +181,32 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not message:
         return
 
-    from_user = getattr(message, "from_user", None)
-    if from_user and from_user.id == context.bot.id:
-        logger.info("Skip self message")
-        return
-
-    # В business-режиме игнорируем сообщения владельца аккаунта,
-    # чтобы не ловить ответные циклы.
-    if _is_business_update(update) and from_user and str(from_user.id) == str(config.ADMIN_TELEGRAM_ID):
-        logger.info("Skip business owner message")
-        return
-
     if _is_business_update(update):
+        reason = _business_skip_reason(message, context.bot.id)
+        if reason:
+            logger.info("Skip business update %s: reason=%s", update.update_id, reason)
+            return
+
+        connection_id = getattr(message, "business_connection_id", None)
+        if not database.db.is_business_connection_enabled(connection_id):
+            logger.info(
+                "Skip business update %s: connection disabled (%s)",
+                update.update_id,
+                connection_id,
+            )
+            return
+
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        if chat_id is not None and not database.db.is_chat_enabled(int(chat_id)):
+            logger.info("Skip business update %s: chat %s disabled", update.update_id, chat_id)
+            return
+
         await handle_business_message(update, context)
     else:
+        from_user = getattr(message, "from_user", None)
+        if from_user and from_user.id == context.bot.id:
+            logger.info("Skip self message")
+            return
         await handle_message(update, context)
 
 
@@ -182,6 +225,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_consent_callback(update, context)
     elif data.startswith("doc_"):
         await handle_documents_callback(update, context)
+    elif data.startswith("profile_"):
+        await handle_profile_callback(update, context)
     elif data.startswith("magnet_"):
         await handle_lead_magnet_callback(update, context)
     elif data.startswith("cleanup_"):

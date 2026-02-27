@@ -80,7 +80,9 @@ def build_welcome_message(first_name: str) -> str:
         "• понять, что можно автоматизировать в вашем кейсе\n"
         "• выбрать реалистичный формат внедрения\n"
         "• оценить сроки, бюджет и следующий шаг\n\n"
-        "Коротко опишите вашу задачу, и начнем."
+        "Коротко опишите вашу задачу, и начнем.\n\n"
+        "Если у вас личный вопрос к Андрею Попову, нажмите кнопку «✉️ Личное обращение» "
+        "и я передам запрос напрямую."
     )
 
 
@@ -133,6 +135,16 @@ MENU_RESPONSES = {
         "• готовлю к консультации с командой\n\n"
         "Можно начать одной фразой: например, \"много времени уходит на согласование договоров\"."
     ),
+    "menu_consultation": (
+        "📞 КОНСУЛЬТАЦИЯ\n\n"
+        "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.\n"
+        "Если удобнее, можете сразу написать номер в сообщении."
+    ),
+    "menu_personal_request": (
+        "✉️ ЛИЧНОЕ ОБРАЩЕНИЕ\n\n"
+        "Если нужен личный ответ Андрея Попова, оставьте телефон или кратко опишите вопрос.\n"
+        "Я передам обращение напрямую и отмечу приоритет."
+    ),
 }
 
 
@@ -140,6 +152,8 @@ BUTTON_TO_MENU_KEY = {
     "📋 Услуги": "menu_services",
     "💰 Цены": "menu_prices",
     "❓ Помощь": "menu_help",
+    "📞 Консультация": "menu_consultation",
+    "✉️ Личное обращение": "menu_personal_request",
 }
 
 
@@ -289,6 +303,20 @@ def consent_status_text(consent: dict) -> str:
         f"• Согласие отозвано: {'✅' if revoked else '❌'}\n"
         f"• Дата отзыва: {revoked_date}"
     )
+
+
+def consent_user_status_text(consent: dict) -> str:
+    consent_given = bool(consent.get("consent_given"))
+    transborder = bool(consent.get("transborder_consent"))
+    revoked = bool(consent.get("consent_revoked"))
+
+    if revoked:
+        return "⚠️ Согласия отозваны. Для повторного запуска отправьте /start."
+    if consent_given and transborder:
+        return "✅ Согласия на обработку ПД и трансграничную передачу уже даны."
+    if consent_given:
+        return "✅ Согласие на обработку ПД уже дано."
+    return "❌ Согласия еще не даны."
 
 
 def privacy_policy_text() -> str:

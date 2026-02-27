@@ -7,14 +7,15 @@ from telegram import KeyboardButton, InlineKeyboardButton
 MAIN_MENU = [
     [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
-    [KeyboardButton("🔄 Начать заново")]
+    [KeyboardButton("✉️ Личное обращение"), KeyboardButton("🔄 Начать заново")],
 ]
 
 # Админское меню (видно только админу)
 ADMIN_MENU = [
     [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
-    [KeyboardButton("⚙️ Админ-панель"), KeyboardButton("🔄 Начать заново")]
+    [KeyboardButton("✉️ Личное обращение"), KeyboardButton("⚙️ Админ-панель")],
+    [KeyboardButton("🔄 Начать заново")],
 ]
 
 LEAD_MAGNET_MENU = [
@@ -87,6 +88,32 @@ ADMIN_USERS_MENU = [
     [InlineKeyboardButton("🗑️ Отозвали согласие", callback_data="admin_users_revoked")],
     [InlineKeyboardButton("🔎 Поиск / карточка по ID", callback_data="admin_users_lookup_help")],
     [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")],
+]
+
+ADMIN_LOOKUP_MENU = [
+    [InlineKeyboardButton("🗂️ Карточка по ID", callback_data="admin_lookup_card_prompt")],
+    [InlineKeyboardButton("💬 История диалога по ID", callback_data="admin_lookup_dialog_prompt")],
+    [InlineKeyboardButton("✏️ Редактировать ПД", callback_data="admin_lookup_edit_prompt")],
+    [InlineKeyboardButton("🗑️ Отозвать согласие по ID", callback_data="admin_lookup_revoke_prompt")],
+    [InlineKeyboardButton("👥 Открыть список пользователей", callback_data="admin_users_list")],
+    [InlineKeyboardButton("◀️ Назад в раздел пользователей", callback_data="admin_section_users")],
+]
+
+ADMIN_EDIT_FIELD_MENU = [
+    [
+        InlineKeyboardButton("👤 Имя профиля", callback_data="admin_lookup_edit_field_first_name"),
+        InlineKeyboardButton("👤 Фамилия профиля", callback_data="admin_lookup_edit_field_last_name"),
+    ],
+    [InlineKeyboardButton("🔖 Username", callback_data="admin_lookup_edit_field_username")],
+    [
+        InlineKeyboardButton("📝 Имя в заявке", callback_data="admin_lookup_edit_field_name"),
+        InlineKeyboardButton("✉️ Email", callback_data="admin_lookup_edit_field_email"),
+    ],
+    [
+        InlineKeyboardButton("📞 Телефон", callback_data="admin_lookup_edit_field_phone"),
+        InlineKeyboardButton("🏢 Компания", callback_data="admin_lookup_edit_field_company"),
+    ],
+    [InlineKeyboardButton("◀️ Назад в поиск", callback_data="admin_users_lookup_help")],
 ]
 
 ADMIN_EXPORT_MENU = [

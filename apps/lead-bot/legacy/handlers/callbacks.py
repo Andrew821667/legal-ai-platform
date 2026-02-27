@@ -43,6 +43,46 @@ def _backup_and_truncate_log(log_file: str) -> str | None:
     return backup_file
 
 
+def _services_inline_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
+            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
+            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
+            [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
+            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
+        ]
+    )
+
+
+def _consultation_contact_markup() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("📲 Отправить телефон", request_contact=True)],
+            [KeyboardButton("⬅️ Отмена")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def _admin_lookup_menu_markup(back_callback: str, back_label: str) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton("🗂️ Карточка по ID", callback_data="admin_lookup_card_prompt")],
+        [InlineKeyboardButton("💬 История диалога по ID", callback_data="admin_lookup_dialog_prompt")],
+        [InlineKeyboardButton("✏️ Редактировать ПД", callback_data="admin_lookup_edit_prompt")],
+        [InlineKeyboardButton("🗑️ Отозвать согласие по ID", callback_data="admin_lookup_revoke_prompt")],
+        [InlineKeyboardButton("👥 Открыть список пользователей", callback_data="admin_users_list")],
+        [InlineKeyboardButton(back_label, callback_data=back_callback)],
+    ]
+    return InlineKeyboardMarkup(rows)
+
+
+def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("admin_lookup_action", None)
+    context.user_data.pop("admin_lookup_field", None)
+
+
 async def handle_business_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обработчик inline кнопок меню для бизнес-чатов
@@ -54,25 +94,95 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         except Exception as answer_error:
             logger.warning(f"Failed to answer business menu callback: {answer_error}")
         
-        callback_data = query.data
-        
+        callback_data = query.data or ""
         response_text = content.menu_response_by_key(callback_data)
-        
-        # Проверяем есть ли business_connection_id
-        if query.message and hasattr(query.message, 'business_connection_id') and query.message.business_connection_id:
-            # Бизнес-чат
+        menu_markup = _services_inline_menu_markup()
+
+        is_business = bool(
+            query.message
+            and hasattr(query.message, "business_connection_id")
+            and query.message.business_connection_id
+        )
+
+        if callback_data in {"menu_consultation", "menu_personal_request"}:
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=menu_markup,
+                )
+            else:
+                await utils.safe_reply_text(
+                    query.message,
+                    response_text,
+                    action=f"{callback_data}_reply",
+                    reply_markup=_consultation_contact_markup(),
+                )
+            return
+
+        if is_business:
             await context.bot.send_message(
                 chat_id=query.message.chat.id,
                 text=response_text,
-                business_connection_id=query.message.business_connection_id
+                business_connection_id=query.message.business_connection_id,
+                reply_markup=menu_markup,
             )
         else:
-            # Обычный чат
-            await query.edit_message_text(text=response_text)
+            await utils.safe_edit_text(
+                query.message,
+                response_text,
+                reply_markup=menu_markup,
+                action=f"{callback_data}_edit",
+            )
             
     except Exception as e:
         logger.error(f"Error in handle_business_menu_callback: {e}")
 
+
+
+async def handle_profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback-обработчик редактирования полей профиля пользователя."""
+    query = update.callback_query
+    try:
+        await utils.safe_answer_callback(query, action="profile_edit_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer profile callback: {answer_error}")
+
+    user = query.from_user
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data:
+        await utils.safe_reply_text(query.message, "Сначала выполните /start.", action="profile_edit_no_user")
+        return
+
+    action = query.data or ""
+    cancel_markup = ReplyKeyboardMarkup(
+        [[KeyboardButton("⬅️ Отмена")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+    if action == "profile_edit_name":
+        context.user_data["profile_edit_field"] = "name"
+        await utils.safe_reply_text(
+            query.message,
+            "Введите корректные ФИО одной строкой.\nНапример: Иван Иванов\n\nДля выхода нажмите «⬅️ Отмена».",
+            reply_markup=cancel_markup,
+            action="profile_edit_name_prompt",
+        )
+        return
+
+    if action == "profile_edit_email":
+        context.user_data["profile_edit_field"] = "email"
+        await utils.safe_reply_text(
+            query.message,
+            "Введите корректный email.\nНапример: user@example.com\n\nДля выхода нажмите «⬅️ Отмена».",
+            reply_markup=cancel_markup,
+            action="profile_edit_email_prompt",
+        )
+        return
+
+    await utils.safe_reply_text(query.message, "Неизвестное действие профиля.", action="profile_edit_unknown")
 
 
 async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -523,9 +633,11 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
 
     if action == "doc_consent_status":
         consent_state = database.db.get_user_consent_state(user_data["id"])
+        is_admin = user.id == config.ADMIN_TELEGRAM_ID
+        status_text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
         await utils.safe_edit_text(
             query.message,
-            _clip_for_edit(_documents_panel_text("📑 Статус согласий", content.consent_status_text(consent_state))),
+            _clip_for_edit(_documents_panel_text("📑 Статус согласий", status_text)),
             reply_markup=_documents_panel_markup(),
             action="doc_consent_status",
         )
@@ -593,6 +705,10 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if action == "admin_users_page_noop":
             return
+
+        if action in {"admin_panel", "admin_section_users", "admin_section_commands"}:
+            # При выходе в разделы сбрасываем активный режим интерактивного поиска.
+            _clear_admin_lookup_state(context)
 
         if action == "admin_users_list" or users_page_match:
             requested_page = int(users_page_match.group(1)) if users_page_match else 1
@@ -768,21 +884,18 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_section_commands":
+            _clear_admin_lookup_state(context)
             await utils.safe_edit_text(
                 query.message,
                 (
                     "🧭 КОМАНДЫ И ПОИСК\n\n"
-                    "Поиск/карточка пользователя:\n"
-                    "/pdn_user <telegram_id>\n"
-                    "/view_conversation <telegram_id>\n\n"
-                    "Редактирование ПД:\n"
-                    "/edit_pdn <telegram_id> <field> <value>\n"
-                    "/revoke_user_consent <telegram_id>\n\n"
-                    "Поля:\n"
-                    "user: first_name, last_name, username\n"
-                    "lead: name, email, phone, company"
+                    "Команды вручную больше не требуются.\n"
+                    "Выберите действие кнопкой ниже, затем введите ID/значение по подсказке."
                 ),
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_panel",
+                    back_label="◀️ Назад в админ-панель",
+                ),
                 action="admin_section_commands",
             )
 
@@ -814,18 +927,112 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_users_lookup_help":
+            _clear_admin_lookup_state(context)
             await utils.safe_edit_text(
                 query.message,
                 (
                     "🔎 Поиск пользователя по ID\n\n"
-                    "Используйте команды:\n"
-                    "/pdn_user <telegram_id>\n"
-                    "/view_conversation <telegram_id>\n"
-                    "/edit_pdn <telegram_id> <field> <value>"
+                    "Выберите действие кнопкой ниже.\n"
+                    "После выбора введите ID (и при необходимости новое значение)."
                 ),
-                reply_markup=InlineKeyboardMarkup(ADMIN_USERS_MENU),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
                 action="admin_users_lookup_help",
             )
+
+        elif action == "admin_lookup_card_prompt":
+            context.user_data["admin_lookup_action"] = "card"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🗂️ Карточка по ID\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
+                action="admin_lookup_card_prompt",
+            )
+
+        elif action == "admin_lookup_dialog_prompt":
+            context.user_data["admin_lookup_action"] = "dialog"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "💬 История диалога по ID\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
+                action="admin_lookup_dialog_prompt",
+            )
+
+        elif action == "admin_lookup_revoke_prompt":
+            context.user_data["admin_lookup_action"] = "revoke"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🗑️ Отзыв согласия и очистка ПД\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
+                action="admin_lookup_revoke_prompt",
+            )
+
+        elif action == "admin_lookup_edit_prompt":
+            context.user_data["admin_lookup_action"] = "edit"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "✏️ Редактирование ПД\n\n"
+                    "1) Выберите поле кнопкой ниже.\n"
+                    "2) Затем отправьте сообщение в формате:\n"
+                    "<telegram_id> <новое значение>\n\n"
+                    "Пример: 321681061 new@email.com"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_EDIT_FIELD_MENU),
+                action="admin_lookup_edit_prompt",
+            )
+
+        elif action and action.startswith("admin_lookup_edit_field_"):
+            field = action.replace("admin_lookup_edit_field_", "", 1)
+            valid_fields = {"first_name", "last_name", "username", "name", "email", "phone", "company"}
+            if field not in valid_fields:
+                await utils.safe_edit_text(
+                    query.message,
+                    "Неизвестное поле редактирования.",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_EDIT_FIELD_MENU),
+                    action="admin_lookup_edit_field_invalid",
+                )
+            else:
+                context.user_data["admin_lookup_action"] = "edit"
+                context.user_data["admin_lookup_field"] = field
+                await utils.safe_edit_text(
+                    query.message,
+                    (
+                        f"✏️ Выбрано поле: `{field}`\n\n"
+                        "Теперь отправьте сообщение:\n"
+                        "<telegram_id> <новое значение>\n\n"
+                        "Пример: 321681061 Новое значение"
+                    ),
+                    reply_markup=InlineKeyboardMarkup(ADMIN_EDIT_FIELD_MENU),
+                    action="admin_lookup_edit_field_selected",
+                )
 
         elif action == "admin_stats":
             stats_message = admin_interface.admin_interface.format_statistics(30)

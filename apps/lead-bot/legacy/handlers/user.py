@@ -25,6 +25,8 @@ from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
+_EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
+_EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
 
 # Import admin panel function (avoid at module level due to potential circular import)
 def get_show_admin_panel():
@@ -59,8 +61,256 @@ def _consultation_contact_markup() -> ReplyKeyboardMarkup:
     )
 
 
+def _services_inline_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
+            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
+            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
+            [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
+            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
+        ]
+    )
+
+
 def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU, resize_keyboard=True)
+
+
+def _profile_edit_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✏️ Исправить ФИО", callback_data="profile_edit_name"),
+                InlineKeyboardButton("✉️ Исправить Email", callback_data="profile_edit_email"),
+            ]
+        ]
+    )
+
+
+def _profile_edit_cancel_markup() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("⬅️ Отмена")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("admin_lookup_action", None)
+    context.user_data.pop("admin_lookup_field", None)
+
+
+async def _handle_admin_lookup_input(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    message_text: str,
+) -> bool:
+    action = context.user_data.get("admin_lookup_action")
+    if not action:
+        return False
+
+    message = update.effective_message
+    if not message:
+        return True
+
+    if message_text == "⬅️ Отмена":
+        _clear_admin_lookup_state(context)
+        await utils.safe_reply_text(
+            message,
+            "Ок, режим поиска/редактирования закрыт.",
+            reply_markup=_main_menu_markup(config.ADMIN_TELEGRAM_ID),
+            action="admin_lookup_cancel",
+        )
+        return True
+
+    def _parse_id(raw: str) -> int | None:
+        try:
+            return int(raw.strip())
+        except (TypeError, ValueError):
+            return None
+
+    if action == "card":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_lookup_card_invalid_id",
+            )
+            return True
+
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_card_not_found",
+            )
+            return True
+
+        lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
+        consent = database.db.get_user_consent_state(target_user["id"]) or {}
+        text = (
+            f"🗂️ Карточка пользователя {telegram_id}\n\n"
+            f"Username: @{target_user.get('username') or '—'}\n"
+            f"Имя: {target_user.get('first_name') or '—'} {target_user.get('last_name') or ''}\n"
+            f"Регистрация: {target_user.get('created_at') or '—'}\n"
+            f"Последняя активность: {target_user.get('last_interaction') or '—'}\n\n"
+            "Lead:\n"
+            f"• Имя: {lead.get('name') or '—'}\n"
+            f"• Email: {lead.get('email') or '—'}\n"
+            f"• Телефон: {lead.get('phone') or '—'}\n"
+            f"• Компания: {lead.get('company') or '—'}\n"
+            f"• Статус: {lead.get('status') or '—'}\n\n"
+            "Согласия:\n"
+            f"• ПД: {'✅' if consent.get('consent_given') else '❌'}\n"
+            f"• Трансграничная передача: {'✅' if consent.get('transborder_consent') else '❌'}\n"
+            f"• Отозвано: {'✅' if consent.get('consent_revoked') else '❌'}"
+        )
+        await utils.safe_reply_text(message, text, action="admin_lookup_card_result")
+        return True
+
+    if action == "dialog":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_lookup_dialog_invalid_id",
+            )
+            return True
+
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_dialog_not_found",
+            )
+            return True
+
+        history = database.db.get_conversation_history(target_user["id"], limit=100)
+        if not history:
+            await utils.safe_reply_text(
+                message,
+                f"📝 История диалога ({telegram_id})\n\nДиалогов пока нет.",
+                action="admin_lookup_dialog_empty",
+            )
+            return True
+
+        lines = [f"📝 История диалога ({telegram_id})", ""]
+        for item in history:
+            role = "👤 Клиент" if item.get("role") == "user" else "🤖 Бот"
+            ts = item.get("timestamp", "")
+            text_part = item.get("message") or item.get("content") or ""
+            lines.append(f"{role} [{ts}]:")
+            lines.append(text_part)
+            lines.append("")
+        await utils.safe_reply_text(
+            message,
+            "\n".join(lines).strip(),
+            action="admin_lookup_dialog_result",
+        )
+        return True
+
+    if action == "revoke":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_lookup_revoke_invalid_id",
+            )
+            return True
+
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_revoke_not_found",
+            )
+            return True
+
+        result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
+        await utils.safe_reply_text(
+            message,
+            (
+                f"✅ Данные пользователя ID {telegram_id} очищены.\n\n"
+                f"Изменено профилей: {result.get('users_updated', 0)}\n"
+                f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
+                f"Удалено сообщений: {result.get('messages_deleted', 0)}"
+            ),
+            action="admin_lookup_revoke_done",
+        )
+        return True
+
+    if action == "edit":
+        field = context.user_data.get("admin_lookup_field")
+        if not field:
+            await utils.safe_reply_text(
+                message,
+                "Сначала выберите поле редактирования кнопкой в админ-панели.",
+                action="admin_lookup_edit_no_field",
+            )
+            return True
+
+        parts = message_text.strip().split(maxsplit=1)
+        if len(parts) < 2:
+            await utils.safe_reply_text(
+                message,
+                "Формат: <telegram_id> <новое значение>\nНапример: 321681061 new@email.com",
+                action="admin_lookup_edit_bad_format",
+            )
+            return True
+
+        telegram_id = _parse_id(parts[0])
+        value = parts[1].strip()
+        if telegram_id is None or not value:
+            await utils.safe_reply_text(
+                message,
+                "Нужен корректный ID и новое значение.\nПример: 321681061 ООО Ромашка",
+                action="admin_lookup_edit_bad_values",
+            )
+            return True
+
+        target_user = database.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_edit_not_found",
+            )
+            return True
+
+        if field in _EDITABLE_USER_FIELDS:
+            updated = database.db.update_user_fields(target_user["id"], {field: value})
+            if not updated:
+                await utils.safe_reply_text(
+                    message,
+                    "Профиль пользователя не обновлен.",
+                    action="admin_lookup_edit_user_not_updated",
+                )
+                return True
+        elif field in _EDITABLE_LEAD_FIELDS:
+            database.db.create_or_update_lead(target_user["id"], {field: value})
+        else:
+            await utils.safe_reply_text(
+                message,
+                f"Поле {field} недоступно для редактирования.",
+                action="admin_lookup_edit_bad_field",
+            )
+            return True
+
+        await utils.safe_reply_text(
+            message,
+            f"✅ Поле `{field}` обновлено для пользователя {telegram_id}.",
+            action="admin_lookup_edit_done",
+        )
+        return True
+
+    return False
 
 
 def _is_pdn_consent_granted(consent_state: Dict) -> bool:
@@ -69,22 +319,35 @@ def _is_pdn_consent_granted(consent_state: Dict) -> bool:
 
 def _format_profile_text(user_data: Dict, lead: Optional[Dict], consent_state: Dict, is_admin: bool) -> str:
     lead = lead or {}
-    status = "Администратор" if is_admin else "Пользователь"
+    if is_admin:
+        return (
+            "👤 Ваш профиль\n\n"
+            "Статус: Администратор\n"
+            f"Имя: {user_data.get('first_name') or 'не указано'}\n"
+            f"Фамилия: {user_data.get('last_name') or 'не указана'}\n"
+            f"Username: @{user_data.get('username') or 'не указан'}\n"
+            f"Telegram ID: {user_data.get('telegram_id')}\n\n"
+            "Данные по заявке:\n"
+            f"• Имя: {lead.get('name') or 'не указано'}\n"
+            f"• Компания: {lead.get('company') or 'не указана'}\n"
+            f"• Email: {lead.get('email') or 'не указан'}\n"
+            f"• Телефон: {lead.get('phone') or 'не указан'}\n"
+            f"• Температура: {lead.get('temperature') or 'не определена'}\n"
+            f"• Статус: {lead.get('status') or 'new'}\n\n"
+            f"{content.consent_status_text(consent_state)}"
+        )
+
     return (
         "👤 Ваш профиль\n\n"
-        f"Статус: {status}\n"
         f"Имя: {user_data.get('first_name') or 'не указано'}\n"
         f"Фамилия: {user_data.get('last_name') or 'не указана'}\n"
-        f"Username: @{user_data.get('username') or 'не указан'}\n"
-        f"Telegram ID: {user_data.get('telegram_id')}\n\n"
-        "Данные по заявке:\n"
-        f"• Имя: {lead.get('name') or 'не указано'}\n"
-        f"• Компания: {lead.get('company') or 'не указана'}\n"
+        f"Username: @{user_data.get('username') or 'не указан'}\n\n"
+        "Контактные данные:\n"
+        f"• Имя в заявке: {lead.get('name') or 'не указано'}\n"
         f"• Email: {lead.get('email') or 'не указан'}\n"
-        f"• Телефон: {lead.get('phone') or 'не указан'}\n"
-        f"• Температура: {lead.get('temperature') or 'не определена'}\n"
-        f"• Статус: {lead.get('status') or 'new'}\n\n"
-        f"{content.consent_status_text(consent_state)}"
+        f"• Телефон: {lead.get('phone') or 'не указан'}\n\n"
+        f"{content.consent_user_status_text(consent_state)}\n\n"
+        "Если в данных ошибка, используйте кнопки редактирования ниже."
     )
 
 
@@ -189,9 +452,11 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lead = database.db.get_lead_by_user_id(user_data["id"])
     consent_state = database.db.get_user_consent_state(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
+    reply_markup = None if is_admin else _profile_edit_markup()
     await utils.safe_reply_text(
         update.message,
         _format_profile_text(user_data, lead, consent_state, is_admin),
+        reply_markup=reply_markup,
         action="profile_command",
     )
 
@@ -270,9 +535,11 @@ async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_T
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="consent_status_no_user")
         return
     consent_state = database.db.get_user_consent_state(user_data["id"])
+    is_admin = user.id == config.ADMIN_TELEGRAM_ID
+    text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
     await utils.safe_reply_text(
         update.message,
-        content.consent_status_text(consent_state),
+        text,
         action="consent_status_command",
     )
 
@@ -372,12 +639,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /menu - показывает меню услуг"""
     try:
-        keyboard = [
-            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = _services_inline_menu_markup()
         
         # Используем effective_message вместо message (может быть None)
         message = update.effective_message
@@ -507,6 +769,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
 
+        if is_admin:
+            handled_admin_lookup = await _handle_admin_lookup_input(update, context, message_text)
+            if handled_admin_lookup:
+                return
+
         if not is_admin and not has_pdn_consent:
             await original_message.reply_text(
                 content.CONSENT_STEP_1_TEXT,
@@ -525,6 +792,69 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Security check failed for user {user.id}: {block_reason}")
             await original_message.reply_text(block_reason)
             return
+
+        profile_edit_field = context.user_data.get("profile_edit_field")
+        if profile_edit_field:
+            if message_text == "⬅️ Отмена":
+                context.user_data.pop("profile_edit_field", None)
+                await utils.safe_reply_text(
+                    original_message,
+                    "Редактирование отменено.",
+                    reply_markup=_main_menu_markup(user.id),
+                    action="profile_edit_cancel",
+                )
+                return
+
+            if profile_edit_field == "name":
+                normalized_name = " ".join(message_text.split())
+                if len(normalized_name) < 2:
+                    await utils.safe_reply_text(
+                        original_message,
+                        "Введите корректные ФИО (минимум 2 символа) или нажмите «⬅️ Отмена».",
+                        reply_markup=_profile_edit_cancel_markup(),
+                        action="profile_edit_name_validation",
+                    )
+                    return
+
+                parts = normalized_name.split(maxsplit=1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ""
+                database.db.create_or_update_user(
+                    telegram_id=user.id,
+                    username=user_data.get("username") or user.username,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                database.db.create_or_update_lead(user_data["id"], {"name": normalized_name})
+                context.user_data.pop("profile_edit_field", None)
+                await utils.safe_reply_text(
+                    original_message,
+                    "✅ ФИО обновлены.",
+                    reply_markup=_main_menu_markup(user.id),
+                    action="profile_edit_name_success",
+                )
+                return
+
+            if profile_edit_field == "email":
+                new_email = message_text.strip()
+                if not utils.validate_email(new_email):
+                    await utils.safe_reply_text(
+                        original_message,
+                        "Email выглядит некорректно. Введите корректный email или нажмите «⬅️ Отмена».",
+                        reply_markup=_profile_edit_cancel_markup(),
+                        action="profile_edit_email_validation",
+                    )
+                    return
+
+                database.db.create_or_update_lead(user_data["id"], {"email": new_email})
+                context.user_data.pop("profile_edit_field", None)
+                await utils.safe_reply_text(
+                    original_message,
+                    "✅ Email обновлен.",
+                    reply_markup=_main_menu_markup(user.id),
+                    action="profile_edit_email_success",
+                )
+                return
 
         # Проверяем есть ли pending lead magnet и email в сообщении
         if lead and lead.get("lead_magnet_type") and not lead.get("lead_magnet_delivered"):
@@ -580,6 +910,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
                 reply_markup=_consultation_contact_markup(),
                 action="consultation_phone_prompt",
+            )
+            return
+
+        if message_text == "✉️ Личное обращение":
+            if allow_lead_processing:
+                database.db.create_or_update_lead(
+                    user_data["id"],
+                    {
+                        "name": user.first_name,
+                        "lead_magnet_type": "consultation",
+                        "lead_magnet_delivered": False,
+                        "notes": "Личное обращение к Андрею Попову",
+                    },
+                )
+            await utils.safe_reply_text(
+                original_message,
+                "Принято. Для личного обращения оставьте номер телефона кнопкой ниже "
+                "или отправьте номер текстом, и я передам запрос напрямую.",
+                reply_markup=_consultation_contact_markup(),
+                action="personal_request_phone_prompt",
             )
             return
 

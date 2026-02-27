@@ -67,6 +67,7 @@ from handlers.callbacks import (
     handle_consent_callback,
     handle_documents_callback,
     handle_business_menu_callback,
+    handle_profile_callback,
     handle_lead_magnet_callback,
     handle_admin_panel_callback,
     handle_cleanup_callback
@@ -137,6 +138,7 @@ __all__ = [
     'handle_consent_callback',
     'handle_documents_callback',
     'handle_business_menu_callback',
+    'handle_profile_callback',
     'handle_lead_magnet_callback',
     'handle_admin_panel_callback',
     'handle_cleanup_callback',

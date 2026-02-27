@@ -68,11 +68,41 @@ def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> N
         database.db.create_or_update_lead(user_db_id, payload)
 
 
+def _business_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
+            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
+            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
+            [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
+            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
+        ]
+    )
+
+
+def _is_business_processing_allowed(message) -> bool:
+    connection_id = getattr(message, "business_connection_id", None)
+    chat_id = getattr(getattr(message, "chat", None), "id", None)
+
+    if not database.db.is_business_connection_enabled(connection_id):
+        logger.info("[Business] Skip message: connection disabled (%s)", connection_id)
+        return False
+    if chat_id is not None and not database.db.is_chat_enabled(int(chat_id)):
+        logger.info("[Business] Skip message: chat disabled (%s)", chat_id)
+        return False
+    return True
+
+
 async def handle_business_connection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка подключения/отключения Business аккаунта"""
     try:
         if update.business_connection:
             connection = update.business_connection
+            database.db.set_business_connection_state(
+                connection_id=str(connection.id),
+                user_chat_id=getattr(connection, "user_chat_id", None),
+                is_enabled=bool(connection.is_enabled),
+            )
             if connection.is_enabled:
                 logger.info(f"✅ Business connection enabled: {connection.id} for user {connection.user_chat_id}")
                 await context.bot.send_message(
@@ -82,6 +112,11 @@ async def handle_business_connection(update: Update, context: ContextTypes.DEFAU
                 )
             else:
                 logger.info(f"❌ Business connection disabled: {connection.id}")
+                if getattr(connection, "user_chat_id", None):
+                    await context.bot.send_message(
+                        chat_id=connection.user_chat_id,
+                        text="ℹ️ Business-автоответы отключены. Бот больше не будет отвечать в business-чатах.",
+                    )
     except Exception as e:
         logger.error(f"Error in handle_business_connection: {e}", exc_info=True)
 
@@ -94,6 +129,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             return
             
         message = update.business_message
+        if not _is_business_processing_allowed(message):
+            return
+
+        if not message.from_user:
+            logger.info("[Business] Skip message without from_user, update=%s", update.update_id)
+            return
+
         user_id = message.from_user.id
         text = message.text or ""
         
@@ -114,13 +156,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             welcome_message = content.build_welcome_message(message.from_user.first_name)
             
             # Для бизнес-чатов используем InlineKeyboard (ReplyKeyboard не поддерживается)
-            keyboard = [
-                [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-                [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-                [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
-                [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = _business_menu_markup()
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
@@ -135,13 +171,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         
         # Обработка команды /menu для бизнес-чата
         if text.strip().lower() in ['/menu', 'menu', '/меню', 'меню']:
-            keyboard = [
-                [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-                [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-                [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
-                [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = _business_menu_markup()
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
@@ -529,13 +559,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         
         # ОТПРАВЛЯЕМ КНОПКИ МЕНЮ ОТДЕЛЬНЫМ СООБЩЕНИЕМ при первом сообщении
         if show_menu_buttons:
-            keyboard = [
-                [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-                [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-                [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
-                [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = _business_menu_markup()
             
             try:
                 await context.bot.send_message(
