@@ -91,9 +91,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user.id != config.ADMIN_TELEGRAM_ID:
             consent_state = database.db.get_user_consent_state(user_id)
             if not _is_pdn_consent_granted(consent_state):
-                await update.message.reply_text(
+                await utils.safe_reply_text(
+                    update.message,
                     content.CONSENT_STEP_1_TEXT,
                     reply_markup=_pdn_consent_markup(),
+                    action="start_consent_step_1",
                 )
                 return
 
@@ -107,17 +109,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
 
-        await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+        await utils.safe_reply_text(
+            update.message,
+            welcome_message,
+            reply_markup=reply_markup,
+            action="start_welcome",
+        )
 
     except Exception as e:
         logger.error(f"Error in start_command: {e}")
-        await update.message.reply_text("Произошла ошибка. Попробуйте еще раз.")
+        await utils.safe_reply_text(update.message, "Произошла ошибка. Попробуйте еще раз.", action="start_fallback_error")
 
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
-    await update.message.reply_text(content.HELP_MESSAGE)
+    await utils.safe_reply_text(update.message, content.HELP_MESSAGE, action="help_command")
 
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -126,21 +133,27 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
     if not user_data:
-        await update.message.reply_text("Сначала выполните /start.")
+        await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="profile_no_user")
         return
 
     lead = database.db.get_lead_by_user_id(user_data["id"])
     consent_state = database.db.get_user_consent_state(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
-    await update.message.reply_text(_format_profile_text(user_data, lead, consent_state, is_admin))
+    await utils.safe_reply_text(
+        update.message,
+        _format_profile_text(user_data, lead, consent_state, is_admin),
+        action="profile_command",
+    )
 
 
 async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /documents - список документов и действий по данным."""
     _ = context
-    await update.message.reply_text(
+    await utils.safe_reply_text(
+        update.message,
         content.documents_list_text(),
         reply_markup=_documents_markup(),
+        action="documents_command",
     )
 
 
@@ -148,19 +161,19 @@ async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /privacy - политика обработки ПД."""
     _ = context
-    await update.message.reply_text(content.privacy_policy_text())
+    await utils.safe_reply_text(update.message, content.privacy_policy_text(), action="privacy_command")
 
 
 async def user_agreement_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /user_agreement - пользовательское соглашение."""
     _ = context
-    await update.message.reply_text(content.user_agreement_text())
+    await utils.safe_reply_text(update.message, content.user_agreement_text(), action="user_agreement_command")
 
 
 async def ai_policy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /ai_policy - политика использования ИИ."""
     _ = context
-    await update.message.reply_text(content.ai_policy_text())
+    await utils.safe_reply_text(update.message, content.ai_policy_text(), action="ai_policy_command")
 
 
 async def marketing_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,9 +181,9 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
     _ = context
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
+    await utils.safe_reply_text(update.message, content.marketing_consent_text(), action="marketing_consent_command")
     if user_data:
         database.db.set_user_marketing_consent(user_data["id"], True)
-    await update.message.reply_text(content.marketing_consent_text())
 
 
 async def transborder_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -179,16 +192,22 @@ async def transborder_consent_command(update: Update, context: ContextTypes.DEFA
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
     if not user_data:
-        await update.message.reply_text("Сначала выполните /start.")
+        await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="transborder_no_user")
         return
     consent_state = database.db.get_user_consent_state(user_data["id"])
     message = content.transborder_policy_text()
     if bool(consent_state.get("transborder_consent")):
-        await update.message.reply_text(f"{message}\n\nСтатус: ✅ согласие активно.")
+        await utils.safe_reply_text(
+            update.message,
+            f"{message}\n\nСтатус: ✅ согласие активно.",
+            action="transborder_status_active",
+        )
         return
-    await update.message.reply_text(
+    await utils.safe_reply_text(
+        update.message,
         f"{message}\n\nСтатус: ❌ согласие не дано.",
         reply_markup=_transborder_consent_markup(),
+        action="transborder_status_missing",
     )
 
 
@@ -198,10 +217,14 @@ async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
     if not user_data:
-        await update.message.reply_text("Сначала выполните /start.")
+        await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="consent_status_no_user")
         return
     consent_state = database.db.get_user_consent_state(user_data["id"])
-    await update.message.reply_text(content.consent_status_text(consent_state))
+    await utils.safe_reply_text(
+        update.message,
+        content.consent_status_text(consent_state),
+        action="consent_status_command",
+    )
 
 
 async def export_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -210,13 +233,13 @@ async def export_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
     if not user_data:
-        await update.message.reply_text("Сначала выполните /start.")
+        await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="export_data_no_user")
         return
     payload = database.db.export_user_data(user_data["id"])
     if not payload:
-        await update.message.reply_text("Данные пользователя не найдены.")
+        await utils.safe_reply_text(update.message, "Данные пользователя не найдены.", action="export_data_not_found")
         return
-    await update.message.reply_text(content.export_data_text(payload))
+    await utils.safe_reply_text(update.message, content.export_data_text(payload), action="export_data_command")
 
 
 async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

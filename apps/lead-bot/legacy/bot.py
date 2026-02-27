@@ -10,12 +10,16 @@
 
 from __future__ import annotations
 
+import atexit
+import fcntl
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from telegram import Update
+from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -88,6 +92,44 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+_LOCK_FILE_HANDLE = None
+
+
+def _release_single_instance_lock() -> None:
+    global _LOCK_FILE_HANDLE
+    if _LOCK_FILE_HANDLE is None:
+        return
+    try:
+        fcntl.flock(_LOCK_FILE_HANDLE.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        pass
+    try:
+        _LOCK_FILE_HANDLE.close()
+    except Exception:
+        pass
+    _LOCK_FILE_HANDLE = None
+
+
+def _acquire_single_instance_lock(lock_path: str = "data/lead-bot.lock") -> None:
+    """
+    Защита от случайного запуска двух polling-процессов на одном хосте.
+    """
+    global _LOCK_FILE_HANDLE
+    lock_file = Path(lock_path)
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_file.open("w", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        handle.close()
+        raise RuntimeError("Обнаружен второй экземпляр бота: остановите дублирующий процесс.") from error
+
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+    _LOCK_FILE_HANDLE = handle
+    atexit.register(_release_single_instance_lock)
 
 
 def _is_business_update(update: Update) -> bool:
@@ -192,7 +234,26 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def build_application() -> Application:
-    application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    request = HTTPXRequest(
+        connect_timeout=15.0,
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=5.0,
+    )
+    get_updates_request = HTTPXRequest(
+        connect_timeout=15.0,
+        read_timeout=45.0,
+        write_timeout=30.0,
+        pool_timeout=5.0,
+    )
+
+    application = (
+        Application.builder()
+        .token(config.TELEGRAM_BOT_TOKEN)
+        .request(request)
+        .get_updates_request(get_updates_request)
+        .build()
+    )
 
     # Пользовательские команды
     application.add_handler(CommandHandler("start", start_command))
@@ -252,9 +313,16 @@ def build_application() -> Application:
 
 def main() -> None:
     try:
+        _acquire_single_instance_lock()
         app = build_application()
         logger.info("Legacy bot started")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        app.run_polling(
+            timeout=30,
+            bootstrap_retries=5,
+            allowed_updates=Update.ALL_TYPES,
+        )
+    except RuntimeError as lock_error:
+        logger.error("%s", lock_error)
     except KeyboardInterrupt:
         logger.info("Legacy bot stopped by user")
     except Exception as error:

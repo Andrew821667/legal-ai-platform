@@ -1,9 +1,13 @@
 """
 Вспомогательные функции
 """
+import asyncio
 import re
 import logging
 from datetime import datetime
+from typing import Any, Awaitable, Callable
+
+from telegram.error import NetworkError, RetryAfter, TimedOut
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +150,97 @@ def split_long_message(text: str, max_length: int = 4096) -> list:
         parts.append(current_part)
     
     return parts
+
+
+async def telegram_call_with_retry(
+    call: Callable[[], Awaitable[Any]],
+    action: str,
+    max_retries: int = 2,
+    base_delay: float = 0.8,
+) -> Any:
+    """
+    Выполняет Telegram API-вызов с ограниченным retry для временных сбоев сети.
+    """
+    attempt = 0
+    while True:
+        try:
+            return await call()
+        except RetryAfter as error:
+            if attempt >= max_retries:
+                raise
+            retry_after = float(getattr(error, "retry_after", base_delay))
+            delay = max(retry_after, base_delay)
+            attempt += 1
+            logger.warning(
+                "RetryAfter during %s (attempt %s/%s), sleeping %.2fs",
+                action,
+                attempt,
+                max_retries,
+                delay,
+            )
+            await asyncio.sleep(delay)
+        except (TimedOut, NetworkError) as error:
+            if attempt >= max_retries:
+                raise
+            delay = base_delay * (2 ** attempt)
+            attempt += 1
+            logger.warning(
+                "Transient Telegram error during %s: %s (attempt %s/%s), retry in %.2fs",
+                action,
+                error,
+                attempt,
+                max_retries,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+
+async def safe_answer_callback(query, action: str = "callback_answer", **kwargs):
+    """Безопасно отвечает на callback query с retry."""
+    return await telegram_call_with_retry(
+        lambda: query.answer(**kwargs),
+        action=action,
+    )
+
+
+async def safe_reply_text(message, text: str, action: str = "reply_text", **kwargs):
+    """
+    Безопасно отправляет reply_text:
+    - retry для временных сетевых ошибок;
+    - авто-разбиение длинных сообщений.
+    """
+    parts = split_long_message(text, max_length=4000)
+    sent_message = None
+    total = len(parts)
+
+    for index, part in enumerate(parts, start=1):
+        part_kwargs = dict(kwargs)
+        if index > 1 and "reply_markup" in part_kwargs:
+            part_kwargs.pop("reply_markup")
+
+        if total > 1:
+            label = f"{action}[{index}/{total}]"
+        else:
+            label = action
+
+        sent_message = await telegram_call_with_retry(
+            lambda part=part, part_kwargs=part_kwargs: message.reply_text(part, **part_kwargs),
+            action=label,
+        )
+
+    return sent_message
+
+
+async def safe_edit_text(message, text: str, action: str = "edit_text", **kwargs):
+    """
+    Безопасно редактирует сообщение с retry.
+    Для edit ограничиваем размер, чтобы не поймать Telegram лимит.
+    """
+    prepared_text = text if len(text) <= 4000 else f"{text[:3990]}…"
+    return await telegram_call_with_retry(
+        lambda: message.edit_text(prepared_text, **kwargs),
+        action=action,
+    )
 
 
 def format_ai_text_as_plain_symbols(text: str) -> str:

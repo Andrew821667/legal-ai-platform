@@ -48,7 +48,10 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
     """
     try:
         query = update.callback_query
-        await query.answer()
+        try:
+            await utils.safe_answer_callback(query, action="business_menu_answer")
+        except Exception as answer_error:
+            logger.warning(f"Failed to answer business menu callback: {answer_error}")
         
         callback_data = query.data
         
@@ -74,13 +77,16 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
 async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора lead magnet"""
     query = update.callback_query
-    await query.answer()
+    try:
+        await utils.safe_answer_callback(query, action="lead_magnet_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer lead magnet callback: {answer_error}")
 
     user = query.from_user
     user_data = database.db.get_user_by_telegram_id(user.id)
 
     if not user_data:
-        await query.message.reply_text("Ошибка. Попробуйте /start")
+        await utils.safe_reply_text(query.message, "Ошибка. Попробуйте /start", action="lead_magnet_no_user")
         return
 
     magnet_type = query.data.replace("magnet_", "")
@@ -164,14 +170,17 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
             business_connection_id=query.message.business_connection_id,
         )
     else:
-        await query.message.reply_text(selection_text)
+        await utils.safe_reply_text(query.message, selection_text, action="lead_magnet_selection")
 
 
 
 async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback для согласий на ПД и трансграничную передачу."""
     query = update.callback_query
-    await query.answer()
+    try:
+        await utils.safe_answer_callback(query, action="consent_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer consent callback: {answer_error}")
 
     user = query.from_user
     user_data = database.db.get_user_by_telegram_id(user.id)
@@ -185,29 +194,35 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         user_data = database.db.get_user_by_id(user_id)
 
     if not user_data:
-        await query.message.reply_text("Ошибка инициализации профиля. Нажмите /start еще раз.")
+        await utils.safe_reply_text(
+            query.message,
+            "Ошибка инициализации профиля. Нажмите /start еще раз.",
+            action="consent_profile_error",
+        )
         return
 
     action = query.data or ""
 
     if action == "consent_doc_privacy":
-        await query.message.reply_text(content.privacy_policy_text())
+        await utils.safe_reply_text(query.message, content.privacy_policy_text(), action="consent_doc_privacy")
         return
 
     if action == "consent_doc_transborder":
-        await query.message.reply_text(content.transborder_policy_text())
+        await utils.safe_reply_text(query.message, content.transborder_policy_text(), action="consent_doc_transborder")
         return
 
     if action == "consent_pdn_no":
-        await query.message.edit_text(content.CONSENT_DENIED_TEXT)
+        await utils.safe_edit_text(query.message, content.CONSENT_DENIED_TEXT, action="consent_pdn_no")
         return
 
     if action == "consent_pdn_yes":
         database.db.grant_user_consent(user_data["id"])
         database.db.set_user_transborder_consent(user_data["id"], True)
-        await query.message.edit_text(
+        await utils.safe_edit_text(
+            query.message,
             "✅ Согласие на обработку ПД и трансграничную передачу сохранено.\n\n"
-            "AI-режим включен. Можно описать задачу в свободной форме."
+            "AI-режим включен. Можно описать задачу в свободной форме.",
+            action="consent_pdn_yes",
         )
 
         welcome_message = content.build_welcome_message(user.first_name)
@@ -216,22 +231,31 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await query.message.reply_text(welcome_message, reply_markup=reply_markup)
+        await utils.safe_reply_text(
+            query.message,
+            welcome_message,
+            reply_markup=reply_markup,
+            action="consent_welcome_after_yes",
+        )
         return
 
     if action in ("consent_transborder_yes", "consent_transborder_no"):
         transborder_enabled = action == "consent_transborder_yes"
         database.db.set_user_transborder_consent(user_data["id"], transborder_enabled)
         if transborder_enabled:
-            await query.message.edit_text(
+            await utils.safe_edit_text(
+                query.message,
                 "✅ Согласия сохранены. AI-режим включен.\n\n"
-                "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг."
+                "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг.",
+                action="consent_transborder_yes",
             )
         else:
-            await query.message.edit_text(
+            await utils.safe_edit_text(
+                query.message,
                 "✅ Согласие на обработку ПД сохранено.\n"
                 "ИИ-режим отключен до вашего разрешения на трансграничную передачу.\n\n"
-                "Можно пользоваться меню и оставить заявку на консультацию."
+                "Можно пользоваться меню и оставить заявку на консультацию.",
+                action="consent_transborder_no",
             )
 
         welcome_message = content.build_welcome_message(user.first_name)
@@ -240,54 +264,66 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await query.message.reply_text(welcome_message, reply_markup=reply_markup)
+        await utils.safe_reply_text(
+            query.message,
+            welcome_message,
+            reply_markup=reply_markup,
+            action="consent_welcome_after_transborder",
+        )
         return
 
-    await query.message.reply_text("Неизвестное действие согласия. Попробуйте /start.")
+    await utils.safe_reply_text(query.message, "Неизвестное действие согласия. Попробуйте /start.", action="consent_unknown")
 
 
 async def handle_documents_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback для раздела документов/прав пользователя."""
     _ = context
     query = update.callback_query
-    await query.answer()
+    try:
+        await utils.safe_answer_callback(query, action="documents_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer documents callback: {answer_error}")
 
     user = query.from_user
     user_data = database.db.get_user_by_telegram_id(user.id)
     action = query.data or ""
 
     if action == "doc_privacy":
-        await query.message.reply_text(content.privacy_policy_text())
+        await utils.safe_reply_text(query.message, content.privacy_policy_text(), action="doc_privacy")
         return
     if action == "doc_transborder":
-        await query.message.reply_text(content.transborder_policy_text())
+        await utils.safe_reply_text(query.message, content.transborder_policy_text(), action="doc_transborder")
         return
     if action == "doc_user_agreement":
-        await query.message.reply_text(content.user_agreement_text())
+        await utils.safe_reply_text(query.message, content.user_agreement_text(), action="doc_user_agreement")
         return
     if action == "doc_ai_policy":
-        await query.message.reply_text(content.ai_policy_text())
+        await utils.safe_reply_text(query.message, content.ai_policy_text(), action="doc_ai_policy")
         return
     if action == "doc_marketing_consent":
+        await utils.safe_reply_text(query.message, content.marketing_consent_text(), action="doc_marketing_consent")
         if user_data:
             database.db.set_user_marketing_consent(user_data["id"], True)
-        await query.message.reply_text(content.marketing_consent_text())
         return
 
     if not user_data:
-        await query.message.reply_text("Сначала выполните /start.")
+        await utils.safe_reply_text(query.message, "Сначала выполните /start.", action="doc_no_user")
         return
 
     if action == "doc_consent_status":
         consent_state = database.db.get_user_consent_state(user_data["id"])
-        await query.message.reply_text(content.consent_status_text(consent_state))
+        await utils.safe_reply_text(
+            query.message,
+            content.consent_status_text(consent_state),
+            action="doc_consent_status",
+        )
         return
     if action == "doc_export_data":
         payload = database.db.export_user_data(user_data["id"])
-        await query.message.reply_text(content.export_data_text(payload))
+        await utils.safe_reply_text(query.message, content.export_data_text(payload), action="doc_export_data")
         return
 
-    await query.message.reply_text("Неизвестное действие. Используйте /documents.")
+    await utils.safe_reply_text(query.message, "Неизвестное действие. Используйте /documents.", action="doc_unknown")
 
 
 def _format_users_for_admin(title: str, users: list[dict]) -> str:
@@ -311,7 +347,10 @@ def _format_users_for_admin(title: str, users: list[dict]) -> str:
 async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback кнопок админ-панели"""
     query = update.callback_query
-    await query.answer()
+    try:
+        await utils.safe_answer_callback(query, action="admin_panel_answer")
+    except Exception as answer_error:
+        logger.warning(f"Failed to answer admin callback: {answer_error}")
 
     user = query.from_user
 
