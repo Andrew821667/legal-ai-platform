@@ -64,12 +64,15 @@ def _consultation_contact_markup() -> ReplyKeyboardMarkup:
 def _services_inline_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
-            [InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact")],
+            [
+                InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
+                InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
+            ],
+            [
+                InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+                InlineKeyboardButton("📲 Контакт", callback_data="menu_leave_contact"),
+            ],
             [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
-            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
             [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
         ]
     )
@@ -88,6 +91,10 @@ def _profile_edit_markup() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def _personal_mode_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
 
 def _profile_edit_cancel_markup() -> ReplyKeyboardMarkup:
@@ -435,6 +442,17 @@ def _looks_like_plain_greeting(text: str) -> bool:
     }
 
 
+def _looks_like_return_to_bot(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in {
+        "↩️ вернуться к боту",
+        "вернуться к боту",
+        "вернуться",
+        "/bot",
+        "бот",
+    }
+
+
 def _looks_like_new_topic_after_handoff(text: str) -> bool:
     normalized = (text or "").strip().lower()
     if not normalized:
@@ -492,6 +510,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             first_name=user.first_name,
             last_name=user.last_name
         )
+        chat = update.effective_chat
+        if chat is not None:
+            database.db.set_chat_mode(int(chat.id), "bot")
 
         # Для пользователей (кроме админа) сначала обязателен сбор согласия на ПД.
         if user.id != config.ADMIN_TELEGRAM_ID:
@@ -864,11 +885,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_transborder_consent = bool(consent_state.get("transborder_consent"))
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
+        chat = update.effective_chat
+        chat_id = int(chat.id) if chat and getattr(chat, "id", None) is not None else user.id
+        chat_mode = database.db.get_chat_mode(chat_id)
 
         if is_admin:
             handled_admin_lookup = await _handle_admin_lookup_input(update, context, message_text)
             if handled_admin_lookup:
                 return
+
+        if message_text == "✉️ Личное обращение":
+            database.db.set_chat_mode(chat_id, "personal")
+            await utils.safe_reply_text(
+                original_message,
+                "Чат переведен в личный режим.\n\n"
+                "Теперь можете писать Андрею напрямую: бот не будет отвечать и не будет "
+                "обрабатывать сообщения как лиды.\n\n"
+                "Когда захотите снова пользоваться ботом, нажмите «↩️ Вернуться к боту».",
+                reply_markup=_personal_mode_markup(),
+                action="personal_mode_enabled",
+            )
+            return
+
+        if chat_mode == "personal":
+            if _looks_like_return_to_bot(message_text):
+                database.db.set_chat_mode(chat_id, "bot")
+                database.db.reset_user_funnel_state(user_data["id"])
+                await utils.safe_reply_text(
+                    original_message,
+                    content.build_welcome_message(user.first_name),
+                    reply_markup=_main_menu_markup(user.id),
+                    action="personal_mode_return_text",
+                )
+            return
 
         if not is_admin and not has_pdn_consent:
             await original_message.reply_text(
@@ -1092,26 +1141,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
                 reply_markup=_consultation_contact_markup(),
                 action="consultation_phone_prompt",
-            )
-            return
-
-        if message_text == "✉️ Личное обращение":
-            if allow_lead_processing:
-                database.db.create_or_update_lead(
-                    user_data["id"],
-                    {
-                        "name": user.first_name,
-                        "lead_magnet_type": "consultation",
-                        "lead_magnet_delivered": False,
-                        "notes": "Личное обращение к Андрею Попову",
-                    },
-                )
-            await utils.safe_reply_text(
-                original_message,
-                "Принято. Для личного обращения оставьте номер телефона кнопкой ниже "
-                "или отправьте номер текстом, и я передам запрос напрямую.",
-                reply_markup=_consultation_contact_markup(),
-                action="personal_request_phone_prompt",
             )
             return
 

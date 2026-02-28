@@ -46,15 +46,22 @@ def _backup_and_truncate_log(log_file: str) -> str | None:
 def _services_inline_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📋 Услуги", callback_data="menu_services")],
-            [InlineKeyboardButton("💰 Цены", callback_data="menu_prices")],
-            [InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation")],
-            [InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact")],
+            [
+                InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
+                InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
+            ],
+            [
+                InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+                InlineKeyboardButton("📲 Контакт", callback_data="menu_leave_contact"),
+            ],
             [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
-            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
             [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
         ]
     )
+
+
+def _personal_mode_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
 
 def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
@@ -62,7 +69,6 @@ def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("📲 Оставить номер телефона", callback_data="menu_contact_send_phone")],
             [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
-            [InlineKeyboardButton("🔄 Начать сначала", callback_data="menu_restart")],
         ]
     )
 
@@ -180,7 +186,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         callback_data = query.data or ""
         response_text = content.menu_response_by_key(callback_data)
         menu_markup = _services_inline_menu_markup()
-        contact_actions = {"menu_consultation", "menu_personal_request", "menu_leave_contact"}
+        contact_actions = {"menu_consultation", "menu_leave_contact"}
 
         is_business = bool(
             query.message
@@ -220,6 +226,35 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     restart_text,
                     reply_markup=menu_markup,
                     action="menu_restart",
+                )
+            return
+
+        if callback_data == "menu_return_to_bot":
+            chat_id = getattr(getattr(query, "message", None), "chat", None)
+            chat_id = getattr(chat_id, "id", None)
+            if chat_id is not None:
+                database.db.set_chat_mode(int(chat_id), "bot")
+
+            if user_db_id:
+                database.db.reset_user_funnel_state(user_db_id)
+
+            response_text = content.build_welcome_message(user.first_name if user else "клиент")
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=menu_markup,
+                )
+            else:
+                await utils.safe_reply_text(
+                    query.message,
+                    response_text,
+                    action="menu_return_to_bot",
+                    reply_markup=ReplyKeyboardMarkup(
+                        ADMIN_MENU if user and user.id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
+                        resize_keyboard=True,
+                    ),
                 )
             return
 
@@ -285,6 +320,38 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 )
             return
 
+        if callback_data == "menu_personal_request":
+            chat = getattr(query.message, "chat", None)
+            chat_id = getattr(chat, "id", None)
+            if chat_id is not None:
+                database.db.set_chat_mode(int(chat_id), "personal")
+
+            context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
+            context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+
+            response_text = (
+                "Чат переведен в личный режим.\n\n"
+                "Теперь можете писать Андрею напрямую: бот не будет отвечать и не будет "
+                "обрабатывать сообщения как лиды.\n\n"
+                "Когда захотите снова пользоваться ботом, нажмите «↩️ Вернуться к боту»."
+            )
+            response_markup = _personal_mode_markup()
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=response_markup,
+                )
+            else:
+                await utils.safe_reply_text(
+                    query.message,
+                    response_text,
+                    action="menu_personal_request_mode_on",
+                    reply_markup=response_markup,
+                )
+            return
+
         if callback_data in contact_actions:
             if not user_db_id:
                 await utils.safe_reply_text(
@@ -296,11 +363,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             contact_source = "consultation"
             notes = None
             lead_magnet_type = "consultation"
-            if callback_data == "menu_personal_request":
-                lead_magnet_type = "personal_request"
-                notes = "Личное обращение к Андрею Попову"
-                contact_source = "personal_request"
-            elif callback_data == "menu_leave_contact":
+            if callback_data == "menu_leave_contact":
                 existing_lead = database.db.get_lead_by_user_id(user_db_id) or {}
                 if existing_lead.get("lead_magnet_type") == "personal_request":
                     lead_magnet_type = "personal_request"

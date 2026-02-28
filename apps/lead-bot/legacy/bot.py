@@ -31,6 +31,7 @@ from telegram.ext import (
 )
 
 import database
+import content
 from config import Config
 from handlers.admin import (
     blacklist_command,
@@ -45,7 +46,7 @@ from handlers.admin import (
     unblacklist_command,
     view_conversation_command,
 )
-from handlers.business import handle_business_connection, handle_business_message
+from handlers.business import build_business_menu_markup, handle_business_connection, handle_business_message
 from handlers.callbacks import (
     handle_admin_panel_callback,
     handle_business_menu_callback,
@@ -173,6 +174,24 @@ def _business_skip_reason(message: Any, bot_id: int) -> str | None:
     return None
 
 
+def _is_legacy_owner_intro_text(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    signals = [
+        "я андрей попов",
+        "автоматизировать работу юротдела",
+        "обучение команды работе с ai",
+        "какая задача стоит перед вашей компанией",
+        "разработка специализированного решения",
+        "аудит существующих процессов",
+    ]
+    hits = sum(1 for token in signals if token in normalized)
+    if normalized.startswith("здравствуйте!") and hits >= 2:
+        return True
+    return hits >= 3 and len(normalized) >= 180
+
+
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Общий роутер входящих сообщений.
@@ -184,6 +203,52 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if _is_business_update(update):
         reason = _business_skip_reason(message, context.bot.id)
         if reason:
+            if reason == "owner_message":
+                text = getattr(message, "text", "") or ""
+                if _is_legacy_owner_intro_text(text):
+                    connection_id = getattr(message, "business_connection_id", None)
+                    chat = getattr(message, "chat", None)
+                    chat_id = getattr(chat, "id", None)
+                    client_name = getattr(chat, "first_name", "") or "клиент"
+                    message_id = getattr(message, "message_id", None)
+
+                    if connection_id and message_id:
+                        try:
+                            await context.bot.delete_business_messages(
+                                business_connection_id=str(connection_id),
+                                message_ids=[int(message_id)],
+                            )
+                            logger.info(
+                                "Deleted legacy owner intro message %s on connection %s",
+                                message_id,
+                                connection_id,
+                            )
+                        except Exception as delete_error:
+                            logger.warning(
+                                "Failed to delete legacy owner intro message %s: %s",
+                                message_id,
+                                delete_error,
+                            )
+
+                    if connection_id and chat_id is not None:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=chat_id,
+                                text=content.build_welcome_message(client_name),
+                                reply_markup=build_business_menu_markup(),
+                                business_connection_id=str(connection_id),
+                            )
+                            logger.info(
+                                "Sent replacement welcome after owner intro for chat %s (connection %s)",
+                                chat_id,
+                                connection_id,
+                            )
+                        except Exception as send_error:
+                            logger.warning(
+                                "Failed to send replacement welcome for chat %s: %s",
+                                chat_id,
+                                send_error,
+                            )
             logger.info("Skip business update %s: reason=%s", update.update_id, reason)
             return
 

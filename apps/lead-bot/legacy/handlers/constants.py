@@ -40,6 +40,10 @@ CONSULTATION_CTA_MENU = [
     [InlineKeyboardButton("📞 Заказать консультацию", callback_data="magnet_consultation")],
 ]
 
+PERSONAL_MODE_RETURN_MENU = [
+    [InlineKeyboardButton("↩️ Вернуться к боту", callback_data="menu_return_to_bot")],
+]
+
 DOCUMENTS_MENU = [
     [
         InlineKeyboardButton("📄 Политика ПД", callback_data="doc_privacy"),
@@ -133,3 +137,7 @@ ADMIN_CLEANUP_MENU = [
     [InlineKeyboardButton("⚠️ ОЧИСТИТЬ ВСЁ", callback_data="cleanup_all")],
     [InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")]
 ]
+
+# Служебные ключи user_data для business-сценария контакта.
+BUSINESS_AWAITING_CONTACT_KEY = "business_awaiting_contact"
+BUSINESS_AWAITING_CONTACT_SOURCE_KEY = "business_awaiting_contact_source"

@@ -112,6 +112,15 @@ def _business_menu_markup() -> InlineKeyboardMarkup:
     )
 
 
+def build_business_menu_markup() -> InlineKeyboardMarkup:
+    """Публичный доступ к business-меню для роутера в bot.py."""
+    return _business_menu_markup()
+
+
+def _personal_mode_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
+
+
 def _clear_business_contact_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
     context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
@@ -138,6 +147,17 @@ def _looks_like_plain_greeting(text: str) -> bool:
         "доброе утро",
         "hello",
         "hi",
+    }
+
+
+def _looks_like_return_to_bot(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in {
+        "↩️ вернуться к боту",
+        "вернуться к боту",
+        "вернуться",
+        "/bot",
+        "бот",
     }
 
 
@@ -294,10 +314,14 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         )
         is_admin = user_id == config.ADMIN_TELEGRAM_ID
         allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        chat_mode = database.db.get_chat_mode(int(chat_id)) if chat_id is not None else "bot"
         
         # Обработка команды /start для бизнес-чата
         if text == "/start":
             _clear_business_contact_state(context)
+            if chat_id is not None:
+                database.db.set_chat_mode(int(chat_id), "bot")
             welcome_message = content.build_welcome_message(message.from_user.first_name)
             
             # Для бизнес-чатов используем InlineKeyboard (ReplyKeyboard не поддерживается)
@@ -341,6 +365,36 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id
             )
+            return
+
+        if text == "✉️ Личное обращение":
+            if chat_id is not None:
+                database.db.set_chat_mode(int(chat_id), "personal")
+            _clear_business_contact_state(context)
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=(
+                    "Чат переведен в личный режим.\n\n"
+                    "Теперь можете писать Андрею напрямую: бот не будет отвечать и не будет "
+                    "обрабатывать сообщения как лиды.\n\n"
+                    "Когда захотите снова пользоваться ботом, нажмите «↩️ Вернуться к боту»."
+                ),
+                reply_markup=_personal_mode_markup(),
+                business_connection_id=message.business_connection_id,
+            )
+            return
+
+        if chat_mode == "personal":
+            if _looks_like_return_to_bot(text):
+                if chat_id is not None:
+                    database.db.set_chat_mode(int(chat_id), "bot")
+                database.db.reset_user_funnel_state(user)
+                await context.bot.send_message(
+                    chat_id=message.chat.id,
+                    text=content.build_welcome_message(message.from_user.first_name),
+                    reply_markup=_business_menu_markup(),
+                    business_connection_id=message.business_connection_id,
+                )
             return
 
         # На первом сообщении-приветствии в business-режиме отдаем

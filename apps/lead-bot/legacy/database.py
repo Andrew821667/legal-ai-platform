@@ -245,11 +245,17 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     chat_id INTEGER UNIQUE NOT NULL,
                     is_enabled BOOLEAN DEFAULT 1,
+                    mode TEXT DEFAULT 'bot',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_states_chat_id ON chat_states(chat_id)")
+            cursor.execute("PRAGMA table_info(chat_states)")
+            chat_state_columns = [column[1] for column in cursor.fetchall()]
+            if 'mode' not in chat_state_columns:
+                cursor.execute("ALTER TABLE chat_states ADD COLUMN mode TEXT DEFAULT 'bot'")
+                logger.info("Added mode column to chat_states table")
             # Таблица для состояний business connection.
             # Нужна, чтобы гарантированно игнорировать апдейты после отключения.
             cursor.execute("""
@@ -310,6 +316,46 @@ class Database:
             logger.info("Chat %s %s", chat_id, "enabled" if enabled else "disabled")
         except Exception as e:
             logger.error(f"Error setting chat enabled state: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def get_chat_mode(self, chat_id: int) -> str:
+        """Режим чата: bot | personal."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT mode FROM chat_states WHERE chat_id = ?", (chat_id,))
+            row = cursor.fetchone()
+            mode = (row[0] if row and row[0] else "bot").strip().lower()
+            return mode if mode in {"bot", "personal"} else "bot"
+        finally:
+            conn.close()
+
+    def set_chat_mode(self, chat_id: int, mode: str) -> None:
+        """Устанавливает режим чата."""
+        normalized_mode = (mode or "bot").strip().lower()
+        if normalized_mode not in {"bot", "personal"}:
+            normalized_mode = "bot"
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO chat_states (chat_id, is_enabled, mode, updated_at)
+                VALUES (?, 1, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(chat_id) DO UPDATE SET
+                    mode = excluded.mode,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (chat_id, normalized_mode),
+            )
+            conn.commit()
+            logger.info("Chat %s switched to mode=%s", chat_id, normalized_mode)
+        except Exception as e:
+            logger.error(f"Error setting chat mode: {e}")
             conn.rollback()
             raise
         finally:
@@ -827,7 +873,7 @@ class Database:
         cta_variant: str = None,
         cta_shown: Optional[bool] = None,
     ) -> None:
-        """Синхронизация состояния воронки в таблице leads для аналитики."""
+        """Синхронизация состояния воронки в таблице leads для последнего лида пользователя."""
         updates = []
         values: List = []
 
@@ -851,12 +897,62 @@ class Database:
         try:
             values.append(user_id)
             cursor.execute(
-                f"UPDATE leads SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+                (
+                    f"UPDATE leads SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP "
+                    "WHERE id = ("
+                    "SELECT id FROM leads "
+                    "WHERE user_id = ? "
+                    "ORDER BY updated_at DESC, created_at DESC, id DESC "
+                    "LIMIT 1"
+                    ")"
+                ),
                 values,
             )
             conn.commit()
         except Exception as e:
             logger.error(f"Error updating lead funnel state: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def update_lead_funnel_state_by_id(
+        self,
+        lead_id: int,
+        conversation_stage: str = None,
+        cta_variant: str = None,
+        cta_shown: Optional[bool] = None,
+    ) -> None:
+        """Синхронизация состояния воронки для конкретного лида."""
+        updates = []
+        values: List = []
+
+        if conversation_stage is not None:
+            updates.append("conversation_stage = ?")
+            values.append(conversation_stage)
+
+        if cta_variant is not None:
+            updates.append("cta_variant = ?")
+            values.append(cta_variant)
+
+        if cta_shown is not None:
+            updates.append("cta_shown = ?")
+            values.append(1 if cta_shown else 0)
+
+        if not updates:
+            return
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            values.append(lead_id)
+            cursor.execute(
+                f"UPDATE leads SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values,
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error updating lead funnel state by id: {e}")
             conn.rollback()
             raise
         finally:
@@ -1019,13 +1115,45 @@ class Database:
         finally:
             conn.close()
 
+    def create_new_lead(self, user_id: int, lead_data: Dict) -> int:
+        """Принудительное создание нового лида, без merge с предыдущим."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cleaned = {k: v for k, v in (lead_data or {}).items() if v is not None}
+            fields = ["user_id"] + list(cleaned.keys())
+            values = [user_id] + list(cleaned.values())
+            placeholders = ["?"] * len(fields)
+
+            query = f"INSERT INTO leads ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+            cursor.execute(query, values)
+            lead_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"New lead {lead_id} created for user {user_id}")
+            return lead_id
+        except Exception as e:
+            logger.error(f"Error creating new lead: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def get_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
-        """Получение лида по user_id"""
+        """Получение последнего лида по user_id"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
-            cursor.execute("SELECT * FROM leads WHERE user_id = ?", (user_id,))
+            cursor.execute(
+                """
+                SELECT *
+                FROM leads
+                WHERE user_id = ?
+                ORDER BY updated_at DESC, created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
             row = cursor.fetchone()
 
             if row:
