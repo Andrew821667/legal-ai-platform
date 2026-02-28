@@ -111,6 +111,19 @@ def claim_scheduled_posts(
     return posts
 
 
+@router.get("/{post_id}", response_model=ScheduledPostOut)
+def get_scheduled_post(
+    post_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ScheduledPost:
+    _ = identity
+    post = db.get(ScheduledPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
+
+
 @router.patch("/{post_id}", response_model=ScheduledPostOut)
 def patch_scheduled_post(
     post_id: uuid.UUID,
@@ -122,10 +135,26 @@ def patch_scheduled_post(
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    post.status = payload.status
-    post.last_error = None if payload.status == ScheduledPostStatus.posted else payload.last_error
+    prev_status = post.status
+
+    if payload.title is not None:
+        post.title = payload.title
+    if payload.text is not None:
+        post.text = payload.text
+    if payload.publish_at is not None:
+        post.publish_at = payload.publish_at
+
+    if payload.status is not None:
+        post.status = payload.status
+        if payload.status == ScheduledPostStatus.posted:
+            post.last_error = None
+        elif payload.last_error is not None:
+            post.last_error = payload.last_error
+    elif payload.last_error is not None:
+        post.last_error = payload.last_error
+
     post.updated_at = datetime.now(timezone.utc)
-    if payload.status == ScheduledPostStatus.failed:
+    if payload.status == ScheduledPostStatus.failed and prev_status != ScheduledPostStatus.failed:
         post.attempts += 1
 
     db.add(post)

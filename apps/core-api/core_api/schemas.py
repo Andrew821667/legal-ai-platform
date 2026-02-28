@@ -98,7 +98,10 @@ class ScheduledPostCreate(BaseModel):
 
 
 class ScheduledPostPatch(BaseModel):
-    status: ScheduledPostStatus
+    status: ScheduledPostStatus | None = None
+    title: str | None = None
+    text: str | None = None
+    publish_at: datetime | None = None
     last_error: str | None = None
 
 

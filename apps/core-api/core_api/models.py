@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text as sa_text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -82,7 +82,7 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_text("true"))
 
 
 class User(Base):
@@ -130,7 +130,7 @@ class Lead(Base):
         Index(
             "ix_leads_telegram_user_id",
             "telegram_user_id",
-            postgresql_where=text("telegram_user_id IS NOT NULL"),
+            postgresql_where=sa_text("telegram_user_id IS NOT NULL"),
         ),
         Index("ix_leads_status", "status"),
     )
@@ -147,7 +147,7 @@ class Event(Base):
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     __table_args__ = (
-        Index("ix_events_lead_id", "lead_id", postgresql_where=text("lead_id IS NOT NULL")),
+        Index("ix_events_lead_id", "lead_id", postgresql_where=sa_text("lead_id IS NOT NULL")),
         Index("ix_events_created_at", "created_at"),
     )
 
@@ -182,13 +182,13 @@ class ScheduledPost(Base):
         Index(
             "ix_scheduled_posts_publish",
             "publish_at",
-            postgresql_where=text("status = 'scheduled'"),
+            postgresql_where=sa_text("status = 'scheduled'"),
         ),
         Index(
             "ix_scheduled_posts_source_hash",
             "source_hash",
             unique=True,
-            postgresql_where=text("source_hash IS NOT NULL"),
+            postgresql_where=sa_text("source_hash IS NOT NULL"),
         ),
     )
 
@@ -226,12 +226,12 @@ class ContractJob(Base):
             "ix_contract_jobs_queue",
             "priority",
             "created_at",
-            postgresql_where=text("status = 'new'"),
+            postgresql_where=sa_text("status = 'new'"),
         ),
         Index(
             "ix_contract_jobs_stale",
             "updated_at",
-            postgresql_where=text("status = 'processing'"),
+            postgresql_where=sa_text("status = 'processing'"),
         ),
     )
 
@@ -281,8 +281,8 @@ class AutomationControl(Base):
     scope: Mapped[Scope | None] = mapped_column(Enum(Scope, name="scope_enum"), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
-    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'::jsonb"))
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_text("true"))
+    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

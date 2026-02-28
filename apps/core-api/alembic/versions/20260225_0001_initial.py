@@ -16,19 +16,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    scope_enum = sa.Enum("bot", "news", "worker", "admin", name="scope_enum")
-    user_role_enum = sa.Enum("admin", "operator", "user", name="user_role_enum")
-    lead_source_enum = sa.Enum(
-        "telegram_bot", "website_form", "telegram_channel", name="lead_source_enum"
+    scope_enum = postgresql.ENUM("bot", "news", "worker", "admin", name="scope_enum", create_type=False)
+    user_role_enum = postgresql.ENUM("admin", "operator", "user", name="user_role_enum", create_type=False)
+    lead_source_enum = postgresql.ENUM(
+        "telegram_bot", "website_form", "telegram_channel", name="lead_source_enum", create_type=False
     )
-    lead_segment_enum = sa.Enum("inhouse", "law_firm", "entrepreneur", "other", name="lead_segment_enum")
-    lead_status_enum = sa.Enum("new", "qualified", "booked", "proposal", "won", "lost", name="lead_status_enum")
-    scheduled_post_status_enum = sa.Enum(
-        "draft", "scheduled", "publishing", "posted", "failed", name="scheduled_post_status_enum"
+    lead_segment_enum = postgresql.ENUM(
+        "inhouse", "law_firm", "entrepreneur", "other", name="lead_segment_enum", create_type=False
     )
-    contract_job_status_enum = sa.Enum("new", "processing", "done", "failed", name="contract_job_status_enum")
-    input_mode_enum = sa.Enum("text_only", "file_url", "file_upload_reference", name="input_mode_enum")
-    actor_type_enum = sa.Enum("user", "api_key", "system", name="actor_type_enum")
+    lead_status_enum = postgresql.ENUM(
+        "new", "qualified", "booked", "proposal", "won", "lost", name="lead_status_enum", create_type=False
+    )
+    scheduled_post_status_enum = postgresql.ENUM(
+        "draft", "scheduled", "publishing", "posted", "failed", name="scheduled_post_status_enum", create_type=False
+    )
+    contract_job_status_enum = postgresql.ENUM(
+        "new", "processing", "done", "failed", name="contract_job_status_enum", create_type=False
+    )
+    input_mode_enum = postgresql.ENUM(
+        "text_only", "file_url", "file_upload_reference", name="input_mode_enum", create_type=False
+    )
+    actor_type_enum = postgresql.ENUM("user", "api_key", "system", name="actor_type_enum", create_type=False)
 
     bind = op.get_bind()
     scope_enum.create(bind, checkfirst=True)

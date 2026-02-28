@@ -16,7 +16,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    scope_enum = sa.Enum("bot", "news", "worker", "admin", name="scope_enum", create_type=False)
+    scope_enum = postgresql.ENUM("bot", "news", "worker", "admin", name="scope_enum", create_type=False)
     op.create_table(
         "automation_controls",
         sa.Column("key", sa.String(length=120), primary_key=True, nullable=False),
