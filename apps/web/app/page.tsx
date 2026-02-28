@@ -7,6 +7,7 @@ import Services from "@/components/Services";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import Testimonials from "@/components/Testimonials";
 import LeadMagnets from "@/components/LeadMagnets";
+import LeadCaptureForm from "@/components/LeadCaptureForm";
 import FAQ from "@/components/FAQ";
 import TrustSignals from "@/components/TrustSignals";
 import FloatingCTAWrapper from "@/components/FloatingCTAWrapper";
@@ -36,6 +37,7 @@ export default function Home() {
       <ProcessTimeline />
       <Testimonials />
       <LeadMagnets />
+      <LeadCaptureForm />
       <FAQ />
       <TrustSignals />
       <FloatingCTAWrapper />

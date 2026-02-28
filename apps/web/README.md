@@ -54,6 +54,24 @@ npm run dev
 
 Сайт будет доступен по адресу: [http://localhost:3000](http://localhost:3000)
 
+### Запуск с новым ядром (`core-api`)
+
+1. Поднимите backend (`core-api`) на `http://127.0.0.1:8000`.
+2. Создайте `apps/web/.env.local` на основе `.env.example` и заполните:
+   - `CORE_API_URL`
+   - `CORE_API_BOT_KEY` (или `API_KEY_BOT`) для формы лидов
+   - `CORE_API_ADMIN_KEY` (или `API_KEY_ADMIN`)
+3. Запустите сайт:
+
+```bash
+npm install
+npm run dev
+```
+
+Проверка интеграции:
+- [http://localhost:3000/api/admin/automation-controls](http://localhost:3000/api/admin/automation-controls) должен возвращать JSON с control plane.
+- `POST /api/leads` на сайте проксирует лиды в `POST /api/v1/leads` core-api (source=`website_form`).
+
 ### Production build
 
 ```bash
