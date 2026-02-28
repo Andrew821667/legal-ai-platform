@@ -348,7 +348,7 @@ def main() -> int:
             "fetched": len(articles),
             "pool_selected": len(selected_articles),
             "slots_planned": len(publish_plan),
-            "created": created,
+            "created_posts": created,
             "previewed": previewed,
             "duplicates": duplicates,
             "failed": failed,
