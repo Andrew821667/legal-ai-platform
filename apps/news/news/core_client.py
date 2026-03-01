@@ -78,6 +78,41 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def lookup_post_by_telegram_message(
+        self,
+        message_id: int,
+        *,
+        channel_id: str | None = None,
+        channel_username: str | None = None,
+    ) -> requests.Response:
+        params: dict[str, Any] = {"message_id": message_id}
+        if channel_id:
+            params["channel_id"] = channel_id
+        if channel_username:
+            params["channel_username"] = channel_username
+        return requests.get(
+            f"{self.base_url}/api/v1/scheduled-posts/lookup/by-telegram-message",
+            params=params,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def create_post_feedback(self, post_id: str, payload: dict[str, Any]) -> requests.Response:
+        return requests.post(
+            f"{self.base_url}/api/v1/scheduled-posts/{post_id}/feedback",
+            json=payload,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def list_post_feedback(self, post_id: str, limit: int = 20) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/scheduled-posts/{post_id}/feedback",
+            params={"limit": limit},
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def workers_status(self) -> requests.Response:
         return requests.get(
             f"{self.base_url}/api/v1/workers/status",

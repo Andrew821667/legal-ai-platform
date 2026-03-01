@@ -6,8 +6,10 @@ import time
 import re
 import asyncio
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram_ui import inline_button as InlineKeyboardButton
+from telegram_ui import reply_button as KeyboardButton
 import database
 import ai_brain
 import lead_qualifier

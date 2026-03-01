@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from news.core_client import CoreClient
+from news.feedback import render_negative_feedback_context, select_negative_feedback_examples
 from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.pipeline import (
@@ -74,13 +75,15 @@ def _is_enabled(controls: dict[str, bool], key: str, default: bool = True) -> bo
     return controls.get(key, default)
 
 
-def _collect_history(client: CoreClient) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]]]:
+def _collect_history(
+    client: CoreClient,
+) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]], list[dict[str, str]]]:
     texts: list[str] = []
     source_urls: set[str] = set()
     recent_pillar_counts: dict[str, int] = {}
     posted_items: list[dict[str, str]] = []
 
-    for status in ("posted", "scheduled", "publishing"):
+    for status in ("posted", "review", "scheduled", "publishing"):
         try:
             response = client.list_posts(
                 limit=settings.news_history_scan_limit,
@@ -113,10 +116,12 @@ def _collect_history(client: CoreClient) -> tuple[list[str], set[str], dict[str,
                     "text": text,
                     "source_url": row.get("source_url") or "",
                     "publish_at": row.get("publish_at") or "",
+                    "feedback_snapshot": row.get("feedback_snapshot") or {},
+                    "id": str(row.get("id") or ""),
                 }
             )
 
-    return texts, source_urls, recent_pillar_counts, posted_items
+    return texts, source_urls, recent_pillar_counts, posted_items, select_negative_feedback_examples(posted_items)
 
 
 def _build_digest_candidate(now_utc: datetime, posted_items: list[dict[str, str]]) -> ArticleCandidate | None:
@@ -171,9 +176,15 @@ def main() -> int:
         logger.error("NEWS_SOURCE_URLS is empty; generator cannot run")
         return 1
 
-    history_texts, existing_source_urls, recent_pillar_counts, posted_items = _collect_history(core_client)
+    history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
+        core_client
+    )
     digest_enabled = _is_enabled(controls, "news.digest.enabled", True)
+    feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
     digest_candidate = _build_digest_candidate(now_utc, posted_items) if digest_enabled else None
+    negative_feedback_context = (
+        render_negative_feedback_context(negative_feedback_examples) if feedback_guard_enabled else ""
+    )
 
     articles = fetch_rss_articles(source_urls)
     priority_domains = _parse_priority_domains()
@@ -209,6 +220,7 @@ def main() -> int:
     created = 0
     previewed = 0
     duplicates = 0
+    feedback_skipped = 0
     failed = 0
     skipped_slots = 0
 
@@ -239,6 +251,28 @@ def main() -> int:
                 logger.info("source_url_duplicate_skipped", extra={"source_url": article.article_url})
                 continue
 
+            if feedback_guard_enabled and negative_feedback_examples:
+                candidate_text = f"{article.title}\n{article.summary}"
+                blocked_example: dict[str, str] | None = None
+                blocked_similarity = 0.0
+                for example in negative_feedback_examples:
+                    similarity = lexical_similarity(candidate_text, str(example.get("text") or ""))
+                    if similarity >= 0.76:
+                        blocked_example = example
+                        blocked_similarity = similarity
+                        break
+                if blocked_example is not None:
+                    feedback_skipped += 1
+                    logger.info(
+                        "feedback_guard_skipped_candidate",
+                        extra={
+                            "article_url": article.article_url,
+                            "matched_post_id": blocked_example.get("post_id"),
+                            "similarity": round(blocked_similarity, 4),
+                        },
+                    )
+                    continue
+
             query_text = f"{article.title}\n{article.summary}"
             rag_context = rag.find_context(query_text, history_limit=50, top_k=3)
             pillar = pillar_for_article(article)
@@ -248,6 +282,7 @@ def main() -> int:
                 format_type=format_type,
                 cta_type=cta_type,
                 pillar=pillar,
+                negative_feedback_context=negative_feedback_context,
             )
 
             max_similarity = 0.0
@@ -275,12 +310,14 @@ def main() -> int:
                 "title": generated["title"],
                 "text": generated["text"],
                 "rubric": generated["rubric"],
+                "format_type": format_type,
+                "cta_type": cta_type,
                 "source_url": article.article_url,
                 "source_hash": source_hash,
                 "channel_id": settings.telegram_channel_id or None,
                 "channel_username": settings.telegram_channel_username or None,
                 "publish_at": publish_at_utc.isoformat(),
-                "status": "scheduled",
+                "status": "review",
             }
 
             if args.dry_run:
@@ -351,6 +388,7 @@ def main() -> int:
             "created_posts": created,
             "previewed": previewed,
             "duplicates": duplicates,
+            "feedback_skipped": feedback_skipped,
             "failed": failed,
             "skipped_slots": skipped_slots,
             "dry_run": args.dry_run,

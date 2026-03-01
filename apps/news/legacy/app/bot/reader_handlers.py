@@ -12,13 +12,14 @@ from typing import Optional
 from uuid import UUID
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, ForceReply
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import structlog
+from app.bot.telegram_ui import inline_button as InlineKeyboardButton
 
 logger = structlog.get_logger()
 

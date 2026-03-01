@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     news_admin_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_channel_username: str = ""
+    news_discussion_chat_id: str = ""
+    news_discussion_chat_username: str = ""
     news_admin_ids: str = ""
     news_source_urls: str = ""
     tz_name: str = "Europe/Moscow"

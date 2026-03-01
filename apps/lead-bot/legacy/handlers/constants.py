@@ -1,7 +1,8 @@
 """
 Константы для handlers - меню кнопок и другие константы
 """
-from telegram import KeyboardButton, InlineKeyboardButton
+from telegram_ui import inline_button as InlineKeyboardButton
+from telegram_ui import reply_button as KeyboardButton
 
 # Меню кнопок
 MAIN_MENU = [

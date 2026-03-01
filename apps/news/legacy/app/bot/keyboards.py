@@ -4,8 +4,9 @@ Telegram Bot Keyboards
 """
 
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from app.bot.telegram_ui import inline_button as InlineKeyboardButton
 
 
 def add_utm_params(

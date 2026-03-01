@@ -82,6 +82,38 @@ uv run --package news python -m news.admin_bot
 Для одновременной работы с лид-ботом задайте отдельный токен `NEWS_ADMIN_BOT_TOKEN`
 (иначе оба процесса будут конфликтовать по long polling одного Telegram-бота).
 
+Важно для feedback pipeline:
+- `news-admin-bot` должен быть админом в канале публикации или иметь доступ к `message_reaction_count` updates по этому каналу;
+- если комментарии идут через linked discussion group, бот должен состоять в этой группе;
+- при необходимости ограничьте сбор комментариев env-переменными `NEWS_DISCUSSION_CHAT_ID` или `NEWS_DISCUSSION_CHAT_USERNAME`;
+- без этого реакции/комментарии не попадут в feedback snapshot и feedback-guard не будет иметь данных для фильтрации.
+
+Минимальные env для feedback:
+```bash
+TELEGRAM_CHANNEL_USERNAME=@legal_ai_pro
+NEWS_DISCUSSION_CHAT_ID=-100...
+# или NEWS_DISCUSSION_CHAT_USERNAME=...
+```
+
+Кастомные иконки кнопок Telegram:
+- Bot API поддерживает `icon_custom_emoji_id` для `KeyboardButton` и `InlineKeyboardButton`, но для показа нужны реальные document ID кастомных emoji;
+- в проекте для этого предусмотрены env-переменные:
+  - `NEWS_ADMIN_BUTTON_ICON_MAP`
+  - `LEAD_BOT_BUTTON_ICON_MAP`
+  - `NEWS_READER_BUTTON_ICON_MAP`
+- формат значения: `semantic_key=document_id,semantic_key=document_id`
+- рекомендуемый набор для текущего проекта:
+```bash
+NEWS_ADMIN_BUTTON_ICON_MAP=panel=5312486108309757006,create=5373251851074415873,sections=5357315181649076022,calendar=5433614043006903194,review=5357121491508928442,drafts=5373251851074415873,ready=5418085807791545980,posted=5309984423003823246,failed=5379748062124056162,queue=5434144690511290129,automation=5312016608254762256,summary=5350305691942788490,workers=5350554349074391003,help=5377316857231450742,publish=5309984423003823246,save=5373251851074415873
+LEAD_BOT_BUTTON_ICON_MAP=services=5357315181649076022,consultation=5312536423851630001,contact=5409357944619802453,profile=5357107601584693888,documents=5350481781306958339,personal=5310029292527164639,admin=5350554349074391003,restart=5408906741125490282,help=5377316857231450742,send_phone=5409357944619802453,telegram=5348436127038579546,consent_accept=5312138559556164615,consent_decline=5379748062124056162,policy=5350481781306958339,return_bot=5312486108309757006
+NEWS_READER_BUTTON_ICON_MAP=read_more=5309965701241379366,useful=5312536423851630001,not_interesting=5379748062124056162,digest_accept=5434144690511290129,digest_decline=5379748062124056162,save=5357315181649076022,digest=5434144690511290129,search=5309965701241379366,publish=5309984423003823246,create=5373251851074415873,share=5309984423003823246,question=5377316857231450742,idea=5312536423851630001
+```
+- после изменения этих env нужно перезапустить соответствующий бот.
+
+Проверка после запуска `news-admin-bot`:
+- в логах не должно быть постоянных `news_feedback_*_failed`;
+- после реакции/комментария под опубликованным постом в `scheduled_posts.feedback_snapshot` должны появляться поля `reaction_total`, `comments_total`, `score`.
+
 Запуск reader-бота (локально):
 ```bash
 cd apps/news/legacy
@@ -115,9 +147,11 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 - `Статус очереди` — оперативный статус draft/scheduled/failed;
 - `/posts` — вкладки постов (`draft`/`scheduled`/`failed`) с ручной публикацией и редактированием (manual/LLM);
 - в карточке поста доступны быстрые слоты перепланирования (`+1ч`, `19:00`, `завтра 10:00`);
+- в карточке поста виден `feedback snapshot` по реакциям и комментариям;
 - для `draft/failed` доступно пакетное действие «В готовые (все на странице)».
 - ручная публикация теперь идёт через confirm-step (кнопка подтверждения перед отправкой в канал).
 - `Включить всё/Отключить всё` — массовое управление news-автоматизациями.
+- отдельные тумблеры `news.feedback.collect.enabled` и `news.feedback.guard.enabled` отвечают за автоматический сбор сигналов и фильтрацию новых публикаций по слабой реакции аудитории.
 
 ## Backup/Restore
 Бэкап:

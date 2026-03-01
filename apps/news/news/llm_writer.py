@@ -212,6 +212,7 @@ class LLMNewsWriter:
         format_type: str = "standard",
         cta_type: str = "soft",
         pillar: str = "implementation",
+        negative_feedback_context: str = "",
     ) -> dict[str, str]:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         user_prompt = (
@@ -223,7 +224,8 @@ class LLMNewsWriter:
             f"{format_hint}\n"
             f"CTA-уровень: {cta_type}\n\n"
             f"Краткое содержание статьи:\n{article.summary[:3000]}\n\n"
-            f"{self._build_context(rag_examples)}"
+            f"{self._build_context(rag_examples)}\n\n"
+            f"{negative_feedback_context or 'Негативных сигналов по похожим постам не найдено.'}"
         )
 
         response = self.client.chat.completions.create(

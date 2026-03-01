@@ -28,7 +28,7 @@ def upgrade() -> None:
         "new", "qualified", "booked", "proposal", "won", "lost", name="lead_status_enum", create_type=False
     )
     scheduled_post_status_enum = postgresql.ENUM(
-        "draft", "scheduled", "publishing", "posted", "failed", name="scheduled_post_status_enum", create_type=False
+        "draft", "review", "scheduled", "publishing", "posted", "failed", name="scheduled_post_status_enum", create_type=False
     )
     contract_job_status_enum = postgresql.ENUM(
         "new", "processing", "done", "failed", name="contract_job_status_enum", create_type=False

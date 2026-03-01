@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -74,7 +75,7 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
     raise RuntimeError(f"Telegram request failed: {last_error}")
 
 
-def _send_to_telegram(text: str, media_urls: list[str] | None) -> None:
+def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
     chat_id = settings.telegram_channel_id or settings.telegram_channel_username
     if not chat_id:
         raise RuntimeError("TELEGRAM_CHANNEL_ID or TELEGRAM_CHANNEL_USERNAME is required")
@@ -89,7 +90,7 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> None:
         remainder = normalized_text[1020:].strip()
 
         photo_value = media.replace("tg://", "") if media.startswith("tg://") else media
-        _telegram_request(
+        response = _telegram_request(
             "sendPhoto",
             {
                 "chat_id": chat_id,
@@ -97,14 +98,19 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> None:
                 "caption": caption,
             },
         )
+        message_id = int(response.get("result", {}).get("message_id") or 0)
 
         if remainder:
             for part in _split_text_for_telegram(remainder):
                 _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
-        return
+        return message_id
 
+    primary_message_id = 0
     for part in _split_text_for_telegram(normalized_text):
-        _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        response = _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        if primary_message_id == 0:
+            primary_message_id = int(response.get("result", {}).get("message_id") or 0)
+    return primary_message_id
 
 
 def main() -> int:
@@ -135,8 +141,16 @@ def main() -> int:
     for post in posts:
         post_id = post["id"]
         try:
-            _send_to_telegram(post["text"], post.get("media_urls"))
-            patch = client.patch_post(post_id, {"status": "posted", "last_error": None})
+            message_id = _send_to_telegram(post["text"], post.get("media_urls"))
+            patch = client.patch_post(
+                post_id,
+                {
+                    "status": "posted",
+                    "last_error": None,
+                    "telegram_message_id": message_id or None,
+                    "posted_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
             patch.raise_for_status()
             consecutive_errors = 0
             logger.info("post_published", extra={"post_id": post_id})

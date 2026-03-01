@@ -49,6 +49,22 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "config": {},
     },
     {
+        "key": "news.feedback.collect.enabled",
+        "scope": Scope.news,
+        "title": "Сбор feedback из Telegram",
+        "description": "Сбор реакций и комментариев под опубликованными постами.",
+        "enabled": True,
+        "config": {},
+    },
+    {
+        "key": "news.feedback.guard.enabled",
+        "scope": Scope.news,
+        "title": "Feedback-guard генерации",
+        "description": "Фильтрация новых публикаций на основе слабой реакции аудитории на похожие посты.",
+        "enabled": True,
+        "config": {},
+    },
+    {
         "key": "lead_bot.autorespond.enabled",
         "scope": Scope.bot,
         "title": "Автоответы лид-бота",

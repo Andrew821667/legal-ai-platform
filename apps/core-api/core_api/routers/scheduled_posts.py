@@ -12,8 +12,9 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api.models import ActorType, ScheduledPost, ScheduledPostStatus, Scope
-from core_api.schemas import ScheduledPostCreate, ScheduledPostOut, ScheduledPostPatch
+from core_api.models import ActorType, PostFeedbackSignal, ScheduledPost, ScheduledPostStatus, Scope
+from core_api.post_feedback import apply_feedback_signal
+from core_api.schemas import PostFeedbackCreate, PostFeedbackOut, ScheduledPostCreate, ScheduledPostOut, ScheduledPostPatch
 
 router = APIRouter(prefix="/api/v1/scheduled-posts", tags=["scheduled-posts"])
 
@@ -58,6 +59,27 @@ def list_scheduled_posts(
             )
         )
     return list(db.execute(stmt).scalars().all())
+
+
+@router.get("/lookup/by-telegram-message", response_model=ScheduledPostOut)
+def lookup_scheduled_post_by_telegram_message(
+    message_id: int = Query(ge=1),
+    channel_id: str | None = Query(default=None),
+    channel_username: str | None = Query(default=None),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ScheduledPost:
+    _ = identity
+    stmt = select(ScheduledPost).where(ScheduledPost.telegram_message_id == message_id)
+    if channel_id:
+        stmt = stmt.where(ScheduledPost.channel_id == channel_id)
+    elif channel_username:
+        stmt = stmt.where(ScheduledPost.channel_username == channel_username)
+
+    post = db.execute(stmt.order_by(ScheduledPost.posted_at.desc().nullslast(), ScheduledPost.created_at.desc())).scalars().first()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
 
 
 @router.post("/claim", response_model=list[ScheduledPostOut])
@@ -143,6 +165,16 @@ def patch_scheduled_post(
         post.text = payload.text
     if payload.publish_at is not None:
         post.publish_at = payload.publish_at
+    if payload.format_type is not None:
+        post.format_type = payload.format_type
+    if payload.cta_type is not None:
+        post.cta_type = payload.cta_type
+    if payload.telegram_message_id is not None:
+        post.telegram_message_id = payload.telegram_message_id
+    if payload.posted_at is not None:
+        post.posted_at = payload.posted_at
+    if payload.feedback_snapshot is not None:
+        post.feedback_snapshot = payload.feedback_snapshot
 
     if payload.status is not None:
         post.status = payload.status
@@ -170,6 +202,68 @@ def patch_scheduled_post(
     db.commit()
     db.refresh(post)
     return post
+
+
+@router.post("/{post_id}/feedback", response_model=PostFeedbackOut)
+def create_post_feedback(
+    post_id: uuid.UUID,
+    payload: PostFeedbackCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> PostFeedbackSignal:
+    post = db.get(ScheduledPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    now = datetime.now(timezone.utc)
+    signal = PostFeedbackSignal(post_id=post_id, **payload.model_dump())
+    db.add(signal)
+    db.flush()
+
+    post.feedback_snapshot = apply_feedback_signal(
+        post.feedback_snapshot,
+        source=payload.source.value,
+        signal_value=payload.signal_value,
+        text=payload.text,
+        payload=payload.payload,
+        created_at_iso=now.isoformat(),
+    )
+    post.updated_at = now
+    db.add(post)
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="post.feedback.create",
+        target_type="scheduled_post",
+        target_id=post.id,
+        details={"source": payload.source.value, "signal_key": payload.signal_key},
+    )
+    db.commit()
+    db.refresh(signal)
+    return signal
+
+
+@router.get("/{post_id}/feedback", response_model=list[PostFeedbackOut])
+def list_post_feedback(
+    post_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> list[PostFeedbackSignal]:
+    _ = identity
+    post = db.get(ScheduledPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    stmt = (
+        select(PostFeedbackSignal)
+        .where(PostFeedbackSignal.post_id == post_id)
+        .order_by(PostFeedbackSignal.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 @router.post("/reset-stale", response_model=dict[str, int])
