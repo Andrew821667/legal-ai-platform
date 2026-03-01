@@ -36,6 +36,23 @@ make deploy
 - идемпотентно проверяет admin key,
 - перезапускает только изменившиеся сервисы.
 
+Критичное правило для `lead-bot`:
+- production compose поднимает `lead-bot` из образа `LEAD_BOT_IMAGE`, а не через `build`;
+- поэтому изменения в `apps/lead-bot/pyproject.toml` и корневом `uv.lock` не попадут на VPS одним только `make deploy`;
+- если менялись зависимости лид-бота, сначала нужно пересобрать и запушить образ `lead-bot`, и только потом выполнять `make deploy`;
+- частный случай: `python-telegram-bot[job-queue]` нужен для фонового scheduler'а. Если образ не пересобран, бот стартует с предупреждением `JobQueue is not available`, и отложенные уведомления по лидам будут выключены.
+
+Минимальная проверка после деплоя лид-бота:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml logs --tail=50 lead-bot
+```
+В логах должно быть:
+- `Scheduler started`
+- `Added job "pending_leads_notifier"`
+
+В логах не должно быть:
+- `JobQueue is not available`
+
 ## Ночные и периодические задачи (cron)
 News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
 по интервалам `NEWS_GENERATE_INTERVAL_SECONDS` и `NEWS_PUBLISH_INTERVAL_SECONDS`.
