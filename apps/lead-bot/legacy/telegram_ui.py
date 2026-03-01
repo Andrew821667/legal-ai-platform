@@ -26,6 +26,23 @@ def _read_env_value(env_file: Path, key: str) -> str:
     return ""
 
 
+def normalize_button_text(text: str | None) -> str:
+    normalized = " ".join((text or "").split())
+    if not normalized:
+        return ""
+    def _has_wordish_char(token: str) -> bool:
+        for char in token:
+            lower = char.lower()
+            if char.isdigit() or ("a" <= lower <= "z") or ("а" <= lower <= "я") or lower == "ё":
+                return True
+        return False
+    tokens = normalized.split(" ")
+    while len(tokens) > 1 and not _has_wordish_char(tokens[0]):
+        tokens.pop(0)
+    result = " ".join(tokens).strip()
+    return result or normalized
+
+
 def _parse_button_icon_map(raw: str) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for chunk in (raw or "").split(","):
@@ -49,20 +66,20 @@ def _button_icon_map() -> dict[str, str]:
 
 
 def _infer_icon_key(text: str | None) -> str | None:
-    label = (text or "").strip()
+    label = normalize_button_text(text)
     normalized = label.lower()
     if not normalized:
         return None
     exact = {
-        "📋 меню услуг": "services",
-        "📞 консультация": "consultation",
-        "📲 контакт": "contact",
-        "👤 мой профиль": "profile",
-        "📚 документы": "documents",
-        "✉️ личное обращение": "personal",
-        "⚙️ админ-панель": "admin",
-        "🔄 начать заново": "restart",
-        "❓ помощь": "help",
+        "меню услуг": "services",
+        "консультация": "consultation",
+        "контакт": "contact",
+        "мой профиль": "profile",
+        "документы": "documents",
+        "личное обращение": "personal",
+        "админ-панель": "admin",
+        "начать заново": "restart",
+        "помощь": "help",
     }
     if normalized in exact:
         return exact[normalized]
@@ -92,7 +109,7 @@ def _infer_style(text: str | None) -> str | None:
     label = (text or "").strip()
     if not label:
         return None
-    normalized = label.lower()
+    normalized = normalize_button_text(label).lower()
     if label.startswith("✅") or any(
         token in normalized
         for token in (
@@ -141,8 +158,9 @@ def inline_button(text: str, *args: Any, style: str | None = None, icon_custom_e
         icon_key = _infer_icon_key(text)
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
+    display_text = normalize_button_text(text) if icon_custom_emoji_id else text
     return _InlineKeyboardButton(
-        text,
+        display_text,
         *args,
         api_kwargs=_merge_api_kwargs(
             style=style or _infer_style(text),
@@ -159,8 +177,9 @@ def reply_button(text: str, *args: Any, style: str | None = None, icon_custom_em
         icon_key = _infer_icon_key(text)
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
+    display_text = normalize_button_text(text) if icon_custom_emoji_id else text
     return _KeyboardButton(
-        text,
+        display_text,
         *args,
         api_kwargs=_merge_api_kwargs(
             style=style or _infer_style(text),

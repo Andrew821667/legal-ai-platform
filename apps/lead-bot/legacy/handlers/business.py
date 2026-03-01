@@ -10,6 +10,7 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
+from telegram_ui import normalize_button_text
 import database
 import ai_brain
 import lead_qualifier
@@ -26,6 +27,10 @@ from handlers.helpers import notify_admin_new_lead, extract_email
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
+
+
+def _button_text_equals(text: str | None, expected: str) -> bool:
+    return normalize_button_text(text).casefold() == normalize_button_text(expected).casefold()
 
 
 def _schedule_business_typing(context: ContextTypes.DEFAULT_TYPE, message, user_id: int) -> None:
@@ -153,7 +158,7 @@ def _looks_like_plain_greeting(text: str) -> bool:
 
 
 def _looks_like_return_to_bot(text: str) -> bool:
-    normalized = (text or "").strip().lower()
+    normalized = normalize_button_text(text).strip().lower()
     return normalized in {
         "↩️ вернуться к боту",
         "вернуться к боту",
@@ -164,7 +169,7 @@ def _looks_like_return_to_bot(text: str) -> bool:
 
 
 def _looks_like_new_topic_after_handoff(text: str) -> bool:
-    normalized = (text or "").strip().lower()
+    normalized = normalize_button_text(text).strip().lower()
     if not normalized:
         return False
     if _looks_like_ack_only(normalized):
@@ -354,7 +359,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             return
         
         # Обработка команды сброса
-        if text in {"🔄 Начать заново", "🔄 Начать сначала"} or text.strip().lower() in {"/reset", "reset", "сброс"}:
+        if _button_text_equals(text, "🔄 Начать заново") or _button_text_equals(text, "🔄 Начать сначала") or text.strip().lower() in {"/reset", "reset", "сброс"}:
             _clear_business_contact_state(context)
             user_data = database.db.get_user_by_telegram_id(user_id)
             if user_data:
@@ -369,7 +374,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             )
             return
 
-        if text == "✉️ Личное обращение":
+        if _button_text_equals(text, "✉️ Личное обращение"):
             if chat_id is not None:
                 database.db.set_chat_mode(int(chat_id), "personal")
             _clear_business_contact_state(context)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
+    _button_icon_map,
     _main_menu_markup,
     _batch_mode_label,
     _batch_mode_limit,
@@ -146,14 +147,22 @@ def test_format_workers_status_payload() -> None:
     assert "news-publish" in text
 
 
-def test_main_menu_markup_is_compact_and_has_sections() -> None:
-    markup = _main_menu_markup()
-    rows = [[button.text for button in row] for row in markup.keyboard]
-    assert rows == [
-        ["🏠 Панель", "➕ Создать"],
-        ["🗓 Календарь", "📚 Разделы"],
-        ["ℹ️ Помощь"],
-    ]
+def test_main_menu_markup_is_compact_and_has_sections(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "NEWS_ADMIN_BUTTON_ICON_MAP",
+        "panel=1,create=1,calendar=1,sections=1,help=1",
+    )
+    _button_icon_map.cache_clear()
+    try:
+        markup = _main_menu_markup()
+        rows = [[button.text for button in row] for row in markup.keyboard]
+        assert rows == [
+            ["Панель", "Создать"],
+            ["Календарь", "Разделы"],
+            ["Помощь"],
+        ]
+    finally:
+        _button_icon_map.cache_clear()
 
 
 def test_main_menu_buttons_include_style_in_payload() -> None:

@@ -321,6 +321,23 @@ def _read_env_value(env_file: Path, key: str) -> str:
     return ""
 
 
+def _normalize_button_text(text: str | None) -> str:
+    normalized = " ".join((text or "").split())
+    if not normalized:
+        return ""
+    def _has_wordish_char(token: str) -> bool:
+        for char in token:
+            lower = char.lower()
+            if char.isdigit() or ("a" <= lower <= "z") or ("а" <= lower <= "я") or lower == "ё":
+                return True
+        return False
+    tokens = normalized.split(" ")
+    while len(tokens) > 1 and not _has_wordish_char(tokens[0]):
+        tokens.pop(0)
+    result = " ".join(tokens).strip()
+    return result or normalized
+
+
 @lru_cache(maxsize=1)
 def _button_icon_map() -> dict[str, str]:
     raw = os.getenv(_NEWS_ADMIN_BUTTON_ICON_ENV, "").strip()
@@ -330,19 +347,19 @@ def _button_icon_map() -> dict[str, str]:
 
 
 def _infer_button_icon_key(text: str | None) -> str | None:
-    label = (text or "").strip()
+    label = _normalize_button_text(text)
     normalized = label.lower()
     if not normalized:
         return None
     exact = {
-        "🏠 панель": "panel",
-        "➕ создать": "create",
-        "📚 разделы": "sections",
-        "🗓 календарь": "calendar",
-        "ℹ️ помощь": "help",
-        "🤖 автоматизация": "automation",
-        "📊 сводка": "summary",
-        "👷 воркеры": "workers",
+        "панель": "panel",
+        "создать": "create",
+        "разделы": "sections",
+        "календарь": "calendar",
+        "помощь": "help",
+        "автоматизация": "automation",
+        "сводка": "summary",
+        "воркеры": "workers",
     }
     if normalized in exact:
         return exact[normalized]
@@ -371,7 +388,7 @@ def _infer_button_style(text: str | None) -> str | None:
     label = (text or "").strip()
     if not label:
         return None
-    normalized = label.lower()
+    normalized = _normalize_button_text(label).lower()
     if label.startswith("✅") or any(
         token in normalized
         for token in (
@@ -406,8 +423,9 @@ def InlineKeyboardButton(text: str, *args: Any, **kwargs: Any) -> _PTBInlineKeyb
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
     api_kwargs = kwargs.pop("api_kwargs", None)
+    display_text = _normalize_button_text(text) if icon_custom_emoji_id else text
     return _PTBInlineKeyboardButton(
-        text,
+        display_text,
         *args,
         api_kwargs=_button_api_kwargs(
             style=style,
@@ -426,8 +444,9 @@ def KeyboardButton(text: str, *args: Any, **kwargs: Any) -> _PTBKeyboardButton:
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
     api_kwargs = kwargs.pop("api_kwargs", None)
+    display_text = _normalize_button_text(text) if icon_custom_emoji_id else text
     return _PTBKeyboardButton(
-        text,
+        display_text,
         *args,
         api_kwargs=_button_api_kwargs(
             style=style,
@@ -468,6 +487,10 @@ def _reply_button(
         style=style,
         icon_custom_emoji_id=icon_custom_emoji_id,
     )
+
+
+def _button_text_equals(text: str | None, expected: str) -> bool:
+    return _normalize_button_text(text).casefold() == _normalize_button_text(expected).casefold()
 
 
 def _is_scope_error(exc: Exception) -> bool:
@@ -2804,19 +2827,19 @@ class NewsAdminBot:
 
         pending = context.user_data.get(_STATE_PENDING_EDIT)
         if not pending:
-            if message_text == _MAIN_MENU_PANEL:
+            if _button_text_equals(message_text, _MAIN_MENU_PANEL):
                 await self.cmd_panel(update, context)
                 return
-            if message_text == _MAIN_MENU_CREATE:
+            if _button_text_equals(message_text, _MAIN_MENU_CREATE):
                 await self.cmd_new_post(update, context)
                 return
-            if message_text == _MAIN_MENU_CALENDAR:
+            if _button_text_equals(message_text, _MAIN_MENU_CALENDAR):
                 await self.cmd_calendar(update, context)
                 return
-            if message_text == _MAIN_MENU_SECTIONS:
+            if _button_text_equals(message_text, _MAIN_MENU_SECTIONS):
                 await self.cmd_sections(update, context)
                 return
-            if message_text == _MAIN_MENU_HELP:
+            if _button_text_equals(message_text, _MAIN_MENU_HELP):
                 await self.cmd_help(update, context)
                 return
             await update.effective_message.reply_text(

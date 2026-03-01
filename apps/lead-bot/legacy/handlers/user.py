@@ -11,6 +11,7 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
+from telegram_ui import normalize_button_text
 import database
 import ai_brain
 import lead_qualifier
@@ -29,6 +30,10 @@ logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
 _EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
 _EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
+
+
+def _button_text_equals(text: str | None, expected: str) -> bool:
+    return normalize_button_text(text).casefold() == normalize_button_text(expected).casefold()
 
 # Import admin panel function (avoid at module level due to potential circular import)
 def get_show_admin_panel():
@@ -445,7 +450,7 @@ def _looks_like_plain_greeting(text: str) -> bool:
 
 
 def _looks_like_return_to_bot(text: str) -> bool:
-    normalized = (text or "").strip().lower()
+    normalized = normalize_button_text(text).strip().lower()
     return normalized in {
         "↩️ вернуться к боту",
         "вернуться к боту",
@@ -456,7 +461,7 @@ def _looks_like_return_to_bot(text: str) -> bool:
 
 
 def _looks_like_new_topic_after_handoff(text: str) -> bool:
-    normalized = (text or "").strip().lower()
+    normalized = normalize_button_text(text).strip().lower()
     if not normalized:
         return False
     if _looks_like_ack_only(normalized):
@@ -466,9 +471,9 @@ def _looks_like_new_topic_after_handoff(text: str) -> bool:
     if normalized in {
         "/menu", "menu", "/меню", "меню",
         "/reset", "reset", "сброс",
-        "📋 меню услуг", "📞 консультация", "✉️ заказать консультацию",
-        "✉️ личное обращение", "👤 мой профиль", "📚 документы",
-        "🔄 начать заново", "⚙️ админ-панель",
+        "меню услуг", "консультация", "заказать консультацию",
+        "личное обращение", "мой профиль", "документы",
+        "начать заново", "админ-панель",
     }:
         return False
     return len(normalized) >= 3
@@ -896,7 +901,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if handled_admin_lookup:
                 return
 
-        if message_text == "✉️ Личное обращение":
+        if _button_text_equals(message_text, "✉️ Личное обращение"):
             database.db.set_chat_mode(chat_id, "personal")
             await utils.safe_reply_text(
                 original_message,
@@ -953,7 +958,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         profile_edit_field = context.user_data.get("profile_edit_field")
         if profile_edit_field:
-            if message_text == "⬅️ Отмена":
+            if _button_text_equals(message_text, "⬅️ Отмена"):
                 context.user_data.pop("profile_edit_field", None)
                 await utils.safe_reply_text(
                     original_message,
@@ -1124,11 +1129,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("New lead %s created from new topic after handoff for user %s", new_lead_id, user.id)
 
         # Обработка кнопок reply-меню
-        if message_text == "📋 Меню услуг" or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
+        if _button_text_equals(message_text, "📋 Меню услуг") or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
             await menu_command(update, context)
             return
 
-        if message_text in {"📞 Консультация", "✉️ Заказать консультацию"}:
+        if _button_text_equals(message_text, "📞 Консультация") or _button_text_equals(message_text, "✉️ Заказать консультацию"):
             if allow_lead_processing:
                 database.db.create_or_update_lead(
                     user_data["id"],
@@ -1146,7 +1151,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if message_text == "⬅️ Отмена":
+        if _button_text_equals(message_text, "⬅️ Отмена"):
             await utils.safe_reply_text(
                 original_message,
                 "Ок, вернул основное меню.",
@@ -1155,20 +1160,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if message_text == "👤 Мой профиль":
+        if _button_text_equals(message_text, "👤 Мой профиль"):
             await profile_command(update, context)
             return
 
-        if message_text == "📚 Документы":
+        if _button_text_equals(message_text, "📚 Документы"):
             await documents_command(update, context)
             return
 
-        if message_text == "🔄 Начать заново":
+        if _button_text_equals(message_text, "🔄 Начать заново"):
             await reset_command(update, context)
             return
 
         # Админ-панель (только для админа)
-        if message_text == "⚙️ Админ-панель":
+        if _button_text_equals(message_text, "⚙️ Админ-панель"):
             if user.id == config.ADMIN_TELEGRAM_ID:
                 show_admin_panel_func = get_show_admin_panel()
                 await show_admin_panel_func(update, context)

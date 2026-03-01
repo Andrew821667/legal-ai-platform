@@ -26,6 +26,23 @@ def _read_env_value(env_file: Path, key: str) -> str:
     return ""
 
 
+def normalize_button_text(text: str | None) -> str:
+    normalized = " ".join((text or "").split())
+    if not normalized:
+        return ""
+    def _has_wordish_char(token: str) -> bool:
+        for char in token:
+            lower = char.lower()
+            if char.isdigit() or ("a" <= lower <= "z") or ("а" <= lower <= "я") or lower == "ё":
+                return True
+        return False
+    tokens = normalized.split(" ")
+    while len(tokens) > 1 and not _has_wordish_char(tokens[0]):
+        tokens.pop(0)
+    result = " ".join(tokens).strip()
+    return result or normalized
+
+
 def _parse_button_icon_map(raw: str) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for chunk in (raw or "").split(","):
@@ -49,16 +66,16 @@ def _button_icon_map() -> dict[str, str]:
 
 
 def _infer_icon_key(text: str | None) -> str | None:
-    label = (text or "").strip()
+    label = normalize_button_text(text)
     normalized = label.lower()
     if not normalized:
         return None
     exact = {
-        "📖 читать полностью": "read_more",
-        "👍 полезно": "useful",
-        "👎 не интересно": "not_interesting",
-        "🎯 да, хочу персональный дайджест!": "digest_accept",
-        "❌ пока не интересно": "digest_decline",
+        "читать полностью": "read_more",
+        "полезно": "useful",
+        "не интересно": "not_interesting",
+        "да, хочу персональный дайджест!": "digest_accept",
+        "пока не интересно": "digest_decline",
     }
     if normalized in exact:
         return exact[normalized]
@@ -84,7 +101,7 @@ def _infer_style(text: str | None) -> str | None:
     label = (text or "").strip()
     if not label:
         return None
-    normalized = label.lower()
+    normalized = normalize_button_text(label).lower()
     if label.startswith(("✅", "👍")) or any(
         token in normalized
         for token in (
@@ -116,11 +133,12 @@ def inline_button(*, text: str, style: str | None = None, icon_custom_emoji_id: 
         icon_key = _infer_icon_key(text)
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
+    display_text = normalize_button_text(text) if icon_custom_emoji_id else text
     if resolved_style:
         extra_data["style"] = resolved_style
     if icon_custom_emoji_id:
         extra_data["icon_custom_emoji_id"] = icon_custom_emoji_id
-    return _InlineKeyboardButton(text=text, **extra_data)
+    return _InlineKeyboardButton(text=display_text, **extra_data)
 
 
 def reply_button(*, text: str, style: str | None = None, icon_custom_emoji_id: str | None = None, **kwargs: Any):
@@ -130,8 +148,9 @@ def reply_button(*, text: str, style: str | None = None, icon_custom_emoji_id: s
         icon_key = _infer_icon_key(text)
         if icon_key:
             icon_custom_emoji_id = _button_icon_map().get(icon_key)
+    display_text = normalize_button_text(text) if icon_custom_emoji_id else text
     if resolved_style:
         extra_data["style"] = resolved_style
     if icon_custom_emoji_id:
         extra_data["icon_custom_emoji_id"] = icon_custom_emoji_id
-    return _KeyboardButton(text=text, **extra_data)
+    return _KeyboardButton(text=display_text, **extra_data)

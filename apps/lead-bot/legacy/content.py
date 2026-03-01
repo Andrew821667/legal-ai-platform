@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from config import Config
+from telegram_ui import normalize_button_text
 
 
 config = Config()
@@ -150,7 +151,13 @@ def menu_response_by_key(key: str) -> str:
 
 
 def menu_response_by_button(button_text: str) -> str:
+    normalized_text = normalize_button_text(button_text)
     key = BUTTON_TO_MENU_KEY.get(button_text)
+    if not key:
+        for button_key, menu_key in BUTTON_TO_MENU_KEY.items():
+            if normalize_button_text(button_key) == normalized_text:
+                key = menu_key
+                break
     if not key:
         return "Выберите пункт меню."
     return menu_response_by_key(key)
