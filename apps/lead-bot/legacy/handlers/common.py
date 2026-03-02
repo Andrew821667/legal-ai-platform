@@ -44,7 +44,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update.callback_query,
                 action="error_handler_callback_answer",
             )
-        except Exception as callback_error:
+        except (BadRequest, NetworkError, TimedOut) as callback_error:
             logger.warning("Failed to answer callback in error handler: %s", callback_error)
 
     if not update or not update.effective_message:
@@ -68,7 +68,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_text,
             action="error_handler_notify_user",
         )
-    except Exception as notify_error:
+    except (BadRequest, NetworkError, TimedOut) as notify_error:
         logger.warning("Failed to notify user from error handler: %s", notify_error)
 
 

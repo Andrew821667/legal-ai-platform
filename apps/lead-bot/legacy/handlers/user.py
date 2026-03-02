@@ -2,12 +2,14 @@
 Handlers: user
 """
 import logging
+import sqlite3
 import time
 import re
 import asyncio
 from typing import Optional, Dict
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
@@ -374,7 +376,7 @@ def _schedule_typing_indicator(chat, user_telegram_id: int) -> None:
         try:
             await asyncio.wait_for(chat.send_action(action="typing"), timeout=1.5)
             logger.info(f"Typing indicator sent for user {user_telegram_id}")
-        except Exception as error:
+        except (asyncio.TimeoutError, TelegramError, OSError) as error:
             logger.debug(f"Typing indicator skipped for user {user_telegram_id}: {error}")
 
     asyncio.create_task(_send_typing())
@@ -544,7 +546,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             action="start_welcome",
         )
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in start_command: {e}")
         await utils.safe_reply_text(update.message, "Произошла ошибка. Попробуйте еще раз.", action="start_fallback_error")
 
@@ -720,7 +722,7 @@ async def correct_data_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         await context.bot.send_message(chat_id=config.ADMIN_TELEGRAM_ID, text=admin_text)
-    except Exception as e:
+    except TelegramError as e:
         logger.warning(f"Failed to notify admin about correct_data request: {e}")
 
     await update.message.reply_text("✅ Запрос на исправление данных отправлен команде.")
@@ -745,7 +747,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await start_command(update, context)
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in reset_command: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте /start")
 
@@ -765,12 +767,12 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Menu shown to user {update.effective_user.id}")
         
-    except Exception as e:
+    except (TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in menu_command: {e}")
         try:
             if update.effective_message:
                 await update.effective_message.reply_text("Произошла ошибка. Попробуйте /start")
-        except:
+        except TelegramError:
             pass
 
 
@@ -1107,7 +1109,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     payload={"message": message_text[:300], "from_stage": "handoff", "to_stage": "discover"},
                     lead_id=new_lead_id,
                 )
-            except Exception as analytics_error:
+            except (sqlite3.Error, KeyError) as analytics_error:
                 logger.warning(f"Failed to track new_topic_after_handoff: {analytics_error}")
 
             new_lead_payload_db = database.db.get_lead_by_id(new_lead_id) or {}
@@ -1279,7 +1281,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             last_update_time = current_time
                             chunk_buffer = ""
                             logger.debug(f"Initial message sent: {len(full_response)} chars")
-                        except Exception as e:
+                        except TelegramError as e:
                             logger.warning(f"Failed to send initial message: {e}")
                 else:
                     try:
@@ -1293,7 +1295,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         last_update_time = current_time
                         chunk_buffer = ""
                         logger.debug(f"Message updated: {len(full_response)} chars")
-                    except Exception as e:
+                    except TelegramError as e:
                         logger.debug(f"Skipped update (rate limit): {e}")
 
         generation_time = time.time() - start_generation
@@ -1317,7 +1319,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if sent_message:
                 try:
                     await sent_message.delete()
-                except Exception:
+                except TelegramError:
                     pass
 
             for i, part in enumerate(parts):
@@ -1335,7 +1337,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         action="streaming_final_update",
                     )
                     logger.debug("Final message update sent")
-                except Exception:
+                except TelegramError:
                     pass
             else:
                 await utils.safe_reply_text(
@@ -1351,7 +1353,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=_consultation_cta_markup(),
                 )
                 consultation_button_sent = True
-            except Exception as cta_error:
+            except TelegramError as cta_error:
                 logger.warning(f"Failed to send consultation CTA button: {cta_error}")
 
         database.db.add_message(user_data["id"], "assistant", full_response)
@@ -1381,7 +1383,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     },
                     lead_id=lead_id,
                 )
-            except Exception as analytics_error:
+            except (sqlite3.Error, KeyError) as analytics_error:
                 logger.warning(f"Failed to track cta_shown event: {analytics_error}")
 
         # 🛡️ УЧЕТ ИСПОЛЬЗОВАННЫХ ТОКЕНОВ
@@ -1421,7 +1423,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         payload={"from": current_stage, "to": next_stage},
                         lead_id=lead_id,
                     )
-                except Exception as analytics_error:
+                except (sqlite3.Error, KeyError) as analytics_error:
                     logger.warning(f"Failed to track stage_changed event: {analytics_error}")
 
             cta_was_shown = cta_shown
@@ -1486,14 +1488,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 payload={"variant": cta_variant, "stage": next_stage, "source": "lead_magnet_offer"},
                                 lead_id=processed_lead_id,
                             )
-                        except Exception as analytics_error:
+                        except (sqlite3.Error, KeyError) as analytics_error:
                             logger.warning(f"Failed to track lead magnet CTA show: {analytics_error}")
-                except Exception as background_error:
+                except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError) as background_error:
                     logger.warning(f"Background lead processing failed for user {user_db_id}: {background_error}")
 
             asyncio.create_task(_post_response_lead_processing())
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError, OSError) as e:
         if "Peer_id_invalid" not in str(e):
             logger.error(f"Error in handle_message: {e}")
 
@@ -1587,7 +1589,7 @@ async def handle_handoff_request(
                     payload={"from": previous_stage, "to": "handoff"},
                     lead_id=lead_id
                 )
-            except Exception as analytics_error:
+            except (sqlite3.Error, KeyError) as analytics_error:
                 logger.warning(f"Failed to track handoff stage change: {analytics_error}")
 
         lead_payload = database.db.get_lead_by_id(lead_id) or {}
@@ -1606,10 +1608,10 @@ async def handle_handoff_request(
                 payload={"source": source, "cta_variant": cta_variant},
                 lead_id=lead_id
             )
-        except Exception as analytics_error:
+        except (sqlite3.Error, KeyError) as analytics_error:
             logger.warning(f"Failed to track handoff_done event: {analytics_error}")
 
         logger.info(f"Handoff request from user {user.id}")
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in handle_handoff_request: {e}")

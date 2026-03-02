@@ -4,11 +4,13 @@ Handlers: callbacks
 import logging
 import os
 import shutil
+import sqlite3
 import time
 import re
 import asyncio
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
@@ -66,6 +68,12 @@ def _personal_mode_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
 
+def _clear_business_contact_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
+    context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+    context.user_data.pop(BUSINESS_PENDING_CONTACT_KEY, None)
+
+
 def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -86,6 +94,15 @@ def _consultation_contact_markup() -> ReplyKeyboardMarkup:
     )
 
 
+def _business_phone_format_text() -> str:
+    return (
+        "Отправьте номер одним сообщением в одном из форматов:\n"
+        "• +7 999 123-45-67\n"
+        "• 8 999 123-45-67\n"
+        "• 89991234567"
+    )
+
+
 def _admin_lookup_menu_markup(back_callback: str, back_label: str) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("🗂️ Карточка по ID", callback_data="admin_lookup_card_prompt")],
@@ -103,77 +120,6 @@ def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("admin_lookup_field", None)
 
 
-async def _create_and_notify_instant_contact_lead(
-    context: ContextTypes.DEFAULT_TYPE,
-    user_db_id: int,
-    user,
-    *,
-    source: str,
-    lead_magnet_type: str,
-    note: str,
-) -> tuple[int, bool]:
-    """
-    Создает новый лид в 1 клик по кнопке "Оставить контакт" и сразу уведомляет админа.
-    """
-    previous_lead = database.db.get_lead_by_user_id(user_db_id) or {}
-    user_state = database.db.get_user_funnel_state(user_db_id)
-    cta_variant = user_state.get("cta_variant") or funnel.choose_cta_variant(user_db_id)
-
-    payload = {
-        "name": user.first_name if user else None,
-        "email": previous_lead.get("email"),
-        "phone": previous_lead.get("phone"),
-        "company": previous_lead.get("company"),
-        "pain_point": note,
-        "temperature": "warm",
-        "status": "new",
-        "notification_sent": 0,
-        "lead_magnet_type": lead_magnet_type,
-        "lead_magnet_delivered": 1,
-        "notes": f"[ONE_CLICK_CONTACT] {source}",
-    }
-    lead_id = database.db.create_new_lead(user_db_id, payload)
-
-    database.db.update_user_funnel_state(
-        user_db_id,
-        conversation_stage="handoff",
-        cta_variant=cta_variant,
-        cta_shown=True,
-    )
-    database.db.update_lead_funnel_state_by_id(
-        lead_id,
-        conversation_stage="handoff",
-        cta_variant=cta_variant,
-        cta_shown=True,
-    )
-
-    try:
-        database.db.track_event(
-            user_db_id,
-            "one_click_contact",
-            payload={"source": source, "lead_magnet_type": lead_magnet_type},
-            lead_id=lead_id,
-        )
-    except Exception as analytics_error:
-        logger.warning(f"Failed to track one_click_contact: {analytics_error}")
-
-    lead_payload = database.db.get_lead_by_id(lead_id) or {}
-    await notify_admin_new_lead(
-        context=context,
-        lead_id=lead_id,
-        lead_data=lead_payload,
-        user_data={
-            "id": user_db_id,
-            "telegram_id": user.id if user else None,
-            "username": user.username if user else None,
-            "first_name": user.first_name if user else None,
-        },
-        is_update=False,
-    )
-    has_phone = bool((lead_payload.get("phone") or "").strip())
-    return lead_id, has_phone
-
-
 async def handle_business_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обработчик inline кнопок меню для бизнес-чатов
@@ -182,7 +128,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         query = update.callback_query
         try:
             await utils.safe_answer_callback(query, action="business_menu_answer")
-        except Exception as answer_error:
+        except TelegramError as answer_error:
             logger.warning(f"Failed to answer business menu callback: {answer_error}")
         
         callback_data = query.data or ""
@@ -206,9 +152,9 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 last_name=user.last_name,
             )
 
-        if callback_data not in contact_actions:
-            context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
-            context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+        contact_flow_actions = contact_actions | {"menu_contact_send_phone", "menu_contact_telegram_only"}
+        if callback_data not in contact_flow_actions:
+            _clear_business_contact_state(context)
 
         if callback_data == "menu_restart":
             if user_db_id:
@@ -270,36 +216,73 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 return
 
             if callback_data == "menu_contact_send_phone":
-                latest_lead = database.db.get_lead_by_user_id(user_db_id) or {}
-                source = "personal_request" if latest_lead.get("lead_magnet_type") == "personal_request" else "consultation"
+                pending_contact = context.user_data.get(BUSINESS_PENDING_CONTACT_KEY) or {}
+                source = pending_contact.get("source") or "consultation"
                 context.user_data[BUSINESS_AWAITING_CONTACT_KEY] = True
                 context.user_data[BUSINESS_AWAITING_CONTACT_SOURCE_KEY] = source
                 response_text = (
-                    "Отлично, пришлите номер телефона одним сообщением.\n"
-                    "Пример: +7 999 123-45-67."
+                    "Отлично, пришлите номер телефона.\n"
+                    f"{_business_phone_format_text()}"
                 )
                 response_markup = menu_markup if is_business else _consultation_contact_markup()
             else:
-                context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
-                context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
-                latest_lead = database.db.get_lead_by_user_id(user_db_id) or {}
-                if latest_lead:
-                    notes = (latest_lead.get("notes") or "").strip()
-                    notes = f"{notes}\n[CONTACT_MODE] Клиент выбрал связь через Telegram без телефона".strip()
-                    database.db.create_or_update_lead(user_db_id, {"notes": notes, "notification_sent": 0})
-                    refreshed_lead = database.db.get_lead_by_user_id(user_db_id) or latest_lead
-                    await notify_admin_new_lead(
-                        context=context,
-                        lead_id=refreshed_lead["id"],
-                        lead_data=refreshed_lead,
-                        user_data={
-                            "id": user_db_id,
-                            "telegram_id": user.id if user else None,
-                            "username": user.username if user else None,
-                            "first_name": user.first_name if user else None,
-                        },
-                        is_update=True,
+                pending_contact = context.user_data.get(BUSINESS_PENDING_CONTACT_KEY) or {}
+                previous_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+                notes_parts = []
+                if pending_contact.get("notes"):
+                    notes_parts.append(str(pending_contact["notes"]).strip())
+                notes_parts.append("[CONTACT_MODE] Клиент выбрал связь через Telegram без телефона")
+                lead_payload = {
+                    "name": user.first_name if user else None,
+                    "email": previous_lead.get("email"),
+                    "company": previous_lead.get("company"),
+                    "pain_point": pending_contact.get("pain_point") or previous_lead.get("pain_point"),
+                    "temperature": "warm",
+                    "status": "new",
+                    "notification_sent": 0,
+                    "lead_magnet_type": pending_contact.get("lead_magnet_type") or previous_lead.get("lead_magnet_type") or "consultation",
+                    "lead_magnet_delivered": 1,
+                    "notes": "\n".join(part for part in notes_parts if part).strip(),
+                }
+                lead_id = database.db.create_new_lead(user_db_id, lead_payload)
+                user_state = database.db.get_user_funnel_state(user_db_id)
+                cta_variant = user_state.get("cta_variant") or funnel.choose_cta_variant(user_db_id)
+                database.db.update_user_funnel_state(
+                    user_db_id,
+                    conversation_stage="handoff",
+                    cta_variant=cta_variant,
+                    cta_shown=True,
+                )
+                database.db.update_lead_funnel_state_by_id(
+                    lead_id,
+                    conversation_stage="handoff",
+                    cta_variant=cta_variant,
+                    cta_shown=True,
+                )
+                try:
+                    database.db.track_event(
+                        user_db_id,
+                        "contact_via_telegram_only",
+                        payload={"source": pending_contact.get("source") or "business_contact_choice"},
+                        lead_id=lead_id,
                     )
+                except (sqlite3.Error, KeyError) as analytics_error:
+                    logger.warning(f"Failed to track contact_via_telegram_only: {analytics_error}")
+
+                refreshed_lead = database.db.get_lead_by_id(lead_id) or {}
+                await notify_admin_new_lead(
+                    context=context,
+                    lead_id=lead_id,
+                    lead_data=refreshed_lead,
+                    user_data={
+                        "id": user_db_id,
+                        "telegram_id": user.id if user else None,
+                        "username": user.username if user else None,
+                        "first_name": user.first_name if user else None,
+                    },
+                    is_update=False,
+                )
+                _clear_business_contact_state(context)
                 response_text = (
                     "Принято. Передал команде, что с вами лучше связаться в Telegram.\n"
                     "Если захотите ускорить связь, можете в любой момент отправить номер."
@@ -328,8 +311,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if chat_id is not None:
                 database.db.set_chat_mode(int(chat_id), "personal")
 
-            context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
-            context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+            _clear_business_contact_state(context)
 
             response_text = (
                 "Чат переведен в личный режим.\n\n"
@@ -378,29 +360,18 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     if lead_magnet_type != "personal_request"
                     else "Клиент нажал кнопку «Оставить контакт» для личного обращения."
                 )
-                _, has_phone = await _create_and_notify_instant_contact_lead(
-                    context=context,
-                    user_db_id=user_db_id,
-                    user=user,
-                    source=contact_source,
-                    lead_magnet_type=lead_magnet_type,
-                    note=instant_note,
+                _clear_business_contact_state(context)
+                context.user_data[BUSINESS_PENDING_CONTACT_KEY] = {
+                    "source": contact_source,
+                    "lead_magnet_type": lead_magnet_type,
+                    "notes": instant_note if not notes else f"{notes}\n{instant_note}".strip(),
+                    "pain_point": instant_note,
+                }
+                response_text = (
+                    "Как удобнее передать контакт для связи?\n\n"
+                    "Если номер скрыт в настройках Telegram, просто выберите вариант ниже."
                 )
-                context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
-                context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
-                if has_phone:
-                    response_text = (
-                        "✅ Контакт передан команде.\n\n"
-                        "Мы свяжемся с вами в ближайшее рабочее время."
-                    )
-                    response_markup = menu_markup
-                else:
-                    response_text = (
-                        "⚠️ Контакт передан, но номер телефона не удалось получить "
-                        "(он может быть скрыт в настройках Telegram).\n\n"
-                        "Выберите, как удобнее продолжить:"
-                    )
-                    response_markup = _contact_visibility_choice_markup()
+                response_markup = _contact_visibility_choice_markup()
             else:
                 lead_payload = {
                     "name": user.first_name if user else None,
@@ -412,8 +383,14 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     lead_payload["notes"] = notes
                 database.db.create_or_update_lead(user_db_id, lead_payload)
 
+                context.user_data.pop(BUSINESS_PENDING_CONTACT_KEY, None)
                 context.user_data[BUSINESS_AWAITING_CONTACT_KEY] = True
                 context.user_data[BUSINESS_AWAITING_CONTACT_SOURCE_KEY] = contact_source
+                response_text = (
+                    "Отлично, пришлите номер телефона.\n"
+                    f"{_business_phone_format_text()}"
+                )
+                response_markup = menu_markup if is_business else _consultation_contact_markup()
 
             if is_business:
                 await context.bot.send_message(
@@ -450,7 +427,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 action=f"{callback_data}_edit",
             )
             
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError) as e:
         logger.error(f"Error in handle_business_menu_callback: {e}")
 
 
@@ -460,7 +437,7 @@ async def handle_profile_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="profile_edit_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer profile callback: {answer_error}")
 
     user = query.from_user
@@ -504,7 +481,7 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="lead_magnet_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer lead magnet callback: {answer_error}")
 
     user = query.from_user
@@ -585,7 +562,7 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
                 payload={"from": current_stage, "to": next_stage, "reason": "cta_clicked"},
                 lead_id=lead_id
             )
-    except Exception as analytics_error:
+    except (sqlite3.Error, KeyError) as analytics_error:
         logger.warning(f"Failed to track CTA click analytics: {analytics_error}")
 
     selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо!")
@@ -620,7 +597,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="consent_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer consent callback: {answer_error}")
 
     user = query.from_user
@@ -870,7 +847,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="documents_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer documents callback: {answer_error}")
 
     user = query.from_user
@@ -995,7 +972,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="admin_panel_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer admin callback: {answer_error}")
 
     user = query.from_user
@@ -1540,7 +1517,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 action="admin_unknown_action",
             )
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError) as e:
         logger.error(f"Error in handle_admin_panel_callback: {e}")
         await utils.safe_reply_text(query.message, f"Ошибка: {str(e)}", action="admin_panel_error")
 
@@ -1551,7 +1528,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     try:
         await utils.safe_answer_callback(query, action="cleanup_answer")
-    except Exception as answer_error:
+    except TelegramError as answer_error:
         logger.warning(f"Failed to answer cleanup callback: {answer_error}")
 
     user = query.from_user
@@ -1659,7 +1636,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
                 notif_count = cursor.rowcount
 
                 conn.commit()
-            except Exception as e:
+            except sqlite3.Error as e:
                 conn.rollback()
                 raise
             finally:
@@ -1693,6 +1670,6 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
             )
             logger.warning(f"Admin {user.id} cleared ALL data")
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, IOError) as e:
         logger.error(f"Error in handle_cleanup_callback: {e}")
         await utils.safe_reply_text(query.message, f"Ошибка: {str(e)}", action="cleanup_error")

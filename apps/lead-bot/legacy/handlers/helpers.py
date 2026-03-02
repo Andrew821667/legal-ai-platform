@@ -2,11 +2,14 @@
 Handlers: helpers
 """
 import logging
+import smtplib
+import sqlite3
 import time
 import re
 import asyncio
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 import database
 import ai_brain
@@ -86,7 +89,7 @@ async def send_message_gradually(update: Update, text: str):
                 try:
                     await sent_message.edit_text(full_message)
                     last_update_time = current_time
-                except Exception as e:
+                except TelegramError:
                     # Если ошибка редактирования - пропускаем
                     pass
 
@@ -94,7 +97,7 @@ async def send_message_gradually(update: Update, text: str):
     if sent_message:
         try:
             await sent_message.edit_text(text)
-        except Exception:
+        except TelegramError:
             pass
     else:
         # Если вообще не отправили (очень короткий текст)
@@ -143,7 +146,7 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
             )
             logger.error(f"Failed to send lead magnet {magnet_type} to {email}")
 
-    except Exception as e:
+    except (smtplib.SMTPException, sqlite3.Error, TelegramError, KeyError, OSError) as e:
         logger.error(f"Error in send_lead_magnet_email: {e}")
         await update.message.reply_text(
             "Произошла ошибка.\n\n"
@@ -247,7 +250,7 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 )
                 sent_any = True
                 logger.info(f"Lead notification sent to chat {target_chat_id} for lead {lead_id}")
-            except Exception as send_error:
+            except TelegramError as send_error:
                 logger.warning(f"Failed to send lead notification to chat {target_chat_id}: {send_error}")
 
         if sent_any:
@@ -269,8 +272,8 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 )
 
                 logger.info(f"Email notification sent to admin about lead {lead_id}")
-            except Exception as e:
+            except (smtplib.SMTPException, OSError) as e:
                 logger.error(f"Error sending email notification: {e}")
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in notify_admin_new_lead: {e}")

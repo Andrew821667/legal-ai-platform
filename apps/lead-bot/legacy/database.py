@@ -12,6 +12,34 @@ config = Config()
 
 logger = logging.getLogger(__name__)
 
+# ── Column whitelists: only these names are allowed in dynamic SQL ──
+_USERS_COLUMNS = frozenset({
+    "telegram_id", "username", "first_name", "last_name",
+    "consent_given", "consent_date", "consent_revoked", "consent_revoked_at",
+    "transborder_consent", "transborder_consent_date",
+    "marketing_consent", "marketing_consent_date",
+    "conversation_stage", "cta_variant", "cta_shown", "cta_shown_at",
+    "created_at", "last_interaction",
+})
+
+_LEADS_COLUMNS = frozenset({
+    "user_id", "name", "email", "phone", "company",
+    "team_size", "contracts_per_month", "pain_point", "budget",
+    "urgency", "industry", "service_category", "specific_need",
+    "temperature", "status", "notes",
+    "conversation_stage", "cta_variant", "cta_shown",
+    "lead_magnet_type", "lead_magnet_delivered",
+    "notification_sent", "last_message_at",
+    "created_at", "updated_at",
+})
+
+
+def _validate_columns(columns, allowed: frozenset, context: str) -> None:
+    """Raise ValueError if any column name is not in the whitelist."""
+    bad = set(columns) - allowed
+    if bad:
+        raise ValueError(f"Disallowed column(s) in {context}: {bad}")
+
 
 class Database:
     """Класс для работы с SQLite базой данных"""
@@ -737,6 +765,7 @@ class Database:
         """Обновление полей профиля пользователя."""
         if not fields:
             return False
+        _validate_columns(fields.keys(), _USERS_COLUMNS, "update_user_fields")
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1078,26 +1107,24 @@ class Database:
                 # Обновляем существующий лид
                 lead_id = existing[0]
 
-                update_fields = []
-                values = []
+                # Фильтруем только допустимые колонки
+                safe_data = {k: v for k, v in lead_data.items()
+                             if v is not None and k in _LEADS_COLUMNS}
 
-                for key, value in lead_data.items():
-                    if value is not None:
-                        update_fields.append(f"{key} = ?")
-                        values.append(value)
-
-                if update_fields:
-                    values.append(lead_id)
+                if safe_data:
+                    update_fields = [f"{key} = ?" for key in safe_data]
+                    values = list(safe_data.values()) + [lead_id]
                     query = f"UPDATE leads SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                     cursor.execute(query, values)
 
                 logger.info(f"Lead {lead_id} updated for user {user_id}")
 
             else:
-                # Создаем новый лид
-                fields = ['user_id'] + list(lead_data.keys())
+                # Создаем новый лид — фильтруем допустимые колонки
+                safe_data = {k: v for k, v in lead_data.items() if k in _LEADS_COLUMNS}
+                fields = ['user_id'] + list(safe_data.keys())
                 placeholders = ['?'] * len(fields)
-                values = [user_id] + list(lead_data.values())
+                values = [user_id] + list(safe_data.values())
 
                 query = f"INSERT INTO leads ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
                 cursor.execute(query, values)
@@ -1120,7 +1147,8 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            cleaned = {k: v for k, v in (lead_data or {}).items() if v is not None}
+            cleaned = {k: v for k, v in (lead_data or {}).items()
+                       if v is not None and k in _LEADS_COLUMNS}
             fields = ["user_id"] + list(cleaned.keys())
             values = [user_id] + list(cleaned.values())
             placeholders = ["?"] * len(fields)
@@ -1245,12 +1273,13 @@ class Database:
             # 1. last_message_at есть и прошло > idle_minutes минут
             # 2. notification_sent = 0
             # 3. Температура warm/hot ИЛИ есть контакты+боль
-            cursor.execute(f"""
+            idle_minutes = int(idle_minutes)  # ensure integer
+            cursor.execute("""
                 SELECT * FROM leads
                 WHERE last_message_at IS NOT NULL
                 AND notification_sent = 0
                 AND (
-                    datetime(last_message_at, '+{idle_minutes} minutes') <= datetime('now')
+                    datetime(last_message_at, '+' || ? || ' minutes') <= datetime('now')
                 )
                 AND (
                     temperature IN ('warm', 'hot')
@@ -1261,7 +1290,7 @@ class Database:
                     )
                 )
                 ORDER BY last_message_at DESC
-            """)
+            """, (str(idle_minutes),))
             
             rows = cursor.fetchall()
             return [dict(row) for row in rows]

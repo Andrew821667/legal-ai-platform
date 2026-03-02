@@ -2,11 +2,13 @@
 Handlers: business
 """
 import logging
+import sqlite3
 import time
 import re
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
@@ -47,7 +49,7 @@ def _schedule_business_typing(context: ContextTypes.DEFAULT_TYPE, message, user_
                 timeout=1.5,
             )
             logger.info(f"[Business] Typing indicator sent for user {user_id}")
-        except Exception as error:
+        except (asyncio.TimeoutError, TelegramError, OSError) as error:
             logger.debug(f"[Business] Typing indicator skipped for user {user_id}: {error}")
 
     asyncio.create_task(_send_typing())
@@ -128,9 +130,60 @@ def _personal_mode_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
 
+def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📲 Оставить номер телефона", callback_data="menu_contact_send_phone")],
+            [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
+        ]
+    )
+
+
 def _clear_business_contact_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
     context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
+    context.user_data.pop(BUSINESS_PENDING_CONTACT_KEY, None)
+
+
+def _business_phone_format_text() -> str:
+    return (
+        "Отправьте номер одним сообщением в одном из форматов:\n"
+        "• +7 999 123-45-67\n"
+        "• 8 999 123-45-67\n"
+        "• 89991234567"
+    )
+
+
+def _parse_conversation_timestamp(raw_value) -> datetime | None:
+    if not raw_value:
+        return None
+    if isinstance(raw_value, datetime):
+        return raw_value
+    try:
+        return datetime.fromisoformat(str(raw_value))
+    except ValueError:
+        return None
+
+
+def _should_force_business_welcome(
+    user_db_id: int,
+    *,
+    awaiting_contact: bool,
+    pending_contact: bool,
+) -> bool:
+    if awaiting_contact or pending_contact:
+        return False
+
+    history = database.db.get_conversation_history(user_db_id, limit=1)
+    if not history:
+        return True
+
+    last_timestamp = _parse_conversation_timestamp(history[-1].get("timestamp"))
+    if not last_timestamp:
+        return False
+
+    timeout = timedelta(minutes=max(config.BUSINESS_NEW_SESSION_TIMEOUT_MINUTES, 1))
+    return datetime.utcnow() - last_timestamp > timeout
 
 
 def _looks_like_ack_only(text: str) -> bool:
@@ -221,7 +274,7 @@ async def _send_business_handoff_and_notify(
                 payload={"from": previous_stage, "to": "handoff"},
                 lead_id=lead_id,
             )
-        except Exception as analytics_error:
+        except (sqlite3.Error, KeyError) as analytics_error:
             logger.warning(f"[Business] Failed to track handoff stage change: {analytics_error}")
 
     lead_payload = database.db.get_lead_by_id(lead_id) or {}
@@ -245,7 +298,7 @@ async def _send_business_handoff_and_notify(
             payload={"source": source, "cta_variant": cta_variant},
             lead_id=lead_id,
         )
-    except Exception as analytics_error:
+    except (sqlite3.Error, KeyError) as analytics_error:
         logger.warning(f"[Business] Failed to track handoff_done ({source}): {analytics_error}")
 
     return lead_id
@@ -288,7 +341,7 @@ async def handle_business_connection(update: Update, context: ContextTypes.DEFAU
                         chat_id=connection.user_chat_id,
                         text="ℹ️ Business-автоответы отключены. Бот больше не будет отвечать в business-чатах.",
                     )
-    except Exception as e:
+    except (TelegramError, AttributeError, sqlite3.Error) as e:
         logger.error(f"Error in handle_business_connection: {e}", exc_info=True)
 
 
@@ -323,6 +376,10 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
         chat_id = getattr(getattr(message, "chat", None), "id", None)
         chat_mode = database.db.get_chat_mode(int(chat_id)) if chat_id is not None else "bot"
+        awaiting_contact = bool(context.user_data.get(BUSINESS_AWAITING_CONTACT_KEY))
+        awaiting_contact_source = context.user_data.get(BUSINESS_AWAITING_CONTACT_SOURCE_KEY) or "consultation"
+        pending_contact = context.user_data.get(BUSINESS_PENDING_CONTACT_KEY) or {}
+        has_pending_contact = bool(pending_contact)
         
         # Обработка команды /start для бизнес-чата
         if text == "/start":
@@ -404,6 +461,22 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 )
             return
 
+        if _should_force_business_welcome(
+            user,
+            awaiting_contact=awaiting_contact,
+            pending_contact=has_pending_contact,
+        ):
+            database.db.clear_conversation_history(user)
+            database.db.reset_user_funnel_state(user)
+            _clear_business_contact_state(context)
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=content.build_welcome_message(message.from_user.first_name),
+                reply_markup=_business_menu_markup(),
+                business_connection_id=message.business_connection_id,
+            )
+            return
+
         # На первом сообщении-приветствии в business-режиме отдаем
         # фиксированное приветствие без участия LLM.
         if text and _looks_like_plain_greeting(text):
@@ -418,8 +491,6 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         lead = database.db.get_lead_by_user_id(user) if allow_lead_processing else None
         funnel_state = database.db.get_user_funnel_state(user)
         current_stage = funnel_state.get("conversation_stage") or "discover"
-        awaiting_contact = bool(context.user_data.get(BUSINESS_AWAITING_CONTACT_KEY))
-        awaiting_contact_source = context.user_data.get(BUSINESS_AWAITING_CONTACT_SOURCE_KEY) or "consultation"
 
         # Если после handoff появляется новая предметная боль/вопрос — открываем новый лид.
         if (
@@ -468,7 +539,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                     payload={"message": text[:300], "from_stage": "handoff", "to_stage": "discover"},
                     lead_id=new_lead_id,
                 )
-            except Exception as analytics_error:
+            except (sqlite3.Error, KeyError) as analytics_error:
                 logger.warning(f"[Business] Failed to track new_topic_after_handoff: {analytics_error}")
 
             new_lead_payload_db = database.db.get_lead_by_id(new_lead_id) or {}
@@ -498,6 +569,21 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             if 10 <= len(digits) <= 12:
                 phone_candidate = digits
 
+        if allow_lead_processing and has_pending_contact and not awaiting_contact and not phone_candidate:
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=(
+                    "Сначала выберите удобный вариант связи.\n\n"
+                    "Если хотите передать номер сразу сообщением, используйте один из форматов ниже:\n"
+                    "• +7 999 123-45-67\n"
+                    "• 8 999 123-45-67\n"
+                    "• 89991234567"
+                ),
+                reply_markup=_contact_visibility_choice_markup(),
+                business_connection_id=message.business_connection_id,
+            )
+            return
+
         if allow_lead_processing and awaiting_contact and (
             not phone_candidate or not utils.validate_phone(phone_candidate)
         ):
@@ -505,7 +591,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 chat_id=message.chat.id,
                 text=(
                     "Не удалось распознать номер.\n"
-                    "Отправьте телефон одним сообщением, например: +7 999 123-45-67."
+                    f"{_business_phone_format_text()}"
                 ),
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
@@ -514,7 +600,9 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
 
         if allow_lead_processing and phone_candidate and utils.validate_phone(phone_candidate):
             formatted_phone = utils.format_phone(phone_candidate)
-            lead_magnet_type = (lead.get("lead_magnet_type") if lead else None) or "consultation"
+            pending_lead_magnet_type = pending_contact.get("lead_magnet_type") if has_pending_contact else None
+            pending_notes = (pending_contact.get("notes") or "").strip() if has_pending_contact else ""
+            lead_magnet_type = pending_lead_magnet_type or (lead.get("lead_magnet_type") if lead else None) or "consultation"
             if awaiting_contact_source == "personal_request":
                 lead_magnet_type = "personal_request"
 
@@ -535,9 +623,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 "lead_magnet_delivered": True,
                 "notification_sent": 0,
             }
+            notes_parts = []
+            if pending_notes:
+                notes_parts.append(pending_notes)
             if lead_magnet_type == "personal_request":
-                notes = (previous_lead.get("notes") or "").strip()
-                lead_payload["notes"] = f"{notes}\nЛичное обращение (business)".strip()
+                notes_parts.append("Личное обращение (business)")
+            if notes_parts:
+                lead_payload["notes"] = "\n".join(part for part in notes_parts if part).strip()
 
             lead_id = database.db.create_new_lead(user, lead_payload)
             database.db.update_lead_last_message_time(user)
@@ -741,7 +833,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                             last_update_time = current_time
                             chunk_buffer = ""
                             logger.debug(f"[Business] Initial message sent: {len(full_response)} chars")
-                        except Exception as e:
+                        except TelegramError as e:
                             logger.warning(f"[Business] Failed to send initial message: {e}")
                 else:
                     # Обновляем существующее сообщение
@@ -756,10 +848,9 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                         last_update_time = current_time
                         chunk_buffer = ""
                         logger.debug(f"[Business] Message updated: {len(full_response)} chars")
-                    except Exception as e:
+                    except TelegramError as e:
                         # Telegram rate limit - просто пропускаем это обновление
                         logger.debug(f"[Business] Skipped update (rate limit): {e}")
-                        pass
 
         # Финальное обновление с полным текстом
         generation_time = time.time() - start_generation
@@ -786,7 +877,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                         chat_id=message.chat.id,
                         message_id=sent_message.message_id
                     )
-                except Exception:
+                except TelegramError:
                     pass
             
             # Отправляем по частям
@@ -819,7 +910,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                         reply_markup=menu_markup,
                     )
                     logger.debug("[Business] Final message update sent")
-                except Exception:
+                except TelegramError:
                     pass
             else:
                 # Если текст был слишком коротким для постепенного вывода
@@ -851,7 +942,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                     "cta_shown",
                     payload={"variant": cta_variant, "stage": response_stage, "source": "assistant_response"},
                 )
-            except Exception as analytics_error:
+            except (sqlite3.Error, KeyError) as analytics_error:
                 logger.warning(f"[Business] Failed to track cta_shown: {analytics_error}")
             cta_shown = True
         
@@ -880,7 +971,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                         payload={"from": current_stage, "to": next_stage},
                         lead_id=lead_id,
                     )
-                except Exception as analytics_error:
+                except (sqlite3.Error, KeyError) as analytics_error:
                     logger.warning(f"[Business] Failed to track stage_changed: {analytics_error}")
 
             cta_was_shown = cta_shown
@@ -953,16 +1044,16 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                                 payload={"variant": cta_variant, "stage": next_stage, "source": "lead_magnet_offer"},
                                 lead_id=processed_lead_id,
                             )
-                        except Exception as analytics_error:
+                        except (sqlite3.Error, KeyError) as analytics_error:
                             logger.warning(f"[Business] Failed to track lead magnet CTA show: {analytics_error}")
-                except Exception as background_error:
+                except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError) as background_error:
                     logger.warning(f"[Business] Background lead processing failed for user {user_id}: {background_error}")
 
             asyncio.create_task(_post_response_lead_processing())
 
         logger.info(f"✅ [Business] Response sent to user {user_id}")
         
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError, OSError) as e:
         logger.error(f"Error in handle_business_message: {e}", exc_info=True)
         try:
             if update.business_message:
@@ -971,5 +1062,5 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                     text="❌ Произошла ошибка. Попробуйте позже.",
                     business_connection_id=update.business_message.business_connection_id
                 )
-        except:
+        except TelegramError:
             pass

@@ -2,11 +2,13 @@
 Handlers: admin
 """
 import logging
+import sqlite3
 import time
 import re
 import asyncio
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 import database
 import ai_brain
@@ -38,7 +40,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats_message = admin_interface.admin_interface.format_statistics(30)
         await update.message.reply_text(stats_message)
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in stats_command: {e}")
         await update.message.reply_text("Ошибка при получении статистики")
 
@@ -63,7 +65,7 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(leads_message)
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in leads_command: {e}")
         await update.message.reply_text("Ошибка при получении списка лидов")
 
@@ -89,7 +91,7 @@ async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("Ошибка при экспорте данных")
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError, UnicodeEncodeError) as e:
         logger.error(f"Error in export_command: {e}")
         await update.message.reply_text("Ошибка при экспорте данных")
 
@@ -125,7 +127,7 @@ async def view_conversation_command(update: Update, context: ContextTypes.DEFAUL
 
     except ValueError:
         await update.message.reply_text("Неверный telegram_id")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in view_conversation_command: {e}")
         await update.message.reply_text("Ошибка при получении истории диалога")
 
@@ -162,7 +164,7 @@ async def security_stats_command(update: Update, context: ContextTypes.DEFAULT_T
 
         await update.message.reply_text(stats_message)
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in security_stats_command: {e}")
         await update.message.reply_text("Ошибка при получении статистики безопасности")
 
@@ -201,7 +203,7 @@ async def blacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except ValueError:
         await update.message.reply_text("Неверный telegram_id. Должно быть число.")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in blacklist_command: {e}")
         await update.message.reply_text("Ошибка при добавлении в черный список")
 
@@ -241,7 +243,7 @@ async def unblacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except ValueError:
         await update.message.reply_text("Неверный telegram_id. Должно быть число.")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in unblacklist_command: {e}")
         await update.message.reply_text("Ошибка при удалении из черного списка")
 
@@ -284,7 +286,7 @@ async def pdn_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
     except ValueError:
         await update.message.reply_text("Неверный telegram_id")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in pdn_user_command: {e}")
         await update.message.reply_text("Ошибка при получении карточки ПД")
 
@@ -332,7 +334,7 @@ async def edit_pdn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Поле {field} обновлено для пользователя {telegram_id}")
     except ValueError:
         await update.message.reply_text("Неверный telegram_id")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in edit_pdn_command: {e}")
         await update.message.reply_text("Ошибка редактирования ПД")
 
@@ -365,7 +367,7 @@ async def revoke_user_consent_command(update: Update, context: ContextTypes.DEFA
         )
     except ValueError:
         await update.message.reply_text("Неверный telegram_id")
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in revoke_user_consent_command: {e}")
         await update.message.reply_text("Ошибка при отзыве согласия")
 
@@ -381,7 +383,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(ADMIN_PANEL_MENU)
         await update.message.reply_text(admin_panel_message, reply_markup=reply_markup)
 
-    except Exception as e:
+    except (TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in show_admin_panel: {e}")
         await update.message.reply_text("Ошибка при открытии админ-панели")
 
