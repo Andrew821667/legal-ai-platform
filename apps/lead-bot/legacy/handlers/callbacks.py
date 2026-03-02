@@ -921,7 +921,8 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     if action == "doc_consent_status":
-        consent_state = database.db.get_user_consent_state(user_data["id"])
+        snapshot = admin_interface.admin_interface.get_user_snapshot(user.id)
+        consent_state = (snapshot or {}).get("consent", {})
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         status_text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
         await utils.safe_edit_text(
@@ -932,7 +933,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_export_data":
-        payload = database.db.export_user_data(user_data["id"])
+        payload = admin_interface.admin_interface.export_user_data(user.id)
         await utils.safe_edit_text(
             query.message,
             _clip_for_edit(_documents_panel_text("📊 Экспорт данных", content.export_data_text(payload))),
@@ -1014,8 +1015,8 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if user_detail_match:
             telegram_id = int(user_detail_match.group(1))
-            target_user = database.db.get_user_by_telegram_id(telegram_id)
-            if not target_user:
+            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+            if not snapshot:
                 await utils.safe_edit_text(
                     query.message,
                     "❌ Пользователь не найден.",
@@ -1026,10 +1027,14 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
-            consent = database.db.get_user_consent_state(target_user["id"])
+            target_user = snapshot["user"]
             conversations_count = _get_user_conversation_count(target_user["id"])
-            detail_text = _build_admin_user_detail_text(target_user, lead, consent, conversations_count)
+            detail_text = _build_admin_user_detail_text(
+                target_user,
+                snapshot.get("lead"),
+                snapshot.get("consent", {}),
+                conversations_count,
+            )
             await utils.safe_edit_text(
                 query.message,
                 _clip_for_edit(detail_text),
@@ -1040,8 +1045,8 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if user_export_match:
             telegram_id = int(user_export_match.group(1))
-            target_user = database.db.get_user_by_telegram_id(telegram_id)
-            if not target_user:
+            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+            if not snapshot:
                 await utils.safe_edit_text(
                     query.message,
                     "❌ Пользователь не найден.",
@@ -1052,7 +1057,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            payload = database.db.export_user_data(target_user["id"])
+            payload = admin_interface.admin_interface.export_user_data(telegram_id)
             export_text = (
                 f"🧾 Экспорт данных пользователя ID {telegram_id}\n\n"
                 f"{content.export_data_text(payload)}"
@@ -1087,11 +1092,14 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             database.db.clear_conversation_history(target_user["id"])
             database.db.reset_user_funnel_state(target_user["id"])
 
-            lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
-            consent = database.db.get_user_consent_state(target_user["id"])
+            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id) or {
+                "user": target_user,
+                "lead": {},
+                "consent": database.db.get_user_consent_state(target_user["id"]),
+            }
             detail_text = (
                 "✅ Диалог пользователя сброшен.\n\n"
-                + _build_admin_user_detail_text(target_user, lead, consent, 0)
+                + _build_admin_user_detail_text(target_user, snapshot.get("lead"), snapshot.get("consent", {}), 0)
             )
             await utils.safe_edit_text(
                 query.message,
@@ -1189,7 +1197,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_users_recent":
-            users = database.db.get_recent_users(limit=20)
+            users = admin_interface.admin_interface.get_recent_users(limit=20)
             await utils.safe_edit_text(
                 query.message,
                 _clip_for_edit(_format_users_for_admin("🕒 ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ (20)", users)),
@@ -1198,7 +1206,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_users_no_consent":
-            users = database.db.get_users_without_consent(limit=20)
+            users = admin_interface.admin_interface.get_users_without_consent(limit=20)
             await utils.safe_edit_text(
                 query.message,
                 _clip_for_edit(_format_users_for_admin("⚠️ ПОЛЬЗОВАТЕЛИ БЕЗ СОГЛАСИЯ ПД (20)", users)),
@@ -1207,7 +1215,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_users_revoked":
-            users = database.db.get_users_with_revoked_consent(limit=20)
+            users = admin_interface.admin_interface.get_users_with_revoked_consent(limit=20)
             await utils.safe_edit_text(
                 query.message,
                 _clip_for_edit(_format_users_for_admin("🗑️ ОТОЗВАЛИ СОГЛАСИЕ (20)", users)),

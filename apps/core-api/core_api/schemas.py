@@ -15,6 +15,7 @@ from core_api.models import (
     PostFeedbackSource,
     ScheduledPostStatus,
     Scope,
+    UserRole,
 )
 
 
@@ -22,14 +23,101 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class UserCreate(BaseModel):
+    role: UserRole = UserRole.user
+    telegram_id: int | None = None
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    name: str | None = None
+    consent_given: bool = False
+    consent_date: datetime | None = None
+    consent_revoked: bool = False
+    consent_revoked_at: datetime | None = None
+    transborder_consent: bool = False
+    transborder_consent_date: datetime | None = None
+    marketing_consent: bool = False
+    marketing_consent_date: datetime | None = None
+    conversation_stage: str | None = None
+    cta_variant: str | None = None
+    cta_shown: bool = False
+    cta_shown_at: datetime | None = None
+    last_interaction: datetime | None = None
+
+
+class UserPatch(BaseModel):
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    name: str | None = None
+    consent_given: bool | None = None
+    consent_date: datetime | None = None
+    consent_revoked: bool | None = None
+    consent_revoked_at: datetime | None = None
+    transborder_consent: bool | None = None
+    transborder_consent_date: datetime | None = None
+    marketing_consent: bool | None = None
+    marketing_consent_date: datetime | None = None
+    conversation_stage: str | None = None
+    cta_variant: str | None = None
+    cta_shown: bool | None = None
+    cta_shown_at: datetime | None = None
+    last_interaction: datetime | None = None
+
+
+class UserOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    role: UserRole
+    telegram_id: int | None
+    username: str | None
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    name: str | None
+    consent_given: bool
+    consent_date: datetime | None
+    consent_revoked: bool
+    consent_revoked_at: datetime | None
+    transborder_consent: bool
+    transborder_consent_date: datetime | None
+    marketing_consent: bool
+    marketing_consent_date: datetime | None
+    conversation_stage: str | None
+    cta_variant: str | None
+    cta_shown: bool
+    cta_shown_at: datetime | None
+    last_interaction: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
 class LeadCreate(BaseModel):
     source: LeadSource
+    legacy_lead_id: int | None = None
     telegram_user_id: int | None = None
     name: str | None = None
     contact: str | None = None
+    company: str | None = None
+    email: str | None = None
+    phone: str | None = None
     segment: LeadSegment | None = None
     status: LeadStatus = LeadStatus.new
     score: int | None = None
+    temperature: str | None = None
+    service_category: str | None = None
+    specific_need: str | None = None
+    pain_point: str | None = None
+    budget: str | None = None
+    urgency: str | None = None
+    industry: str | None = None
+    conversation_stage: str | None = None
+    cta_variant: str | None = None
+    cta_shown: bool = False
+    lead_magnet_type: str | None = None
+    lead_magnet_delivered: bool = False
     notes: str | None = None
     utm_source: str | None = None
     utm_medium: str | None = None
@@ -39,9 +127,26 @@ class LeadCreate(BaseModel):
 
 
 class LeadPatch(BaseModel):
+    legacy_lead_id: int | None = None
+    contact: str | None = None
+    company: str | None = None
+    email: str | None = None
+    phone: str | None = None
     segment: LeadSegment | None = None
     status: LeadStatus | None = None
     score: int | None = None
+    temperature: str | None = None
+    service_category: str | None = None
+    specific_need: str | None = None
+    pain_point: str | None = None
+    budget: str | None = None
+    urgency: str | None = None
+    industry: str | None = None
+    conversation_stage: str | None = None
+    cta_variant: str | None = None
+    cta_shown: bool | None = None
+    lead_magnet_type: str | None = None
+    lead_magnet_delivered: bool | None = None
     notes: str | None = None
 
 
@@ -51,12 +156,28 @@ class LeadOut(BaseModel):
     updated_at: datetime
     last_activity_at: datetime
     source: LeadSource
+    legacy_lead_id: int | None
     telegram_user_id: int | None
     name: str | None
     contact: str | None
+    company: str | None
+    email: str | None
+    phone: str | None
     segment: LeadSegment | None
     status: LeadStatus
     score: int | None
+    temperature: str | None
+    service_category: str | None
+    specific_need: str | None
+    pain_point: str | None
+    budget: str | None
+    urgency: str | None
+    industry: str | None
+    conversation_stage: str | None
+    cta_variant: str | None
+    cta_shown: bool
+    lead_magnet_type: str | None
+    lead_magnet_delivered: bool
     notes: str | None
     utm_source: str | None
     utm_medium: str | None
@@ -65,6 +186,25 @@ class LeadOut(BaseModel):
     utm_term: str | None
 
     model_config = {"from_attributes": True}
+
+
+class LeadStatsOut(BaseModel):
+    total_leads: int
+    new_leads: int
+    qualified_leads: int
+    booked_leads: int
+    proposal_leads: int
+    won_leads: int
+    lost_leads: int
+    telegram_bot_leads: int
+    hot_leads: int
+    warm_leads: int
+    cold_leads: int
+    stage_discover: int
+    stage_diagnose: int
+    stage_qualify: int
+    stage_propose: int
+    stage_handoff: int
 
 
 class EventCreate(BaseModel):

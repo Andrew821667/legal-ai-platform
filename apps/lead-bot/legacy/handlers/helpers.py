@@ -22,6 +22,7 @@ import email_sender
 import security
 import prompts
 import content
+from core_api_bridge import core_api_bridge
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
@@ -137,14 +138,14 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
             # Подтверждение пользователю
             base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
             await update.message.reply_text(f"{base_message}\n\nКонтакт для отправки: {email}")
-            logger.info(f"Lead magnet {magnet_type} sent to {email}")
+            logger.info("Lead magnet %s sent to %s", magnet_type, utils.mask_email(email))
         else:
             # Ошибка отправки
             await update.message.reply_text(
                 "Произошла ошибка при отправке email.\n\n"
                 f"{content.DIRECT_CONTACTS_TEXT}"
             )
-            logger.error(f"Failed to send lead magnet {magnet_type} to {email}")
+            logger.error("Failed to send lead magnet %s to %s", magnet_type, utils.mask_email(email))
 
     except (smtplib.SMTPException, sqlite3.Error, TelegramError, KeyError, OSError) as e:
         logger.error(f"Error in send_lead_magnet_email: {e}")
@@ -162,14 +163,50 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
     """
     try:
         # Получаем информацию о лиде
-        lead = database.db.get_lead_by_id(lead_id)
-        if not lead:
+        legacy_lead = database.db.get_lead_by_id(lead_id)
+        if not legacy_lead:
             return
 
         # Формируем сообщение для админа
         # ИСПРАВЛЕНИЕ: проверяем оба поля - 'temperature' и 'lead_temperature'
-        temperature = lead.get('temperature') or lead_data.get('temperature') or lead_data.get('lead_temperature', 'cold')
-        logger.info(f"Lead {lead_id} notification: temperature={temperature} (from lead_data: {lead_data.get('temperature') or lead_data.get('lead_temperature')})")
+        temperature = (
+            legacy_lead.get('temperature')
+            or lead_data.get('temperature')
+            or lead_data.get('lead_temperature', 'cold')
+        )
+
+        user_row = database.db.get_user_by_id(user_data.get("id")) if user_data.get("id") else None
+        bridge_user_data = {
+            "telegram_id": user_data.get("telegram_id") or (user_row or {}).get("telegram_id"),
+            "username": user_data.get("username") or (user_row or {}).get("username"),
+            "first_name": user_data.get("first_name") or (user_row or {}).get("first_name"),
+        }
+        if core_api_bridge.enabled:
+            core_lead_id = core_api_bridge.sync_lead(legacy_lead, bridge_user_data)
+            if core_lead_id and legacy_lead.get("core_lead_id") != core_lead_id:
+                database.db.set_core_lead_id(lead_id, core_lead_id)
+                legacy_lead["core_lead_id"] = core_lead_id
+            if core_lead_id:
+                core_api_bridge.track_event(
+                    event_type="legacy_lead_notified",
+                    payload={
+                        "legacy_lead_id": lead_id,
+                        "is_update": is_update,
+                        "temperature": temperature,
+                        "service_category": legacy_lead.get("service_category"),
+                        "specific_need": legacy_lead.get("specific_need"),
+                    },
+                    idempotency_key=f"legacy-lead-notified-{lead_id}-{int(is_update)}",
+                    core_lead_id=core_lead_id,
+                )
+        core_snapshot = admin_interface.admin_interface.get_lead_snapshot_by_legacy_id(lead_id) or {}
+        lead = {**legacy_lead, **core_snapshot}
+        logger.info(
+            "Lead %s notification: temperature=%s (from lead_data: %s)",
+            lead_id,
+            temperature,
+            lead_data.get('temperature') or lead_data.get('lead_temperature'),
+        )
         
         temperature_emoji = {
             'hot': '🔥',

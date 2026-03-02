@@ -4,6 +4,7 @@
 import asyncio
 import re
 import logging
+import json
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
@@ -75,6 +76,42 @@ def mask_sensitive_data(text: str) -> str:
     )
 
     return text
+
+
+def mask_email(email: str | None) -> str:
+    """Маскирует email для логов."""
+    if not email:
+        return ""
+    return mask_sensitive_data(email)
+
+
+def mask_phone(phone: str | None) -> str:
+    """Маскирует телефон для логов."""
+    if not phone:
+        return ""
+    return mask_sensitive_data(phone)
+
+
+def mask_sensitive_mapping(data: dict | None) -> dict:
+    """Возвращает копию словаря с замаскированными PII-полями."""
+    if not data:
+        return {}
+
+    masked = dict(data)
+    for key in ("email", "phone"):
+        value = masked.get(key)
+        if isinstance(value, str):
+            masked[key] = mask_sensitive_data(value)
+    return masked
+
+
+def mask_sensitive_json(data: Any) -> str:
+    """Сериализует объект в JSON и маскирует чувствительные данные."""
+    try:
+        serialized = json.dumps(data, ensure_ascii=False)
+    except TypeError:
+        serialized = str(data)
+    return mask_sensitive_data(serialized)
 
 
 def get_formatted_timestamp() -> str:

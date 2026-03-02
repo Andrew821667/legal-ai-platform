@@ -162,3 +162,214 @@ def test_consent_flow_and_data_export(test_db):
     lead_after = test_db.get_lead_by_user_id(user_id)
     assert lead_after["email"] is None
     assert lead_after["phone"] is None
+
+
+def test_get_successful_conversations_returns_grouped_messages(test_db):
+    """RAG-выборка должна возвращать диалоги без потери сообщений."""
+    first_user_id = test_db.create_or_update_user(
+        telegram_id=10001,
+        username="rag_user_1",
+        first_name="Rag",
+    )
+    second_user_id = test_db.create_or_update_user(
+        telegram_id=10002,
+        username="rag_user_2",
+        first_name="RagTwo",
+    )
+
+    test_db.create_or_update_lead(
+        first_user_id,
+        {
+            "name": "Rag User 1",
+            "temperature": "warm",
+            "service_category": "contracts",
+            "pain_point": "Долго согласуем договоры",
+        },
+    )
+    test_db.create_or_update_lead(
+        second_user_id,
+        {
+            "name": "Rag User 2",
+            "temperature": "hot",
+            "service_category": "claims",
+            "pain_point": "Большой поток претензий",
+        },
+    )
+
+    test_db.add_message(first_user_id, "user", "Первое сообщение")
+    test_db.add_message(first_user_id, "assistant", "Ответ ассистента")
+    test_db.add_message(second_user_id, "user", "Второе сообщение")
+
+    result = test_db.get_successful_conversations(limit=10)
+
+    assert len(result) == 2
+    by_user = {item["user_id"]: item for item in result}
+    assert [msg["message"] for msg in by_user[first_user_id]["messages"]] == [
+        "Первое сообщение",
+        "Ответ ассистента",
+    ]
+    assert [msg["message"] for msg in by_user[second_user_id]["messages"]] == [
+        "Второе сообщение",
+    ]
+
+
+def test_set_core_lead_id_persists_mapping(test_db):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10003,
+        username="core_sync_user",
+        first_name="Core",
+    )
+    lead_id = test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Core Sync",
+            "temperature": "warm",
+        },
+    )
+
+    test_db.set_core_lead_id(lead_id, "11111111-1111-1111-1111-111111111111")
+
+    lead = test_db.get_lead_by_id(lead_id)
+    assert lead["core_lead_id"] == "11111111-1111-1111-1111-111111111111"
+
+
+def test_create_or_update_lead_syncs_to_core_bridge(test_db, monkeypatch):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10004,
+        username="bridge_user",
+        first_name="Bridge",
+    )
+
+    class StubBridge:
+        enabled = True
+
+        @staticmethod
+        def sync_lead(lead, user):
+            assert lead["user_id"] == user_id
+            assert user["telegram_id"] == 10004
+            return "22222222-2222-2222-2222-222222222222"
+
+    import core_api_bridge
+
+    monkeypatch.setattr(core_api_bridge, "core_api_bridge", StubBridge())
+
+    lead_id = test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Bridge Lead",
+            "temperature": "warm",
+            "pain_point": "Нужен sync в core-api",
+        },
+    )
+
+    lead = test_db.get_lead_by_id(lead_id)
+    assert lead["core_lead_id"] == "22222222-2222-2222-2222-222222222222"
+
+
+def test_create_or_update_user_syncs_to_core_bridge(test_db, monkeypatch):
+    captured = {}
+
+    class StubBridge:
+        enabled = True
+
+        @staticmethod
+        def sync_user(user):
+            captured["telegram_id"] = user["telegram_id"]
+            captured["username"] = user["username"]
+            captured["consent_given"] = bool(user["consent_given"])
+            return "user-core-id"
+
+    import core_api_bridge
+
+    monkeypatch.setattr(core_api_bridge, "core_api_bridge", StubBridge())
+
+    user_id = test_db.create_or_update_user(
+        telegram_id=10005,
+        username="bridge_user_sync",
+        first_name="User",
+    )
+    test_db.grant_user_consent(user_id)
+
+    assert captured["telegram_id"] == 10005
+    assert captured["username"] == "bridge_user_sync"
+    assert captured["consent_given"] is True
+
+
+def test_get_user_by_telegram_id_prefers_core_snapshot(test_db, monkeypatch):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10006,
+        username="local_user",
+        first_name="Local",
+        last_name="User",
+    )
+    assert user_id > 0
+
+    monkeypatch.setattr(
+        test_db,
+        "_core_get_json",
+        lambda path, params=None: [
+            {
+                "telegram_id": 10006,
+                "username": "core_user",
+                "first_name": "Core",
+                "last_name": "User",
+                "consent_given": True,
+                "consent_revoked": False,
+                "transborder_consent": True,
+                "marketing_consent": False,
+                "cta_shown": True,
+            }
+        ]
+        if path == "/api/v1/users" and params and params.get("telegram_id") == 10006
+        else None,
+    )
+
+    user = test_db.get_user_by_telegram_id(10006)
+
+    assert user is not None
+    assert user["username"] == "core_user"
+    assert user["first_name"] == "Core"
+    assert bool(user["consent_given"]) is True
+    assert bool(user["transborder_consent"]) is True
+
+
+def test_get_lead_by_user_id_prefers_core_snapshot(test_db, monkeypatch):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10007,
+        username="lead_local",
+        first_name="Lead",
+    )
+    lead_id = test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Local Lead",
+            "company": "Local Co",
+            "temperature": "cold",
+        },
+    )
+
+    def _fake_core(path, params=None):
+        if path == "/api/v1/users" and params and params.get("telegram_id") == 10007:
+            return [{"telegram_id": 10007, "username": "lead_local"}]
+        if path == "/api/v1/leads" and params and params.get("legacy_lead_id") == lead_id:
+            return [
+                {
+                    "id": "core-lead-10007",
+                    "name": "Core Lead",
+                    "company": "Core Co",
+                    "temperature": "hot",
+                    "status": "qualified",
+                    "lead_magnet_delivered": True,
+                }
+            ]
+        return None
+
+    monkeypatch.setattr(test_db, "_core_get_json", _fake_core)
+
+    lead = test_db.get_lead_by_user_id(user_id)
+
+    assert lead is not None
+    assert lead["name"] == "Core Lead"
+    assert lead["company"] == "Core Co"
+    assert lead["temperature"] == "hot"
+    assert lead["core_lead_id"] == "core-lead-10007"

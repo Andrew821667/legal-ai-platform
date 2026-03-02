@@ -2,6 +2,9 @@ import logging
 import csv
 import io
 import asyncio
+import json
+import urllib.parse
+import urllib.request
 from typing import Dict
 import database
 from config import Config
@@ -13,6 +16,172 @@ logger = logging.getLogger(__name__)
 class AdminInterface:
     def __init__(self, db):
         self.db = db
+        self.core_api_url = config.CORE_API_URL.rstrip("/")
+        self.core_api_enabled = bool(config.CORE_API_SYNC_ENABLED and self.core_api_url and config.API_KEY_BOT)
+
+    def _core_headers(self) -> dict[str, str]:
+        return {"X-API-Key": config.API_KEY_BOT, "Content-Type": "application/json"}
+
+    def _core_get_json(self, path: str, params: dict | None = None):
+        if not self.core_api_enabled:
+            return None
+
+        query = ""
+        if params:
+            cleaned = {key: value for key, value in params.items() if value is not None}
+            if cleaned:
+                query = "?" + urllib.parse.urlencode(cleaned)
+        request = urllib.request.Request(
+            url=f"{self.core_api_url}{path}{query}",
+            headers=self._core_headers(),
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else None
+        except Exception as error:
+            logger.warning("Core API read fallback to SQLite for %s: %s", path, error)
+            return None
+
+    def _map_core_lead(self, row: dict) -> dict:
+        return {
+            "id": row.get("id"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+            "name": row.get("name"),
+            "company": row.get("company") or "",
+            "email": row.get("email") or "",
+            "phone": row.get("phone") or "",
+            "temperature": row.get("temperature") or "cold",
+            "status": row.get("status"),
+            "service_category": row.get("service_category") or "",
+            "specific_need": row.get("specific_need") or "",
+            "pain_point": row.get("pain_point") or "",
+            "budget": row.get("budget") or "",
+            "urgency": row.get("urgency") or "",
+            "industry": row.get("industry") or "",
+            "conversation_stage": row.get("conversation_stage") or "",
+            "cta_variant": row.get("cta_variant") or "",
+            "cta_shown": row.get("cta_shown") or False,
+            "lead_magnet_type": row.get("lead_magnet_type") or "",
+            "lead_magnet_delivered": row.get("lead_magnet_delivered") or False,
+        }
+
+    def _map_core_user(self, row: dict) -> dict:
+        return {
+            "telegram_id": row.get("telegram_id"),
+            "username": row.get("username"),
+            "first_name": row.get("first_name"),
+            "last_name": row.get("last_name"),
+            "consent_given": bool(row.get("consent_given")),
+            "consent_date": row.get("consent_date"),
+            "consent_revoked": bool(row.get("consent_revoked")),
+            "consent_revoked_at": row.get("consent_revoked_at"),
+            "transborder_consent": bool(row.get("transborder_consent")),
+            "transborder_consent_date": row.get("transborder_consent_date"),
+            "marketing_consent": bool(row.get("marketing_consent")),
+            "marketing_consent_date": row.get("marketing_consent_date"),
+            "conversation_stage": row.get("conversation_stage"),
+            "cta_variant": row.get("cta_variant"),
+            "cta_shown": bool(row.get("cta_shown")),
+            "cta_shown_at": row.get("cta_shown_at"),
+            "created_at": row.get("created_at"),
+            "last_interaction": row.get("last_interaction"),
+        }
+
+    def get_user_by_telegram_id(self, telegram_id: int) -> dict | None:
+        core_users = self._core_get_json("/api/v1/users", {"telegram_id": telegram_id, "limit": 1})
+        core_user = self._map_core_user(core_users[0]) if isinstance(core_users, list) and core_users else None
+        local_user = self.db.get_user_by_telegram_id(telegram_id)
+        if local_user and core_user:
+            merged = dict(local_user)
+            merged.update({k: v for k, v in core_user.items() if v is not None})
+            return merged
+        if local_user:
+            return local_user
+        return core_user
+
+    def get_recent_users(self, limit: int = 20) -> list[dict]:
+        core_users = self._core_get_json("/api/v1/users", {"limit": limit})
+        if isinstance(core_users, list):
+            return [self._map_core_user(row) for row in core_users]
+        return self.db.get_recent_users(limit=limit)
+
+    def get_users_without_consent(self, limit: int = 20) -> list[dict]:
+        core_users = self._core_get_json("/api/v1/users", {"without_consent": True, "limit": limit})
+        if isinstance(core_users, list):
+            return [self._map_core_user(row) for row in core_users]
+        return self.db.get_users_without_consent(limit=limit)
+
+    def get_users_with_revoked_consent(self, limit: int = 20) -> list[dict]:
+        core_users = self._core_get_json("/api/v1/users", {"revoked_only": True, "limit": limit})
+        if isinstance(core_users, list):
+            return [self._map_core_user(row) for row in core_users]
+        return self.db.get_users_with_revoked_consent(limit=limit)
+
+    def get_latest_lead_for_telegram_user(self, telegram_id: int) -> dict:
+        core_leads = self._core_get_json(
+            "/api/v1/leads",
+            {
+                "source_filter": "telegram_bot",
+                "telegram_user_id": telegram_id,
+                "limit": 1,
+            },
+        )
+        if isinstance(core_leads, list) and core_leads:
+            return self._map_core_lead(core_leads[0])
+
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return {}
+        return self.db.get_lead_by_user_id(target_user["id"]) or {}
+
+    def get_lead_snapshot_by_legacy_id(self, legacy_lead_id: int) -> dict:
+        core_leads = self._core_get_json(
+            "/api/v1/leads",
+            {
+                "source_filter": "telegram_bot",
+                "legacy_lead_id": legacy_lead_id,
+                "limit": 1,
+            },
+        )
+        if isinstance(core_leads, list) and core_leads:
+            return self._map_core_lead(core_leads[0])
+        return self.db.get_lead_by_id(legacy_lead_id) or {}
+
+    def get_user_snapshot(self, telegram_id: int) -> dict | None:
+        target_user = self.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return None
+
+        consent = {
+            "consent_given": bool(target_user.get("consent_given")),
+            "consent_date": target_user.get("consent_date"),
+            "consent_revoked": bool(target_user.get("consent_revoked")),
+            "consent_revoked_at": target_user.get("consent_revoked_at"),
+            "transborder_consent": bool(target_user.get("transborder_consent")),
+            "transborder_consent_date": target_user.get("transborder_consent_date"),
+            "marketing_consent": bool(target_user.get("marketing_consent")),
+            "marketing_consent_date": target_user.get("marketing_consent_date"),
+        }
+        lead = self.get_latest_lead_for_telegram_user(telegram_id)
+        return {
+            "user": target_user,
+            "lead": lead,
+            "consent": consent,
+        }
+
+    def export_user_data(self, telegram_id: int) -> dict:
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return {}
+
+        payload = self.db.export_user_data(target_user["id"])
+        core_lead = self.get_latest_lead_for_telegram_user(telegram_id)
+        if core_lead:
+            payload["lead"] = core_lead
+        return payload
 
     def _get_funnel_payload(self, days=30) -> Dict:
         funnel_data = self.db.get_funnel_report(days)
@@ -21,7 +190,20 @@ class AdminInterface:
 
     def format_leads_list(self, temperature=None, status=None, limit=20):
         try:
-            leads = self.db.get_all_leads(temperature, status, limit)
+            leads = None
+            core_leads = self._core_get_json(
+                "/api/v1/leads",
+                {
+                    "status_filter": status,
+                    "source_filter": "telegram_bot",
+                    "temperature_filter": temperature,
+                    "limit": limit,
+                },
+            )
+            if isinstance(core_leads, list):
+                leads = [self._map_core_lead(row) for row in core_leads]
+            if leads is None:
+                leads = self.db.get_all_leads(temperature, status, limit)
             if not leads:
                 return "📋 СПИСОК ЛИДОВ\n\nЛидов не найдено"
             
@@ -41,6 +223,18 @@ class AdminInterface:
     def format_statistics(self, days=30):
         try:
             stats = self.db.get_statistics(days)
+            core_summary = self._core_get_json("/api/v1/leads/stats/summary")
+            if isinstance(core_summary, dict):
+                stats = dict(stats)
+                stats["total_leads"] = core_summary.get("total_leads", stats.get("total_leads", 0))
+                stats["cold_leads"] = core_summary.get("cold_leads", stats.get("cold_leads", 0))
+                stats["warm_leads"] = core_summary.get("warm_leads", stats.get("warm_leads", 0))
+                stats["hot_leads"] = core_summary.get("hot_leads", stats.get("hot_leads", 0))
+                stats["stage_discover"] = core_summary.get("stage_discover", stats.get("stage_discover", 0))
+                stats["stage_diagnose"] = core_summary.get("stage_diagnose", stats.get("stage_diagnose", 0))
+                stats["stage_qualify"] = core_summary.get("stage_qualify", stats.get("stage_qualify", 0))
+                stats["stage_propose"] = core_summary.get("stage_propose", stats.get("stage_propose", 0))
+                stats["stage_handoff"] = core_summary.get("stage_handoff", stats.get("stage_handoff", 0))
             message = (
                 f"📊 СТАТИСТИКА\n\n"
                 f"👥 Пользователей: {stats.get('total_users', 0)}\n"
@@ -214,7 +408,15 @@ class AdminInterface:
     
     def export_leads_to_csv(self):
         try:
-            leads = self.db.get_all_leads(limit=10000)
+            leads = None
+            core_leads = self._core_get_json(
+                "/api/v1/leads",
+                {"source_filter": "telegram_bot", "limit": 500},
+            )
+            if isinstance(core_leads, list):
+                leads = [self._map_core_lead(row) for row in core_leads]
+            if leads is None:
+                leads = self.db.get_all_leads(limit=10000)
             if not leads:
                 return ""
 
@@ -305,8 +507,9 @@ class AdminInterface:
             if lead_id:
                 self.db.create_notification(lead_id, notification_type, message or "")
 
-            lead = self.db.get_lead_by_id(lead_id) if lead_id else None
-            user = self.db.get_user_by_id(lead["user_id"]) if lead else None
+            legacy_lead = self.db.get_lead_by_id(lead_id) if lead_id else None
+            lead = self.get_lead_snapshot_by_legacy_id(lead_id) if lead_id else None
+            user = self.db.get_user_by_id(legacy_lead["user_id"]) if legacy_lead and legacy_lead.get("user_id") else None
 
             type_header = {
                 "handoff_request": "📞 Запрос на связь с командой",

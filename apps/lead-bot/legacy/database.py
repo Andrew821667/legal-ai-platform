@@ -5,6 +5,8 @@ import sqlite3
 import logging
 import json
 import os
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 from config import Config
@@ -27,6 +29,7 @@ _LEADS_COLUMNS = frozenset({
     "team_size", "contracts_per_month", "pain_point", "budget",
     "urgency", "industry", "service_category", "specific_need",
     "temperature", "status", "notes",
+    "core_lead_id",
     "conversation_stage", "cta_variant", "cta_shown",
     "lead_magnet_type", "lead_magnet_delivered",
     "notification_sent", "last_message_at",
@@ -56,6 +59,143 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row  # Доступ к колонкам по имени
         return conn
+
+    def _core_get_json(self, path: str, params: dict | None = None):
+        if not (config.CORE_API_SYNC_ENABLED and config.CORE_API_URL and config.API_KEY_BOT):
+            return None
+
+        query = ""
+        if params:
+            cleaned = {key: value for key, value in params.items() if value is not None}
+            if cleaned:
+                query = "?" + urllib.parse.urlencode(cleaned)
+
+        request = urllib.request.Request(
+            url=f"{config.CORE_API_URL.rstrip('/')}{path}{query}",
+            headers={"X-API-Key": config.API_KEY_BOT, "Content-Type": "application/json"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else None
+        except Exception as error:
+            logger.debug("Core API getter fallback to SQLite for %s: %s", path, error)
+            return None
+
+    @staticmethod
+    def _map_core_user(row: dict) -> dict:
+        return {
+            "telegram_id": row.get("telegram_id"),
+            "username": row.get("username"),
+            "first_name": row.get("first_name"),
+            "last_name": row.get("last_name"),
+            "email": row.get("email"),
+            "name": row.get("name"),
+            "consent_given": bool(row.get("consent_given")),
+            "consent_date": row.get("consent_date"),
+            "consent_revoked": bool(row.get("consent_revoked")),
+            "consent_revoked_at": row.get("consent_revoked_at"),
+            "transborder_consent": bool(row.get("transborder_consent")),
+            "transborder_consent_date": row.get("transborder_consent_date"),
+            "marketing_consent": bool(row.get("marketing_consent")),
+            "marketing_consent_date": row.get("marketing_consent_date"),
+            "conversation_stage": row.get("conversation_stage"),
+            "cta_variant": row.get("cta_variant"),
+            "cta_shown": bool(row.get("cta_shown")),
+            "cta_shown_at": row.get("cta_shown_at"),
+            "created_at": row.get("created_at"),
+            "last_interaction": row.get("last_interaction"),
+        }
+
+    @staticmethod
+    def _map_core_lead(row: dict) -> dict:
+        return {
+            "core_lead_id": row.get("id"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+            "name": row.get("name"),
+            "email": row.get("email"),
+            "phone": row.get("phone"),
+            "company": row.get("company"),
+            "temperature": row.get("temperature"),
+            "status": row.get("status"),
+            "service_category": row.get("service_category"),
+            "specific_need": row.get("specific_need"),
+            "pain_point": row.get("pain_point"),
+            "budget": row.get("budget"),
+            "urgency": row.get("urgency"),
+            "industry": row.get("industry"),
+            "conversation_stage": row.get("conversation_stage"),
+            "cta_variant": row.get("cta_variant"),
+            "cta_shown": bool(row.get("cta_shown")),
+            "lead_magnet_type": row.get("lead_magnet_type"),
+            "lead_magnet_delivered": bool(row.get("lead_magnet_delivered")),
+            "notes": row.get("notes"),
+        }
+
+    def _merge_user_row_with_core(self, local_user: dict | None) -> dict | None:
+        if not local_user:
+            return None
+        telegram_id = local_user.get("telegram_id")
+        if telegram_id is None:
+            return local_user
+        core_rows = self._core_get_json("/api/v1/users", {"telegram_id": telegram_id, "limit": 1})
+        if isinstance(core_rows, list) and core_rows:
+            merged = dict(local_user)
+            merged.update({k: v for k, v in self._map_core_user(core_rows[0]).items() if v is not None})
+            return merged
+        return local_user
+
+    def _merge_lead_row_with_core(self, local_lead: dict | None, telegram_user_id: int | None = None) -> dict | None:
+        if not local_lead:
+            return None
+        params = {"source_filter": "telegram_bot", "limit": 1}
+        if local_lead.get("id") is not None:
+            params["legacy_lead_id"] = local_lead.get("id")
+        elif telegram_user_id is not None:
+            params["telegram_user_id"] = telegram_user_id
+        core_rows = self._core_get_json("/api/v1/leads", params)
+        if isinstance(core_rows, list) and core_rows:
+            merged = dict(local_lead)
+            merged.update({k: v for k, v in self._map_core_lead(core_rows[0]).items() if v is not None})
+            return merged
+        return local_lead
+
+    def _sync_lead_to_core(self, lead_id: int) -> None:
+        """Зеркалирует текущий lead state в core-api, не ломая legacy flow."""
+        try:
+            from core_api_bridge import core_api_bridge
+
+            if not core_api_bridge.enabled:
+                return
+
+            lead = self.get_lead_by_id(lead_id)
+            if not lead:
+                return
+
+            user = self.get_user_by_id(lead["user_id"]) if lead.get("user_id") else None
+            core_lead_id = core_api_bridge.sync_lead(lead, user)
+            if core_lead_id and lead.get("core_lead_id") != core_lead_id:
+                self.set_core_lead_id(lead_id, core_lead_id)
+        except Exception as mirror_error:
+            logger.warning("Failed to sync lead %s to core-api: %s", lead_id, mirror_error)
+
+    def _sync_user_to_core(self, user_id: int) -> None:
+        """Зеркалирует профиль и согласия пользователя в core-api."""
+        try:
+            from core_api_bridge import core_api_bridge
+
+            if not core_api_bridge.enabled:
+                return
+
+            user = self.get_user_by_id(user_id)
+            if not user:
+                return
+
+            core_api_bridge.sync_user(user)
+        except Exception as mirror_error:
+            logger.warning("Failed to sync user %s to core-api: %s", user_id, mirror_error)
 
     def init_database(self):
         """Инициализация базы данных и создание таблиц"""
@@ -104,6 +244,7 @@ class Database:
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_timestamp ON conversations(user_id, timestamp)")
 
             # Таблица leads
             cursor.execute("""
@@ -128,6 +269,7 @@ class Database:
                     temperature TEXT DEFAULT 'cold',
                     status TEXT DEFAULT 'new',
                     notes TEXT,
+                    core_lead_id TEXT,
                     conversation_stage TEXT DEFAULT 'discover',
                     cta_variant TEXT,
                     cta_shown BOOLEAN DEFAULT 0,
@@ -189,6 +331,10 @@ class Database:
             if 'notification_sent' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN notification_sent BOOLEAN DEFAULT 0")
                 logger.info("Added notification_sent column to leads table")
+
+            if 'core_lead_id' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN core_lead_id TEXT")
+                logger.info("Added core_lead_id column to leads table")
             
             # Миграция: добавляем service_category и specific_need
             if 'service_category' not in columns:
@@ -215,6 +361,13 @@ class Database:
             if 'cta_shown' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN cta_shown BOOLEAN DEFAULT 0")
                 logger.info("Added cta_shown column to leads table")
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_user_created_at ON leads(user_id, created_at DESC)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leads_notification_last_message "
+                "ON leads(notification_sent, last_message_at)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_core_lead_id ON leads(core_lead_id)")
 
             cursor.execute("PRAGMA table_info(users)")
             user_columns = [column[1] for column in cursor.fetchall()]
@@ -477,6 +630,7 @@ class Database:
             user_id = cursor.fetchone()[0]
 
             logger.info(f"User {telegram_id} created/updated with id {user_id}")
+            self._sync_user_to_core(user_id)
             return user_id
 
         except Exception as e:
@@ -496,7 +650,7 @@ class Database:
             row = cursor.fetchone()
 
             if row:
-                return dict(row)
+                return self._merge_user_row_with_core(dict(row))
             return None
 
         finally:
@@ -512,7 +666,7 @@ class Database:
             row = cursor.fetchone()
 
             if row:
-                return dict(row)
+                return self._merge_user_row_with_core(dict(row))
             return None
 
         finally:
@@ -579,31 +733,19 @@ class Database:
 
     def get_user_consent_state(self, user_id: int) -> Dict:
         """Получение статуса согласий пользователя."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT
-                    consent_given,
-                    consent_date,
-                    consent_revoked,
-                    consent_revoked_at,
-                    transborder_consent,
-                    transborder_consent_date,
-                    marketing_consent,
-                    marketing_consent_date
-                FROM users
-                WHERE id = ?
-                """,
-                (user_id,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return {}
-            return dict(row)
-        finally:
-            conn.close()
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return {}
+        return {
+            "consent_given": user.get("consent_given"),
+            "consent_date": user.get("consent_date"),
+            "consent_revoked": user.get("consent_revoked"),
+            "consent_revoked_at": user.get("consent_revoked_at"),
+            "transborder_consent": user.get("transborder_consent"),
+            "transborder_consent_date": user.get("transborder_consent_date"),
+            "marketing_consent": user.get("marketing_consent"),
+            "marketing_consent_date": user.get("marketing_consent_date"),
+        }
 
     def grant_user_consent(self, user_id: int) -> None:
         """Выдать согласие на обработку ПД."""
@@ -623,6 +765,7 @@ class Database:
                 (user_id,),
             )
             conn.commit()
+            self._sync_user_to_core(user_id)
         except Exception:
             conn.rollback()
             raise
@@ -645,6 +788,7 @@ class Database:
                 (1 if granted else 0, 1 if granted else 0, user_id),
             )
             conn.commit()
+            self._sync_user_to_core(user_id)
         except Exception:
             conn.rollback()
             raise
@@ -667,6 +811,7 @@ class Database:
                 (1 if granted else 0, 1 if granted else 0, user_id),
             )
             conn.commit()
+            self._sync_user_to_core(user_id)
         except Exception:
             conn.rollback()
             raise
@@ -716,7 +861,13 @@ class Database:
             cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
             messages_deleted = cursor.rowcount
 
+            cursor.execute("SELECT id FROM leads WHERE user_id = ?", (user_id,))
+            affected_lead_ids = [row[0] for row in cursor.fetchall()]
+
             conn.commit()
+            self._sync_user_to_core(user_id)
+            for lead_id in affected_lead_ids:
+                self._sync_lead_to_core(int(lead_id))
             return {
                 "users_updated": users_updated,
                 "leads_anonymized": leads_anonymized,
@@ -730,36 +881,25 @@ class Database:
 
     def export_user_data(self, user_id: int) -> Dict:
         """Экспорт данных пользователя и связанной анкеты."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
-            if not user:
-                return {}
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return {}
 
-            cursor.execute(
-                "SELECT * FROM leads WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT 1",
-                (user_id,),
-            )
-            lead = cursor.fetchone()
-
-            return {
-                "user": dict(user),
-                "lead": dict(lead) if lead else {},
-                "consent": {
-                    "consent_given": bool(user["consent_given"]),
-                    "consent_date": user["consent_date"],
-                    "consent_revoked": bool(user["consent_revoked"]),
-                    "consent_revoked_at": user["consent_revoked_at"],
-                    "transborder_consent": bool(user["transborder_consent"]),
-                    "transborder_consent_date": user["transborder_consent_date"],
-                    "marketing_consent": bool(user["marketing_consent"]),
-                    "marketing_consent_date": user["marketing_consent_date"],
-                },
-            }
-        finally:
-            conn.close()
+        lead = self.get_lead_by_user_id(user_id)
+        return {
+            "user": user,
+            "lead": lead or {},
+            "consent": {
+                "consent_given": bool(user.get("consent_given")),
+                "consent_date": user.get("consent_date"),
+                "consent_revoked": bool(user.get("consent_revoked")),
+                "consent_revoked_at": user.get("consent_revoked_at"),
+                "transborder_consent": bool(user.get("transborder_consent")),
+                "transborder_consent_date": user.get("transborder_consent_date"),
+                "marketing_consent": bool(user.get("marketing_consent")),
+                "marketing_consent_date": user.get("marketing_consent_date"),
+            },
+        }
 
     def update_user_fields(self, user_id: int, fields: Dict[str, str]) -> bool:
         """Обновление полей профиля пользователя."""
@@ -776,6 +916,8 @@ class Database:
                 values,
             )
             conn.commit()
+            if cursor.rowcount > 0:
+                self._sync_user_to_core(user_id)
             return cursor.rowcount > 0
         except Exception:
             conn.rollback()
@@ -856,6 +998,7 @@ class Database:
                 values,
             )
             conn.commit()
+            self._sync_user_to_core(user_id)
         except Exception as e:
             logger.error(f"Error updating user funnel state: {e}")
             conn.rollback()
@@ -888,6 +1031,7 @@ class Database:
                 (user_id,),
             )
             conn.commit()
+            self._sync_user_to_core(user_id)
         except Exception as e:
             logger.error(f"Error resetting user funnel state: {e}")
             conn.rollback()
@@ -1007,13 +1151,36 @@ class Database:
                 (user_id, lead_id, event_type, payload_text),
             )
             conn.commit()
-            return cursor.lastrowid
+            event_row_id = cursor.lastrowid
         except Exception as e:
             logger.error(f"Error tracking analytics event: {e}")
             conn.rollback()
             raise
         finally:
             conn.close()
+
+        try:
+            from core_api_bridge import core_api_bridge
+
+            core_lead_id = None
+            if lead_id:
+                lead = self.get_lead_by_id(lead_id) or {}
+                core_lead_id = lead.get("core_lead_id")
+            core_api_bridge.track_event(
+                event_type=event_type,
+                payload={
+                    **(payload or {}),
+                    "legacy_event_id": event_row_id,
+                    "legacy_user_id": user_id,
+                    "legacy_lead_id": lead_id,
+                },
+                idempotency_key=f"legacy-event-sync-{event_row_id}",
+                core_lead_id=core_lead_id,
+            )
+        except Exception as mirror_error:
+            logger.warning("Failed to mirror analytics event %s to core-api: %s", event_type, mirror_error)
+
+        return event_row_id
 
     # === CONVERSATIONS ===
 
@@ -1133,6 +1300,7 @@ class Database:
                 logger.info(f"Lead {lead_id} created for user {user_id}")
 
             conn.commit()
+            self._sync_lead_to_core(lead_id)
             return lead_id
 
         except Exception as e:
@@ -1158,6 +1326,7 @@ class Database:
             lead_id = cursor.lastrowid
             conn.commit()
             logger.info(f"New lead {lead_id} created for user {user_id}")
+            self._sync_lead_to_core(lead_id)
             return lead_id
         except Exception as e:
             logger.error(f"Error creating new lead: {e}")
@@ -1185,7 +1354,9 @@ class Database:
             row = cursor.fetchone()
 
             if row:
-                return dict(row)
+                user = self.get_user_by_id(user_id)
+                telegram_user_id = (user or {}).get("telegram_id")
+                return self._merge_lead_row_with_core(dict(row), telegram_user_id=telegram_user_id)
             return None
 
         finally:
@@ -1223,9 +1394,32 @@ class Database:
             row = cursor.fetchone()
 
             if row:
-                return dict(row)
+                local_lead = dict(row)
+                user = self.get_user_by_id(local_lead["user_id"]) if local_lead.get("user_id") else None
+                return self._merge_lead_row_with_core(local_lead, telegram_user_id=(user or {}).get("telegram_id"))
             return None
 
+        finally:
+            conn.close()
+
+    def set_core_lead_id(self, lead_id: int, core_lead_id: str) -> None:
+        """Сохраняет UUID лида из core-api для legacy лида."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE leads
+                SET core_lead_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (core_lead_id, lead_id),
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error setting core_lead_id for lead {lead_id}: {e}")
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
@@ -1349,23 +1543,35 @@ class Database:
             """, (limit,))
             
             leads = [dict(row) for row in cursor.fetchall()]
-            
-            # Для каждого лида получаем историю диалога
+            if not leads:
+                return []
+
+            user_ids = [lead["user_id"] for lead in leads]
+            placeholders = ",".join("?" for _ in user_ids)
+            cursor.execute(
+                f"""
+                SELECT user_id, role, message, timestamp
+                FROM conversations
+                WHERE user_id IN ({placeholders})
+                ORDER BY user_id ASC, timestamp ASC
+                """,
+                user_ids,
+            )
+
+            messages_by_user = {}
+            for row in cursor.fetchall():
+                payload = dict(row)
+                messages_by_user.setdefault(payload["user_id"], []).append(
+                    {
+                        "role": payload["role"],
+                        "message": payload["message"],
+                        "timestamp": payload["timestamp"],
+                    }
+                )
+
             result = []
             for lead in leads:
                 user_id = lead['user_id']
-                
-                # Получаем сообщения диалога
-                cursor.execute("""
-                    SELECT role, message, timestamp
-                    FROM conversations
-                    WHERE user_id = ?
-                    ORDER BY timestamp ASC
-                """, (user_id,))
-                
-                messages = [dict(row) for row in cursor.fetchall()]
-                
-                # Формируем полный объект
                 result.append({
                     'lead_id': lead['id'],
                     'user_id': user_id,
@@ -1374,7 +1580,7 @@ class Database:
                     'pain_point': lead.get('pain_point'),
                     'industry': lead.get('industry'),
                     'temperature': lead.get('temperature'),
-                    'messages': messages
+                    'messages': messages_by_user.get(user_id, []),
                 })
             
             logger.info(f"Retrieved {len(result)} successful conversations for RAG")
@@ -1425,26 +1631,41 @@ class Database:
             
             cursor.execute(query, params)
             leads = [dict(row) for row in cursor.fetchall()]
-            
-            # Добавляем сообщения для каждого лида
+            if not leads:
+                return []
+
+            user_ids = [lead["user_id"] for lead in leads]
+            placeholders = ",".join("?" for _ in user_ids)
+            cursor.execute(
+                f"""
+                SELECT user_id, role, message, timestamp
+                FROM conversations
+                WHERE user_id IN ({placeholders})
+                ORDER BY user_id ASC, timestamp ASC
+                """,
+                user_ids,
+            )
+
+            messages_by_user = {}
+            for row in cursor.fetchall():
+                payload = dict(row)
+                messages_by_user.setdefault(payload["user_id"], []).append(
+                    {
+                        "role": payload["role"],
+                        "message": payload["message"],
+                        "timestamp": payload["timestamp"],
+                    }
+                )
+
             result = []
             for lead in leads:
-                cursor.execute("""
-                    SELECT role, message, timestamp
-                    FROM conversations
-                    WHERE user_id = ?
-                    ORDER BY timestamp ASC
-                """, (lead['user_id'],))
-                
-                messages = [dict(row) for row in cursor.fetchall()]
-                
                 result.append({
                     'lead_id': lead['id'],
                     'service_category': lead.get('service_category'),
                     'specific_need': lead.get('specific_need'),
                     'pain_point': lead.get('pain_point'),
                     'temperature': lead.get('temperature'),
-                    'messages': messages
+                    'messages': messages_by_user.get(lead['user_id'], []),
                 })
             
             return result

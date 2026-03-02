@@ -8,6 +8,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from config import Config
+import utils
 config = Config()
 
 logger = logging.getLogger(__name__)
@@ -53,11 +54,11 @@ class EmailSender:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(message)
 
-            logger.info(f"Email sent successfully to {to_email}")
+            logger.info("Email sent successfully to %s", utils.mask_email(to_email))
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+            logger.error("Failed to send email to %s: %s", utils.mask_email(to_email), e)
             return False
 
     def send_consultation_confirmation(self, to_email: str, name: Optional[str] = None) -> bool:
