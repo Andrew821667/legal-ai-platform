@@ -15,6 +15,33 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
+
+        # Preserve structured context passed through logger.*(..., extra={...}).
+        skip = {
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+        }
+        for key, value in record.__dict__.items():
+            if key not in skip and key not in payload:
+                payload[key] = value
         return json.dumps(payload, ensure_ascii=False)
 
 

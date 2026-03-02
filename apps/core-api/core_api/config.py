@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     alert_chat_id: str | None = None
     api_key_cache_ttl_seconds: int = 60
     health_worker_active_minutes: int = 10
+    news_retry_failed_after_minutes: int = 15
 
 
 @lru_cache

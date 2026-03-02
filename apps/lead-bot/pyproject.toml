@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "shared",
-    "python-telegram-bot>=21.9",
+    "python-telegram-bot[job-queue]>=21.9",
     "requests>=2.32",
     "pydantic-settings>=2.7",
 ]

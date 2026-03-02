@@ -2,11 +2,14 @@
 Handlers: helpers
 """
 import logging
+import smtplib
+import sqlite3
 import time
 import re
 import asyncio
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 import database
 import ai_brain
@@ -18,6 +21,7 @@ import utils
 import email_sender
 import security
 import prompts
+import content
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
@@ -85,7 +89,7 @@ async def send_message_gradually(update: Update, text: str):
                 try:
                     await sent_message.edit_text(full_message)
                     last_update_time = current_time
-                except Exception as e:
+                except TelegramError:
                     # Если ошибка редактирования - пропускаем
                     pass
 
@@ -93,7 +97,7 @@ async def send_message_gradually(update: Update, text: str):
     if sent_message:
         try:
             await sent_message.edit_text(text)
-        except Exception:
+        except TelegramError:
             pass
     else:
         # Если вообще не отправили (очень короткий текст)
@@ -105,6 +109,9 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
     """Отправляет email с lead magnet"""
     try:
         magnet_type = lead.get('lead_magnet_type')
+        if magnet_type == "demo_analysis":
+            magnet_type = "demo"
+            database.db.create_or_update_lead(user_data["id"], {"lead_magnet_type": "demo"})
         user_name = lead.get('name') or user_data.get('first_name')
 
         # Показываем индикатор печатания
@@ -128,42 +135,22 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
             lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead['id'])
 
             # Подтверждение пользователю
-            messages = {
-                'consultation': (
-                    f"✅ Отлично! Подтверждение консультации отправлено на {email}\n\n"
-                    "Наша команда свяжется с вами в ближайшее время для согласования времени.\n\n"
-                    "Если есть еще вопросы - спрашивайте, я на связи!"
-                ),
-                'checklist': (
-                    f"✅ Отлично! Чек-лист отправлен на {email}\n\n"
-                    "Проверьте почту (иногда письма попадают в спам).\n\n"
-                    "Если хотите обсудить автоматизацию - готов ответить на вопросы!"
-                ),
-                'demo': (
-                    f"✅ Отлично! Инструкции отправлены на {email}\n\n"
-                    "Теперь вы можете отправить нам ваш договор для демо-анализа:\n"
-                    "📱 Telegram: @AndrewPopov821667\n"
-                    "📧 Email: a.popov.gv@gmail.com"
-                )
-            }
-
-            await update.message.reply_text(messages.get(magnet_type, "✅ Спасибо! Письмо отправлено."))
+            base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
+            await update.message.reply_text(f"{base_message}\n\nКонтакт для отправки: {email}")
             logger.info(f"Lead magnet {magnet_type} sent to {email}")
         else:
             # Ошибка отправки
             await update.message.reply_text(
-                "Произошла ошибка при отправке email. Пожалуйста, свяжитесь с нами напрямую:\n\n"
-                "📧 a.popov.gv@gmail.com\n"
-                "📱 @AndrewPopov821667\n"
-                "📞 +7 (909) 233-09-09"
+                "Произошла ошибка при отправке email.\n\n"
+                f"{content.DIRECT_CONTACTS_TEXT}"
             )
             logger.error(f"Failed to send lead magnet {magnet_type} to {email}")
 
-    except Exception as e:
+    except (smtplib.SMTPException, sqlite3.Error, TelegramError, KeyError, OSError) as e:
         logger.error(f"Error in send_lead_magnet_email: {e}")
         await update.message.reply_text(
-            "Произошла ошибка. Пожалуйста, свяжитесь с нами напрямую:\n"
-            "📧 a.popov.gv@gmail.com"
+            "Произошла ошибка.\n\n"
+            f"{content.DIRECT_CONTACTS_TEXT}"
         )
 
 
@@ -243,19 +230,34 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         
         notification_message += f"🌡️ Температура: {temperature.upper()}"
 
-        # Отправляем в Telegram
-        # Если задан LEADS_CHAT_ID - отправляем в отдельный чат, иначе напрямую админу
-        target_chat_id = config.LEADS_CHAT_ID if config.LEADS_CHAT_ID else config.ADMIN_TELEGRAM_ID
+        # Отправляем в Telegram с retry и fallback в личный чат админа.
+        targets = []
+        if config.LEADS_CHAT_ID and config.LEADS_CHAT_ID != config.ADMIN_TELEGRAM_ID:
+            targets.append(config.LEADS_CHAT_ID)
+        targets.append(config.ADMIN_TELEGRAM_ID)
 
-        await context.bot.send_message(
-            chat_id=target_chat_id,
-            text=notification_message
-        )
+        sent_any = False
+        for target_chat_id in targets:
+            try:
+                await utils.telegram_call_with_retry(
+                    lambda target_chat_id=target_chat_id: context.bot.send_message(
+                        chat_id=target_chat_id,
+                        text=notification_message,
+                    ),
+                    action=f"lead_notification_{target_chat_id}",
+                    max_retries=3,
+                    base_delay=1.0,
+                )
+                sent_any = True
+                logger.info(f"Lead notification sent to chat {target_chat_id} for lead {lead_id}")
+            except TelegramError as send_error:
+                logger.warning(f"Failed to send lead notification to chat {target_chat_id}: {send_error}")
 
-        # Помечаем что уведомление отправлено
-        database.db.mark_lead_notification_sent(lead_id)
-
-        logger.info(f"Lead notification sent to chat {target_chat_id} for lead {lead_id}")
+        if sent_any:
+            # Помечаем что уведомление отправлено
+            database.db.mark_lead_notification_sent(lead_id)
+        else:
+            logger.error(f"Lead notification was not delivered to any target for lead {lead_id}")
 
         # Отправляем на email (если настроен SMTP)
         if config.SMTP_USER and config.SMTP_PASSWORD:
@@ -270,11 +272,8 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 )
 
                 logger.info(f"Email notification sent to admin about lead {lead_id}")
-            except Exception as e:
+            except (smtplib.SMTPException, OSError) as e:
                 logger.error(f"Error sending email notification: {e}")
 
-    except Exception as e:
+    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in notify_admin_new_lead: {e}")
-
-
-

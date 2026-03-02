@@ -68,6 +68,12 @@ class LeadQualifier:
             if extracted_data.get('industry'):
                 lead_data['industry'] = extracted_data['industry']
 
+            if extracted_data.get('service_category'):
+                lead_data['service_category'] = extracted_data['service_category']
+
+            if extracted_data.get('specific_need'):
+                lead_data['specific_need'] = extracted_data['specific_need']
+
             # Температура лида
             if extracted_data.get('lead_temperature'):
                 lead_data['temperature'] = extracted_data['lead_temperature']
@@ -92,9 +98,12 @@ class LeadQualifier:
 
         Args:
             lead_id: ID лида
-            magnet_type: Тип lead magnet (consultation, checklist, demo_analysis)
+            magnet_type: Тип lead magnet (consultation, checklist, demo)
         """
         try:
+            if magnet_type == "demo_analysis":
+                magnet_type = "demo"
+
             lead = self.db.get_lead_by_id(lead_id)
             if lead:
                 self.db.create_or_update_lead(lead['user_id'], {

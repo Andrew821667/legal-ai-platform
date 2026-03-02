@@ -8,11 +8,34 @@ class Settings(BaseSettings):
 
     core_api_url: str = "http://core-api:8000"
     api_key_news: str = ""
+    api_key_admin: str = ""
     telegram_bot_token: str = ""
+    news_admin_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_channel_username: str = ""
+    news_discussion_chat_id: str = ""
+    news_discussion_chat_username: str = ""
+    news_admin_ids: str = ""
     news_source_urls: str = ""
     tz_name: str = "Europe/Moscow"
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    news_model: str = "deepseek-chat"
+    news_top_k: int = 5
+    news_schedule_slots: str = "10:00,13:00,17:00"
+    news_retry_failed_after_minutes: int = 15
+    news_max_per_source: int = 2
+    news_similarity_threshold: float = 0.48
+    news_priority_domains: str = ""
+    news_history_scan_limit: int = 120
+    news_weekday_slots: str = "10:00,16:30"
+    news_saturday_slots: str = "11:00"
+    news_sunday_slots: str = ""
+    news_alert_slot: str = "19:00"
+    news_enable_alert_slot: bool = True
+    news_deep_days: str = "tue,thu"
+    news_digest_weekday: int = 5
+    news_cta_sequence: str = "soft,soft,soft,soft,soft,soft,soft,mid,mid,hard"
 
 
 settings = Settings()

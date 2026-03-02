@@ -21,12 +21,14 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Settings2
 } from 'lucide-react';
 import SEOChart from './admin/SEOChart';
 import ExportButton from './admin/ExportButton';
 import NotificationBadge from './admin/NotificationBadge';
 import IssueFilters from './admin/IssueFilters';
+import AutomationControlsPanel from './admin/AutomationControlsPanel';
 import { verifyPassword } from '@/lib/auth';
 
 interface AdminPanelProps {
@@ -39,7 +41,7 @@ export default function AdminPanel({ password = "admin123" }: AdminPanelProps) {
   const [inputPassword, setInputPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'seo' | 'technical' | 'github'>('seo');
+  const [activeTab, setActiveTab] = useState<'seo' | 'technical' | 'github' | 'automation'>('seo');
   const [githubData, setGithubData] = useState<any>(null);
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
@@ -359,7 +361,8 @@ export default function AdminPanel({ password = "admin123" }: AdminPanelProps) {
                       {[
                         { id: 'seo' as const, label: 'SEO & Аналитика', icon: BarChart3 },
                         { id: 'technical' as const, label: 'Технические данные', icon: Zap },
-                        { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github }
+                        { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github },
+                        { id: 'automation' as const, label: 'Automation Control', icon: Settings2 }
                       ].map((tab) => (
                         <button
                           key={tab.id}
@@ -818,6 +821,24 @@ export default function AdminPanel({ password = "admin123" }: AdminPanelProps) {
                             </button>
                           </div>
                         )}
+                      </motion.div>
+                    )}
+
+                    {/* Automation Tab */}
+                    {activeTab === 'automation' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-6"
+                      >
+                        <div className="bg-gradient-to-r from-cyan-500/10 to-amber-500/10 border border-cyan-400/20 rounded-xl p-4">
+                          <h3 className="text-white font-semibold mb-1">Automation Control Plane</h3>
+                          <p className="text-sm text-slate-300">
+                            Централизованное управление автоматизациями платформы.
+                            Любой сценарий можно выключить без редеплоя.
+                          </p>
+                        </div>
+                        <AutomationControlsPanel />
                       </motion.div>
                     )}
                   </div>

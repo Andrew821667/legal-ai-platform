@@ -5,7 +5,7 @@ RAG (Retrieval-Augmented Generation) Engine
 
 import logging
 import json
-import numpy as np
+import math
 from typing import List, Dict, Optional, Tuple
 from openai import OpenAI
 from config import Config
@@ -19,7 +19,10 @@ class KnowledgeEngine:
     """Движок для семантического поиска похожих диалогов"""
     
     def __init__(self):
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client_kwargs = {"api_key": config.OPENAI_API_KEY}
+        if config.OPENAI_BASE_URL:
+            client_kwargs["base_url"] = config.OPENAI_BASE_URL
+        self.client = OpenAI(**client_kwargs)
         self.embedding_model = "text-embedding-3-small"  # Дешёвая и быстрая модель
         logger.info("KnowledgeEngine initialized")
     
@@ -57,13 +60,11 @@ class KnowledgeEngine:
         if not vec1 or not vec2:
             return 0.0
         
-        vec1_np = np.array(vec1)
-        vec2_np = np.array(vec2)
-        
-        # Нормализация и скалярное произведение
-        dot_product = np.dot(vec1_np, vec2_np)
-        norm1 = np.linalg.norm(vec1_np)
-        norm2 = np.linalg.norm(vec2_np)
+        # Вычисляем сходство без внешних numeric-зависимостей.
+        # Это позволяет модулю стабильно импортироваться даже в облегченном окружении.
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
         
         if norm1 == 0 or norm2 == 0:
             return 0.0

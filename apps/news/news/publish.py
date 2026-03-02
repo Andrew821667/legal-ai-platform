@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
+from datetime import datetime, timezone
+from typing import Any
 
 import requests
 
@@ -12,35 +15,102 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def _send_to_telegram(text: str, media_urls: list[str] | None) -> None:
+def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
+    normalized = (text or "").strip()
+    if not normalized:
+        return []
+    if len(normalized) <= limit:
+        return [normalized]
+
+    parts: list[str] = []
+    rest = normalized
+    while rest:
+        if len(rest) <= limit:
+            parts.append(rest)
+            break
+        cut = rest.rfind("\n", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = rest.rfind(" ", 0, limit)
+        if cut < int(limit * 0.5):
+            cut = limit
+        parts.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+    return [part for part in parts if part]
+
+
+def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) -> dict[str, Any]:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
+    last_error: Exception | None = None
+
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.post(url, data=payload, timeout=20)
+            if response.status_code == 429:
+                retry_after = 3
+                try:
+                    body = response.json()
+                    retry_after = int(body.get("parameters", {}).get("retry_after", retry_after))
+                except Exception:
+                    pass
+                logger.warning("telegram_rate_limited", extra={"method": method, "retry_after": retry_after})
+                time.sleep(retry_after)
+                continue
+
+            response.raise_for_status()
+            body = response.json()
+            if not body.get("ok", False):
+                description = body.get("description") or "unknown telegram error"
+                raise RuntimeError(f"Telegram API error: {description}")
+            return body
+        except Exception as exc:
+            last_error = exc
+            if attempt < retries:
+                time.sleep(attempt)
+                continue
+            break
+
+    raise RuntimeError(f"Telegram request failed: {last_error}")
+
+
+def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
     chat_id = settings.telegram_channel_id or settings.telegram_channel_username
     if not chat_id:
         raise RuntimeError("TELEGRAM_CHANNEL_ID or TELEGRAM_CHANNEL_USERNAME is required")
 
+    normalized_text = (text or "").strip()
+    if not normalized_text:
+        raise RuntimeError("Post text is empty")
+
     if media_urls:
         media = media_urls[0]
-        if media.startswith("tg://"):
-            requests.post(
-                f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
-                data={"chat_id": chat_id, "photo": media.replace("tg://", ""), "caption": text},
-                timeout=20,
-            ).raise_for_status()
-            return
-        requests.post(
-            f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto",
-            data={"chat_id": chat_id, "photo": media, "caption": text},
-            timeout=20,
-        ).raise_for_status()
-        return
+        caption = normalized_text[:1020]
+        remainder = normalized_text[1020:].strip()
 
-    requests.post(
-        f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-        data={"chat_id": chat_id, "text": text},
-        timeout=20,
-    ).raise_for_status()
+        photo_value = media.replace("tg://", "") if media.startswith("tg://") else media
+        response = _telegram_request(
+            "sendPhoto",
+            {
+                "chat_id": chat_id,
+                "photo": photo_value,
+                "caption": caption,
+            },
+        )
+        message_id = int(response.get("result", {}).get("message_id") or 0)
+
+        if remainder:
+            for part in _split_text_for_telegram(remainder):
+                _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        return message_id
+
+    primary_message_id = 0
+    for part in _split_text_for_telegram(normalized_text):
+        response = _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        if primary_message_id == 0:
+            primary_message_id = int(response.get("result", {}).get("message_id") or 0)
+    return primary_message_id
 
 
 def main() -> int:
@@ -49,9 +119,19 @@ def main() -> int:
         return 1
 
     client = CoreClient(settings.core_api_url, settings.api_key_news)
+    try:
+        controls_response = client.list_automation_controls(scope="news")
+        controls_response.raise_for_status()
+        controls = {row.get("key"): bool(row.get("enabled", True)) for row in controls_response.json()}
+        if controls.get("news.publish.enabled") is False:
+            logger.info("publish_disabled_by_control_plane")
+            return 0
+    except Exception as exc:
+        logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
+
     claim_response = client.claim_posts(limit=10)
     if claim_response.status_code == 204:
-        logger.info("No due posts")
+        logger.info("no_due_posts")
         return 0
     claim_response.raise_for_status()
 
@@ -61,19 +141,28 @@ def main() -> int:
     for post in posts:
         post_id = post["id"]
         try:
-            _send_to_telegram(post["text"], post.get("media_urls"))
-            patch = client.patch_post(post_id, {"status": "posted"})
+            message_id = _send_to_telegram(post["text"], post.get("media_urls"))
+            patch = client.patch_post(
+                post_id,
+                {
+                    "status": "posted",
+                    "last_error": None,
+                    "telegram_message_id": message_id or None,
+                    "posted_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
             patch.raise_for_status()
             consecutive_errors = 0
+            logger.info("post_published", extra={"post_id": post_id})
         except Exception as exc:
             consecutive_errors += 1
-            logger.exception("Failed to publish post", extra={"post_id": post_id})
+            logger.exception("post_publish_failed", extra={"post_id": post_id, "error": str(exc)})
             fail = client.patch_post(post_id, {"status": "failed", "last_error": str(exc)[:500]})
             if fail.status_code >= 400:
-                logger.error("Failed to mark post failed", extra={"post_id": post_id})
+                logger.error("post_failed_patch_error", extra={"post_id": post_id, "status": fail.status_code})
 
             if consecutive_errors >= 3:
-                logger.error("Circuit breaker activated")
+                logger.error("publisher_circuit_breaker_activated")
                 break
 
     return 0

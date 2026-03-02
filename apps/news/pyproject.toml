@@ -6,6 +6,9 @@ dependencies = [
     "shared",
     "requests>=2.32",
     "pydantic-settings>=2.7",
+    "openai>=1.0.0",
+    "feedparser>=6.0.11",
+    "python-telegram-bot>=22.6",
 ]
 
 [tool.uv.sources]

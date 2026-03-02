@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "20260225_0002"
@@ -14,6 +15,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    has_vector = bind.execute(
+        sa.text("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
+    ).scalar_one_or_none()
+    if not has_vector:
+        return
+
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute(
         """

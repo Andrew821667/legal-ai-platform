@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text as sa_text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -48,10 +48,17 @@ class LeadStatus(str, enum.Enum):
 
 class ScheduledPostStatus(str, enum.Enum):
     draft = "draft"
+    review = "review"
     scheduled = "scheduled"
     publishing = "publishing"
     posted = "posted"
     failed = "failed"
+
+
+class PostFeedbackSource(str, enum.Enum):
+    comment = "comment"
+    reaction_count = "reaction_count"
+    reaction = "reaction"
 
 
 class ContractJobStatus(str, enum.Enum):
@@ -82,7 +89,7 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_text("true"))
 
 
 class User(Base):
@@ -130,7 +137,7 @@ class Lead(Base):
         Index(
             "ix_leads_telegram_user_id",
             "telegram_user_id",
-            postgresql_where=text("telegram_user_id IS NOT NULL"),
+            postgresql_where=sa_text("telegram_user_id IS NOT NULL"),
         ),
         Index("ix_leads_status", "status"),
     )
@@ -147,7 +154,7 @@ class Event(Base):
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     __table_args__ = (
-        Index("ix_events_lead_id", "lead_id", postgresql_where=text("lead_id IS NOT NULL")),
+        Index("ix_events_lead_id", "lead_id", postgresql_where=sa_text("lead_id IS NOT NULL")),
         Index("ix_events_created_at", "created_at"),
     )
 
@@ -168,12 +175,17 @@ class ScheduledPost(Base):
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     rubric: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    format_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cta_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     publish_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[ScheduledPostStatus] = mapped_column(
         Enum(ScheduledPostStatus, name="scheduled_post_status_enum"),
         nullable=False,
         default=ScheduledPostStatus.scheduled,
     )
+    telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    feedback_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -182,13 +194,52 @@ class ScheduledPost(Base):
         Index(
             "ix_scheduled_posts_publish",
             "publish_at",
-            postgresql_where=text("status = 'scheduled'"),
+            postgresql_where=sa_text("status = 'scheduled'"),
         ),
         Index(
             "ix_scheduled_posts_source_hash",
             "source_hash",
             unique=True,
-            postgresql_where=text("source_hash IS NOT NULL"),
+            postgresql_where=sa_text("source_hash IS NOT NULL"),
+        ),
+        Index(
+            "ix_scheduled_posts_telegram_message_id",
+            "telegram_message_id",
+            postgresql_where=sa_text("telegram_message_id IS NOT NULL"),
+        ),
+    )
+
+
+class PostFeedbackSignal(Base):
+    __tablename__ = "post_feedback_signals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("scheduled_posts.id"), nullable=False)
+    source: Mapped[PostFeedbackSource] = mapped_column(
+        Enum(PostFeedbackSource, name="post_feedback_source_enum"),
+        nullable=False,
+    )
+    signal_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    signal_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    actor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb"))
+
+    __table_args__ = (
+        Index("ix_post_feedback_signals_post_id", "post_id"),
+        Index("ix_post_feedback_signals_created_at", "created_at"),
+        Index(
+            "ix_post_feedback_signals_message",
+            "telegram_message_id",
+            "telegram_chat_id",
+            postgresql_where=sa_text("telegram_message_id IS NOT NULL"),
         ),
     )
 
@@ -226,12 +277,12 @@ class ContractJob(Base):
             "ix_contract_jobs_queue",
             "priority",
             "created_at",
-            postgresql_where=text("status = 'new'"),
+            postgresql_where=sa_text("status = 'new'"),
         ),
         Index(
             "ix_contract_jobs_stale",
             "updated_at",
-            postgresql_where=text("status = 'processing'"),
+            postgresql_where=sa_text("status = 'processing'"),
         ),
     )
 
@@ -272,3 +323,20 @@ class WorkerHeartbeat(Base):
     worker_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class AutomationControl(Base):
+    __tablename__ = "automation_controls"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    scope: Mapped[Scope | None] = mapped_column(Enum(Scope, name="scope_enum"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_text("true"))
+    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (Index("ix_automation_controls_scope", "scope"),)

@@ -6,6 +6,15 @@ export default function LeadMagnets() {
   const { ref: headerRef, isVisible: headerVisible } = useScrollAnimation();
   const { ref: gridRef, isVisible: gridVisible } = useScrollAnimation({ threshold: 0.05 });
 
+  const offerByIndex = ["consultation", "checklist", "demo"] as const;
+
+  const openLeadForm = (offer: (typeof offerByIndex)[number]) => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("lead_offer_selected", { detail: { offer } }));
+    const target = document.getElementById("lead-form");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const magnets = [
     {
       icon: "📞",
@@ -120,12 +129,9 @@ export default function LeadMagnets() {
               </ul>
 
               {/* CTA Button */}
-              <a
-                href={`https://t.me/legal_ai_helper_new_bot?start=${
-                  index === 0 ? "consultation" : index === 1 ? "checklist" : "demo"
-                }`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => openLeadForm(offerByIndex[index] || "consultation")}
                 className={`block w-full text-center font-semibold py-4 px-6 rounded-lg text-lg transition-all transform hover:scale-105 ${
                   magnet.popular
                     ? "bg-amber-600 hover:bg-amber-700 text-white shadow-lg"
@@ -133,7 +139,7 @@ export default function LeadMagnets() {
                 }`}
               >
                 {magnet.cta} →
-              </a>
+              </button>
             </div>
           ))}
         </div>

@@ -4,6 +4,13 @@ import AnimatedStat from "./AnimatedStat";
 import HeroIllustration from "./HeroIllustration";
 
 export default function Hero() {
+  const openLeadForm = (offer: "consultation" | "checklist" | "demo" | "unknown") => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("lead_offer_selected", { detail: { offer } }));
+    const target = document.getElementById("lead-form");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
       {/* Background decoration - Grid pattern */}
@@ -60,25 +67,26 @@ export default function Hero() {
 
             {/* CTA Buttons - added more internal links */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start animate-fade-in-delay-3">
-              <a
-                href="#calculator"
+              <button
+                type="button"
+                onClick={() => openLeadForm("consultation")}
                 className="group relative bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all transform hover:scale-105 shadow-xl hover:shadow-2xl overflow-hidden animate-pulse-subtle"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-400 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="absolute inset-0 bg-amber-400 rounded-lg opacity-20 animate-ping"></div>
+                <span className="relative z-10">Оставить заявку</span>
+              </button>
+              <a
+                href="#calculator"
+                className="group relative bg-blue-600/90 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all backdrop-blur-sm border border-blue-500/50 hover:border-blue-400 transform hover:scale-105 shadow-lg"
+              >
                 <span className="relative z-10">Рассчитать экономию</span>
               </a>
               <a
                 href="#services"
-                className="group relative bg-blue-600/90 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all backdrop-blur-sm border border-blue-500/50 hover:border-blue-400 transform hover:scale-105 shadow-lg"
-              >
-                <span className="relative z-10">Наши услуги</span>
-              </a>
-              <a
-                href="#faq"
                 className="group relative bg-white/10 hover:bg-white/20 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all backdrop-blur-sm border border-white/30 hover:border-white/60 transform hover:scale-105 shadow-lg"
               >
-                <span className="relative z-10">FAQ</span>
+                <span className="relative z-10">Наши услуги</span>
               </a>
             </div>
           </div>

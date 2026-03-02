@@ -12,6 +12,7 @@ from core_api.models import (
     LeadSegment,
     LeadSource,
     LeadStatus,
+    PostFeedbackSource,
     ScheduledPostStatus,
     Scope,
 )
@@ -93,12 +94,22 @@ class ScheduledPostCreate(BaseModel):
     source_url: str | None = None
     source_hash: str | None = None
     rubric: str | None = None
+    format_type: str | None = None
+    cta_type: str | None = None
     publish_at: datetime
     status: ScheduledPostStatus = ScheduledPostStatus.scheduled
 
 
 class ScheduledPostPatch(BaseModel):
-    status: ScheduledPostStatus
+    status: ScheduledPostStatus | None = None
+    title: str | None = None
+    text: str | None = None
+    publish_at: datetime | None = None
+    format_type: str | None = None
+    cta_type: str | None = None
+    telegram_message_id: int | None = None
+    posted_at: datetime | None = None
+    feedback_snapshot: dict[str, Any] | None = None
     last_error: str | None = None
 
 
@@ -114,11 +125,46 @@ class ScheduledPostOut(BaseModel):
     source_url: str | None
     source_hash: str | None
     rubric: str | None
+    format_type: str | None
+    cta_type: str | None
     publish_at: datetime
     status: ScheduledPostStatus
+    telegram_message_id: int | None
+    posted_at: datetime | None
+    feedback_snapshot: dict[str, Any] | None
     attempts: int
     max_attempts: int
     last_error: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class PostFeedbackCreate(BaseModel):
+    source: PostFeedbackSource
+    signal_key: str | None = None
+    signal_value: int = 0
+    text: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_message_id: int | None = None
+    telegram_user_id: int | None = None
+    actor_name: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class PostFeedbackOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    post_id: uuid.UUID
+    source: PostFeedbackSource
+    signal_key: str | None
+    signal_value: int
+    text: str | None
+    telegram_chat_id: str | None
+    telegram_message_id: int | None
+    telegram_user_id: int | None
+    actor_name: str | None
+    payload: dict[str, Any]
 
     model_config = {"from_attributes": True}
 
@@ -210,3 +256,24 @@ class ApiKeyCreateResponse(BaseModel):
     name: str
     scope: Scope
     api_key: str
+
+
+class AutomationControlPatch(BaseModel):
+    scope: Scope | None = None
+    title: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
+    config: dict[str, Any] | None = None
+
+
+class AutomationControlOut(BaseModel):
+    key: str
+    scope: Scope | None
+    title: str
+    description: str | None
+    enabled: bool
+    config: dict[str, Any]
+    updated_at: datetime
+    updated_by: str | None
+
+    model_config = {"from_attributes": True}
