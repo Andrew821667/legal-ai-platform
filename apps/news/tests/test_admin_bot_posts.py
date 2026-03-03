@@ -19,8 +19,11 @@ from news.admin_bot import (
     _is_calendar_context,
     _is_manual_queue_context,
     _manual_post_kind_label,
+    _manual_post_kind_from_format_type,
     _manual_post_kind_prompt_block,
+    _manual_post_kind_screen_template,
     _manual_post_kind_style_hint,
+    _post_format_display_label,
     _parse_review_filter_callback,
     _review_origin,
     _review_origin_badge,
@@ -221,6 +224,19 @@ def test_manual_post_kind_prompt_blocks_exist() -> None:
     assert "узкого места клиента" in _manual_post_kind_prompt_block("promo_offer")
     assert "Первая фраза должна содержать четкий тезис" in _manual_post_kind_prompt_block("opinion")
     assert "исходную проблему" in _manual_post_kind_prompt_block("case_story")
+
+
+def test_manual_post_kind_screen_templates_exist() -> None:
+    assert "Где у клиента рвется процесс" in _manual_post_kind_screen_template("promo_offer")
+    assert "Жесткий тезис" in _manual_post_kind_screen_template("opinion")
+    assert "процесс до изменений" in _manual_post_kind_screen_template("case_story")
+
+
+def test_manual_post_kind_from_format_type_and_display_label() -> None:
+    assert _manual_post_kind_from_format_type("manual_promo_offer") == "promo_offer"
+    assert _manual_post_kind_from_format_type("operator_ai_case_story") == "case_story"
+    assert _post_format_display_label({"format_type": "manual_opinion"}) == "✍️ Мнение"
+    assert _post_format_display_label({"format_type": "operator_ai_case_story"}) == "🤖 Кейс внедрения"
 
 
 def test_review_origin_helpers() -> None:

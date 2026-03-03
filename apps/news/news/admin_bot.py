@@ -614,6 +614,41 @@ def _manual_post_kind_structure(kind: str) -> str:
     return templates.get(kind, "Структура: сильный тезис -> прикладное содержание -> завершенный вывод.")
 
 
+def _manual_post_kind_screen_template(kind: str) -> str:
+    templates = {
+        "promo_offer": (
+            "Опорный шаблон:\n"
+            "• Где у клиента рвется процесс\n"
+            "• Что именно вы предлагаете изменить\n"
+            "• Какой рабочий результат он получает\n"
+            "• Какой следующий шаг логичен сейчас"
+        ),
+        "opinion": (
+            "Опорный шаблон:\n"
+            "• Жесткий тезис в первой фразе\n"
+            "• 2-3 аргумента по существу\n"
+            "• Одна оговорка или контраргумент\n"
+            "• Спокойный итог для юрфункции или рынка"
+        ),
+        "case_story": (
+            "Опорный шаблон:\n"
+            "• Как выглядел процесс до изменений\n"
+            "• Что конкретно внедрили или изменили\n"
+            "• Где проявился эффект\n"
+            "• В каких еще сценариях это применимо"
+        ),
+    }
+    return templates.get(
+        kind,
+        (
+            "Опорный шаблон:\n"
+            "• Один абзац — одна мысль\n"
+            "• Без длинной вводной\n"
+            "• Финал с ясным выводом"
+        ),
+    )
+
+
 def _manual_post_kind_prompt_block(kind: str) -> str:
     prompt_blocks = {
         "promo_offer": (
@@ -650,6 +685,23 @@ def _manual_post_kind_prompt_block(kind: str) -> str:
             "3. Заканчивай текст завершенным выводом."
         ),
     )
+
+
+def _manual_post_kind_from_format_type(format_type: str) -> str:
+    normalized = (format_type or "").strip().lower()
+    for prefix in ("manual_", "operator_ai_"):
+        if normalized.startswith(prefix):
+            return normalized[len(prefix) :]
+    return ""
+
+
+def _post_format_display_label(post: dict[str, Any]) -> str:
+    format_type = str(post.get("format_type") or "n/a")
+    manual_kind = _manual_post_kind_from_format_type(format_type)
+    if manual_kind:
+        origin = "✍️" if format_type.startswith("manual_") else "🤖"
+        return f"{origin} {_manual_post_kind_label(manual_kind)}"
+    return format_type
 
 
 def _review_origin(format_type: str) -> str:
@@ -2377,7 +2429,9 @@ class NewsAdminBot:
                     lines.append(f"   Тема: {slot.longread_topic}")
                 continue
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
+            format_label = _post_format_display_label(row)
             lines.append(f"{index}. {time_label} {kind_text} — {title[:76]}")
+            lines.append(f"   Формат: {format_label}")
             if slot.longread_topic:
                 lines.append(f"   Тема: {slot.longread_topic}")
 
@@ -2389,7 +2443,9 @@ class NewsAdminBot:
                 time_label = local_dt.strftime("%H:%M") if local_dt else "--:--"
                 title = str(row.get("title") or "Без заголовка").replace("\n", " ")
                 kind = self._publication_kind(row)
+                format_label = _post_format_display_label(row)
                 lines.append(f"• {time_label} {publication_kind_badge(kind)} {title[:72]}")
+                lines.append(f"  Формат: {format_label}")
         return "\n".join(lines)
 
     def _calendar_day_keyboard(self, day_key: str, rows: list[dict[str, Any]]) -> InlineKeyboardMarkup:
@@ -2657,10 +2713,11 @@ class NewsAdminBot:
             format_type = str(row.get("format_type") or "")
             origin_badge = _review_origin_badge(format_type)
             publication_kind = self._publication_kind(row)
+            format_label = _post_format_display_label(row)
             lines.append(
                 f"{idx}. {origin_badge} {publication_kind_badge(publication_kind)} {title[:80]}"
             )
-            lines.append(f"   ⏰ {publish_at}")
+            lines.append(f"   ⏰ {publish_at} | {format_label}")
         return "\n".join(lines)
 
     def _manual_queue_text(
@@ -2694,8 +2751,9 @@ class NewsAdminBot:
             publish_at = str(row.get("publish_at") or "")
             publish_at_utc = self._publish_at_utc(row)
             due_mark = "⚡" if publish_at_utc and publish_at_utc <= now_utc else "🕒"
+            format_label = _post_format_display_label(row)
             lines.append(f"{idx}. {due_mark} {title[:84]}")
-            lines.append(f"   ⏰ {publish_at}")
+            lines.append(f"   ⏰ {publish_at} | {format_label}")
         return "\n".join(lines)
 
     def _posts_keyboard(self, total: int, rows: list[dict[str, Any]], offset: int, status: str) -> InlineKeyboardMarkup:
@@ -2814,6 +2872,7 @@ class NewsAdminBot:
         status = str(post.get("status") or "")
         text = _strip_html_markup(str(post.get("text") or ""))
         format_type = str(post.get("format_type") or "n/a")
+        format_label = _post_format_display_label(post)
         publication_kind = self._publication_kind(post)
         cta_type = str(post.get("cta_type") or "n/a")
         rubric = str(post.get("rubric") or "")
@@ -2830,7 +2889,8 @@ class NewsAdminBot:
             f"Статус: {status}",
             f"Публикация (план): {publish_at}",
             f"Вид публикации: {publication_kind_badge(publication_kind)} {publication_kind_label(publication_kind)}",
-            f"Формат: {format_type}",
+            f"Формат: {format_label}",
+            f"Format type: {format_type}",
             f"CTA: {cta_type}",
             f"Тематика: {_pillar_label(pillar)}",
             f"Рубрика: {_rubric_label(rubric)}",
@@ -3042,6 +3102,10 @@ class NewsAdminBot:
             "🎙 из транскриба / voice — вы даете текстовую расшифровку голосового или устного материала, "
             "бот мягко очищает устную речь и собирает драфт\n\n"
             f"Доступные типы:\n{post_types}\n\n"
+            "Сильные опорные типы:\n"
+            f"{_manual_post_kind_label('promo_offer')}\n{_manual_post_kind_screen_template('promo_offer')}\n\n"
+            f"{_manual_post_kind_label('opinion')}\n{_manual_post_kind_screen_template('opinion')}\n\n"
+            f"{_manual_post_kind_label('case_story')}\n{_manual_post_kind_screen_template('case_story')}\n\n"
             "Далее сможете сохранить материал в черновики, на проверку или сразу в автоплан публикации."
         )
         await update.effective_message.reply_text(context_text, reply_markup=self._create_start_keyboard())
@@ -3077,6 +3141,7 @@ class NewsAdminBot:
                 f"Тема: {_manual_theme_label(theme)}\n",
                 f"Режим: {mode_label}\n",
                 f"Шаблон: {_manual_post_kind_structure(kind)}\n",
+                f"Опорный шаблон:\n{_manual_post_kind_screen_template(kind)}\n",
                 f"Медиа: {'да' if media_urls else 'нет'}\n",
                 media_block,
                 f"Ссылка: {source_url[:180]}\n" if source_url else "Ссылка: нет\n",
@@ -3982,6 +4047,7 @@ class NewsAdminBot:
                     f"Тип: {_manual_post_kind_label(kind)}\n"
                     f"{_manual_post_kind_note(kind)}\n"
                     f"{_manual_post_kind_structure(kind)}\n\n"
+                    f"{_manual_post_kind_screen_template(kind)}\n\n"
                     "Выберите тематику поста.",
                     reply_markup=self._create_theme_keyboard(),
                 )
@@ -4011,6 +4077,7 @@ class NewsAdminBot:
                     f"Тип: {_manual_post_kind_label(str(pending.get('kind') or ''))}\n"
                     f"Тема: {_manual_theme_label(theme)}\n"
                     f"{_manual_theme_note(theme)}\n\n"
+                    f"{_manual_post_kind_screen_template(str(pending.get('kind') or ''))}\n\n"
                     "Пришлите изображение/видео для поста или нажмите «Без медиа».",
                     reply_markup=self._create_media_keyboard(),
                 )
@@ -5523,6 +5590,7 @@ class NewsAdminBot:
                         f"Тип: {_manual_post_kind_label(kind)}\n"
                         f"Тема: {_manual_theme_label(theme)}\n"
                         f"{_manual_post_kind_structure(kind)}\n\n"
+                        f"{_manual_post_kind_screen_template(kind)}\n\n"
                         "Пришлите заголовок или тему поста одним сообщением.",
                         reply_markup=InlineKeyboardMarkup(
                             [[InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")]]
