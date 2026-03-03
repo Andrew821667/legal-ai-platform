@@ -8,6 +8,10 @@ def test_source_catalog_marks_telegram_unconfigured_by_default() -> None:
     settings = Settings(
         news_source_keys='google_news_ru,telegram_channels,pravo_ru',
         news_source_urls='',
+        telegram_api_id=0,
+        telegram_api_hash='',
+        telegram_channels='',
+        telegram_fetch_enabled=False,
     )
     catalog = source_catalog(settings)
     assert catalog['telegram_channels'].integrated is False
@@ -30,3 +34,13 @@ def test_source_catalog_marks_telegram_configured_when_env_complete() -> None:
     )
     catalog = source_catalog(settings)
     assert catalog['telegram_channels'].integrated is True
+
+
+def test_source_catalog_includes_extended_google_news_buckets() -> None:
+    settings = Settings(news_source_keys="", news_source_urls="")
+    catalog = source_catalog(settings)
+    assert "google_news_ops_ru" in catalog
+    assert "google_news_ops_en" in catalog
+    assert "google_news_regulation_ru" in catalog
+    assert "google_news_regulation_en" in catalog
+    assert "google_news_market_en" in catalog

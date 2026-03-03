@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
+    _auto_queue_context,
+    _auto_queue_filter_from_context,
     _button_icon_map,
     _main_menu_markup,
     _batch_mode_label,
@@ -12,11 +14,18 @@ from news.admin_bot import (
     _compute_quick_publish_at,
     _format_workers_status,
     _is_hidden_deleted_post,
+    _is_auto_queue_context,
     _is_batch_mode_allowed,
     _is_calendar_context,
     _is_manual_queue_context,
+    _manual_post_kind_label,
+    _parse_review_filter_callback,
+    _review_origin,
+    _review_origin_badge,
+    _manual_post_kind_structure,
     NewsAdminBot,
     _normalize_operator_note,
+    _parse_auto_queue_callback,
     _parse_batch_publish_callback,
     _parse_manual_queue_callback,
     _parse_post_list_callback,
@@ -61,6 +70,27 @@ def test_manual_queue_context_helpers() -> None:
     assert _queue_filter_from_context("mq_all") == "all"
     assert _is_manual_queue_context("mq_due")
     assert not _is_manual_queue_context("scheduled")
+    assert _auto_queue_context("daily") == "aq_daily"
+    assert _auto_queue_filter_from_context("aq_humor") == "humor"
+    assert _is_auto_queue_context("aq_all")
+
+
+def test_parse_auto_queue_callback_formats() -> None:
+    queue_filter, offset = _parse_auto_queue_callback("aq:daily:8")
+    assert queue_filter == "daily"
+    assert offset == 8
+    queue_filter, offset = _parse_auto_queue_callback("aq:other:0")
+    assert queue_filter == "other"
+    assert offset == 0
+
+
+def test_parse_review_filter_callback_formats() -> None:
+    review_filter, offset = _parse_review_filter_callback("rv:ai:8")
+    assert review_filter == "ai"
+    assert offset == 8
+    review_filter, offset = _parse_review_filter_callback("rv:manual:0")
+    assert review_filter == "manual"
+    assert offset == 0
 
 
 def test_calendar_context_helpers() -> None:
@@ -148,31 +178,39 @@ def test_format_workers_status_payload() -> None:
     assert "news-publish" in text
 
 
-def test_main_menu_markup_is_compact_and_has_sections(monkeypatch) -> None:
-    monkeypatch.setenv(
-        "NEWS_ADMIN_BUTTON_ICON_MAP",
-        "panel=1,create=1,calendar=1,sections=1,help=1",
-    )
+def test_main_menu_markup_removes_reply_keyboard(monkeypatch) -> None:
+    monkeypatch.delenv("NEWS_ADMIN_BUTTON_ICON_MAP", raising=False)
     _button_icon_map.cache_clear()
     try:
         markup = _main_menu_markup()
-        rows = [[button.text for button in row] for row in markup.keyboard]
-        assert rows == [
-            ["Панель", "Создать"],
-            ["Календарь", "Разделы"],
-            ["Помощь"],
-        ]
+        payload = markup.to_dict()
+        assert payload.get("remove_keyboard") is True
     finally:
         _button_icon_map.cache_clear()
 
 
-def test_main_menu_buttons_include_style_in_payload() -> None:
+def test_main_menu_remove_keyboard_has_no_buttons() -> None:
     markup = _main_menu_markup()
-    first_button = markup.keyboard[0][0]
-    assert "style" not in first_button.to_dict()
+    assert "keyboard" not in markup.to_dict()
 
 
 def test_hidden_deleted_post_helper() -> None:
     assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant"})
     assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant: ai-noise"})
     assert not _is_hidden_deleted_post({"last_error": "timeout"})
+
+
+def test_manual_post_kind_label_exists() -> None:
+    assert _manual_post_kind_label("promo_offer") == "Рекламный"
+
+
+def test_manual_post_kind_structure_exists() -> None:
+    assert "боль клиента" in _manual_post_kind_structure("promo_offer")
+    assert "тезис" in _manual_post_kind_structure("opinion")
+
+
+def test_review_origin_helpers() -> None:
+    assert _review_origin("manual_checklist") == "manual"
+    assert _review_origin("operator_ai_digest") == "ai"
+    assert _review_origin_badge("manual_checklist") == "✍️"
+    assert _review_origin_badge("daily") == "🤖"

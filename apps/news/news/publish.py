@@ -89,16 +89,40 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
         caption = normalized_text[:1020]
         remainder = normalized_text[1020:].strip()
 
-        photo_value = media.replace("tg://", "") if media.startswith("tg://") else media
-        response = _telegram_request(
-            "sendPhoto",
-            {
+        method = "sendPhoto"
+        payload: dict[str, Any]
+        if media.startswith("tgphoto://"):
+            payload = {
+                "chat_id": chat_id,
+                "photo": media.replace("tgphoto://", "", 1),
+                "caption": caption,
+                "parse_mode": "HTML",
+            }
+        elif media.startswith("tgvideo://"):
+            method = "sendVideo"
+            payload = {
+                "chat_id": chat_id,
+                "video": media.replace("tgvideo://", "", 1),
+                "caption": caption,
+                "parse_mode": "HTML",
+            }
+        elif media.startswith("tgdocument://"):
+            method = "sendDocument"
+            payload = {
+                "chat_id": chat_id,
+                "document": media.replace("tgdocument://", "", 1),
+                "caption": caption,
+                "parse_mode": "HTML",
+            }
+        else:
+            photo_value = media.replace("tg://", "", 1) if media.startswith("tg://") else media
+            payload = {
                 "chat_id": chat_id,
                 "photo": photo_value,
                 "caption": caption,
                 "parse_mode": "HTML",
-            },
-        )
+            }
+        response = _telegram_request(method, payload)
         message_id = int(response.get("result", {}).get("message_id") or 0)
 
         if remainder:

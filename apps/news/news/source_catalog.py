@@ -47,6 +47,51 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         getattr(settings, "google_news_region_en", "US"),
     )
+    google_ops_ru = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ops_ru",
+            '("автоматизация договорной работы" OR "автоматизация юротдела" OR legaltech OR "документооборот юристов" OR "AI для юристов")',
+        ),
+        getattr(settings, "google_news_lang_ru", "ru"),
+        getattr(settings, "google_news_region_ru", "RU"),
+    )
+    google_ops_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ops_en",
+            '("legal operations" OR "contract automation" OR "AI for legal departments" OR "AI for lawyers" OR legaltech)',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_regulation_ru = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_regulation_ru",
+            '("регулирование ИИ" OR "закон об ИИ" OR "ответственность за ИИ" OR "персональные данные ИИ" OR "AI compliance")',
+        ),
+        getattr(settings, "google_news_lang_ru", "ru"),
+        getattr(settings, "google_news_region_ru", "RU"),
+    )
+    google_regulation_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_regulation_en",
+            '("AI regulation" OR "AI Act" OR "AI compliance" OR "AI governance" OR "AI privacy law")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_market_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_market_en",
+            '("legal tech" OR legaltech OR "legal AI" OR "AI contract review" OR "AI compliance platform")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
     return {
         "google_news_ru": SourceSpec(
             key="google_news_ru",
@@ -62,6 +107,46 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             kind="search_rss",
             note="Поисковый RSS по англоязычным темам legal AI и legal ops",
             url=google_en,
+            domain="news.google.com",
+        ),
+        "google_news_ops_ru": SourceSpec(
+            key="google_news_ops_ru",
+            name="Google News Legal Ops RU",
+            kind="search_rss",
+            note="Поисковый RSS по русскоязычным сценариям AI в юротделе, договорной работе и документообороте",
+            url=google_ops_ru,
+            domain="news.google.com",
+        ),
+        "google_news_ops_en": SourceSpec(
+            key="google_news_ops_en",
+            name="Google News Legal Ops EN",
+            kind="search_rss",
+            note="Поисковый RSS по legal operations, contract automation и AI для юрфункции",
+            url=google_ops_en,
+            domain="news.google.com",
+        ),
+        "google_news_regulation_ru": SourceSpec(
+            key="google_news_regulation_ru",
+            name="Google News AI Regulation RU",
+            kind="search_rss",
+            note="Поисковый RSS по регулированию ИИ, ответственности и данным на русском языке",
+            url=google_regulation_ru,
+            domain="news.google.com",
+        ),
+        "google_news_regulation_en": SourceSpec(
+            key="google_news_regulation_en",
+            name="Google News AI Regulation EN",
+            kind="search_rss",
+            note="Поисковый RSS по AI regulation, AI Act, governance, privacy law",
+            url=google_regulation_en,
+            domain="news.google.com",
+        ),
+        "google_news_market_en": SourceSpec(
+            key="google_news_market_en",
+            name="Google News Legal AI Market EN",
+            kind="search_rss",
+            note="Поисковый RSS по рынку legal AI, legaltech и продуктовым AI-решениям для юристов",
+            url=google_market_en,
             domain="news.google.com",
         ),
         "pravo_ru": SourceSpec(
@@ -112,13 +197,13 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url="https://tass.ru/rss/v2.xml",
             domain="tass.ru",
         ),
-        "rbc": SourceSpec(
-            key="rbc",
-            name="РБК",
+        "lenta": SourceSpec(
+            key="lenta",
+            name="Lenta.ru",
             kind="rss",
-            note="Технологии и крупный бизнес, только через topical/legal filter",
-            url="https://rssexport.rbc.ru/rbcnews/news/20/full.rss",
-            domain="rbc.ru",
+            note="Общий новостной поток, используется только через topical/legal filter",
+            url="https://lenta.ru/rss/news",
+            domain="lenta.ru",
         ),
         "interfax": SourceSpec(
             key="interfax",
@@ -165,7 +250,23 @@ def parse_active_source_keys(settings: Any) -> list[str]:
     if raw_urls:
         return [item.strip() for item in raw_urls.split(",") if item.strip()]
 
-    return ["google_news_ru", "pravo_ru", "garant", "habr_news", "vc", "tass"]
+    return [
+        "google_news_ru",
+        "google_news_en",
+        "google_news_ops_ru",
+        "google_news_ops_en",
+        "google_news_regulation_ru",
+        "google_news_regulation_en",
+        "google_news_market_en",
+        "pravo_ru",
+        "garant",
+        "habr_news",
+        "habr_hubs",
+        "vc",
+        "tass",
+        "lenta",
+        "interfax",
+    ]
 
 
 def resolve_source_urls(settings: Any, enabled_overrides: dict[str, bool] | None = None) -> list[str]:

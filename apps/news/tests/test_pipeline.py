@@ -10,6 +10,7 @@ from news.pipeline import (
     choose_top_articles,
     is_specialized_candidate,
     normalize_rubric_to_pillar,
+    normalize_post_text,
     parse_schedule_slots,
     select_rag_examples,
 )
@@ -126,3 +127,12 @@ def test_select_rag_examples_returns_related_texts() -> None:
 def test_normalize_rubric_to_pillar() -> None:
     assert normalize_rubric_to_pillar("compliance") == "regulation"
     assert normalize_rubric_to_pillar("unknown", "Рынок AI и инвестиции в LegalTech") == "market"
+
+
+def test_normalize_post_text_trims_without_cutting_html_tag() -> None:
+    text = "<b>Заголовок</b>\n\n" + ("Юридический AI-сигнал. " * 400) + '<a href="https://example.com">источник</a>'
+    normalized = normalize_post_text(text)
+    assert len(normalized) <= 4000
+    assert normalized.count("<b>") == normalized.count("</b>")
+    assert normalized.count("<a ") == normalized.count("</a>")
+    assert not normalized.endswith("<")

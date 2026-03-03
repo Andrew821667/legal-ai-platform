@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from html.parser import HTMLParser
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
@@ -611,6 +612,107 @@ def select_rag_examples(query_text: str, examples: Iterable[RAGExample], top_k: 
 
 
 def normalize_post_text(text: str) -> str:
-    # Telegram hard limit for sendMessage is 4096 chars.
     normalized = (text or "").strip()
-    return normalized[:4000]
+    if not normalized:
+        return ""
+    if len(normalized) <= 4000:
+        return normalized
+
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", normalized) if block.strip()]
+    if not blocks:
+        return _trim_html_safely(normalized, 4000)
+
+    parts: list[str] = []
+    for block in blocks:
+        candidate = "\n\n".join(parts + [block]).strip()
+        if len(candidate) <= 4000:
+            parts.append(block)
+            continue
+
+        remaining = 4000 - len("\n\n".join(parts).strip()) - (2 if parts else 0)
+        if remaining > 180:
+            trimmed = _trim_html_safely(block, remaining)
+            if trimmed:
+                parts.append(trimmed)
+        break
+
+    result = "\n\n".join(parts).strip()
+    if not result:
+        return _trim_html_safely(normalized, 4000)
+    return result
+
+
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self.parts)
+
+
+def _extract_text(html_text: str) -> str:
+    parser = _HTMLTextExtractor()
+    parser.feed(html_text)
+    parser.close()
+    return parser.get_text()
+
+
+def _safe_tail_boundary(text: str) -> int:
+    stripped = text.rstrip()
+    if not stripped:
+        return 0
+    sentence_boundaries = [stripped.rfind(mark) for mark in (".", "!", "?", "…")]
+    boundary = max(sentence_boundaries)
+    if boundary >= max(0, len(stripped) - 220):
+        return boundary + 1
+
+    newline_boundary = stripped.rfind("\n")
+    if newline_boundary >= max(0, len(stripped) - 260):
+        return newline_boundary
+
+    space_boundary = stripped.rfind(" ")
+    if space_boundary > 0:
+        return space_boundary
+    return len(stripped)
+
+
+def _trim_html_safely(html_text: str, limit: int) -> str:
+    if limit <= 0:
+        return ""
+    if len(html_text) <= limit:
+        return html_text.strip()
+
+    truncated = html_text[:limit]
+    boundary = _safe_tail_boundary(_extract_text(truncated))
+    if boundary <= 0:
+        truncated = truncated.rstrip()
+    else:
+        plain = _extract_text(truncated)
+        boundary_text = plain[:boundary].rstrip()
+        cut = truncated.find(boundary_text)
+        if cut != -1:
+            truncated = truncated[: cut + len(boundary_text)]
+        else:
+            truncated = truncated[:limit].rstrip()
+
+    # Drop dangling start of tag/entity if we cut inside HTML markup.
+    last_lt = truncated.rfind("<")
+    last_gt = truncated.rfind(">")
+    if last_lt > last_gt:
+        truncated = truncated[:last_lt]
+    last_amp = truncated.rfind("&")
+    last_semicolon = truncated.rfind(";")
+    if last_amp > last_semicolon:
+        truncated = truncated[:last_amp]
+
+    open_b = truncated.count("<b>") - truncated.count("</b>")
+    if open_b > 0:
+        truncated += "</b>" * open_b
+    open_a = truncated.count("<a ") - truncated.count("</a>")
+    if open_a > 0:
+        truncated += "</a>" * open_a
+    return truncated.strip()
