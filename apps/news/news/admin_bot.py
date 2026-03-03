@@ -567,6 +567,27 @@ def _manual_theme_rubric(theme: str) -> str:
     return str(_MANUAL_THEMES.get(theme, {}).get("rubric") or "manual")
 
 
+def _manual_footer_mode_label(kind: str) -> str:
+    footer = build_manual_footer(kind)
+    if not footer:
+        return "без CTA"
+    if kind in {"promo_offer", "service_page"}:
+        return "продающий CTA"
+    return "мягкий CTA"
+
+
+def _media_preview_label(media_url: str, index: int) -> str:
+    if media_url.startswith("tgphoto://"):
+        kind = "фото"
+    elif media_url.startswith("tgvideo://"):
+        kind = "видео"
+    elif media_url.startswith("tgdocument://"):
+        kind = "документ"
+    else:
+        kind = "медиа"
+    return f"{index}. {kind}"
+
+
 def _manual_post_kind_structure(kind: str) -> str:
     templates = {
         "promo_offer": "Структура: боль клиента -> решение -> результат -> мягкий CTA.",
@@ -2918,35 +2939,42 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _create_draft_keyboard(self) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
+        rows: list[list[InlineKeyboardButton]] = [
             [
-                [
-                    InlineKeyboardButton("🧱 Тип", callback_data="ce:kind"),
-                    InlineKeyboardButton("🧭 Тема", callback_data="ce:theme"),
-                ],
-                [
-                    InlineKeyboardButton("🖼 Медиа", callback_data="ce:media"),
-                    InlineKeyboardButton("🔗 Ссылка", callback_data="ce:link"),
-                ],
-                [
-                    InlineKeyboardButton("🗂 Материал", callback_data="ce:source"),
-                    InlineKeyboardButton("✏️ Заголовок", callback_data="ce:title"),
-                ],
-                [InlineKeyboardButton("📝 Текст", callback_data="ce:text")],
-                [InlineKeyboardButton("🤖 Доработать через LLM", callback_data="ce:ai")],
-                [InlineKeyboardButton("🆕 Сохранить в черновики", callback_data="cs:draft")],
-                [InlineKeyboardButton("🟡 Отправить на проверку", callback_data="cs:review")],
-                [
-                    InlineKeyboardButton("✅ +1ч", callback_data="cs:scheduled:h1"),
-                    InlineKeyboardButton("🌙 19:00", callback_data="cs:scheduled:e19"),
-                ],
-                [InlineKeyboardButton("🌤 Завтра 10:00", callback_data="cs:scheduled:t10")],
-                [
-                    InlineKeyboardButton("🧹 Новый с нуля", callback_data="cn:start"),
-                    InlineKeyboardButton("❌ Закрыть", callback_data="cn:cancel"),
-                ],
+                InlineKeyboardButton("🧱 Тип", callback_data="ce:kind"),
+                InlineKeyboardButton("🧭 Тема", callback_data="ce:theme"),
+            ],
+            [
+                InlineKeyboardButton("🖼 Медиа", callback_data="ce:media"),
+                InlineKeyboardButton("🔗 Ссылка", callback_data="ce:link"),
+            ],
+            [
+                InlineKeyboardButton("🗂 Материал", callback_data="ce:source"),
+                InlineKeyboardButton("✏️ Заголовок", callback_data="ce:title"),
+            ],
+            [InlineKeyboardButton("📝 Текст", callback_data="ce:text")],
+            [InlineKeyboardButton("🤖 Доработать через LLM", callback_data="ce:ai")],
+            [InlineKeyboardButton("🆕 Сохранить в черновики", callback_data="cs:draft")],
+            [InlineKeyboardButton("🟡 Отправить на проверку", callback_data="cs:review")],
+            [
+                InlineKeyboardButton("✅ +1ч", callback_data="cs:scheduled:h1"),
+                InlineKeyboardButton("🌙 19:00", callback_data="cs:scheduled:e19"),
+            ],
+            [InlineKeyboardButton("🌤 Завтра 10:00", callback_data="cs:scheduled:t10")],
+        ]
+        rows.append(
+            [
+                InlineKeyboardButton("⤴️ Последнее в начало", callback_data="cr:lastfirst"),
+                InlineKeyboardButton("🔄 Развернуть медиа", callback_data="cr:reverse"),
             ]
         )
+        rows.append(
+            [
+                InlineKeyboardButton("🧹 Новый с нуля", callback_data="cn:start"),
+                InlineKeyboardButton("❌ Закрыть", callback_data="cn:cancel"),
+            ]
+        )
+        return InlineKeyboardMarkup(rows)
 
     async def _show_create_start(self, update: Update) -> None:
         post_types = "\n".join(
@@ -2988,6 +3016,11 @@ class NewsAdminBot:
         source_url = str(draft.get("source_url") or "").strip()
         media_urls = draft.get("media_urls") or []
         footer = build_manual_footer(kind)
+        media_block = (
+            "Порядок медиа:\n" + "\n".join(_media_preview_label(item, index) for index, item in enumerate(media_urls, start=1)) + "\n"
+            if media_urls
+            else ""
+        )
         return "".join(
             [
                 "Черновик нового поста\n\n",
@@ -2997,11 +3030,13 @@ class NewsAdminBot:
                 f"Режим: {mode_label}\n",
                 f"Шаблон: {_manual_post_kind_structure(kind)}\n",
                 f"Медиа: {'да' if media_urls else 'нет'}\n",
+                media_block,
                 f"Ссылка: {source_url[:180]}\n" if source_url else "Ссылка: нет\n",
                 f"Длина итогового текста: {len(text)} символов\n",
                 f"Материал: {source_material[:220]}\n" if source_material else "",
                 f"Фокус темы: {_manual_theme_note(theme)}\n" if theme else "",
-                f"Футер: {footer[:180]}\n" if footer else "Футер: без CTA\n",
+                f"Футер: {_manual_footer_mode_label(kind)}\n",
+                f"Текст футера: {footer[:180]}\n" if footer else "",
                 "\n",
                 f"{preview}\n\n",
                 "Можно доработать черновик или сразу сохранить:",
@@ -4162,6 +4197,37 @@ class NewsAdminBot:
                         ),
                     )
                     return
+
+            if data == "cr:lastfirst":
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                media_urls = list(draft.get("media_urls") or [])
+                if len(media_urls) < 2:
+                    await query.answer("Недостаточно медиа для перестановки", show_alert=False)
+                    return
+                media_urls.insert(0, media_urls.pop())
+                draft["media_urls"] = media_urls
+                context.user_data[_STATE_DRAFT_CREATE] = draft
+                await self._safe_edit_message_text(
+                    query,
+                    self._render_create_preview(draft),
+                    reply_markup=self._create_draft_keyboard(),
+                )
+                return
+
+            if data == "cr:reverse":
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                media_urls = list(draft.get("media_urls") or [])
+                if len(media_urls) < 2:
+                    await query.answer("Недостаточно медиа для перестановки", show_alert=False)
+                    return
+                draft["media_urls"] = list(reversed(media_urls))
+                context.user_data[_STATE_DRAFT_CREATE] = draft
+                await self._safe_edit_message_text(
+                    query,
+                    self._render_create_preview(draft),
+                    reply_markup=self._create_draft_keyboard(),
+                )
+                return
 
             if data == "cd:view":
                 draft = context.user_data.get(_STATE_DRAFT_CREATE)
@@ -5755,7 +5821,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_create,
-                pattern=r"^(cn:(?:start|manual|ai|transcript|cancel)|ck:[a-z_]+|ct:[a-z_]+|cm:(?:skip|clear|done)|cl:(?:skip|clear)|cd:view|ce:(?:kind|theme|media|link|source|title|text|ai)|cs:(?:draft|review)|cs:scheduled:(?:h1|e19|t10))$",
+                pattern=r"^(cn:(?:start|manual|ai|transcript|cancel)|ck:[a-z_]+|ct:[a-z_]+|cm:(?:skip|clear|done)|cl:(?:skip|clear)|cd:view|cr:(?:lastfirst|reverse)|ce:(?:kind|theme|media|link|source|title|text|ai)|cs:(?:draft|review)|cs:scheduled:(?:h1|e19|t10))$",
             )
         )
         app.add_handler(
