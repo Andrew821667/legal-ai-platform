@@ -209,6 +209,16 @@ _QUALITY_SPECIFICITY_MARKERS = (
     "аудит",
     "человек",
     "human-in-the-loop",
+    "vendor",
+    "lock-in",
+    "sla",
+    "indemn",
+    "санкц",
+    "госзакуп",
+    "экспортн",
+    "e-discovery",
+    "legal hold",
+    "chain of custody",
 )
 _DAILY_LEGAL_RUBRICS = {"ai_law", "compliance", "privacy", "contracts", "litigation", "regulation"}
 _DAILY_THIRD_BLOCK_HEADINGS = (
@@ -217,6 +227,14 @@ _DAILY_THIRD_BLOCK_HEADINGS = (
     "Что это значит для команд",
     "Что это значит для рынка",
     "На что смотреть дальше",
+)
+_GENERIC_LEGAL_PATTERNS = (
+    "есть юридические риски",
+    "есть риски",
+    "нужно учитывать риски",
+    "стоит учитывать риски",
+    "важно учитывать риски",
+    "нужно проверить юридические аспекты",
 )
 
 
@@ -444,6 +462,102 @@ class LLMNewsWriter:
         if legal_specific:
             return "Юридический контур", html.escape(legal_risks)
         return "На что смотреть дальше", html.escape(conclusion_or_effect or business_effect or html.unescape(steps_block))
+
+    @staticmethod
+    def _infer_legal_focus_hint(article: ArticleCandidate, pillar: str) -> str:
+        haystack = " ".join(
+            part for part in (article.title or "", article.summary or "", article.article_url or "") if part
+        ).lower()
+
+        if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
+            return (
+                "Сфокусируй юридический блок на персональных данных: правовое основание обработки, "
+                "трансграничную передачу, локализацию, права доступа к данным и договорный режим с вендором."
+            )
+        if any(marker in haystack for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform")):
+            return (
+                "Сфокусируй юридический блок на договорном контуре: SLA, ответственность поставщика, "
+                "ограничения по использованию output, конфиденциальность, audit rights и vendor lock-in."
+            )
+        if any(marker in haystack for marker in ("litigation", "суд", "e-discovery", "ediscovery", "legal hold", "document review")):
+            return (
+                "Сфокусируй юридический блок на спорах и доказуемости: explainability, chain of custody, "
+                "сохранность доказательств, legal hold и human-in-the-loop."
+            )
+        if any(marker in haystack for marker in ("ai act", "регулирован", "compliance", "governance", "sanction", "санкц", "экспорт")):
+            return (
+                "Сфокусируй юридический блок на регуляторике и governance: применимость AI Act / privacy law, "
+                "внутренний контроль, логирование, санкционные и экспортные ограничения, распределение ответственности."
+            )
+        if pillar == "market":
+            return (
+                "Сфокусируй третий блок на юридико-рыночных последствиях: vendor due diligence, режим закупки, "
+                "санкционные ограничения, устойчивость поставщика и contractual safeguards."
+            )
+        if pillar in {"implementation", "case"}:
+            return (
+                "Сфокусируй юридический блок на практическом внедрении: контроль качества output, "
+                "процедуры проверки юристом, конфиденциальность и распределение ответственности."
+            )
+        if pillar == "tools":
+            return (
+                "Сфокусируй юридический блок на выборе инструмента: режим доступа к данным, SLA, "
+                "права на output, аудит действий модели и ограничения использования."
+            )
+        return (
+            "Юридический блок должен быть предметным: укажи конкретные правовые вопросы, "
+            "которые юристу придется проверить в связи с этой новостью."
+        )
+
+    @staticmethod
+    def _looks_generic_legal_commentary(text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", html.unescape(text or "")).strip().lower()
+        if not normalized:
+            return True
+        if any(pattern in normalized for pattern in _GENERIC_LEGAL_PATTERNS):
+            return True
+        generic_score = sum(1 for marker in _QUALITY_SPECIFICITY_MARKERS if marker in normalized)
+        return generic_score == 0
+
+    @classmethod
+    def _fallback_legal_commentary(cls, article: ArticleCandidate, pillar: str, rubric: str) -> str:
+        haystack = " ".join(
+            part for part in (article.title or "", article.summary or "", article.article_url or "") if part
+        ).lower()
+        if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
+            return (
+                "Юристу стоит проверить правовое основание обработки данных, трансграничную передачу, "
+                "локализацию, режим доступа к данным и договорные ограничения на использование модели."
+            )
+        if any(marker in haystack for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform")):
+            return (
+                "Юристу стоит проверить SLA, распределение ответственности поставщика, права на output, "
+                "режим конфиденциальности, audit rights и риск vendor lock-in."
+            )
+        if any(marker in haystack for marker in ("litigation", "суд", "e-discovery", "ediscovery", "legal hold", "document review")):
+            return (
+                "Юристу стоит оценить explainability, порядок валидации модели, сохранность цепочки доказательств, "
+                "полноту legal hold и обязательный human-in-the-loop при работе со спором."
+            )
+        if rubric in _DAILY_LEGAL_RUBRICS or any(marker in haystack for marker in ("ai act", "регулирован", "compliance", "governance", "sanction", "санкц", "экспорт")):
+            return (
+                "Юристу стоит проверить применимость AI Act и privacy-требований, внутренний governance-контур, "
+                "логирование, контроль качества output и распределение ответственности между бизнесом и вендором."
+            )
+        if pillar == "market":
+            return (
+                "Для юрфункции здесь важны vendor due diligence, санкционные и экспортные ограничения, "
+                "режим закупки, contractual safeguards и устойчивость поставщика в критичных сценариях."
+            )
+        if pillar == "tools":
+            return (
+                "Юристу стоит проверить режим доступа к данным, ограничения использования output, "
+                "SLA, конфиденциальность и право на аудит действий модели."
+            )
+        return (
+            "Юристу стоит проверить договорный режим использования инструмента, контур данных, "
+            "контроль качества output и распределение ответственности при внедрении."
+        )
 
     def _format_post(
         self,
@@ -693,6 +807,7 @@ class LLMNewsWriter:
             f"Заголовок: {article.title}\n"
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
             f"Целевая смысловая корзина: {pillar}\n"
+            f"Приоритетный юридический угол: {self._infer_legal_focus_hint(article, pillar)}\n"
             f"{format_hint}\n"
             f"{_FORMAT_SHAPE_HINTS.get(format_type, '')}\n"
             f"CTA-уровень: {cta_type}\n\n"
@@ -724,6 +839,12 @@ class LLMNewsWriter:
                     },
                 )
                 return None
+            inferred_rubric = self._shorten(
+                str(data.get("rubric") or _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")),
+                100,
+            )
+            if self._looks_generic_legal_commentary(str(data.get("legal_risks") or "")):
+                data["legal_risks"] = self._fallback_legal_commentary(article, pillar, inferred_rubric)
             title, text, rubric = self._format_post(
                 data,
                 article.article_url,

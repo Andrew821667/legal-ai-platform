@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from news.llm_writer import LLMNewsWriter
+from news.pipeline import ArticleCandidate
 
 
 def test_looks_complete_prose_accepts_finished_text() -> None:
@@ -79,3 +82,38 @@ def test_shorten_with_prefer_sentence_keeps_last_full_sentence() -> None:
     text = "Первое предложение завершено. Второе предложение тоже завершено. Третье предложение уже не должно влезть целиком."
     shortened = LLMNewsWriter._shorten(text, 70, prefer_sentence=True)
     assert shortened == "Первое предложение завершено. Второе предложение тоже завершено."
+
+
+def test_infer_legal_focus_hint_for_privacy_article() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/privacy-ai",
+        title="AI privacy and cross-border data transfers",
+        summary="The article discusses AI privacy, GDPR obligations and cross-border data transfers.",
+        published_at=datetime.now(timezone.utc),
+    )
+    hint = LLMNewsWriter._infer_legal_focus_hint(article, "regulation")
+    assert "трансгранич" in hint.lower()
+    assert "локализац" in hint.lower()
+
+
+def test_fallback_legal_commentary_for_contract_tooling_is_specific() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/contract-ai-platform",
+        title="AI contract review platform adds new SLA terms",
+        summary="A vendor expanded its AI contract review platform and updated SLA commitments for enterprise clients.",
+        published_at=datetime.now(timezone.utc),
+    )
+    text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "contracts")
+    lowered = text.lower()
+    assert "sla" in lowered
+    assert "output" in lowered
+    assert "vendor lock-in" in lowered or "lock-in" in lowered
+
+
+def test_generic_legal_commentary_detection() -> None:
+    assert LLMNewsWriter._looks_generic_legal_commentary("Есть риски, которые нужно учитывать.")
+    assert not LLMNewsWriter._looks_generic_legal_commentary(
+        "Юристу стоит проверить SLA, vendor lock-in, privacy-контур и распределение ответственности."
+    )
