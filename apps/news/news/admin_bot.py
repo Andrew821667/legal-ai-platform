@@ -309,15 +309,23 @@ def _parse_post_list_callback(data: str) -> tuple[str, int]:
     return "scheduled", 0
 
 
-def _parse_review_filter_callback(data: str) -> tuple[str, int]:
+def _parse_review_filter_callback(data: str) -> tuple[str, str, str, int]:
     parts = data.split(":")
     review_filter = "all"
+    kind_filter = "all"
+    theme_filter = "all"
     offset = 0
     if len(parts) >= 2 and parts[1] in _REVIEW_SOURCE_FILTERS:
         review_filter = parts[1]
-    if len(parts) >= 3:
+    if len(parts) >= 3 and parts[2] in _AUTO_QUEUE_FILTERS:
+        kind_filter = parts[2]
+    if len(parts) >= 4 and parts[3] in _QUEUE_THEME_FILTERS:
+        theme_filter = parts[3]
+    if len(parts) >= 5:
+        offset = int(parts[4])
+    elif len(parts) >= 3 and parts[2].isdigit():
         offset = int(parts[2])
-    return review_filter, offset
+    return review_filter, kind_filter, theme_filter, offset
 
 
 def _parse_manual_queue_callback(data: str) -> tuple[str, str, int]:
@@ -680,6 +688,13 @@ def _manual_post_kind_screen_template(kind: str) -> str:
             "• Каждый пункт с отдельной пользой или выводом\n"
             "• В конце один собранный итог"
         ),
+        "announcement": (
+            "Опорный шаблон:\n"
+            "• Что именно запускается или выходит\n"
+            "• Для кого это релевантно\n"
+            "• Что человек получит на входе/выходе\n"
+            "• Что делать, если это ему подходит"
+        ),
         "checklist": (
             "Опорный шаблон:\n"
             "• Короткий контекст задачи\n"
@@ -693,6 +708,20 @@ def _manual_post_kind_screen_template(kind: str) -> str:
             "• Короткие, плотные ответы\n"
             "• Один вопрос — один смысловой риск или решение\n"
             "• Финал без повтора FAQ-структуры"
+        ),
+        "service_page": (
+            "Опорный шаблон:\n"
+            "• Какую задачу клиента закрывает услуга\n"
+            "• Что именно входит в работу\n"
+            "• Какой результат получает команда\n"
+            "• Когда этот формат особенно уместен"
+        ),
+        "problem_breakdown": (
+            "Опорный шаблон:\n"
+            "• Где именно возникает узкое место\n"
+            "• Почему оно воспроизводится снова и снова\n"
+            "• Какие 2-3 рабочих пути решения есть\n"
+            "• С какого шага логично начинать"
         ),
     }
     return templates.get(
@@ -755,6 +784,30 @@ def _manual_post_kind_prompt_block(kind: str) -> str:
             "3. В каждом ответе должен быть предметный критерий, риск или рекомендация.\n"
             "4. Запрещены канцелярские ответы и повтор одного и того же тезиса разными словами.\n"
             "5. Финал должен подвести итог, а не просто оборвать список."
+        ),
+        "announcement": (
+            "Жесткие правила для анонса:\n"
+            "1. Не начинай с абстрактного 'рады сообщить'. Сразу скажи, что именно запускается.\n"
+            "2. Зафиксируй аудиторию: кому это реально нужно.\n"
+            "3. Объясни ценность в прикладном виде, а не в лозунгах.\n"
+            "4. Финал должен содержать понятное действие: написать, прийти, запросить разбор, открыть материал.\n"
+            "5. Убери лишний пафос и корпоративный тон."
+        ),
+        "service_page": (
+            "Жесткие правила для поста об услуге:\n"
+            "1. Сначала зафиксируй задачу клиента, а не рассказывай о себе.\n"
+            "2. Потом покажи состав работы: аудит, проектирование, настройка, внедрение, сопровождение.\n"
+            "3. Результат опиши на языке процесса и управляемости, а не общих обещаний.\n"
+            "4. Обязательно обозначь, в каких ситуациях эта услуга действительно нужна.\n"
+            "5. Финал должен вести к спокойному следующему шагу без давления."
+        ),
+        "problem_breakdown": (
+            "Жесткие правила для разбора проблемы:\n"
+            "1. Разбирай одну конкретную проблему, а не три сразу.\n"
+            "2. Назови причину проблемы на уровне процесса, а не только симптом.\n"
+            "3. Покажи 2-3 рабочих варианта решения с понятной разницей между ними.\n"
+            "4. Не пиши абстрактных советов вроде 'оптимизировать процесс' без конкретики.\n"
+            "5. В конце дай приоритет: что делать первым делом."
         ),
     }
     return prompt_blocks.get(
@@ -2787,7 +2840,13 @@ class NewsAdminBot:
         response.raise_for_status()
         return response.json()
 
-    def _load_review_posts(self, review_filter: str, offset: int) -> tuple[int, list[dict[str, Any]]]:
+    def _load_review_posts(
+        self,
+        review_filter: str,
+        offset: int,
+        kind_filter: str = "all",
+        theme_filter: str = "all",
+    ) -> tuple[int, list[dict[str, Any]]]:
         rows = self._list_posts_rows(status="review", newest_first=True, limit=100)
         if review_filter != "all":
             rows = [
@@ -2795,6 +2854,10 @@ class NewsAdminBot:
                 for row in rows
                 if _review_origin(str(row.get("format_type") or "")) == review_filter
             ]
+        if kind_filter != "all":
+            rows = [row for row in rows if self._publication_kind(row) == kind_filter]
+        if theme_filter != "all":
+            rows = [row for row in rows if self._row_pillar(row) == theme_filter]
         total = len(rows)
         return total, rows[offset : offset + _POSTS_PAGE_SIZE]
 
@@ -2812,12 +2875,36 @@ class NewsAdminBot:
             lines.append(f"   ⏰ {publish_at}")
         return "\n".join(lines)
 
-    def _review_posts_text(self, total: int, rows: list[dict[str, Any]], offset: int, review_filter: str) -> str:
+    def _review_posts_text(
+        self,
+        total: int,
+        rows: list[dict[str, Any]],
+        offset: int,
+        review_filter: str,
+        kind_filter: str = "all",
+        theme_filter: str = "all",
+    ) -> str:
         label = _review_origin_label(review_filter)
+        kind_label = _PUBLICATION_KIND_LABELS.get(kind_filter, "Все виды")
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
         if not rows:
-            return f"🟡 На проверке\n\nФильтр: {label}\n\nСейчас записей нет."
+            return (
+                "🟡 На проверке\n\n"
+                f"Фильтр: {label}\n"
+                f"Вид: {kind_label}\n"
+                f"Тема: {theme_label}\n\n"
+                "Сейчас записей нет."
+            )
 
-        lines = ["🟡 На проверке", "", f"Фильтр: {label}", f"Всего: {total}", ""]
+        lines = [
+            "🟡 На проверке",
+            "",
+            f"Фильтр: {label}",
+            f"Вид: {kind_label}",
+            f"Тема: {theme_label}",
+            f"Всего: {total}",
+            "",
+        ]
         for idx, row in enumerate(rows, start=offset + 1):
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             publish_at = str(row.get("publish_at") or "")
@@ -2825,10 +2912,11 @@ class NewsAdminBot:
             origin_badge = _review_origin_badge(format_type)
             publication_kind = self._publication_kind(row)
             format_label = _post_format_display_label(row)
+            pillar = self._row_pillar(row)
             lines.append(
                 f"{idx}. {origin_badge} {publication_kind_badge(publication_kind)} {title[:80]}"
             )
-            lines.append(f"   ⏰ {publish_at} | {format_label}")
+            lines.append(f"   ⏰ {publish_at} | 🧭 {_pillar_label(pillar)} | {format_label}")
         return "\n".join(lines)
 
     def _manual_queue_text(
@@ -2899,14 +2987,53 @@ class NewsAdminBot:
         buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
         return InlineKeyboardMarkup(buttons)
 
-    def _review_posts_keyboard(self, total: int, rows: list[dict[str, Any]], offset: int, review_filter: str) -> InlineKeyboardMarkup:
+    def _review_posts_keyboard(
+        self,
+        total: int,
+        rows: list[dict[str, Any]],
+        offset: int,
+        review_filter: str,
+        kind_filter: str = "all",
+        theme_filter: str = "all",
+    ) -> InlineKeyboardMarkup:
         buttons: list[list[InlineKeyboardButton]] = [
             [
-                _inline_button(f"{'• ' if review_filter == 'all' else ''}Все", callback_data="rv:all:0"),
-                _inline_button(f"{'• ' if review_filter == 'ai' else ''}AI", callback_data="rv:ai:0"),
-                _inline_button(f"{'• ' if review_filter == 'manual' else ''}Ручные", callback_data="rv:manual:0"),
+                _inline_button(f"{'• ' if review_filter == 'all' else ''}Все", callback_data=f"rv:all:{kind_filter}:{theme_filter}:0"),
+                _inline_button(f"{'• ' if review_filter == 'ai' else ''}AI", callback_data=f"rv:ai:{kind_filter}:{theme_filter}:0"),
+                _inline_button(f"{'• ' if review_filter == 'manual' else ''}Ручные", callback_data=f"rv:manual:{kind_filter}:{theme_filter}:0"),
             ]
         ]
+        kind_rows = [
+            ("all", "Все виды"),
+            ("daily", "Ежедневные"),
+            ("weekly_review", "Обзоры"),
+            ("longread", "Лонгриды"),
+            ("humor", "Юмор"),
+            ("other", "Прочее"),
+        ]
+        for index in range(0, len(kind_rows), 2):
+            chunk = kind_rows[index : index + 2]
+            buttons.append(
+                [
+                    _inline_button(
+                        f"{'• ' if kind_filter == item_key else ''}{item_label}",
+                        callback_data=f"rv:{review_filter}:{item_key}:{theme_filter}:0",
+                    )
+                    for item_key, item_label in chunk
+                ]
+            )
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        for index in range(0, len(theme_rows), 2):
+            chunk = theme_rows[index : index + 2]
+            buttons.append(
+                [
+                    _inline_button(
+                        f"{'• ' if theme_filter == item_key else ''}{item_label}",
+                        callback_data=f"rv:{review_filter}:{kind_filter}:{item_key}:0",
+                    )
+                    for item_key, item_label in chunk
+                ]
+            )
         for idx, row in enumerate(rows, start=offset + 1):
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
@@ -2927,13 +3054,30 @@ class NewsAdminBot:
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
         next_offset = offset + _POSTS_PAGE_SIZE
         if offset > 0:
-            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"rv:{review_filter}:{prev_offset}"))
+            nav.append(
+                InlineKeyboardButton(
+                    "⬅️ Назад",
+                    callback_data=f"rv:{review_filter}:{kind_filter}:{theme_filter}:{prev_offset}",
+                )
+            )
         if next_offset < total:
-            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"rv:{review_filter}:{next_offset}"))
+            nav.append(
+                InlineKeyboardButton(
+                    "➡️ Далее",
+                    callback_data=f"rv:{review_filter}:{kind_filter}:{theme_filter}:{next_offset}",
+                )
+            )
         if nav:
             buttons.append(nav)
 
-        buttons.append([InlineKeyboardButton("🔄 Обновить список", callback_data=f"rv:{review_filter}:{offset}")])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    "🔄 Обновить список",
+                    callback_data=f"rv:{review_filter}:{kind_filter}:{theme_filter}:{offset}",
+                )
+            ]
+        )
         buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
         return InlineKeyboardMarkup(buttons)
 
@@ -5137,12 +5281,12 @@ class NewsAdminBot:
                 return
 
             if data.startswith("rv:"):
-                review_filter, offset = _parse_review_filter_callback(data)
-                total, rows = self._load_review_posts(review_filter, offset)
+                review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback(data)
+                total, rows = self._load_review_posts(review_filter, offset, kind_filter, theme_filter)
                 await self._safe_edit_message_text(
                     query,
-                    self._review_posts_text(total, rows, offset, review_filter),
-                    reply_markup=self._review_posts_keyboard(total, rows, offset, review_filter),
+                    self._review_posts_text(total, rows, offset, review_filter, kind_filter, theme_filter),
+                    reply_markup=self._review_posts_keyboard(total, rows, offset, review_filter, kind_filter, theme_filter),
                 )
                 return
 
@@ -6080,7 +6224,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual):\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
+                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
             )
         )
         app.add_handler(

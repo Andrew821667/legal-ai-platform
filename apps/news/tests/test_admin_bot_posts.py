@@ -108,12 +108,23 @@ def test_parse_auto_queue_callback_formats() -> None:
 
 
 def test_parse_review_filter_callback_formats() -> None:
-    review_filter, offset = _parse_review_filter_callback("rv:ai:8")
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback("rv:ai:8")
     assert review_filter == "ai"
+    assert kind_filter == "all"
+    assert theme_filter == "all"
     assert offset == 8
-    review_filter, offset = _parse_review_filter_callback("rv:manual:0")
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback("rv:manual:0")
     assert review_filter == "manual"
+    assert kind_filter == "all"
+    assert theme_filter == "all"
     assert offset == 0
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback(
+        "rv:manual:weekly_review:market:4"
+    )
+    assert review_filter == "manual"
+    assert kind_filter == "weekly_review"
+    assert theme_filter == "market"
+    assert offset == 4
 
 
 def test_calendar_context_helpers() -> None:
