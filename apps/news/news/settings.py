@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     news_generate_interval_options: str = "900,1800,2700,3600,7200"
     news_publish_interval_options: str = "60,120,300,600,900"
     news_generate_limit_options: str = "3,5,7,10"
+    news_generate_morning_slot: str = "08:00"
+    news_generate_evening_slot: str = "17:00"
+    news_generate_morning_options: str = "07:00,07:30,08:00,08:30,09:00"
+    news_generate_evening_options: str = "16:00,16:30,17:00,17:30,18:00"
+    news_review_retention_days: int = 3
+    news_review_retention_options: str = "1,2,3,5,7"
     news_similarity_threshold: float = 0.48
     news_priority_domains: str = ""
     news_history_scan_limit: int = 120
@@ -88,6 +94,9 @@ class Settings(BaseSettings):
     google_news_query_ediscovery_en: str = '("e-discovery AI" OR "document review AI" OR "AI for eDiscovery" OR "litigation AI" OR "legal hold AI")'
     google_news_query_agents_en: str = '("agentic legal AI" OR "legal AI agent" OR "AI agent for lawyers" OR "agentic AI contract review" OR "AI workflow legal")'
     google_news_query_vendors_en: str = '("legal AI platform" OR "AI legal assistant" OR "contract review platform" OR "AI compliance platform" OR "legal tech product")'
+    google_news_query_frontier_en: str = '("frontier AI model" OR "foundation model" OR "reasoning model" OR "multimodal AI" OR "frontier model")'
+    google_news_query_enterprise_ai_en: str = '("enterprise AI" OR "AI copilots business" OR "AI workflow automation" OR "AI agents enterprise" OR "business AI platform")'
+    google_news_query_ai_products_en: str = '("AI product launch" OR "AI platform launch" OR "generative AI product" OR "AI assistant release" OR "AI tool launch")'
     google_news_lang_ru: str = "ru"
     google_news_lang_en: str = "en"
     google_news_region_ru: str = "RU"
@@ -112,6 +121,18 @@ class Settings(BaseSettings):
     @property
     def news_generate_limit_options_list(self) -> list[int]:
         return [int(item.strip()) for item in self.news_generate_limit_options.split(",") if item.strip()]
+
+    @property
+    def news_generate_morning_options_list(self) -> list[str]:
+        return [item.strip() for item in self.news_generate_morning_options.split(",") if item.strip()]
+
+    @property
+    def news_generate_evening_options_list(self) -> list[str]:
+        return [item.strip() for item in self.news_generate_evening_options.split(",") if item.strip()]
+
+    @property
+    def news_review_retention_options_list(self) -> list[int]:
+        return [int(item.strip()) for item in self.news_review_retention_options.split(",") if item.strip()]
 
     @property
     def news_daily_evening_options_list(self) -> list[str]:

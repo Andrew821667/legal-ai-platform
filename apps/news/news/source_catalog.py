@@ -177,6 +177,33 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         getattr(settings, "google_news_region_en", "US"),
     )
+    google_frontier_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_frontier_en",
+            '("frontier AI model" OR "foundation model" OR "reasoning model" OR "multimodal AI" OR "frontier model")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_enterprise_ai_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_enterprise_ai_en",
+            '("enterprise AI" OR "AI copilots business" OR "AI workflow automation" OR "AI agents enterprise" OR "business AI platform")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_ai_products_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_products_en",
+            '("AI product launch" OR "AI platform launch" OR "generative AI product" OR "AI assistant release" OR "AI tool launch")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
     return {
         "google_news_ru": SourceSpec(
             key="google_news_ru",
@@ -312,6 +339,33 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url=google_vendors_en,
             domain="news.google.com",
             priority=1.35,
+        ),
+        "google_news_frontier_en": SourceSpec(
+            key="google_news_frontier_en",
+            name="Google News Frontier AI EN",
+            kind="search_rss",
+            note="Зарубежный поисковый RSS по frontier models, reasoning, multimodal AI и крупным сдвигам в моделях",
+            url=google_frontier_en,
+            domain="news.google.com",
+            priority=0.95,
+        ),
+        "google_news_enterprise_ai_en": SourceSpec(
+            key="google_news_enterprise_ai_en",
+            name="Google News Enterprise AI EN",
+            kind="search_rss",
+            note="Зарубежный поисковый RSS по enterprise AI, AI workflow automation и корпоративным AI-платформам",
+            url=google_enterprise_ai_en,
+            domain="news.google.com",
+            priority=1.0,
+        ),
+        "google_news_ai_products_en": SourceSpec(
+            key="google_news_ai_products_en",
+            name="Google News AI Products EN",
+            kind="search_rss",
+            note="Зарубежный поисковый RSS по запускам AI-продуктов, AI assistants и новым AI-инструментам",
+            url=google_ai_products_en,
+            domain="news.google.com",
+            priority=0.95,
         ),
         "pravo_ru": SourceSpec(
             key="pravo_ru",
@@ -470,6 +524,9 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_ediscovery_en",
         "google_news_agents_en",
         "google_news_vendors_en",
+        "google_news_frontier_en",
+        "google_news_enterprise_ai_en",
+        "google_news_ai_products_en",
         "pravo_ru",
         "habr_news",
         "habr_hubs",

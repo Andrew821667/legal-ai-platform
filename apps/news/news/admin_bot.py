@@ -78,11 +78,11 @@ _MANUAL_QUEUE_FILTERS = ("due", "all")
 _AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
 _REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
 _BATCH_PUBLISH_MODES = ("page", "top3", "top5")
-_INTERVAL_SETTING_KINDS = ("generate", "publish", "limit")
+_INTERVAL_SETTING_KINDS = ("generate_morning", "generate_evening", "publish", "limit", "retention")
 _MAIN_MENU_WORKSPACE = "🏠 Рабочий стол"
 _MAIN_MENU_CREATE = "➕ Создать"
 
-_BUTTON_STYLE_PRIMARY = "primary"
+_BUTTON_STYLE_PRIMARY = None
 _BUTTON_STYLE_SUCCESS = "success"
 _BUTTON_STYLE_DANGER = "danger"
 _NEWS_ADMIN_BUTTON_ICON_ENV = "NEWS_ADMIN_BUTTON_ICON_MAP"
@@ -203,7 +203,7 @@ _MANUAL_POST_TYPE_ORDER = tuple(_MANUAL_POST_TYPES)
 
 def _is_hidden_deleted_post(row: dict[str, Any]) -> bool:
     last_error = str(row.get("last_error") or "").strip().lower()
-    return last_error.startswith("deleted_irrelevant")
+    return last_error.startswith("deleted_irrelevant") or last_error.startswith("expired_review_cleanup")
 
 
 def _status_label(status: str) -> str:
@@ -949,6 +949,13 @@ class NewsAdminBot:
             return value
         return settings.news_generate_interval_seconds
 
+    def _configured_generate_times(self, *, force_refresh: bool = False) -> tuple[str, str]:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        morning = str(config.get("morning_time") or settings.news_generate_morning_slot).strip() or settings.news_generate_morning_slot
+        evening = str(config.get("evening_time") or settings.news_generate_evening_slot).strip() or settings.news_generate_evening_slot
+        return morning, evening
+
     def _configured_publish_interval(self, *, force_refresh: bool = False) -> int:
         row = self._publish_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -965,6 +972,14 @@ class NewsAdminBot:
             return value
         return settings.news_generate_limit
 
+    def _configured_review_retention_days(self, *, force_refresh: bool = False) -> int:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = config.get("retention_days")
+        if isinstance(value, int) and value > 0:
+            return value
+        return settings.news_review_retention_days
+
     def _source_enabled_map(self, *, force_refresh: bool = False) -> dict[str, bool]:
         controls = self._controls_map(force_refresh=force_refresh)
         return {
@@ -979,9 +994,11 @@ class NewsAdminBot:
         publish_row = {str(row.get("key") or ""): row for row in controls}.get("news.publish.enabled", {})
         generate_config = generate_row.get("config") or {}
         publish_config = publish_row.get("config") or {}
-        generate_interval = generate_config.get("interval_seconds") if isinstance(generate_config.get("interval_seconds"), int) else settings.news_generate_interval_seconds
+        generate_morning = str(generate_config.get("morning_time") or settings.news_generate_morning_slot).strip() or settings.news_generate_morning_slot
+        generate_evening = str(generate_config.get("evening_time") or settings.news_generate_evening_slot).strip() or settings.news_generate_evening_slot
         publish_interval = publish_config.get("interval_seconds") if isinstance(publish_config.get("interval_seconds"), int) else settings.news_publish_interval_seconds
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
+        retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
         autopilot_enabled = control_map.get("news.generate.enabled", True) and control_map.get(
             "news.publish.enabled", True
         )
@@ -993,8 +1010,9 @@ class NewsAdminBot:
             "Автоматизация news",
             "",
             f"Автопилот контента: {'🟢 включен' if autopilot_enabled else '🔴 выключен'}",
-            f"Генерация: {_humanize_interval(generate_interval)}; лимит за цикл {generate_limit}",
+            f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
+            f"Хранение драфтов На проверке: {retention_days} дн.",
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"Обзор недели: {schedule_slot_label(schedule.weekly_review_slot)}",
             f"Лонгрид: {schedule_slot_label(schedule.longread_slot)}",
@@ -1531,9 +1549,10 @@ class NewsAdminBot:
     def _generation_text(self, controls: dict[str, bool]) -> str:
         source_count = len(resolve_source_urls(settings, enabled_overrides=self._source_enabled_map()))
         schedule = self._schedule_config()
-        generate_interval = self._configured_generate_interval()
+        generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
+        retention_days = self._configured_review_retention_days()
         discussion_ready = bool((settings.news_discussion_chat_id or "").strip() or (settings.news_discussion_chat_username or "").strip())
         telegram_channel_count = len(self._telegram_channel_enabled_map())
         return (
@@ -1541,9 +1560,10 @@ class NewsAdminBot:
             f"Автогенерация: {'🟢' if controls.get('news.generate.enabled', True) else '🔴'}\n"
             f"Автопубликация: {'🟢' if controls.get('news.publish.enabled', True) else '🔴'}\n"
             f"Feedback guard: {'🟢' if controls.get('news.feedback.guard.enabled', True) else '🔴'}\n\n"
-            f"Интервал автогенерации: {_humanize_interval(generate_interval)}\n"
+            f"Слоты автогенерации: {generate_morning} и {generate_evening}\n"
             f"Интервал автопубликации: {_humanize_interval(publish_interval)}\n"
             f"Лимит генерации за цикл: {generate_limit}\n"
+            f"Хранение в «На проверке»: {retention_days} дн.\n"
             f"Источников RSS/search: {source_count}\n"
             f"Telegram-каналов: {telegram_channel_count}\n"
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}\n"
@@ -1778,13 +1798,13 @@ class NewsAdminBot:
         tz = ZoneInfo(settings.tz_name)
         schedule = self._schedule_config()
         filter_label = "Все публикации" if queue_filter == "all" else publication_kind_label(queue_filter)
-        generate_interval = self._configured_generate_interval()
+        generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         lines = [
             "Автоочередь публикации",
             "",
             f"Фильтр: {filter_label}",
-            f"Автогенерация: {_humanize_interval(generate_interval)}",
+            f"Автогенерация: {generate_morning} и {generate_evening}",
             f"Автопубликация: {_humanize_interval(publish_interval)}",
             f"Всего scheduled: {total}",
             f"Просрочено: {overdue}",
@@ -1885,15 +1905,17 @@ class NewsAdminBot:
     async def _panel_text(self, controls: list[dict[str, Any]]) -> str:
         counts, next_publish = await self._queue_snapshot()
         control_map = {str(row.get("key") or ""): bool(row.get("enabled", True)) for row in controls}
-        generate_interval = self._configured_generate_interval()
+        generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
+        retention_days = self._configured_review_retention_days()
         lines = [
             "Рабочий стол модератора Legal AI PRO",
             "",
             f"Автопилот: {'🟢' if control_map.get('news.generate.enabled', True) and control_map.get('news.publish.enabled', True) else '🔴'}",
-            f"Автогенерация: {_humanize_interval(generate_interval)}; лимит {generate_limit}",
+            f"Автогенерация: {generate_morning} и {generate_evening}; лимит {generate_limit}",
             f"Автопубликация: {_humanize_interval(publish_interval)}",
+            f"Хранение На проверке: {retention_days} дн.",
             f"Сбор feedback: {'🟢' if control_map.get('news.feedback.collect.enabled', True) else '🔴'}",
             f"Защита по feedback: {'🟢' if control_map.get('news.feedback.guard.enabled', True) else '🔴'}",
             "",
@@ -1976,9 +1998,10 @@ class NewsAdminBot:
     def _calendar_summary_text(self, groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
         overdue_count = self._overdue_scheduled_count()
         schedule = self._schedule_config()
-        generate_interval = self._configured_generate_interval()
+        generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
+        retention_days = self._configured_review_retention_days()
         if not groups:
             lines = ["Календарь публикаций", ""]
             if overdue_count:
@@ -2000,9 +2023,10 @@ class NewsAdminBot:
             f"• Юмор: суббота {schedule_slot_label(schedule.humor_slot)}",
             "",
             "Ритм автопилота:",
-            f"• Генерация: {_humanize_interval(generate_interval)}",
+            f"• Генерация: {generate_morning} и {generate_evening}",
             f"• Публикация: {_humanize_interval(publish_interval)}",
             f"• Лимит за цикл: {generate_limit}",
+            f"• Хранение драфтов: {retention_days} дн.",
             "",
         ]
         if overdue_count:
@@ -2334,46 +2358,60 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _interval_settings_text(self) -> str:
-        generate_interval = self._configured_generate_interval(force_refresh=True)
+        generate_morning, generate_evening = self._configured_generate_times(force_refresh=True)
         publish_interval = self._configured_publish_interval(force_refresh=True)
         generate_limit = self._configured_generate_limit(force_refresh=True)
+        retention_days = self._configured_review_retention_days(force_refresh=True)
         return (
             "Ритм автоматической генерации и публикации\n\n"
-            f"• Автогенерация: {_humanize_interval(generate_interval)}\n"
+            f"• Автогенерация: {generate_morning} и {generate_evening}\n"
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
             f"• Лимит генерации за цикл: {generate_limit}\n\n"
-            "Эти настройки читаются loop-процессами news-generate и news-publish через control plane."
+            f"• Хранение драфтов На проверке: {retention_days} дн.\n\n"
+            "Генератор просыпается часто, но реально создает новые драфты только в указанные слоты."
         )
 
     def _interval_settings_keyboard(self) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
-                [_inline_button("Генерация", callback_data="int:view:generate")],
+                [_inline_button("Утренний слот", callback_data="int:view:generate_morning")],
+                [_inline_button("Вечерний слот", callback_data="int:view:generate_evening")],
                 [_inline_button("Публикация", callback_data="int:view:publish")],
-                [_inline_button("Лимит за цикл", callback_data="int:view:limit")],
+                [
+                    _inline_button("Лимит за цикл", callback_data="int:view:limit"),
+                    _inline_button("Хранение", callback_data="int:view:retention"),
+                ],
                 [_inline_button("🔙 К сетке", callback_data="sch:menu")],
             ]
         )
 
     def _interval_detail_text(self, kind: str) -> str:
-        if kind == "generate":
-            current = self._configured_generate_interval(force_refresh=True)
-            options = settings.news_generate_interval_options_list
-            label = "Автогенерация"
+        if kind == "generate_morning":
+            current = self._configured_generate_times(force_refresh=True)[0]
+            options = settings.news_generate_morning_options_list
+            label = "Утренний слот автогенерации"
+        elif kind == "generate_evening":
+            current = self._configured_generate_times(force_refresh=True)[1]
+            options = settings.news_generate_evening_options_list
+            label = "Вечерний слот автогенерации"
         elif kind == "publish":
             current = self._configured_publish_interval(force_refresh=True)
             options = settings.news_publish_interval_options_list
             label = "Автопубликация"
+        elif kind == "retention":
+            current = self._configured_review_retention_days(force_refresh=True)
+            options = settings.news_review_retention_options_list
+            label = "Хранение драфтов На проверке"
         else:
             current = self._configured_generate_limit(force_refresh=True)
             options = settings.news_generate_limit_options_list
             label = "Лимит генерации за цикл"
 
         options_line = ", ".join(
-            _humanize_interval(item) if kind != "limit" else str(item)
+            _humanize_interval(item) if kind == "publish" else (f"{item} дн." if kind == "retention" else str(item))
             for item in options
         )
-        current_label = _humanize_interval(current) if kind != "limit" else str(current)
+        current_label = _humanize_interval(current) if kind == "publish" else (f"{current} дн." if kind == "retention" else str(current))
         return (
             f"{label}\n\n"
             f"Текущее значение: {current_label}\n"
@@ -2381,18 +2419,30 @@ class NewsAdminBot:
         )
 
     def _interval_detail_keyboard(self, kind: str) -> InlineKeyboardMarkup:
-        if kind == "generate":
-            options = settings.news_generate_interval_options_list
+        if kind == "generate_morning":
+            options = settings.news_generate_morning_options_list
+        elif kind == "generate_evening":
+            options = settings.news_generate_evening_options_list
         elif kind == "publish":
             options = settings.news_publish_interval_options_list
+        elif kind == "retention":
+            options = settings.news_review_retention_options_list
         else:
             options = settings.news_generate_limit_options_list
 
         rows: list[list[InlineKeyboardButton]] = []
         row_buffer: list[InlineKeyboardButton] = []
         for option in options:
-            label = _humanize_interval(option) if kind != "limit" else str(option)
-            row_buffer.append(_inline_button(label, callback_data=f"int:set:{kind}:{option}"))
+            if kind == "publish":
+                label = _humanize_interval(option)
+                value = str(option)
+            elif kind == "retention":
+                label = f"{option} дн."
+                value = str(option)
+            else:
+                label = str(option)
+                value = str(option).replace(":", "")
+            row_buffer.append(_inline_button(label, callback_data=f"int:set:{kind}:{value}"))
             if len(row_buffer) == 3:
                 rows.append(row_buffer)
                 row_buffer = []
@@ -4004,21 +4054,8 @@ class NewsAdminBot:
                 if kind not in _INTERVAL_SETTING_KINDS:
                     await query.answer("Неизвестная настройка интервала.", show_alert=True)
                     return
-                value = int(raw_value)
-                if kind == "generate":
-                    row = self._generate_control_row(force_refresh=True)
-                    config = dict(row.get("config") or {})
-                    config["interval_seconds"] = value
-                    payload = {
-                        "scope": "news",
-                        "title": row.get("title") or "Генерация контента (news.generate)",
-                        "description": row.get("description") or "Автоматическая генерация контент-плана и постов из источников.",
-                        "enabled": bool(row.get("enabled", True)),
-                        "config": config,
-                    }
-                    response = self.admin_client.update_automation_control("news.generate.enabled", payload)
-                    response.raise_for_status()
-                elif kind == "publish":
+                if kind == "publish":
+                    value = int(raw_value)
                     row = self._publish_control_row(force_refresh=True)
                     config = dict(row.get("config") or {})
                     config["interval_seconds"] = value
@@ -4034,11 +4071,22 @@ class NewsAdminBot:
                 else:
                     row = self._generate_control_row(force_refresh=True)
                     config = dict(row.get("config") or {})
-                    config["generate_limit"] = value
+                    if kind == "generate_morning":
+                        value = f"{raw_value[:2]}:{raw_value[2:]}"
+                        config["morning_time"] = value
+                    elif kind == "generate_evening":
+                        value = f"{raw_value[:2]}:{raw_value[2:]}"
+                        config["evening_time"] = value
+                    elif kind == "retention":
+                        value = int(raw_value)
+                        config["retention_days"] = value
+                    else:
+                        value = int(raw_value)
+                        config["generate_limit"] = value
                     payload = {
                         "scope": "news",
                         "title": row.get("title") or "Генерация контента (news.generate)",
-                        "description": row.get("description") or "Автоматическая генерация контент-плана и постов из источников.",
+                        "description": row.get("description") or "Автогенерация драфтов из источников по двум слотам в сутки.",
                         "enabled": bool(row.get("enabled", True)),
                         "config": config,
                     }
@@ -5325,7 +5373,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_controls,
-                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate|publish|limit)|int:set:(?:generate|publish|limit):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other):\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z]+:\d+|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
+                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other):\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z]+:\d+|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
             )
         )
         app.add_handler(

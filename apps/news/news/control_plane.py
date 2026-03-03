@@ -29,6 +29,31 @@ def generate_interval_seconds(rows: list[dict[str, Any]]) -> int:
     return settings.news_generate_interval_seconds
 
 
+def _generate_config(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    row = controls_map(rows).get("news.generate.enabled") or {}
+    config = row.get("config") or {}
+    return config if isinstance(config, dict) else {}
+
+
+def generate_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
+    config = _generate_config(rows)
+    morning = str(config.get("morning_time") or settings.news_generate_morning_slot).strip()
+    evening = str(config.get("evening_time") or settings.news_generate_evening_slot).strip()
+    result: list[str] = []
+    for item in (morning, evening):
+        if item and item not in result:
+            result.append(item)
+    return result or [settings.news_generate_morning_slot, settings.news_generate_evening_slot]
+
+
+def review_retention_days(rows: list[dict[str, Any]]) -> int:
+    config = _generate_config(rows)
+    value = config.get("retention_days")
+    if isinstance(value, int) and value > 0:
+        return value
+    return settings.news_review_retention_days
+
+
 def publish_interval_seconds(rows: list[dict[str, Any]]) -> int:
     row = controls_map(rows).get("news.publish.enabled") or {}
     config = row.get("config") or {}
@@ -39,8 +64,7 @@ def publish_interval_seconds(rows: list[dict[str, Any]]) -> int:
 
 
 def generate_limit(rows: list[dict[str, Any]]) -> int:
-    row = controls_map(rows).get("news.generate.enabled") or {}
-    config = row.get("config") or {}
+    config = _generate_config(rows)
     value = config.get("generate_limit")
     if isinstance(value, int) and value > 0:
         return value

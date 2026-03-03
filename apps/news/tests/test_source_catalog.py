@@ -52,6 +52,9 @@ def test_source_catalog_includes_extended_google_news_buckets() -> None:
     assert "google_news_ediscovery_en" in catalog
     assert "google_news_agents_en" in catalog
     assert "google_news_vendors_en" in catalog
+    assert "google_news_frontier_en" in catalog
+    assert "google_news_enterprise_ai_en" in catalog
+    assert "google_news_ai_products_en" in catalog
     assert "vedomosti_technology" in catalog
     assert "vedomosti_regulations" in catalog
     assert "vedomosti_security_law" in catalog
