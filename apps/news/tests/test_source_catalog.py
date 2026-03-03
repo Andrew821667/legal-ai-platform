@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+from news.pipeline import canonicalize_source_url
 from news.settings import Settings
-from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog, source_priority_map, telegram_channel_priority_map
+from news.source_catalog import (
+    active_source_specs,
+    resolve_source_urls,
+    source_bucket_map,
+    source_catalog,
+    source_priority_map,
+    telegram_channel_bucket_map,
+    telegram_channel_priority_map,
+)
 
 
 def test_source_catalog_marks_telegram_unconfigured_by_default() -> None:
@@ -77,3 +86,17 @@ def test_telegram_channel_priority_map_prefers_legal_channels() -> None:
     settings = Settings()
     priorities = telegram_channel_priority_map(settings, ["@allthingslegal", "@ai_newz"])
     assert priorities["https://t.me/allthingslegal"] > priorities["https://t.me/ai_newz"]
+
+
+def test_source_bucket_map_marks_broad_ai_sources() -> None:
+    settings = Settings(news_source_keys="google_news_contracts_en,google_news_frontier_en", news_source_urls="")
+    buckets = source_bucket_map(settings)
+    assert buckets["news.google.com"] in {"core", "broad_ai"}
+    assert buckets[canonicalize_source_url(source_catalog(settings)["google_news_contracts_en"].url)] == "core"
+    assert buckets[canonicalize_source_url(source_catalog(settings)["google_news_frontier_en"].url)] == "broad_ai"
+
+
+def test_telegram_channel_bucket_map_marks_broad_ai_channels() -> None:
+    buckets = telegram_channel_bucket_map(["@allthingslegal", "@ai_newz"])
+    assert buckets["https://t.me/allthingslegal"] == "core"
+    assert buckets["https://t.me/ai_newz"] == "broad_ai"

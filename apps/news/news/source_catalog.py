@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote_plus
 
+from news.pipeline import canonicalize_source_url
+
 
 @dataclass(frozen=True, slots=True)
 class SourceSpec:
@@ -15,6 +17,7 @@ class SourceSpec:
     domain: str | None = None
     integrated: bool = True
     priority: float = 1.0
+    bucket: str = "core"
 
 
 _TELEGRAM_CHANNEL_PRIORITIES: dict[str, float] = {
@@ -26,6 +29,16 @@ _TELEGRAM_CHANNEL_PRIORITIES: dict[str, float] = {
     "anthropicai": 0.7,
     "googleai": 0.7,
     "ai_machinelearning_big_data": 0.7,
+}
+_TELEGRAM_CHANNEL_BUCKETS: dict[str, str] = {
+    "allthingslegal": "core",
+    "legal_tech": "core",
+    "law_gpt": "core",
+    "openai_ru": "broad_ai",
+    "ai_newz": "broad_ai",
+    "anthropicai": "broad_ai",
+    "googleai": "broad_ai",
+    "ai_machinelearning_big_data": "broad_ai",
 }
 
 
@@ -348,6 +361,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url=google_frontier_en,
             domain="news.google.com",
             priority=0.95,
+            bucket="broad_ai",
         ),
         "google_news_enterprise_ai_en": SourceSpec(
             key="google_news_enterprise_ai_en",
@@ -357,6 +371,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url=google_enterprise_ai_en,
             domain="news.google.com",
             priority=1.0,
+            bucket="broad_ai",
         ),
         "google_news_ai_products_en": SourceSpec(
             key="google_news_ai_products_en",
@@ -366,6 +381,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url=google_ai_products_en,
             domain="news.google.com",
             priority=0.95,
+            bucket="broad_ai",
         ),
         "pravo_ru": SourceSpec(
             key="pravo_ru",
@@ -584,7 +600,7 @@ def source_priority_map(settings: Any, enabled_overrides: dict[str, bool] | None
     result: dict[str, float] = {}
     for spec in active_source_specs(settings, enabled_overrides=enabled_overrides):
         if spec.url:
-            result[spec.url.strip()] = float(spec.priority)
+            result[canonicalize_source_url(spec.url.strip())] = float(spec.priority)
         if spec.domain:
             result[spec.domain.strip().lower()] = float(spec.priority)
     return result
@@ -596,5 +612,26 @@ def telegram_channel_priority_map(settings: Any, channels: list[str]) -> dict[st
         slug = raw_channel.strip().lstrip("@").lower()
         if not slug:
             continue
-        result[f"https://t.me/{slug}"] = _TELEGRAM_CHANNEL_PRIORITIES.get(slug, 1.0)
+        result[canonicalize_source_url(f"https://t.me/{slug}")] = _TELEGRAM_CHANNEL_PRIORITIES.get(slug, 1.0)
+    return result
+
+
+def source_bucket_map(settings: Any, enabled_overrides: dict[str, bool] | None = None) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for spec in active_source_specs(settings, enabled_overrides=enabled_overrides):
+        bucket = (spec.bucket or "core").strip() or "core"
+        if spec.url:
+            result[canonicalize_source_url(spec.url.strip())] = bucket
+        if spec.domain:
+            result[spec.domain.strip().lower()] = bucket
+    return result
+
+
+def telegram_channel_bucket_map(channels: list[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for raw_channel in channels:
+        slug = raw_channel.strip().lstrip("@").lower()
+        if not slug:
+            continue
+        result[canonicalize_source_url(f"https://t.me/{slug}")] = _TELEGRAM_CHANNEL_BUCKETS.get(slug, "core")
     return result

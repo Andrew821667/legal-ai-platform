@@ -6,6 +6,7 @@ from news.pipeline import (
     ArticleCandidate,
     RAGExample,
     build_source_hash,
+    canonicalize_source_url,
     canonicalize_url,
     choose_top_articles,
     is_specialized_candidate,
@@ -137,6 +138,50 @@ def test_choose_top_articles_prefers_higher_priority_source() -> None:
     )
     assert len(selected) == 1
     assert selected[0].article_url == "https://source-a.com/1"
+
+
+def test_choose_top_articles_limits_broad_ai_bucket() -> None:
+    now = datetime(2026, 2, 25, tzinfo=timezone.utc)
+    articles = [
+        ArticleCandidate(
+            source_url="https://t.me/allthingslegal",
+            article_url="https://t.me/allthingslegal/1",
+            title="AI в договорной работе и legal ops",
+            summary="Практический кейс для юротдела: AI помогает в договорном процессе и автоматизации юридической функции.",
+            published_at=now,
+        ),
+        ArticleCandidate(
+            source_url="https://news.google.com/rss/search?q=frontier",
+            article_url="https://example.com/frontier-1",
+            title="Frontier AI models reshape enterprise workflows for legal teams",
+            summary="Enterprise AI tools create ideas for legal workflow automation, contract review and in-house legal transformation.",
+            published_at=now,
+        ),
+        ArticleCandidate(
+            source_url="https://news.google.com/rss/search?q=enterprise-ai",
+            article_url="https://example.com/enterprise-2",
+            title="Enterprise AI launches new copilots for corporate departments",
+            summary="The launch suggests ideas for legal automation, intake triage and AI-assisted contract work inside corporate teams.",
+            published_at=now,
+        ),
+    ]
+
+    selected = choose_top_articles(
+        articles,
+        limit=3,
+        now_utc=now,
+        source_bucket_weights={
+            canonicalize_source_url("https://t.me/allthingslegal"): "core",
+            canonicalize_source_url("https://news.google.com/rss/search?q=frontier"): "broad_ai",
+            canonicalize_source_url("https://news.google.com/rss/search?q=enterprise-ai"): "broad_ai",
+        },
+        max_bucket_counts={"broad_ai": 1},
+    )
+
+    assert len(selected) == 2
+    selected_urls = {item.article_url for item in selected}
+    assert "https://t.me/allthingslegal/1" in selected_urls
+    assert len({"https://example.com/frontier-1", "https://example.com/enterprise-2"} & selected_urls) == 1
 
 
 def test_select_rag_examples_returns_related_texts() -> None:

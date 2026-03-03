@@ -72,7 +72,7 @@ _STATE_PENDING_DAY_PUBLISH_REASON = "pending_day_publish_reason"
 _STATE_DRAFT_DAY_PUBLISH = "draft_day_publish"
 _STATE_GENERATION_PREVIEWS = "generation_previews"
 _STATE_PENDING_DELETE_REASON = "pending_delete_reason"
-_CREATE_EDIT_STEPS = {"edit_title", "edit_text", "edit_source", "edit_ai"}
+_CREATE_EDIT_STEPS = {"edit_title", "edit_text", "edit_source", "edit_link", "edit_ai"}
 _POST_LIST_STATUSES = ("draft", "review", "scheduled", "posted", "failed")
 _MANUAL_QUEUE_FILTERS = ("due", "all")
 _AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
@@ -199,6 +199,59 @@ _MANUAL_POST_TYPES = {
     },
 }
 _MANUAL_POST_TYPE_ORDER = tuple(_MANUAL_POST_TYPES)
+_MANUAL_THEMES = {
+    "legal_function_ai": {
+        "label": "AI в работе юротдела",
+        "note": "Процессы, загрузка команды, SLA, скорость и качество работы юрфункции.",
+        "rubric": "legal_ops",
+    },
+    "contracts_ai": {
+        "label": "AI в договорной работе",
+        "note": "Согласование, redlining, review, playbook, контроль рисков по договорам.",
+        "rubric": "contracts",
+    },
+    "leads_ai": {
+        "label": "AI в обработке заявок",
+        "note": "Intake, triage, первичная квалификация, маршрутизация и клиентский контур.",
+        "rubric": "legal_ops",
+    },
+    "documents_ai": {
+        "label": "AI в документообороте",
+        "note": "Шаблоны, сбор данных, генерация и контроль качества юридических документов.",
+        "rubric": "legal_ops",
+    },
+    "disputes_ai": {
+        "label": "AI в судебной и претензионной работе",
+        "note": "Споры, eDiscovery, legal hold, аналитика позиции и прогнозирование исхода.",
+        "rubric": "litigation",
+    },
+    "privacy_compliance_ai": {
+        "label": "AI в комплаенсе и рисках",
+        "note": "ПДн, privacy, AI governance, внутренний контроль, аудит и регуляторика.",
+        "rubric": "privacy",
+    },
+    "legal_ops_automation": {
+        "label": "Legal Ops и автоматизация процессов",
+        "note": "Операционная модель юрфункции, экономия времени, качество и метрики.",
+        "rubric": "legal_ops",
+    },
+    "tools_products_ai": {
+        "label": "AI-продукты для юристов",
+        "note": "Инструменты, платформы, продуктовые решения и vendor evaluation.",
+        "rubric": "market",
+    },
+    "ai_regulation": {
+        "label": "Регулирование AI",
+        "note": "AI Act, privacy law, sanctions, экспортные ограничения и AI law.",
+        "rubric": "regulation",
+    },
+    "legal_ai_market": {
+        "label": "Рынок Legal AI и кейсы",
+        "note": "Сделки, рост вендоров, кейсы внедрения и сигналы рынка Legal AI.",
+        "rubric": "market",
+    },
+}
+_MANUAL_THEME_ORDER = tuple(_MANUAL_THEMES)
 
 
 def _is_hidden_deleted_post(row: dict[str, Any]) -> bool:
@@ -500,6 +553,18 @@ def _manual_post_kind_rubric(kind: str) -> str:
     return str(_MANUAL_POST_TYPES.get(kind, {}).get("rubric") or "manual")
 
 
+def _manual_theme_label(theme: str) -> str:
+    return str(_MANUAL_THEMES.get(theme, {}).get("label") or theme or "Без тематики")
+
+
+def _manual_theme_note(theme: str) -> str:
+    return str(_MANUAL_THEMES.get(theme, {}).get("note") or "Специализированная тематика без дополнительного описания.")
+
+
+def _manual_theme_rubric(theme: str) -> str:
+    return str(_MANUAL_THEMES.get(theme, {}).get("rubric") or "manual")
+
+
 def _manual_post_kind_structure(kind: str) -> str:
     templates = {
         "promo_offer": "Структура: боль клиента -> решение -> результат -> мягкий CTA.",
@@ -548,6 +613,23 @@ def _tg_media_token(message: Message) -> tuple[str, str] | None:
             return "document", f"tgdocument://{message.document.file_id}"
         return None
     return None
+
+
+def _normalize_transcript_text(text: str) -> str:
+    normalized = (text or "").replace("\r", "\n")
+    normalized = re.sub(r"\[(?:\d{1,2}:)?\d{1,2}:\d{2}\]", " ", normalized)
+    normalized = re.sub(r"\b(?:\d{1,2}:)?\d{1,2}:\d{2}\b", " ", normalized)
+    normalized = re.sub(r"(?im)^\s*(спикер\s*\d+|speaker\s*\d+|ведущий|host)\s*:\s*", "", normalized)
+    normalized = re.sub(r"[ \t]+", " ", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    normalized = re.sub(
+        r"(?i)\b(ну|как бы|в общем|собственно|скажем так|по сути|короче|значит|типа)\b(?:,\s*|\s+)",
+        "",
+        normalized,
+    )
+    lines = [line.strip(" -\t") for line in normalized.splitlines()]
+    lines = [line for line in lines if line]
+    return "\n".join(lines).strip()
 
 
 def _humanize_interval(seconds: int) -> str:
@@ -2774,6 +2856,7 @@ class NewsAdminBot:
             [
                 [InlineKeyboardButton("✍️ Написать вручную", callback_data="cn:manual")],
                 [InlineKeyboardButton("🤖 Сгенерировать по тезисам", callback_data="cn:ai")],
+                [InlineKeyboardButton("🎙 Из транскриба / voice", callback_data="cn:transcript")],
                 [InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")],
             ]
         )
@@ -2792,11 +2875,44 @@ class NewsAdminBot:
         rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
         return InlineKeyboardMarkup(rows)
 
-    def _create_media_keyboard(self, *, can_clear: bool = False) -> InlineKeyboardMarkup:
-        rows = [[InlineKeyboardButton("⏭ Без медиа", callback_data="cm:skip")]]
+    def _create_theme_keyboard(self) -> InlineKeyboardMarkup:
+        rows: list[list[InlineKeyboardButton]] = []
+        items = list(_MANUAL_THEME_ORDER)
+        for index in range(0, len(items), 2):
+            chunk = items[index : index + 2]
+            rows.append(
+                [
+                    InlineKeyboardButton(_manual_theme_label(theme), callback_data=f"ct:{theme}")
+                    for theme in chunk
+                ]
+            )
+        rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
+        return InlineKeyboardMarkup(rows)
+
+    def _create_media_keyboard(
+        self,
+        *,
+        can_clear: bool = False,
+        media_count: int = 0,
+        editing: bool = False,
+    ) -> InlineKeyboardMarkup:
+        rows: list[list[InlineKeyboardButton]] = []
+        if media_count > 0:
+            rows.append([InlineKeyboardButton(f"✅ Готово ({media_count})", callback_data="cm:done")])
+        elif not editing:
+            rows.append([InlineKeyboardButton("⏭ Без медиа", callback_data="cm:skip")])
+        else:
+            rows.append([InlineKeyboardButton("✅ Готово", callback_data="cm:done")])
         if can_clear:
             rows.insert(0, [InlineKeyboardButton("🗑 Убрать медиа", callback_data="cm:clear")])
         rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
+        return InlineKeyboardMarkup(rows)
+
+    def _create_link_keyboard(self, *, can_clear: bool = False, cancel_callback: str = "cn:cancel") -> InlineKeyboardMarkup:
+        rows = [[InlineKeyboardButton("⏭ Без ссылки", callback_data="cl:skip")]]
+        if can_clear:
+            rows.insert(0, [InlineKeyboardButton("🗑 Убрать ссылку", callback_data="cl:clear")])
+        rows.append([InlineKeyboardButton("❌ Отменить", callback_data=cancel_callback)])
         return InlineKeyboardMarkup(rows)
 
     def _create_draft_keyboard(self) -> InlineKeyboardMarkup:
@@ -2804,7 +2920,11 @@ class NewsAdminBot:
             [
                 [
                     InlineKeyboardButton("🧱 Тип", callback_data="ce:kind"),
+                    InlineKeyboardButton("🧭 Тема", callback_data="ce:theme"),
+                ],
+                [
                     InlineKeyboardButton("🖼 Медиа", callback_data="ce:media"),
+                    InlineKeyboardButton("🔗 Ссылка", callback_data="ce:link"),
                 ],
                 [
                     InlineKeyboardButton("🗂 Материал", callback_data="ce:source"),
@@ -2834,13 +2954,15 @@ class NewsAdminBot:
         context_text = (
             "Создание нового поста\n\n"
             "Контур ручного редактора:\n"
-            "1. Выбираете режим и тип поста\n"
-            "2. Добавляете медиа\n"
+            "1. Выбираете режим, тип поста и тематику\n"
+            "2. Добавляете медиа и, если нужно, ссылку на источник\n"
             "3. Присылаете материал: текст, тезисы или Telegram-транскриб\n"
             "4. Получаете драфт, правите и отправляете в очередь\n\n"
             "Режимы:\n"
             "✍️ вручную — вы задаете основной текст сами\n"
             "🤖 через LLM — вы даете материал, бот собирает черновик\n\n"
+            "🎙 из транскриба / voice — вы даете текстовую расшифровку голосового или устного материала, "
+            "бот мягко очищает устную речь и собирает драфт\n\n"
             f"Доступные типы:\n{post_types}\n\n"
             "Далее сможете сохранить материал в черновики, на проверку или сразу в автоплан публикации."
         )
@@ -2859,22 +2981,29 @@ class NewsAdminBot:
         mode = str(draft.get("mode") or "manual")
         mode_label = "LLM" if mode == "ai" else "ручной"
         kind = str(draft.get("kind") or "")
+        theme = str(draft.get("theme") or "")
         source_material = str(draft.get("source_material") or "").strip()
+        source_url = str(draft.get("source_url") or "").strip()
         media_urls = draft.get("media_urls") or []
         footer = build_manual_footer(kind)
-        return (
-            "Черновик нового поста\n\n"
-            f"Заголовок: {title}\n"
-            f"Тип: {_manual_post_kind_label(kind)}\n"
-            f"Режим: {mode_label}\n"
-            f"Шаблон: {_manual_post_kind_structure(kind)}\n"
-            f"Медиа: {'да' if media_urls else 'нет'}\n"
-            f"Длина итогового текста: {len(text)} символов\n"
-            + (f"Материал: {source_material[:220]}\n" if source_material else "")
-            + (f"Футер: {footer[:180]}\n" if footer else "Футер: без CTA\n")
-            + "\n"
-            f"{preview}\n\n"
-            "Можно доработать черновик или сразу сохранить:"
+        return "".join(
+            [
+                "Черновик нового поста\n\n",
+                f"Заголовок: {title}\n",
+                f"Тип: {_manual_post_kind_label(kind)}\n",
+                f"Тема: {_manual_theme_label(theme)}\n",
+                f"Режим: {mode_label}\n",
+                f"Шаблон: {_manual_post_kind_structure(kind)}\n",
+                f"Медиа: {'да' if media_urls else 'нет'}\n",
+                f"Ссылка: {source_url[:180]}\n" if source_url else "Ссылка: нет\n",
+                f"Длина итогового текста: {len(text)} символов\n",
+                f"Материал: {source_material[:220]}\n" if source_material else "",
+                f"Фокус темы: {_manual_theme_note(theme)}\n" if theme else "",
+                f"Футер: {footer[:180]}\n" if footer else "Футер: без CTA\n",
+                "\n",
+                f"{preview}\n\n",
+                "Можно доработать черновик или сразу сохранить:",
+            ]
         )
 
     def _compose_create_text(self, draft: dict[str, Any]) -> str:
@@ -2897,11 +3026,12 @@ class NewsAdminBot:
             "title": str(draft.get("title") or "").strip() or None,
             "text": self._compose_create_text(draft),
             "media_urls": list(draft.get("media_urls") or []) or None,
+            "source_url": str(draft.get("source_url") or "").strip() or f"manual://{str(draft.get('theme') or 'manual')}/{str(draft.get('kind') or 'post')}",
             "publish_at": publish_at.isoformat(),
             "status": status,
             "format_type": f"{'manual' if str(draft.get('mode') or 'manual') == 'manual' else 'operator_ai'}_{str(draft.get('kind') or 'generic')}",
             "cta_type": str(draft.get("kind") or "manual"),
-            "rubric": _manual_post_kind_rubric(str(draft.get("kind") or "")),
+            "rubric": _manual_theme_rubric(str(draft.get("theme") or "")) or _manual_post_kind_rubric(str(draft.get("kind") or "")),
         }
 
     @staticmethod
@@ -3066,7 +3196,7 @@ class NewsAdminBot:
             raise RuntimeError("LLM вернул пустой ответ")
         return content
 
-    def _draft_post_with_llm(self, title: str, source_material: str, post_kind: str) -> str:
+    def _draft_post_with_llm(self, title: str, source_material: str, post_kind: str, *, source_mode: str = "ai", theme: str = "") -> str:
         client = self._get_openai_client()
         system_prompt = (
             "Ты редактор Telegram-канала Legal AI PRO. "
@@ -3082,6 +3212,14 @@ class NewsAdminBot:
         else:
             completion_kwargs = {"max_completion_tokens": 1500}
 
+        prepared_source = _normalize_transcript_text(source_material) if source_mode == "transcript" else source_material
+        transcript_hint = (
+            "Источник — расшифровка устной речи. Сначала тихо очисти паразиты устной речи, повторы, оговорки и шум, "
+            "но не меняй фактический смысл. Затем собери читабельный Telegram-пост."
+            if source_mode == "transcript"
+            else "Источник — тезисы, заметки или текстовый материал. Собери из него плотный Telegram-пост."
+        )
+
         response = client.chat.completions.create(
             model=settings.news_model,
             messages=[
@@ -3092,9 +3230,13 @@ class NewsAdminBot:
                         f"Заголовок: {title}\n\n"
                         f"Тип поста: {_manual_post_kind_label(post_kind)}\n"
                         f"Профиль типа: {_manual_post_kind_note(post_kind)}\n"
+                        f"Тема: {_manual_theme_label(theme)}\n"
+                        f"Фокус темы: {_manual_theme_note(theme)}\n"
                         f"Шаблон: {_manual_post_kind_structure(post_kind)}\n"
                         f"Инструкция по типу: {_manual_post_kind_llm_hint(post_kind)}\n\n"
-                        f"Материал / тезисы / транскриб:\n{source_material}\n\n"
+                        f"Режим источника: {source_mode}\n"
+                        f"Инструкция по очистке источника: {transcript_hint}\n\n"
+                        f"Материал / тезисы / транскриб:\n{prepared_source}\n\n"
                         "Собери основной текст Telegram-поста для канала об AI и автоматизации юридической функции."
                     ),
                 },
@@ -3669,7 +3811,7 @@ class NewsAdminBot:
                 context.user_data.pop(_STATE_DRAFT_CREATE, None)
                 await self._safe_edit_message_text(
                     query,
-                    "Новый пост: шаг 1 из 4\n\n"
+                    "Новый пост: шаг 1 из 5\n\n"
                     "Выберите тип материала.",
                     reply_markup=self._create_kind_keyboard(),
                 )
@@ -3680,7 +3822,18 @@ class NewsAdminBot:
                 context.user_data.pop(_STATE_DRAFT_CREATE, None)
                 await self._safe_edit_message_text(
                     query,
-                    "Новый пост через LLM: шаг 1 из 4\n\n"
+                    "Новый пост через LLM: шаг 1 из 5\n\n"
+                    "Выберите тип материала.",
+                    reply_markup=self._create_kind_keyboard(),
+                )
+                return
+
+            if data == "cn:transcript":
+                context.user_data[_STATE_PENDING_CREATE] = {"mode": "transcript", "step": "kind"}
+                context.user_data.pop(_STATE_DRAFT_CREATE, None)
+                await self._safe_edit_message_text(
+                    query,
+                    "Новый пост из транскриба: шаг 1 из 5\n\n"
                     "Выберите тип материала.",
                     reply_markup=self._create_kind_keyboard(),
                 )
@@ -3704,14 +3857,43 @@ class NewsAdminBot:
                     )
                     return
                 pending["kind"] = kind
+                pending["step"] = "theme"
+                context.user_data[_STATE_PENDING_CREATE] = pending
+                await self._safe_edit_message_text(
+                    query,
+                    "Новый пост: шаг 2 из 5\n\n"
+                    f"Тип: {_manual_post_kind_label(kind)}\n"
+                    f"{_manual_post_kind_note(kind)}\n"
+                    f"{_manual_post_kind_structure(kind)}\n\n"
+                    "Выберите тематику поста.",
+                    reply_markup=self._create_theme_keyboard(),
+                )
+                return
+
+            if data.startswith("ct:"):
+                _, theme = data.split(":", maxsplit=1)
+                pending = dict(context.user_data.get(_STATE_PENDING_CREATE) or {})
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                step = str(pending.get("step") or "")
+                if step == "edit_theme" and draft:
+                    draft["theme"] = theme
+                    context.user_data[_STATE_DRAFT_CREATE] = draft
+                    context.user_data.pop(_STATE_PENDING_CREATE, None)
+                    await self._safe_edit_message_text(
+                        query,
+                        self._render_create_preview(draft),
+                        reply_markup=self._create_draft_keyboard(),
+                    )
+                    return
+                pending["theme"] = theme
                 pending["step"] = "media"
                 context.user_data[_STATE_PENDING_CREATE] = pending
                 await self._safe_edit_message_text(
                     query,
-                    "Новый пост: шаг 2 из 4\n\n"
-                    f"Тип: {_manual_post_kind_label(kind)}\n"
-                    f"{_manual_post_kind_note(kind)}\n"
-                    f"{_manual_post_kind_structure(kind)}\n\n"
+                    "Новый пост: шаг 3 из 5\n\n"
+                    f"Тип: {_manual_post_kind_label(str(pending.get('kind') or ''))}\n"
+                    f"Тема: {_manual_theme_label(theme)}\n"
+                    f"{_manual_theme_note(theme)}\n\n"
                     "Пришлите изображение/видео для поста или нажмите «Без медиа».",
                     reply_markup=self._create_media_keyboard(),
                 )
@@ -3729,11 +3911,84 @@ class NewsAdminBot:
                         reply_markup=self._create_draft_keyboard(),
                     )
                     return
+                pending["step"] = "source_link"
+                context.user_data[_STATE_PENDING_CREATE] = pending
+                await self._safe_edit_message_text(
+                    query,
+                    "Новый пост: шаг 4 из 5\n\n"
+                    "Если есть статья, пост или материал-источник, пришлите ссылку одним сообщением.\n"
+                    "Если ссылки нет, нажмите «Без ссылки».",
+                    reply_markup=self._create_link_keyboard(),
+                )
+                return
+
+            if data == "cm:done":
+                pending = dict(context.user_data.get(_STATE_PENDING_CREATE) or {})
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                step = str(pending.get("step") or "")
+                if step == "edit_media" and draft:
+                    context.user_data.pop(_STATE_PENDING_CREATE, None)
+                    await self._safe_edit_message_text(
+                        query,
+                        self._render_create_preview(draft),
+                        reply_markup=self._create_draft_keyboard(),
+                    )
+                    return
+                pending["step"] = "source_link"
+                context.user_data[_STATE_PENDING_CREATE] = pending
+                await self._safe_edit_message_text(
+                    query,
+                    "Новый пост: шаг 4 из 5\n\n"
+                    "Если есть статья, пост или материал-источник, пришлите ссылку одним сообщением.\n"
+                    "Если ссылки нет, нажмите «Без ссылки».",
+                    reply_markup=self._create_link_keyboard(),
+                )
+                return
+
+            if data == "cm:clear":
+                pending = dict(context.user_data.get(_STATE_PENDING_CREATE) or {})
+                step = str(pending.get("step") or "")
+                if step == "media":
+                    pending["media_urls"] = []
+                    context.user_data[_STATE_PENDING_CREATE] = pending
+                    await self._safe_edit_message_text(
+                        query,
+                        "Новый пост: шаг 3 из 5\n\n"
+                        "Медиа очищено. Пришлите изображение/видео для поста или нажмите «Без медиа».",
+                        reply_markup=self._create_media_keyboard(can_clear=False, media_count=0, editing=False),
+                    )
+                    return
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                if not draft:
+                    await query.message.reply_text("Черновик не найден. Запустите создание заново.")
+                    return
+                draft["media_urls"] = []
+                context.user_data[_STATE_DRAFT_CREATE] = draft
+                context.user_data.pop(_STATE_PENDING_CREATE, None)
+                await self._safe_edit_message_text(
+                    query,
+                    self._render_create_preview(draft),
+                    reply_markup=self._create_draft_keyboard(),
+                )
+                return
+
+            if data == "cl:skip":
+                pending = dict(context.user_data.get(_STATE_PENDING_CREATE) or {})
+                draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
+                step = str(pending.get("step") or "")
+                if step == "edit_link" and draft:
+                    context.user_data.pop(_STATE_PENDING_CREATE, None)
+                    await self._safe_edit_message_text(
+                        query,
+                        self._render_create_preview(draft),
+                        reply_markup=self._create_draft_keyboard(),
+                    )
+                    return
                 pending["step"] = "source"
                 context.user_data[_STATE_PENDING_CREATE] = pending
                 await self._safe_edit_message_text(
                     query,
-                    "Новый пост: шаг 3 из 4\n\n"
+                    "Новый пост: шаг 5 из 5\n\n"
                     "Пришлите исходный материал: тезисы, текст, заметки или Telegram-транскриб одним сообщением.",
                     reply_markup=InlineKeyboardMarkup(
                         [[InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")]]
@@ -3741,12 +3996,12 @@ class NewsAdminBot:
                 )
                 return
 
-            if data == "cm:clear":
+            if data == "cl:clear":
                 draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
                 if not draft:
                     await query.message.reply_text("Черновик не найден. Запустите создание заново.")
                     return
-                draft["media_urls"] = []
+                draft["source_url"] = ""
                 context.user_data[_STATE_DRAFT_CREATE] = draft
                 context.user_data.pop(_STATE_PENDING_CREATE, None)
                 await self._safe_edit_message_text(
@@ -3786,6 +4041,17 @@ class NewsAdminBot:
                         reply_markup=self._create_kind_keyboard(),
                     )
                     return
+                if action == "theme":
+                    context.user_data[_STATE_PENDING_CREATE] = {
+                        "mode": str(draft.get("mode") or "manual"),
+                        "step": "edit_theme",
+                    }
+                    await self._safe_edit_message_text(
+                        query,
+                        "Выберите новую тематику поста.",
+                        reply_markup=self._create_theme_keyboard(),
+                    )
+                    return
                 if action == "media":
                     context.user_data[_STATE_PENDING_CREATE] = {
                         "mode": str(draft.get("mode") or "manual"),
@@ -3795,6 +4061,20 @@ class NewsAdminBot:
                         query,
                         "Пришлите новое изображение/видео для поста или нажмите «Убрать медиа».",
                         reply_markup=self._create_media_keyboard(can_clear=bool(draft.get("media_urls"))),
+                    )
+                    return
+                if action == "link":
+                    context.user_data[_STATE_PENDING_CREATE] = {
+                        "mode": str(draft.get("mode") or "manual"),
+                        "step": "edit_link",
+                    }
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пришлите новую ссылку на источник одним сообщением или нажмите «Без ссылки».",
+                        reply_markup=self._create_link_keyboard(
+                            can_clear=bool(draft.get("source_url")),
+                            cancel_callback="cd:view",
+                        ),
                     )
                     return
                 if action == "source":
@@ -5050,20 +5330,50 @@ class NewsAdminBot:
             step = str(pending_create.get("step") or "source")
             title = str(pending_create.get("title") or "").strip()
             kind = str(pending_create.get("kind") or "")
+            theme = str(pending_create.get("theme") or "")
             source_material = str(pending_create.get("source_material") or "").strip()
+            source_url = str(pending_create.get("source_url") or "").strip()
 
             try:
+                if step == "source_link":
+                    source_url = message_text
+                    context.user_data[_STATE_PENDING_CREATE] = {
+                        "mode": mode,
+                        "kind": kind,
+                        "theme": theme,
+                        "step": "source",
+                        "source_url": source_url,
+                    }
+                    await update.effective_message.reply_text(
+                        "Новый пост: шаг 5 из 5\n\n"
+                        f"Тип: {_manual_post_kind_label(kind)}\n"
+                        f"Тема: {_manual_theme_label(theme)}\n\n"
+                        + (
+                            "Теперь пришлите текстовый транскриб или пересланное сообщение с расшифровкой.\n"
+                            "Голосовой файл без текстовой расшифровки бот не соберет."
+                            if mode == "transcript"
+                            else "Теперь пришлите исходный материал: тезисы, текст, заметки или Telegram-транскриб одним сообщением."
+                        ),
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")]]
+                        ),
+                    )
+                    return
+
                 if step == "source":
                     source_material = message_text
                     context.user_data[_STATE_PENDING_CREATE] = {
                         "mode": mode,
                         "kind": kind,
+                        "theme": theme,
                         "step": "title",
                         "source_material": source_material,
+                        "source_url": source_url,
                     }
                     await update.effective_message.reply_text(
-                        "Новый пост: шаг 4 из 4\n\n"
+                        "Новый пост: шаг 5 из 5\n\n"
                         f"Тип: {_manual_post_kind_label(kind)}\n"
+                        f"Тема: {_manual_theme_label(theme)}\n"
                         f"{_manual_post_kind_structure(kind)}\n\n"
                         "Пришлите заголовок или тему поста одним сообщением.",
                         reply_markup=InlineKeyboardMarkup(
@@ -5079,22 +5389,32 @@ class NewsAdminBot:
                         draft = {
                             "mode": mode,
                             "kind": kind,
+                            "theme": theme,
                             "title": title,
                             "text": source_material,
                             "source_material": source_material,
+                            "source_url": source_url,
                             "media_urls": media_urls,
                         }
                         context.user_data[_STATE_DRAFT_CREATE] = draft
                         context.user_data.pop(_STATE_PENDING_CREATE, None)
                         await self._show_create_draft(update.effective_message, draft)
                     else:
-                        draft_text = self._draft_post_with_llm(title, source_material, kind)
+                        draft_text = self._draft_post_with_llm(
+                            title,
+                            source_material,
+                            kind,
+                            source_mode=mode,
+                            theme=theme,
+                        )
                         draft = {
                             "mode": mode,
                             "kind": kind,
+                            "theme": theme,
                             "title": title,
                             "text": draft_text,
                             "source_material": source_material,
+                            "source_url": source_url,
                             "media_urls": media_urls,
                         }
                         payload = self._create_post_payload(draft, status="review", publish_at=datetime.now(timezone.utc))
@@ -5123,10 +5443,12 @@ class NewsAdminBot:
                         draft["text"] = message_text
                     elif step == "edit_source":
                         draft["source_material"] = message_text
+                    elif step == "edit_link":
+                        draft["source_url"] = message_text
                     elif step == "edit_ai":
                         draft["text"] = self._rewrite_with_llm(
                             str(draft.get("text") or ""),
-                            f"{message_text}\n\nТип поста: {_manual_post_kind_label(str(draft.get('kind') or ''))}",
+                            f"{message_text}\n\nТип поста: {_manual_post_kind_label(str(draft.get('kind') or ''))}\nТема: {_manual_theme_label(str(draft.get('theme') or ''))}",
                         )
                     context.user_data[_STATE_DRAFT_CREATE] = draft
                     context.user_data.pop(_STATE_PENDING_CREATE, None)
@@ -5307,23 +5629,57 @@ class NewsAdminBot:
                 context.user_data.pop(_STATE_PENDING_CREATE, None)
                 await message.reply_text("Черновик не найден. Запустите создание заново.")
                 return
-            draft["media_urls"] = [media_url]
+            current_media = list(draft.get("media_urls") or [])
+            if media_url not in current_media:
+                current_media.append(media_url)
+            draft["media_urls"] = current_media
             context.user_data[_STATE_DRAFT_CREATE] = draft
-            context.user_data.pop(_STATE_PENDING_CREATE, None)
             await message.reply_text(
-                f"Медиа обновлено: {media_kind}.\n\n" + self._render_create_preview(draft),
-                reply_markup=self._create_draft_keyboard(),
+                f"Медиа добавлено: {media_kind}. Сейчас вложений: {len(current_media)}.\n"
+                "Можно прислать еще медиа или нажать «Готово».",
+                reply_markup=self._create_media_keyboard(
+                    can_clear=bool(current_media),
+                    media_count=len(current_media),
+                    editing=True,
+                ),
             )
             return
 
         next_state = dict(pending_create)
-        next_state["media_urls"] = [media_url]
-        next_state["step"] = "source"
+        current_media = list(next_state.get("media_urls") or [])
+        if media_url not in current_media:
+            current_media.append(media_url)
+        next_state["media_urls"] = current_media
+        next_state["step"] = "media"
         context.user_data[_STATE_PENDING_CREATE] = next_state
         await message.reply_text(
-            "Новый пост: шаг 3 из 4\n\n"
-            f"Медиа добавлено: {media_kind}.\n"
-            "Теперь пришлите исходный материал: тезисы, текст, заметки или Telegram-транскриб.",
+            "Новый пост: шаг 3 из 5\n\n"
+            f"Медиа добавлено: {media_kind}. Сейчас вложений: {len(current_media)}.\n"
+            "Можно прислать еще медиа или нажать «Готово».",
+            reply_markup=self._create_media_keyboard(
+                can_clear=bool(current_media),
+                media_count=len(current_media),
+                editing=False,
+            ),
+        )
+
+    async def on_transcript_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._ensure_admin(update):
+            return
+
+        pending_create = context.user_data.get(_STATE_PENDING_CREATE)
+        if not pending_create:
+            return
+
+        mode = str(pending_create.get("mode") or "")
+        step = str(pending_create.get("step") or "")
+        if mode != "transcript" or step != "source":
+            return
+
+        await update.effective_message.reply_text(
+            "Для режима «из транскриба / voice» нужен текстовый транскриб.\n"
+            "Пришлите расшифровку одним сообщением или перешлите сообщение Telegram с уже готовым транскрибом.\n"
+            "Сам голосовой файл без текста бот сейчас не расшифровывает.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")]]
             ),
@@ -5367,7 +5723,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_create,
-                pattern=r"^(cn:(?:start|manual|ai|cancel)|ck:[a-z_]+|cm:(?:skip|clear)|cd:view|ce:(?:kind|media|source|title|text|ai)|cs:(?:draft|review)|cs:scheduled:(?:h1|e19|t10))$",
+                pattern=r"^(cn:(?:start|manual|ai|transcript|cancel)|ck:[a-z_]+|ct:[a-z_]+|cm:(?:skip|clear|done)|cl:(?:skip|clear)|cd:view|ce:(?:kind|theme|media|link|source|title|text|ai)|cs:(?:draft|review)|cs:scheduled:(?:h1|e19|t10))$",
             )
         )
         app.add_handler(
@@ -5389,6 +5745,12 @@ class NewsAdminBot:
             MessageHandler(
                 (filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE | filters.Document.ALL) & filters.ChatType.PRIVATE,
                 self.on_create_media,
+            )
+        )
+        app.add_handler(
+            MessageHandler(
+                (filters.VOICE | filters.AUDIO) & filters.ChatType.PRIVATE,
+                self.on_transcript_voice,
             )
         )
         app.add_handler(MessageReactionHandler(self.on_feedback_reaction_count, message_reaction_types=MessageReactionHandler.MESSAGE_REACTION_COUNT_UPDATED))

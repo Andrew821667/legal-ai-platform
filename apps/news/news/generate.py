@@ -31,8 +31,10 @@ from news.settings import settings
 from news.source_catalog import (
     active_source_specs,
     resolve_source_urls,
+    source_bucket_map,
     source_catalog,
     source_priority_map,
+    telegram_channel_bucket_map,
     telegram_channel_priority_map,
 )
 from news.strategy import build_publish_plan
@@ -324,6 +326,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     if not source_urls:
         raise RuntimeError("NEWS_SOURCE_URLS is empty; generator cannot run")
     source_priorities = source_priority_map(settings, enabled_overrides=_source_enabled_map(controls))
+    source_buckets = source_bucket_map(settings, enabled_overrides=_source_enabled_map(controls))
 
     history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
         core_client
@@ -340,6 +343,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         articles.extend(telegram_articles)
         logger.info("telegram_articles_appended", extra={"count": len(telegram_articles)})
         source_priorities.update(telegram_channel_priority_map(settings, enabled_channels))
+        source_buckets.update(telegram_channel_bucket_map(enabled_channels))
     priority_domains = _parse_priority_domains()
     selection_limit = min(200, max(80, top_limit * 16))
     selected_articles = choose_top_articles(
@@ -348,6 +352,8 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         now_utc=now_utc,
         priority_domains=priority_domains,
         source_priority_weights=source_priorities,
+        source_bucket_weights=source_buckets,
+        max_bucket_counts={"broad_ai": 1},
         max_per_source=settings.news_max_per_source,
         recent_pillar_counts=recent_pillar_counts,
         target_pillar_shares=default_pillar_targets(),

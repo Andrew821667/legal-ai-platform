@@ -356,6 +356,19 @@ def canonicalize_url(url: str) -> str:
     return urlunparse(normalized).rstrip("/")
 
 
+def canonicalize_source_url(url: str) -> str:
+    raw = (url or "").strip()
+    if not raw:
+        return raw
+    parsed = urlparse(raw)
+    scheme = parsed.scheme.lower() or "https"
+    netloc = parsed.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    normalized = parsed._replace(scheme=scheme, netloc=netloc, params="", fragment="")
+    return urlunparse(normalized).rstrip("/")
+
+
 def extract_domain(url: str) -> str:
     parsed = urlparse(url or "")
     netloc = parsed.netloc.lower()
@@ -572,7 +585,7 @@ def article_score(
 
     source_priority_bonus = 0.0
     if source_priority_weights:
-        source_url_key = canonicalize_url(article.source_url)
+        source_url_key = canonicalize_source_url(article.source_url)
         article_domain = extract_domain(article.article_url)
         source_domain = extract_domain(article.source_url)
         source_weight = source_priority_weights.get(source_url_key)
@@ -593,6 +606,8 @@ def choose_top_articles(
     now_utc: datetime,
     priority_domains: set[str] | None = None,
     source_priority_weights: dict[str, float] | None = None,
+    source_bucket_weights: dict[str, str] | None = None,
+    max_bucket_counts: dict[str, int] | None = None,
     max_per_source: int = 2,
     recent_pillar_counts: dict[str, int] | None = None,
     target_pillar_shares: dict[str, float] | None = None,
@@ -617,6 +632,7 @@ def choose_top_articles(
     selected: list[ArticleCandidate] = []
     source_count: dict[str, int] = {}
     selected_pillar_counts: dict[str, int] = {}
+    bucket_count: dict[str, int] = {}
 
     remaining = list(scored)
     while remaining and len(selected) < limit:
@@ -629,6 +645,21 @@ def choose_top_articles(
             already = source_count.get(source_key, 0)
             if already >= max(1, max_per_source):
                 continue
+            bucket_key = "core"
+            if source_bucket_weights:
+                source_url_key = canonicalize_source_url(candidate.source_url)
+                article_domain = extract_domain(candidate.article_url)
+                source_domain = extract_domain(candidate.source_url)
+                bucket_key = (
+                    source_bucket_weights.get(source_url_key)
+                    or source_bucket_weights.get(source_domain)
+                    or source_bucket_weights.get(article_domain)
+                    or "core"
+                )
+            if max_bucket_counts is not None:
+                bucket_limit = max_bucket_counts.get(bucket_key)
+                if bucket_limit is not None and bucket_count.get(bucket_key, 0) >= bucket_limit:
+                    continue
 
             observed_total = max(1, sum(recent_counts.values()) + sum(selected_pillar_counts.values()))
             observed_share = (
@@ -650,6 +681,17 @@ def choose_top_articles(
         source_key = extract_domain(candidate.source_url or candidate.article_url)
         source_count[source_key] = source_count.get(source_key, 0) + 1
         selected_pillar_counts[pillar] = selected_pillar_counts.get(pillar, 0) + 1
+        if source_bucket_weights:
+            source_url_key = canonicalize_source_url(candidate.source_url)
+            article_domain = extract_domain(candidate.article_url)
+            source_domain = extract_domain(candidate.source_url)
+            bucket_key = (
+                source_bucket_weights.get(source_url_key)
+                or source_bucket_weights.get(source_domain)
+                or source_bucket_weights.get(article_domain)
+                or "core"
+            )
+            bucket_count[bucket_key] = bucket_count.get(bucket_key, 0) + 1
 
     return selected
 

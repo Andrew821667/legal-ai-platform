@@ -31,6 +31,18 @@ def test_blocks_look_complete_rejects_truncated_internal_paragraph() -> None:
     assert not LLMNewsWriter._blocks_look_complete(text)
 
 
+def test_blocks_look_complete_ignores_title_line_without_period() -> None:
+    text = (
+        "<b>Theorem выпустил гид по Legal AI-платформам для юристов</b>\n\n"
+        "<b>Что произошло</b>\nTheorem собрал обзор платформ, которые помогают юристам выбирать рабочий стек Legal AI.\n\n"
+        "<b>Почему это важно</b>\nДля юрфункции это полезно как карта рынка и ориентир для vendor due diligence.\n\n"
+        "<b>Что это значит для рынка</b>\nКомпании начнут сравнивать платформы не только по точности, но и по governance, SLA и режиму данных.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#LegalAI #AI #LegalTech"
+    )
+    assert LLMNewsWriter._blocks_look_complete(text)
+
+
 def test_format_daily_uses_contextual_market_block() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     title, text, rubric = writer._format_post(
@@ -73,6 +85,29 @@ def test_daily_disables_low_quality_fallback() -> None:
     assert LLMNewsWriter._allow_quality_fallback("weekly_review")
 
 
+def test_quality_gate_failure_reason_for_short_daily() -> None:
+    text = "<b>Короткий пост</b>\n\n<b>Что произошло</b>\nМало текста.\n\n<b>Почему это важно</b>\nМало.\n\n<b>Юридический контур</b>\nЕще мало.\n\n<b>Источник</b>: ссылка"
+    reason = LLMNewsWriter._quality_gate_failure_reason(text, "daily")
+    assert reason is not None
+    assert reason.startswith("too_short:")
+
+
+def test_quality_gate_rejects_weak_daily_third_block() -> None:
+    text = (
+        "<b>360 Business Law расширяет AI-сервис проверки договоров</b>\n\n"
+        "Фирма расширяет доступ к своему AI-сервису проверки договоров для международной сети консультантов и использует это как часть новой операционной модели работы с контрактами.\n\n"
+        "<b>Что произошло</b>\n"
+        "Ранее инструмент был доступен только команде в Великобритании, а теперь его передают международным консультантам. Это означает расширение единого AI-контура проверки договоров на распределенную международную команду, которая работает с едиными шаблонами и стандартами проверки.\n\n"
+        "<b>Почему это важно</b>\n"
+        "Это ускоряет договорную работу и снижает рутинную нагрузку. Для фирм с распределенной моделью это еще и способ выровнять качество первичной проверки контрактов между разными юристами и юрисдикциями, не собирая весь поток только на внутреннюю команду.\n\n"
+        "<b>Юридический контур</b>\n"
+        "Нужно проработать договорной контур с вендором.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#LegalAI #AI #LegalTech"
+    )
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "daily") == "weak_daily_third_block:47"
+
+
 def test_shorten_with_prefer_sentence_never_cuts_mid_sentence() -> None:
     text = "Это очень длинное предложение без точки в пределах лимита и оно не должно обрезаться просто по слову где попало"
     assert LLMNewsWriter._shorten(text, 60, prefer_sentence=True) == ""
@@ -82,6 +117,12 @@ def test_shorten_with_prefer_sentence_keeps_last_full_sentence() -> None:
     text = "Первое предложение завершено. Второе предложение тоже завершено. Третье предложение уже не должно влезть целиком."
     shortened = LLMNewsWriter._shorten(text, 70, prefer_sentence=True)
     assert shortened == "Первое предложение завершено. Второе предложение тоже завершено."
+
+
+def test_shorten_title_removes_cut_prepositional_tail() -> None:
+    text = "Юрфирма 360 Business Law расширяет AI-сервис проверки договоров на международных сделках"
+    shortened = LLMNewsWriter._shorten_title(text, 76)
+    assert shortened == "Юрфирма 360 Business Law расширяет AI-сервис проверки договоров"
 
 
 def test_infer_legal_focus_hint_for_privacy_article() -> None:

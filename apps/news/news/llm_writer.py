@@ -125,25 +125,25 @@ _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
 }
 _CTA_LIBRARY = {
     "soft": {
-        "regulation": "Если хотите спокойно разложить этот риск на ваш AI-, privacy- или compliance-контур, можно написать в {bot_link}.",
-        "case": "Если хотите понять, применим ли такой сценарий в вашей юрфункции, можно написать в {bot_link}.",
-        "implementation": "Если хотите примерить этот сценарий автоматизации на ваш процесс, можно написать в {bot_link}.",
-        "tools": "Если хотите оценить, подойдет ли такой инструмент вашей команде, можно написать в {bot_link}.",
-        "market": "Если хотите перевести этот рыночный сигнал в конкретный план действий, можно написать в {bot_link}.",
+        "regulation": "Если хотите разобрать, как такой регуляторный риск влияет на вашу AI-, privacy- или compliance-функцию, напишите в {bot_link}.",
+        "case": "Если хотите понять, как такой сценарий внедрения применим в вашей юрфункции, напишите в {bot_link}.",
+        "implementation": "Если хотите примерить такой сценарий автоматизации на договорную работу, заявки или внутренние процессы, напишите в {bot_link}.",
+        "tools": "Если хотите оценить, подходит ли такой инструмент для юротдела или практики, напишите в {bot_link}.",
+        "market": "Если хотите перевести этот рыночный сигнал в план действий для вашей юрфункции или продукта, напишите в {bot_link}.",
     },
     "mid": {
-        "regulation": "Если нужен прикладной разбор рисков, роли юристов и дорожной карты внедрения, напишите в {bot_link}.",
-        "case": "Если хотите разобрать ваш процесс и собрать пилот внедрения по этому кейсу, напишите в {bot_link}.",
-        "implementation": "Если хотите разобрать ваш контур автоматизации и выбрать реальный формат внедрения, напишите в {bot_link}.",
-        "tools": "Если нужен отбор инструмента, сценарий пилота и юридические ограничения, напишите в {bot_link}.",
-        "market": "Если хотите понять, как этот тренд влияет на вашу практику, процессы и продуктовую стратегию, напишите в {bot_link}.",
+        "regulation": "Если нужен прикладной разбор рисков, роли юристов и контура контроля для внедрения AI, напишите в {bot_link}.",
+        "case": "Если хотите разобрать ваш процесс и собрать пилот внедрения по такому кейсу, напишите в {bot_link}.",
+        "implementation": "Если хотите разобрать ваш контур автоматизации и выбрать реальный формат внедрения для юротдела, напишите в {bot_link}.",
+        "tools": "Если нужен отбор инструмента, пилот и юридические ограничения по данным и ответственности, напишите в {bot_link}.",
+        "market": "Если хотите понять, как этот тренд влияет на ваши процессы, продукт и архитектуру Legal AI, напишите в {bot_link}.",
     },
     "hard": {
-        "regulation": "Если нужен рабочий формат проекта: аудит риска, регламенты, процесс и контроль качества, напишите в {bot_link}.",
+        "regulation": "Если нужен проектный формат: аудит риска, регламенты, процесс и контроль качества AI в юрфункции, напишите в {bot_link}.",
         "case": "Если готовы переходить от идеи к проекту внедрения, соберем архитектуру и план запуска в {bot_link}.",
-        "implementation": "Если нужен разбор задачи и проект автоматизации под ваш юротдел или практику, напишите в {bot_link}.",
-        "tools": "Если нужен подбор стека, сценарий интеграции и запуск пилота, напишите в {bot_link}.",
-        "market": "Если хотите из этого тренда собрать коммерчески и операционно полезный продукт, напишите в {bot_link}.",
+        "implementation": "Если нужен проект автоматизации заявок, договорной работы или типовых юридических процессов, напишите в {bot_link}.",
+        "tools": "Если нужен подбор стека, интеграция и запуск пилота для юротдела, напишите в {bot_link}.",
+        "market": "Если хотите из этого тренда собрать полезный продукт или сервис для юридической функции, напишите в {bot_link}.",
     },
 }
 _AUTO_FOOTER_MODE_BY_FORMAT = {
@@ -157,16 +157,22 @@ _AUTO_FOOTER_MODE_BY_FORMAT = {
     "humor": "none",
 }
 _MANUAL_FOOTER_LIBRARY = {
-    "promo_offer": "Если хотите обсудить такой формат внедрения под ваш кейс, напишите в {bot_link}.",
+    "promo_offer": "Если хотите обсудить внедрение Legal AI под ваш кейс, напишите в {bot_link}.",
     "product_review": "",
-    "case_story": "Если хотите собрать похожий сценарий под вашу команду, напишите в {bot_link}.",
+    "case_story": "Если хотите собрать похожий сценарий автоматизации под вашу команду, напишите в {bot_link}.",
     "opinion": "",
-    "problem_breakdown": "Если хотите разобрать вашу узкую точку и перевести ее в проект автоматизации, напишите в {bot_link}.",
-    "checklist": "Если хотите получить такой чек-лист или адаптировать его под ваш процесс, напишите в {bot_link}.",
-    "faq": "Если хотите разобрать ваши вопросы по AI и юрфункции на конкретном кейсе, напишите в {bot_link}.",
+    "problem_breakdown": "Если хотите разобрать узкое место в заявках, договорах или внутренних процессах, напишите в {bot_link}.",
+    "checklist": "Если хотите адаптировать этот чек-лист под ваш юридический процесс, напишите в {bot_link}.",
+    "faq": "Если хотите разобрать ваши вопросы по AI и юридической функции на конкретном кейсе, напишите в {bot_link}.",
     "announcement": "Если тема для вас актуальна и нужен следующий шаг по внедрению, напишите в {bot_link}.",
     "digest": "",
     "service_page": "Если хотите обсудить услугу, формат проекта и следующий шаг, напишите в {bot_link}.",
+}
+_CHANNEL_STYLE_HINTS = {
+    "daily": "Редакционный тон: коротко, плотно, без рекламного хвоста. Это информационный пост, а не продающий.",
+    "weekly_review": "Редакционный тон: обзор недели. Никакого CTA, только редакционный вывод и ощущение собранного материала.",
+    "longread": "Редакционный тон: экспертный воскресный разбор. Допустим мягкий следующий шаг, но без навязчивой продажи.",
+    "humor": "Редакционный тон: профессиональная ирония без клоунады. CTA не нужен.",
 }
 _DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
 _DEFAULT_RUBRIC_BY_PILLAR = {
@@ -190,7 +196,14 @@ _INCOMPLETE_TRAILING_WORDS = (
     "для",
     "через",
 )
+_TRAILING_PREPOSITIONAL_PHRASE_RE = re.compile(
+    r"(?:\b(?:на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без)\b)\s+\S+\s*$",
+    re.IGNORECASE,
+)
 _QUALITY_SPECIFICITY_MARKERS = (
+    "legal ai",
+    "legaltech",
+    "legal tech",
     "ai act",
     "gdpr",
     "openai",
@@ -216,10 +229,40 @@ _QUALITY_SPECIFICITY_MARKERS = (
     "indemn",
     "санкц",
     "госзакуп",
+    "закуп",
+    "поставщик",
+    "надежност",
+    "надёжност",
+    "критер",
+    "due diligence",
+    "procurement",
+    "benchmark",
     "экспортн",
     "e-discovery",
     "legal hold",
     "chain of custody",
+)
+_SPELLED_NUMBER_MARKERS = (
+    "один",
+    "два",
+    "три",
+    "четыре",
+    "пять",
+    "шесть",
+    "семь",
+    "восемь",
+    "девять",
+    "десять",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
 )
 _DAILY_LEGAL_RUBRICS = {"ai_law", "compliance", "privacy", "contracts", "litigation", "regulation"}
 _DAILY_THIRD_BLOCK_HEADINGS = (
@@ -229,6 +272,7 @@ _DAILY_THIRD_BLOCK_HEADINGS = (
     "Что это значит для рынка",
     "На что смотреть дальше",
 )
+_DAILY_HEADING_MARKERS = ("Что произошло", "Почему это важно",) + _DAILY_THIRD_BLOCK_HEADINGS + ("Источник",)
 _GENERIC_LEGAL_PATTERNS = (
     "есть юридические риски",
     "есть риски",
@@ -307,6 +351,41 @@ class LLMNewsWriter:
 
         return normalized[:limit].rstrip(" ,;:-")
 
+    @classmethod
+    def _shorten_title(cls, text: str, limit: int = 110) -> str:
+        normalized = re.sub(r"\s+", " ", (text or "").strip())
+        if len(normalized) <= limit:
+            return normalized
+
+        punctuation_positions = [
+            match.end()
+            for match in re.finditer(r"[:.!?…](?:[\"'»”)]*)", normalized[: limit + 1])
+            if match.end() <= limit
+        ]
+        if punctuation_positions:
+            candidate = normalized[: punctuation_positions[-1]].strip(" ,;:-")
+        else:
+            last_space = normalized.rfind(" ", 0, limit + 1)
+            candidate = normalized[:last_space].rstrip(" ,;:-") if last_space > 0 else normalized[:limit].rstrip(" ,;:-")
+
+        while True:
+            lowered = candidate.lower().strip()
+            if not lowered:
+                return normalized[:limit].rstrip(" ,;:-")
+            if re.search(r"\b(?:на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без)\s*$", lowered):
+                candidate = candidate.rsplit(" ", 1)[0].rstrip(" ,;:-")
+                continue
+            last_word = re.sub(r"[^\wа-яА-Я-]+$", "", lowered.split()[-1])
+            if last_word in _INCOMPLETE_TRAILING_WORDS:
+                candidate = candidate.rsplit(" ", 1)[0].rstrip(" ,;:-")
+                continue
+            if _TRAILING_PREPOSITIONAL_PHRASE_RE.search(candidate):
+                candidate = _TRAILING_PREPOSITIONAL_PHRASE_RE.sub("", candidate).rstrip(" ,;:-")
+                continue
+            break
+
+        return candidate or normalized[:limit].rstrip(" ,;:-")
+
     @staticmethod
     def _build_context(rag_examples: list[RAGExample]) -> str:
         if not rag_examples:
@@ -345,6 +424,13 @@ class LLMNewsWriter:
             safe_url = html.escape(settings.news_helper_bot_url, quote=True)
             return f'<a href="{safe_url}">{link_text}</a>'
         return "@legal_ai_helper_new_bot"
+
+    @classmethod
+    def _style_hint(cls, format_type: str) -> str:
+        return _CHANNEL_STYLE_HINTS.get(
+            format_type,
+            "Редакционный тон: полезный профессиональный пост без рекламного перегруза и клишированного хвоста.",
+        )
 
     @classmethod
     def _cta_text(cls, cta_type: str, pillar: str) -> str:
@@ -429,11 +515,14 @@ class LLMNewsWriter:
         plain = html.unescape(re.sub(r"<[^>]+>", "", text or ""))
         lines = [line.strip() for line in plain.splitlines() if line.strip()]
         paragraph_lines: list[str] = []
-        for line in lines:
+        for index, line in enumerate(lines):
             lowered = line.lower()
             if lowered.startswith("источник"):
                 continue
             if lowered.startswith("#"):
+                continue
+            if index == 0:
+                # Первая строка - заголовок поста. Для него отдельная валидация, без требования точки в конце.
                 continue
             if line.startswith("• "):
                 continue
@@ -458,7 +547,28 @@ class LLMNewsWriter:
         normalized = html.unescape(re.sub(r"<[^>]+>", "", text or "")).lower()
         if re.search(r"\d", normalized):
             return True
+        if any(re.search(rf"\b{re.escape(marker)}\b", normalized) for marker in _SPELLED_NUMBER_MARKERS):
+            return True
         return any(marker in normalized for marker in _QUALITY_SPECIFICITY_MARKERS)
+
+    @staticmethod
+    def _extract_daily_third_block_body(text: str) -> str:
+        plain = html.unescape(re.sub(r"<[^>]+>", "", text or ""))
+        lines = [line.strip() for line in plain.splitlines() if line.strip()]
+        capture = False
+        captured: list[str] = []
+        for line in lines:
+            if line in _DAILY_THIRD_BLOCK_HEADINGS:
+                capture = True
+                continue
+            if not capture:
+                continue
+            if line in _DAILY_HEADING_MARKERS or line.startswith("#"):
+                break
+            if line.lower().startswith("источник"):
+                break
+            captured.append(line)
+        return " ".join(captured).strip()
 
     @classmethod
     def _daily_tail_block(
@@ -698,7 +808,7 @@ class LLMNewsWriter:
         pillar: str,
     ) -> tuple[str, str, str]:
         limits = _FORMAT_FIELD_LIMITS.get(format_type, _FORMAT_FIELD_LIMITS["standard"])
-        title = self._shorten(data.get("title") or fallback_title, 110)
+        title = self._shorten_title(data.get("title") or fallback_title, 110)
         default_rubric = _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")
         rubric = self._shorten(data.get("rubric") or default_rubric, 100)
         what_happened = self._shorten(data.get("what_happened") or "", limits["what"], prefer_sentence=True)
@@ -821,7 +931,7 @@ class LLMNewsWriter:
         return title, text, rubric
 
     @staticmethod
-    def _passes_quality_gate(text: str, format_type: str) -> bool:
+    def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
         normalized = (text or "").strip()
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
@@ -835,21 +945,29 @@ class LLMNewsWriter:
         )
         min_chars = _FORMAT_MIN_CHARS.get(format_type, _FORMAT_MIN_CHARS["standard"])
         if len(normalized) < min_chars:
-            return False
+            return f"too_short:{len(normalized)}<{min_chars}"
         for marker in required_markers:
             if marker not in normalized:
-                return False
+                return f"missing_marker:{marker}"
         if format_type == "daily" and not any(marker in normalized for marker in _DAILY_THIRD_BLOCK_HEADINGS):
-            return False
+            return "missing_daily_third_block"
+        if format_type == "daily":
+            third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
+            if len(third_block) < 120:
+                return f"weak_daily_third_block:{len(third_block)}"
         if not LLMNewsWriter._has_specificity_signal(normalized):
-            return False
+            return "not_specific_enough"
         if len(normalized) >= 3980:
-            return False
+            return f"too_long:{len(normalized)}"
         if not LLMNewsWriter._looks_complete_prose(normalized):
-            return False
+            return "incomplete_tail"
         if not LLMNewsWriter._blocks_look_complete(normalized):
-            return False
-        return True
+            return "incomplete_block"
+        return None
+
+    @classmethod
+    def _passes_quality_gate(cls, text: str, format_type: str) -> bool:
+        return cls._quality_gate_failure_reason(text, format_type) is None
 
     def _repair_post(
         self,
@@ -938,6 +1056,7 @@ class LLMNewsWriter:
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
             f"Целевая смысловая корзина: {pillar}\n"
             f"Предполагаемая рубрика: {inferred_rubric}\n"
+            f"Стилистика канала: {self._style_hint(format_type)}\n"
             f"Приоритетный юридический угол: {self._infer_legal_focus_hint(article, pillar)}\n"
             f"Шаблон юридического комментария для этой рубрики: {self._rubric_template_hint(inferred_rubric)}\n"
             f"{format_hint}\n"
@@ -986,6 +1105,7 @@ class LLMNewsWriter:
                 pillar=pillar,
             )
             if not self._passes_quality_gate(text, format_type):
+                failure_reason = self._quality_gate_failure_reason(text, format_type) or "unknown"
                 try:
                     repaired = self._repair_post(
                         title=title,
@@ -1006,7 +1126,12 @@ class LLMNewsWriter:
                     )
                 logger.warning(
                     "llm_post_failed_quality_gate",
-                    extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
+                    extra={
+                        "title": title[:80],
+                        "rubric": rubric,
+                        "format_type": format_type,
+                        "reason": failure_reason,
+                    },
                 )
                 if not self._allow_quality_fallback(format_type):
                     logger.info(
