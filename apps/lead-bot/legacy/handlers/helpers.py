@@ -291,6 +291,18 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 logger.warning(f"Failed to send lead notification to chat {target_chat_id}: {send_error}")
 
         if sent_any:
+            try:
+                database.db.create_notification(
+                    lead_id,
+                    "new_lead_update" if is_update else "new_lead",
+                    notification_message,
+                )
+            except Exception as notification_log_error:
+                logger.warning(
+                    "Failed to persist admin notification for lead %s: %s",
+                    lead_id,
+                    notification_log_error,
+                )
             # Помечаем что уведомление отправлено
             database.db.mark_lead_notification_sent(lead_id)
         else:
