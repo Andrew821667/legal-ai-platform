@@ -33,6 +33,11 @@ _SYSTEM_PROMPT = """
    - AI Act, privacy law, отраслевые регуляторные требования;
    - судебная доказуемость, explainability, контроль качества output.
 8) Если в статье нет явного правового угла, legal_risks должен честно объяснять, какой именно юридический вопрос должен проверить юрист перед внедрением.
+9) Для daily-поста третий блок не должен автоматически становиться юридическим чек-листом. Выбирай его по контексту новости:
+   - регулирование / privacy / compliance / contracts -> «Юридический контур»;
+   - внедрение / legal ops / кейс -> «Что это значит для юрфункции»;
+   - инструмент / продукт -> «Что это значит для команд»;
+   - рынок / вендоры / сделки / геополитика -> «Что это значит для рынка» или «На что смотреть дальше».
 
 Верни СТРОГО JSON-объект (без markdown и пояснений) с полями:
 {
@@ -71,7 +76,8 @@ _FORMAT_HINTS = {
 _FORMAT_SHAPE_HINTS = {
     "daily": (
         "Структура daily: сильный заголовок -> короткий лид -> блок «Что произошло» -> блок «Почему это важно» "
-        "-> блок «Что проверить юристу» -> источник. Абзацы короткие, по 2-3 предложения."
+        "-> третий блок по контексту новости (например: «Юридический контур», «Что это значит для юрфункции», "
+        "«Что это значит для рынка», «На что смотреть дальше») -> источник. Абзацы короткие, по 2-3 предложения."
     ),
     "weekly_review": (
         "Структура weekly_review: короткий лид -> 8-10 коротких пунктов недели -> блок «Что это значит для юрфункции» "
@@ -204,6 +210,14 @@ _QUALITY_SPECIFICITY_MARKERS = (
     "человек",
     "human-in-the-loop",
 )
+_DAILY_LEGAL_RUBRICS = {"ai_law", "compliance", "privacy", "contracts", "litigation", "regulation"}
+_DAILY_THIRD_BLOCK_HEADINGS = (
+    "Юридический контур",
+    "Что это значит для юрфункции",
+    "Что это значит для команд",
+    "Что это значит для рынка",
+    "На что смотреть дальше",
+)
 
 
 class LLMNewsWriter:
@@ -226,9 +240,31 @@ class LLMNewsWriter:
         return {"max_completion_tokens": token_limit}
 
     @staticmethod
-    def _shorten(text: str, limit: int) -> str:
+    def _allow_quality_fallback(format_type: str) -> bool:
+        return format_type not in {"daily"}
+
+    @staticmethod
+    def _shorten(text: str, limit: int, *, prefer_sentence: bool = False) -> str:
         normalized = re.sub(r"\s+", " ", (text or "").strip())
-        return normalized[:limit].strip()
+        if len(normalized) <= limit:
+            return normalized
+
+        if prefer_sentence:
+            punctuation_positions = [
+                match.end()
+                for match in re.finditer(r"[.!?…](?:[\"'»”)]*)", normalized[: limit + 1])
+                if match.end() <= limit
+            ]
+            if punctuation_positions:
+                return normalized[: punctuation_positions[-1]].strip()
+            return ""
+
+        word_cutoff = max(int(limit * 0.65), limit - 80)
+        last_space = normalized.rfind(" ", 0, limit + 1)
+        if last_space >= word_cutoff:
+            return normalized[:last_space].rstrip(" ,;:-")
+
+        return normalized[:limit].rstrip(" ,;:-")
 
     @staticmethod
     def _build_context(rag_examples: list[RAGExample]) -> str:
@@ -348,11 +384,66 @@ class LLMNewsWriter:
         return True
 
     @staticmethod
+    def _blocks_look_complete(text: str) -> bool:
+        plain = html.unescape(re.sub(r"<[^>]+>", "", text or ""))
+        lines = [line.strip() for line in plain.splitlines() if line.strip()]
+        paragraph_lines: list[str] = []
+        for line in lines:
+            lowered = line.lower()
+            if lowered.startswith("источник"):
+                continue
+            if lowered.startswith("#"):
+                continue
+            if line.startswith("• "):
+                continue
+            if re.match(r"^\d+\.\s", line):
+                continue
+            word_count = len(line.split())
+            if len(line) <= 90 and word_count <= 6 and not re.search(r"[.!?…]$", line):
+                # Заголовки и короткие служебные строки не валидируем как прозу.
+                continue
+            paragraph_lines.append(line)
+
+        if not paragraph_lines:
+            return False
+
+        for paragraph in paragraph_lines:
+            if not LLMNewsWriter._looks_complete_prose(paragraph):
+                return False
+        return True
+
+    @staticmethod
     def _has_specificity_signal(text: str) -> bool:
         normalized = html.unescape(re.sub(r"<[^>]+>", "", text or "")).lower()
         if re.search(r"\d", normalized):
             return True
         return any(marker in normalized for marker in _QUALITY_SPECIFICITY_MARKERS)
+
+    @classmethod
+    def _daily_tail_block(
+        cls,
+        *,
+        rubric: str,
+        pillar: str,
+        business_effect: str,
+        legal_risks: str,
+        conclusion: str,
+        steps_block: str,
+    ) -> tuple[str, str]:
+        legal_specific = cls._has_specificity_signal(legal_risks)
+        conclusion_or_effect = conclusion or business_effect
+
+        if rubric in _DAILY_LEGAL_RUBRICS and legal_specific:
+            return "Юридический контур", html.escape(legal_risks)
+        if pillar in {"implementation", "case"}:
+            return "Что это значит для юрфункции", html.escape(conclusion_or_effect or legal_risks or business_effect)
+        if pillar == "tools":
+            return "Что это значит для команд", html.escape(conclusion_or_effect or business_effect or legal_risks)
+        if pillar == "market":
+            return "Что это значит для рынка", html.escape(conclusion_or_effect or business_effect or legal_risks)
+        if legal_specific:
+            return "Юридический контур", html.escape(legal_risks)
+        return "На что смотреть дальше", html.escape(conclusion_or_effect or business_effect or html.unescape(steps_block))
 
     def _format_post(
         self,
@@ -367,9 +458,9 @@ class LLMNewsWriter:
         title = self._shorten(data.get("title") or fallback_title, 110)
         default_rubric = _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")
         rubric = self._shorten(data.get("rubric") or default_rubric, 100)
-        what_happened = self._shorten(data.get("what_happened") or "", limits["what"])
-        business_effect = self._shorten(data.get("business_effect") or "", limits["effect"])
-        legal_risks = self._shorten(data.get("legal_risks") or "", limits["risks"])
+        what_happened = self._shorten(data.get("what_happened") or "", limits["what"], prefer_sentence=True)
+        business_effect = self._shorten(data.get("business_effect") or "", limits["effect"], prefer_sentence=True)
+        legal_risks = self._shorten(data.get("legal_risks") or "", limits["risks"], prefer_sentence=True)
         next_steps_raw = data.get("next_steps") or ""
         hashtags_value = data.get("hashtags")
 
@@ -403,9 +494,9 @@ class LLMNewsWriter:
         )
         escaped_steps = [html.escape(item) for item in steps]
         steps_block = "\n".join(f"• {item}" for item in escaped_steps) if escaped_steps else "• Проверить применимость кейса к текущим процессам."
-        lead = self._shorten(data.get("lead") or "", 260)
+        lead = self._shorten(data.get("lead") or "", 260, prefer_sentence=True)
         escaped_lead = html.escape(lead)
-        conclusion = self._shorten(data.get("conclusion") or "", 320)
+        conclusion = self._shorten(data.get("conclusion") or "", 320, prefer_sentence=True)
         escaped_conclusion = html.escape(conclusion)
         cta_line = self._auto_footer_text(format_type, cta_type, pillar)
         source_block = self._source_block(article_url, format_type)
@@ -453,12 +544,20 @@ class LLMNewsWriter:
                 + f"{hashtags_line}"
             )
         elif format_type == "daily":
+            daily_heading, daily_body = self._daily_tail_block(
+                rubric=rubric,
+                pillar=pillar,
+                business_effect=business_effect,
+                legal_risks=legal_risks,
+                conclusion=conclusion,
+                steps_block=steps_block,
+            )
             body = (
                 f"<b>{escaped_title}</b>\n\n"
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
                 + f"<b>Что произошло</b>\n{escaped_what_happened}\n\n"
                 + f"<b>Почему это важно</b>\n{escaped_business_effect}\n\n"
-                + f"<b>Что проверить юристу</b>\n{steps_block}\n\n"
+                + f"<b>{daily_heading}</b>\n{daily_body}\n\n"
                 + f"{source_block}\n"
                 + f"{hashtags_line}"
             )
@@ -484,7 +583,7 @@ class LLMNewsWriter:
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
-            "daily": ("Что произошло", "Почему это важно", "Что проверить юристу", "Источник"),
+            "daily": ("Что произошло", "Почему это важно", "Источник"),
             "humor": ("Ситуация недели", "Почему это смешно", "Где здесь практический смысл", "Источник"),
         }
         required_markers = format_markers.get(
@@ -497,11 +596,15 @@ class LLMNewsWriter:
         for marker in required_markers:
             if marker not in normalized:
                 return False
+        if format_type == "daily" and not any(marker in normalized for marker in _DAILY_THIRD_BLOCK_HEADINGS):
+            return False
         if not LLMNewsWriter._has_specificity_signal(normalized):
             return False
         if len(normalized) >= 3980:
             return False
         if not LLMNewsWriter._looks_complete_prose(normalized):
+            return False
+        if not LLMNewsWriter._blocks_look_complete(normalized):
             return False
         return True
 
@@ -541,15 +644,27 @@ class LLMNewsWriter:
 
     def _fallback_post(self, article: ArticleCandidate, format_type: str, cta_type: str, pillar: str) -> dict[str, str]:
         title = self._shorten(article.title or "Обзор новости", 110)
-        summary = self._shorten(article.summary, 1300)
+        summary = self._shorten(article.summary, 1300, prefer_sentence=True)
         summary = summary or "Источник сообщил о новом кейсе внедрения AI в юридическом процессе."
+        business_effect = "Кейс показывает, как сократить ручную работу и повысить скорость обработки типовых задач."
+        legal_risks = "Юристу стоит заранее проверить обработку персональных данных, договорную ответственность поставщика, требования к логированию и контроль качества output."
+        conclusion = ""
+        if pillar == "market":
+            business_effect = "Это сигнал о том, что вокруг крупных AI-вендоров усиливается рыночный, политический и регуляторный контур."
+            conclusion = "Дальше стоит смотреть, как это повлияет на выбор поставщиков, закупки и корпоративные AI-стратегии."
+        elif pillar == "tools":
+            business_effect = "Новость показывает, как меняется контур выбора AI-инструментов и требований к вендорам со стороны корпоративных команд."
+            conclusion = "Дальше важны не общие обещания вендора, а режим доступа к данным, качество output и контрактные ограничения."
+        elif pillar in {"implementation", "case"}:
+            conclusion = "Практический смысл здесь не в самой новости, а в том, какие процессы и роли можно пересобрать внутри юрфункции."
         base = {
             "title": title,
             "rubric": _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai"),
             "what_happened": summary[:450],
-            "business_effect": "Кейс показывает, как сократить ручную работу и повысить скорость обработки типовых задач.",
-            "legal_risks": "Юристу стоит заранее проверить обработку персональных данных, договорную ответственность поставщика, требования к логированию и контроль качества output.",
+            "business_effect": business_effect,
+            "legal_risks": legal_risks,
             "next_steps": "Описать процесс и данные в нем; проверить PDn и договорные ограничения; выбрать 1-2 этапа для пилота; согласовать критерии качества и контроля",
+            "conclusion": conclusion,
             "hashtags": list(_DEFAULT_HASHTAGS),
         }
         _, text, rubric = self._format_post(
@@ -640,6 +755,12 @@ class LLMNewsWriter:
                     "llm_post_failed_quality_gate",
                     extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
                 )
+                if not self._allow_quality_fallback(format_type):
+                    logger.info(
+                        "llm_post_discarded_after_quality_gate",
+                        extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
+                    )
+                    return None
                 return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
             logger.info("llm_post_generated", extra={"title": title[:80], "rubric": rubric, "format_type": format_type})
             return {"title": title[:160], "text": text, "rubric": rubric[:100]}
