@@ -78,6 +78,13 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def delete_post(self, post_id: str) -> requests.Response:
+        return requests.delete(
+            f"{self.base_url}/api/v1/scheduled-posts/{post_id}",
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def lookup_post_by_telegram_message(
         self,
         message_id: int,

@@ -107,46 +107,17 @@ else
     echo "Нужна первоначальная авторизация Telegram Client API"
     echo ""
     echo "Выберите метод авторизации:"
-    echo "  1. Автоматически через Bot Token (рекомендуется)"
-    echo "  2. Вручную запустить setup_telegram_session.py"
-    echo "  3. Пропустить (настроить позже)"
+    echo "  1. Запустить интерактивный вход (QR или номер телефона)"
+    echo "  2. Пропустить (настроить позже)"
     echo ""
-    read -p "Ваш выбор (1/2/3): " auth_choice
+    read -p "Ваш выбор (1/2): " auth_choice
 
     case $auth_choice in
         1)
-            # Автоматическая авторизация через bot token
-            BOT_TOKEN=$(grep "^TELEGRAM_BOT_TOKEN=" .env | cut -d'=' -f2)
-            if [ -z "$BOT_TOKEN" ] || [ "$BOT_TOKEN" == "your_bot_token_from_botfather" ]; then
-                warning "TELEGRAM_BOT_TOKEN не настроен в .env"
-                echo "Запустите вручную: python setup_telegram_session.py"
-            else
-                echo "Авторизация через bot token..."
-                python3 -c "
-import asyncio
-from telethon import TelegramClient
-
-async def main():
-    client = TelegramClient('telegram_bot', 34617695, 'e95e6e190f5efcff98001a490acea1c1')
-    await client.start(bot_token='$BOT_TOKEN')
-    print('Авторизация успешна!')
-    await client.disconnect()
-
-asyncio.run(main())
-" 2>&1
-                if [ $? -eq 0 ]; then
-                    success "Авторизация завершена!"
-                else
-                    error "Ошибка авторизации"
-                    echo "Запустите вручную: python setup_telegram_session.py"
-                fi
-            fi
-            ;;
-        2)
             warning "Запускаю интерактивный скрипт авторизации..."
             python3 setup_telegram_session.py
             ;;
-        3)
+        2)
             warning "Авторизация пропущена"
             echo "   Запустите позже: python setup_telegram_session.py"
             ;;

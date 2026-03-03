@@ -38,13 +38,13 @@ class LeadQualifier:
                 if utils.validate_email(extracted_data['email']):
                     lead_data['email'] = extracted_data['email']
                 else:
-                    logger.warning(f"Invalid email: {extracted_data['email']}")
+                    logger.warning("Invalid email: %s", utils.mask_email(extracted_data['email']))
 
             if extracted_data.get('phone'):
                 if utils.validate_phone(extracted_data['phone']):
                     lead_data['phone'] = utils.format_phone(extracted_data['phone'])
                 else:
-                    logger.warning(f"Invalid phone: {extracted_data['phone']}")
+                    logger.warning("Invalid phone: %s", utils.mask_phone(extracted_data['phone']))
 
             if extracted_data.get('company'):
                 lead_data['company'] = extracted_data['company']

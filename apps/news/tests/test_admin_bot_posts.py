@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
+    _auto_queue_context,
+    _auto_queue_filters_from_context,
+    _auto_queue_filter_from_context,
     _button_icon_map,
     _main_menu_markup,
     _batch_mode_label,
@@ -11,15 +14,29 @@ from news.admin_bot import (
     _calendar_date_from_context,
     _compute_quick_publish_at,
     _format_workers_status,
+    _is_hidden_deleted_post,
+    _is_auto_queue_context,
     _is_batch_mode_allowed,
     _is_calendar_context,
     _is_manual_queue_context,
+    _manual_post_kind_label,
+    _manual_post_kind_from_format_type,
+    _manual_post_kind_prompt_block,
+    _manual_post_kind_screen_template,
+    _manual_post_kind_style_hint,
+    _post_format_display_label,
+    _parse_review_filter_callback,
+    _review_origin,
+    _review_origin_badge,
+    _manual_post_kind_structure,
     NewsAdminBot,
     _normalize_operator_note,
+    _parse_auto_queue_callback,
     _parse_batch_publish_callback,
     _parse_manual_queue_callback,
     _parse_post_list_callback,
     _queue_context_from_filter,
+    _queue_filters_from_context,
     _queue_filter_from_context,
     _slot_from_token,
     _slot_token,
@@ -45,21 +62,69 @@ def test_parse_post_list_callback_new_format() -> None:
 
 
 def test_parse_manual_queue_callback_formats() -> None:
-    queue_filter, offset = _parse_manual_queue_callback("mq:4")
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:4")
     assert queue_filter == "due"
+    assert theme_filter == "all"
     assert offset == 4
-    queue_filter, offset = _parse_manual_queue_callback("mq:all:12")
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:all:12")
     assert queue_filter == "all"
+    assert theme_filter == "all"
     assert offset == 12
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:due:implementation:7")
+    assert queue_filter == "due"
+    assert theme_filter == "implementation"
+    assert offset == 7
 
 
 def test_manual_queue_context_helpers() -> None:
-    assert _queue_context_from_filter("due") == "mq_due"
-    assert _queue_context_from_filter("all") == "mq_all"
+    assert _queue_context_from_filter("due") == "mq_due_all"
+    assert _queue_context_from_filter("all") == "mq_all_all"
+    assert _queue_context_from_filter("due", "implementation") == "mq_due_implementation"
     assert _queue_filter_from_context("mq_due") == "due"
     assert _queue_filter_from_context("mq_all") == "all"
+    assert _queue_filters_from_context("mq_due_implementation") == ("due", "implementation")
     assert _is_manual_queue_context("mq_due")
     assert not _is_manual_queue_context("scheduled")
+    assert _auto_queue_context("daily") == "aq_daily_all"
+    assert _auto_queue_context("daily", "regulation") == "aq_daily_regulation"
+    assert _auto_queue_filter_from_context("aq_humor") == "humor"
+    assert _auto_queue_filters_from_context("aq_humor_market") == ("humor", "market")
+    assert _is_auto_queue_context("aq_all")
+
+
+def test_parse_auto_queue_callback_formats() -> None:
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:daily:8")
+    assert queue_filter == "daily"
+    assert theme_filter == "all"
+    assert offset == 8
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:other:0")
+    assert queue_filter == "other"
+    assert theme_filter == "all"
+    assert offset == 0
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:daily:regulation:5")
+    assert queue_filter == "daily"
+    assert theme_filter == "regulation"
+    assert offset == 5
+
+
+def test_parse_review_filter_callback_formats() -> None:
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback("rv:ai:8")
+    assert review_filter == "ai"
+    assert kind_filter == "all"
+    assert theme_filter == "all"
+    assert offset == 8
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback("rv:manual:0")
+    assert review_filter == "manual"
+    assert kind_filter == "all"
+    assert theme_filter == "all"
+    assert offset == 0
+    review_filter, kind_filter, theme_filter, offset = _parse_review_filter_callback(
+        "rv:manual:weekly_review:market:4"
+    )
+    assert review_filter == "manual"
+    assert kind_filter == "weekly_review"
+    assert theme_filter == "market"
+    assert offset == 4
 
 
 def test_calendar_context_helpers() -> None:
@@ -147,25 +212,70 @@ def test_format_workers_status_payload() -> None:
     assert "news-publish" in text
 
 
-def test_main_menu_markup_is_compact_and_has_sections(monkeypatch) -> None:
-    monkeypatch.setenv(
-        "NEWS_ADMIN_BUTTON_ICON_MAP",
-        "panel=1,create=1,calendar=1,sections=1,help=1",
-    )
+def test_main_menu_markup_removes_reply_keyboard(monkeypatch) -> None:
+    monkeypatch.delenv("NEWS_ADMIN_BUTTON_ICON_MAP", raising=False)
     _button_icon_map.cache_clear()
     try:
         markup = _main_menu_markup()
-        rows = [[button.text for button in row] for row in markup.keyboard]
-        assert rows == [
-            ["Панель", "Создать"],
-            ["Календарь", "Разделы"],
-            ["Помощь"],
-        ]
+        payload = markup.to_dict()
+        assert payload.get("remove_keyboard") is True
     finally:
         _button_icon_map.cache_clear()
 
 
-def test_main_menu_buttons_include_style_in_payload() -> None:
+def test_main_menu_remove_keyboard_has_no_buttons() -> None:
     markup = _main_menu_markup()
-    first_button = markup.keyboard[0][0]
-    assert "style" not in first_button.to_dict()
+    assert "keyboard" not in markup.to_dict()
+
+
+def test_hidden_deleted_post_helper() -> None:
+    assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant"})
+    assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant: ai-noise"})
+    assert not _is_hidden_deleted_post({"last_error": "timeout"})
+
+
+def test_manual_post_kind_label_exists() -> None:
+    assert _manual_post_kind_label("promo_offer") == "Рекламный"
+
+
+def test_manual_post_kind_structure_exists() -> None:
+    assert "боль клиента" in _manual_post_kind_structure("promo_offer")
+    assert "тезис" in _manual_post_kind_structure("opinion")
+
+
+def test_manual_post_kind_style_hints_exist() -> None:
+    assert "агрессивного продавливания" in _manual_post_kind_style_hint("promo_offer")
+    assert "авторский" in _manual_post_kind_style_hint("opinion")
+    assert "действием или критерием" in _manual_post_kind_style_hint("checklist")
+
+
+def test_manual_post_kind_prompt_blocks_exist() -> None:
+    assert "узкого места клиента" in _manual_post_kind_prompt_block("promo_offer")
+    assert "Первая фраза должна содержать четкий тезис" in _manual_post_kind_prompt_block("opinion")
+    assert "исходную проблему" in _manual_post_kind_prompt_block("case_story")
+    assert "самостоятельно" in _manual_post_kind_prompt_block("digest")
+    assert "проверкой, действием или критерием" in _manual_post_kind_prompt_block("checklist")
+    assert "реально задает клиент" in _manual_post_kind_prompt_block("faq")
+
+
+def test_manual_post_kind_screen_templates_exist() -> None:
+    assert "Где у клиента рвется процесс" in _manual_post_kind_screen_template("promo_offer")
+    assert "Жесткий тезис" in _manual_post_kind_screen_template("opinion")
+    assert "процесс до изменений" in _manual_post_kind_screen_template("case_story")
+    assert "4-6 самостоятельных пунктов" in _manual_post_kind_screen_template("digest")
+    assert "5-7 действий или критериев" in _manual_post_kind_screen_template("checklist")
+    assert "4-6 реальных вопросов" in _manual_post_kind_screen_template("faq")
+
+
+def test_manual_post_kind_from_format_type_and_display_label() -> None:
+    assert _manual_post_kind_from_format_type("manual_promo_offer") == "promo_offer"
+    assert _manual_post_kind_from_format_type("operator_ai_case_story") == "case_story"
+    assert _post_format_display_label({"format_type": "manual_opinion"}) == "✍️ Мнение"
+    assert _post_format_display_label({"format_type": "operator_ai_case_story"}) == "🤖 Кейс внедрения"
+
+
+def test_review_origin_helpers() -> None:
+    assert _review_origin("manual_checklist") == "manual"
+    assert _review_origin("operator_ai_digest") == "ai"
+    assert _review_origin_badge("manual_checklist") == "✍️"
+    assert _review_origin_badge("daily") == "🤖"

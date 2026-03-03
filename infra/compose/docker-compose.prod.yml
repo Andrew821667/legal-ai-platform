@@ -87,11 +87,7 @@ services:
       API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: >
-      /bin/sh -lc
-      "while true; do
-         uv run --package news python -m news.generate --limit ${NEWS_GENERATE_LIMIT:-5};
-         sleep ${NEWS_GENERATE_INTERVAL_SECONDS:-1800};
-       done"
+      uv run --package news python -m news.generate_loop
     depends_on:
       core-api:
         condition: service_healthy
@@ -116,11 +112,7 @@ services:
       API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: >
-      /bin/sh -lc
-      "while true; do
-         uv run --package news python -m news.publish;
-         sleep ${NEWS_PUBLISH_INTERVAL_SECONDS:-300};
-       done"
+      uv run --package news python -m news.publish_loop
     depends_on:
       core-api:
         condition: service_healthy

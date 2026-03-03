@@ -99,8 +99,41 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role_enum"), nullable=False)
     telegram_id: Mapped[int | None] = mapped_column(nullable=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consent_given: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_text("false"))
+    consent_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consent_revoked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    consent_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    transborder_consent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    transborder_consent_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    marketing_consent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    marketing_consent_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    conversation_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cta_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cta_shown: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_text("false"))
+    cta_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_interaction: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_users_telegram_id",
+            "telegram_id",
+            unique=True,
+            postgresql_where=sa_text("telegram_id IS NOT NULL"),
+        ),
+        Index("ix_users_last_interaction", "last_interaction"),
+        Index("ix_users_consent_revoked", "consent_revoked"),
+    )
 
 
 class Lead(Base):
@@ -115,9 +148,13 @@ class Lead(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     source: Mapped[LeadSource] = mapped_column(Enum(LeadSource, name="lead_source_enum"), nullable=False)
+    legacy_lead_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     segment: Mapped[LeadSegment | None] = mapped_column(
         Enum(LeadSegment, name="lead_segment_enum"), nullable=True
     )
@@ -125,6 +162,20 @@ class Lead(Base):
         Enum(LeadStatus, name="lead_status_enum"), nullable=False, default=LeadStatus.new
     )
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    temperature: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    service_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    specific_need: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pain_point: Mapped[str | None] = mapped_column(Text, nullable=True)
+    budget: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    urgency: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    industry: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    conversation_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cta_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cta_shown: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_text("false"))
+    lead_magnet_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lead_magnet_delivered: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     utm_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     utm_medium: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -135,11 +186,18 @@ class Lead(Base):
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
         Index(
+            "ix_leads_legacy_lead_id",
+            "legacy_lead_id",
+            unique=True,
+            postgresql_where=sa_text("legacy_lead_id IS NOT NULL"),
+        ),
+        Index(
             "ix_leads_telegram_user_id",
             "telegram_user_id",
             postgresql_where=sa_text("telegram_user_id IS NOT NULL"),
         ),
         Index("ix_leads_status", "status"),
+        Index("ix_leads_temperature", "temperature"),
     )
 
 

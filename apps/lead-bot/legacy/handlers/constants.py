@@ -142,3 +142,4 @@ ADMIN_CLEANUP_MENU = [
 # Служебные ключи user_data для business-сценария контакта.
 BUSINESS_AWAITING_CONTACT_KEY = "business_awaiting_contact"
 BUSINESS_AWAITING_CONTACT_SOURCE_KEY = "business_awaiting_contact_source"
+BUSINESS_PENDING_CONTACT_KEY = "business_pending_contact"

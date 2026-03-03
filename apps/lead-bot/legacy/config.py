@@ -54,6 +54,9 @@ class Config:
         self.LLM_TIMEOUT_SECONDS: float = float(os.getenv('LLM_TIMEOUT_SECONDS', '25'))
         self.LLM_MAX_RETRIES: int = int(os.getenv('LLM_MAX_RETRIES', '1'))
         self.STREAMING_PREVIEW: bool = os.getenv('STREAMING_PREVIEW', '0').strip().lower() in {'1', 'true', 'yes'}
+        self.BUSINESS_NEW_SESSION_TIMEOUT_MINUTES: int = int(
+            os.getenv('BUSINESS_NEW_SESSION_TIMEOUT_MINUTES', '180')
+        )
 
         # Настройки базы данных
         self.DB_PATH: str = os.getenv('DB_PATH') or os.getenv('DATABASE_PATH', 'data/bot.db')
@@ -67,6 +70,10 @@ class Config:
         leads_chat_id = os.getenv('LEADS_CHAT_ID', '').strip()
         self.LEADS_CHAT_ID: Optional[int] = int(leads_chat_id) if leads_chat_id else None
         self.ALLOW_ADMIN_TEST_LEADS: bool = os.getenv('ALLOW_ADMIN_TEST_LEADS', '1').strip().lower() in {'1', 'true', 'yes'}
+        self.CORE_API_URL: str = os.getenv('CORE_API_URL', '').strip()
+        self.API_KEY_BOT: str = os.getenv('API_KEY_BOT', '').strip()
+        self.CORE_API_SYNC_ENABLED: bool = os.getenv('CORE_API_SYNC_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
+        self.CORE_API_TIMEOUT_SECONDS: float = float(os.getenv('CORE_API_TIMEOUT_SECONDS', '5'))
         modules_raw = os.getenv('AVAILABLE_SERVICE_MODULES', '').strip()
         self.AVAILABLE_SERVICE_MODULES: list[str] = [item.strip() for item in modules_raw.split(',') if item.strip()]
 

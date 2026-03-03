@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any
+import json
 
 import requests
 
@@ -85,29 +86,77 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
         raise RuntimeError("Post text is empty")
 
     if media_urls:
-        media = media_urls[0]
         caption = normalized_text[:1020]
         remainder = normalized_text[1020:].strip()
 
-        photo_value = media.replace("tg://", "") if media.startswith("tg://") else media
-        response = _telegram_request(
-            "sendPhoto",
-            {
-                "chat_id": chat_id,
-                "photo": photo_value,
-                "caption": caption,
-            },
-        )
-        message_id = int(response.get("result", {}).get("message_id") or 0)
+        def _payload_for_media(media: str) -> tuple[str, str, str]:
+            if media.startswith("tgphoto://"):
+                return "photo", media.replace("tgphoto://", "", 1), "sendPhoto"
+            if media.startswith("tgvideo://"):
+                return "video", media.replace("tgvideo://", "", 1), "sendVideo"
+            if media.startswith("tgdocument://"):
+                return "document", media.replace("tgdocument://", "", 1), "sendDocument"
+            return "photo", media.replace("tg://", "", 1) if media.startswith("tg://") else media, "sendPhoto"
+
+        resolved = [_payload_for_media(item) for item in media_urls if item]
+        album_eligible = len(resolved) > 1 and all(kind in {"photo", "video"} for kind, _, _ in resolved)
+
+        if album_eligible:
+            media_payload: list[dict[str, Any]] = []
+            for index, (kind, payload_value, _) in enumerate(resolved[:10]):
+                item: dict[str, Any] = {"type": kind, "media": payload_value}
+                if index == 0 and caption:
+                    item["caption"] = caption
+                    item["parse_mode"] = "HTML"
+                media_payload.append(item)
+            response = _telegram_request(
+                "sendMediaGroup",
+                {
+                    "chat_id": chat_id,
+                    "media": json.dumps(media_payload, ensure_ascii=False),
+                },
+            )
+            result = response.get("result") or []
+            first_message = result[0] if isinstance(result, list) and result else {}
+            message_id = int(first_message.get("message_id") or 0)
+        else:
+            message_id = 0
+            for index, (kind, payload_value, method) in enumerate(resolved):
+                payload: dict[str, Any] = {
+                    "chat_id": chat_id,
+                    kind: payload_value,
+                }
+                if index == 0 and caption:
+                    payload["caption"] = caption
+                    payload["parse_mode"] = "HTML"
+                response = _telegram_request(method, payload)
+                if message_id == 0:
+                    message_id = int(response.get("result", {}).get("message_id") or 0)
 
         if remainder:
             for part in _split_text_for_telegram(remainder):
-                _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+                _telegram_request(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": part,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                    },
+                )
         return message_id
 
     primary_message_id = 0
     for part in _split_text_for_telegram(normalized_text):
-        response = _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        response = _telegram_request(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": part,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
+        )
         if primary_message_id == 0:
             primary_message_id = int(response.get("result", {}).get("message_id") or 0)
     return primary_message_id

@@ -11,6 +11,7 @@ config = Config()
 import prompts
 import database
 import knowledge_engine
+import utils
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content
-            logger.debug(f"Received async extraction response: {response_text[:100]}")
+            logger.debug("Received async extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             response_text = response_text.strip()
             if response_text.startswith("```"):
@@ -179,14 +180,18 @@ class AIBrain:
                 response_text = "\n".join(lines[1:-1])
 
             lead_data = json.loads(response_text)
-            logger.info(f"✅ Lead data extracted: temperature={lead_data.get('lead_temperature')}")
-            logger.info(f"📊 Service: category={lead_data.get('service_category')}, need={lead_data.get('specific_need')}")
-            logger.info(f"🔍 Full lead data: {json.dumps(lead_data, ensure_ascii=False)}")
+            logger.info("✅ Lead data extracted: temperature=%s", lead_data.get('lead_temperature'))
+            logger.info(
+                "📊 Service: category=%s, need=%s",
+                lead_data.get('service_category'),
+                lead_data.get('specific_need'),
+            )
+            logger.info("🔍 Full lead data: %s", utils.mask_sensitive_json(lead_data))
 
             return lead_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing JSON response: {e}, response: {response_text}")
+            logger.error("Error parsing JSON response: %s, response: %s", e, utils.mask_sensitive_data(response_text))
             return None
         except Exception as e:
             logger.error(f"Error extracting lead data (async): {e}")
@@ -240,7 +245,7 @@ class AIBrain:
                         if similar:
                             # Форматируем примеры для промпта
                             rag_context = knowledge_engine.knowledge_engine.format_similar_examples_for_prompt(similar)
-                            logger.info(f"📚 RAG: Found {len(similar)} similar conversations, adding to context")
+                            logger.info("📚 RAG: Found %s similar conversations, adding to context", len(similar))
             
             except Exception as e:
                 logger.warning(f"RAG search failed (non-critical): {e}")
@@ -326,7 +331,7 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content
-            logger.debug(f"Received extraction response: {response_text[:100]}")
+            logger.debug("Received extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             # Парсим JSON ответ
             # Убираем возможные markdown блоки
@@ -339,14 +344,18 @@ class AIBrain:
             lead_data = json.loads(response_text)
             
             # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
-            logger.info(f"✅ Lead data extracted: temperature={lead_data.get('lead_temperature')}")
-            logger.info(f"📊 Service: category={lead_data.get('service_category')}, need={lead_data.get('specific_need')}")
-            logger.info(f"🔍 Full lead data: {json.dumps(lead_data, ensure_ascii=False)}")
+            logger.info("✅ Lead data extracted: temperature=%s", lead_data.get('lead_temperature'))
+            logger.info(
+                "📊 Service: category=%s, need=%s",
+                lead_data.get('service_category'),
+                lead_data.get('specific_need'),
+            )
+            logger.info("🔍 Full lead data: %s", utils.mask_sensitive_json(lead_data))
 
             return lead_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing JSON response: {e}, response: {response_text}")
+            logger.error("Error parsing JSON response: %s, response: %s", e, utils.mask_sensitive_data(response_text))
             return None
         except Exception as e:
             logger.error(f"Error extracting lead data: {e}")

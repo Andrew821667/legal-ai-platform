@@ -263,13 +263,14 @@ async def pdn_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         telegram_id = int(args[0])
-        target_user = database.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
+        snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+        if not snapshot:
             await update.message.reply_text("Пользователь не найден")
             return
 
-        lead = database.db.get_lead_by_user_id(target_user["id"]) or {}
-        consent = database.db.get_user_consent_state(target_user["id"])
+        target_user = snapshot["user"]
+        lead = snapshot.get("lead") or {}
+        consent = snapshot.get("consent") or {}
         text = (
             "🗂️ Карточка ПД пользователя\n\n"
             f"Telegram ID: {target_user.get('telegram_id')}\n"
@@ -386,4 +387,3 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except (TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in show_admin_panel: {e}")
         await update.message.reply_text("Ошибка при открытии админ-панели")
-

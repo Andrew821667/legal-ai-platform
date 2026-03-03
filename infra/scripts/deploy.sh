@@ -18,10 +18,13 @@ until $COMPOSE exec -T postgres pg_isready -U "${POSTGRES_USER:-legalai}" -d "${
 done
 
 echo "Postgres ready"
+echo "Pulling latest images..."
+$COMPOSE pull
+
+echo "Running database migrations with fresh core-api image..."
 $COMPOSE run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
 $COMPOSE run --rm core-api python -m core_api.cli create-admin-key --name "deploy-admin" --if-no-keys
 
-$COMPOSE pull
 $COMPOSE up -d --no-deps core-api
 $COMPOSE up -d --no-deps lead-bot || true
 $COMPOSE up -d --no-deps news-generate || true

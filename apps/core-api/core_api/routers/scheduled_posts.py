@@ -197,7 +197,7 @@ def patch_scheduled_post(
         action="post.update",
         target_type="scheduled_post",
         target_id=post.id,
-        details=payload.model_dump(exclude_none=True),
+        details=payload.model_dump(exclude_none=True, mode="json"),
     )
     db.commit()
     db.refresh(post)
@@ -264,6 +264,40 @@ def list_post_feedback(
         .limit(limit)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+@router.delete("/{post_id}", status_code=204)
+def delete_scheduled_post(
+    post_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> Response:
+    post = db.get(ScheduledPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    now = datetime.now(timezone.utc)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="post.soft_delete",
+        target_type="scheduled_post",
+        target_id=post.id,
+        details={
+            "status": post.status.value,
+            "source_url": post.source_url,
+            "rubric": post.rubric,
+            "reason": "deleted_irrelevant",
+        },
+    )
+    post.status = ScheduledPostStatus.failed
+    post.attempts = post.max_attempts
+    post.last_error = "deleted_irrelevant"
+    post.updated_at = now
+    db.add(post)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/reset-stale", response_model=dict[str, int])

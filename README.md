@@ -21,6 +21,8 @@ docker compose -f infra/compose/docker-compose.dev.yml up --build
 - после любого изменения Python-зависимостей в workspace-пакетах нужно регенерировать корневой `uv.lock` командой `uv lock`;
 - для `apps/lead-bot` это критично: `python-telegram-bot[job-queue]` ставится через `apps/lead-bot/pyproject.toml`, а не через legacy `requirements.txt`;
 - production-deploy не пересобирает `lead-bot` автоматически, потому что в `infra/compose/docker-compose.prod.yml` используется готовый образ `LEAD_BOT_IMAGE`.
+- если менялись migration/модели `apps/core-api`, сначала нужно обновить `CORE_API_IMAGE`, потом выполнить Alembic миграции, и только после этого перезапускать `lead-bot`;
+- `infra/scripts/deploy.sh` теперь делает это в правильном порядке: `docker compose pull` -> `alembic upgrade head` -> restart сервисов.
 
 ## Полезные команды
 ```bash

@@ -1,176 +1,150 @@
 #!/usr/bin/env python3
-"""
-Скрипт для первоначальной авторизации Telegram Client API.
-
-Запустите ОДИН РАЗ для создания файла сессии telegram_bot.session.
-После этого авторизация больше не потребуется.
-
-Usage:
-    python setup_telegram_session.py
-"""
+from __future__ import annotations
 
 import asyncio
-import sys
 import os
+from getpass import getpass
 from pathlib import Path
 
-# Добавляем путь к app для импорта config
-sys.path.insert(0, str(Path(__file__).parent))
-
-try:
-    from telethon import TelegramClient
-    from telethon.errors import ApiIdInvalidError, PhoneNumberInvalidError
-except ImportError:
-    print("❌ Telethon не установлен. Установите:")
-    print("   pip install telethon==1.34.0")
-    sys.exit(1)
+from dotenv import dotenv_values
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 
-def load_env_file():
-    """Загрузить переменные из .env файла."""
-    env_file = Path(__file__).parent / ".env"
-    if not env_file.exists():
-        return {}
-
-    env_vars = {}
-    with open(env_file) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, value = line.split('=', 1)
-                env_vars[key.strip()] = value.strip()
-    return env_vars
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent.parent.parent
 
 
-async def main():
-    """Запустить процесс авторизации."""
+def _load_env() -> dict[str, str]:
+    merged: dict[str, str] = {}
+    for path in (BASE_DIR / ".env", PROJECT_ROOT / ".env"):
+        if not path.exists():
+            continue
+        for key, value in dotenv_values(path).items():
+            if value is None:
+                continue
+            merged[key] = value
+    merged.update({key: value for key, value in os.environ.items() if value})
+    return merged
+
+
+def _resolve_session_name(raw: str) -> str:
+    value = (raw or "apps/news/legacy/telegram_bot").strip()
+    path = Path(value)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+def _print_header(api_id: int, session_name: str) -> None:
     print("=" * 60)
-    print("🔐 Telegram Client API - Первоначальная авторизация")
+    print("Telegram Client API - авторизация")
     print("=" * 60)
     print()
-
-    # Загружаем credentials
-    env = load_env_file()
-    api_id = env.get('TELEGRAM_API_ID', '34617695')
-    api_hash = env.get('TELEGRAM_API_HASH', 'e95e6e190f5efcff98001a490acea1c1')
-    session_name = env.get('TELEGRAM_SESSION_NAME', 'telegram_bot')
-
-    # Проверяем credentials
-    if not api_id or not api_hash:
-        print("❌ Ошибка: TELEGRAM_API_ID или TELEGRAM_API_HASH не найдены в .env")
-        print()
-        print("Добавьте в .env файл:")
-        print("TELEGRAM_API_ID=34617695")
-        print("TELEGRAM_API_HASH=e95e6e190f5efcff98001a490acea1c1")
-        return
-
-    print(f"📋 API ID: {api_id}")
-    print(f"📋 Session name: {session_name}")
+    print(f"API ID: {api_id}")
+    print(f"Session name: {Path(session_name).name}")
     print()
-
-    # Проверяем существующую сессию
-    session_file = Path(f"{session_name}.session")
-    if session_file.exists():
-        print(f"⚠️  Файл сессии уже существует: {session_file}")
-        response = input("   Пересоздать сессию? (y/N): ").strip().lower()
-        if response != 'y':
-            print("❌ Отменено.")
-            return
-        print()
-
-    # Выбор метода авторизации
     print("Выберите метод авторизации:")
-    print("  1. Через Bot Token (рекомендуется)")
-    print("  2. Через номер телефона")
+    print("  1. QR-код")
+    print("  2. Номер телефона")
     print()
-    choice = input("Выбор (1 или 2): ").strip()
+
+
+async def _authorize_by_qr(client: TelegramClient) -> None:
+    print("Открываю QR-логин...")
+    qr_login = await client.qr_login()
+    print()
+    print("Откройте Telegram на телефоне:")
+    print("  Настройки -> Устройства -> Подключить устройство")
+    print("И отсканируйте этот URL/QR:")
+    print(qr_login.url)
+    print()
+    try:
+        import qrcode
+
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(qr_login.url)
+        qr.print_ascii(invert=True)
+        print()
+    except Exception:
+        print("Пакет qrcode не установлен, поэтому показан только URL.")
+        print()
 
     try:
-        client = TelegramClient(session_name, int(api_id), api_hash)
+        await qr_login.wait(timeout=180)
+    except SessionPasswordNeededError:
+        print()
+        print("Для этого аккаунта включена двухфакторная защита Telegram.")
+        password = getpass("Введите пароль 2FA: ")
+        await client.sign_in(password=password)
 
-        if choice == '1':
-            # Авторизация через bot token
-            print()
-            bot_token = env.get('TELEGRAM_BOT_TOKEN', '')
-            if not bot_token:
-                print("Введите Bot Token (из @BotFather):")
-                bot_token = input("Bot Token: ").strip()
+    me = await client.get_me()
+    print(f"Авторизация успешна: {me.first_name or me.username or me.id}")
 
-            print()
-            print("🔄 Подключаемся...")
-            await client.start(bot_token=bot_token)
 
-        elif choice == '2':
-            # Авторизация через номер телефона
-            print()
-            print("⚠️  Вам потребуется:")
-            print("   1. Номер телефона (формат: +79991234567)")
-            print("   2. Код подтверждения из Telegram")
-            print()
+async def _authorize_by_phone(client: TelegramClient) -> None:
+    phone = input("Введите номер телефона в формате +7...: ").strip()
+    if not phone:
+        raise ValueError("Номер телефона не введен")
 
-            await client.start()
+    sent = await client.send_code_request(phone)
+    print()
+    print("Код должен прийти в сам Telegram, обычно в сервисный чат Telegram.")
+    print("Если кода нет сразу, проверьте все активные устройства и архив.")
+    print()
+    code = input("Введите код из Telegram: ").strip().replace(" ", "")
+    if not code:
+        raise ValueError("Код не введен")
 
+    try:
+        await client.sign_in(phone=phone, code=code, phone_code_hash=sent.phone_code_hash)
+    except SessionPasswordNeededError:
+        password = getpass("У аккаунта включена 2FA. Введите пароль: ")
+        await client.sign_in(password=password)
+
+    me = await client.get_me()
+    print(f"Авторизация успешна: {me.first_name or me.username or me.id}")
+
+
+async def main() -> int:
+    env = _load_env()
+    api_id = int(str(env.get("TELEGRAM_API_ID", "0")).strip() or "0")
+    api_hash = str(env.get("TELEGRAM_API_HASH", "")).strip()
+    session_name = _resolve_session_name(str(env.get("TELEGRAM_SESSION_NAME", "apps/news/legacy/telegram_bot")))
+
+    if not api_id or not api_hash:
+        print("Ошибка: TELEGRAM_API_ID / TELEGRAM_API_HASH не настроены.")
+        return 1
+
+    _print_header(api_id, session_name)
+    choice = input("Выбор (1 или 2): ").strip()
+    if choice not in {"1", "2"}:
+        print("Неверный выбор.")
+        return 1
+
+    client = TelegramClient(session_name, api_id, api_hash)
+    await client.connect()
+
+    try:
+        if await client.is_user_authorized():
+            me = await client.get_me()
+            print(f"Сессия уже авторизована: {me.first_name or me.username or me.id}")
+            return 0
+
+        if choice == "1":
+            await _authorize_by_qr(client)
         else:
-            print("❌ Неверный выбор.")
-            return
-
-        # Проверяем авторизацию
-        me = await client.get_me()
-
-        print()
-        print("=" * 60)
-        print("✅ Авторизация успешна!")
-        print("=" * 60)
-        print()
-
-        if me:
-            if hasattr(me, 'username') and me.username:
-                print(f"👤 Авторизован как: @{me.username}")
-            elif hasattr(me, 'first_name'):
-                print(f"👤 Авторизован как: {me.first_name}")
-            else:
-                print(f"👤 Авторизован как бот")
-
-        print()
-        print(f"📁 Файл сессии создан: {session_file.absolute()}")
-        print()
-        print("🎯 Следующие шаги:")
-        print("   1. НЕ коммитьте файл *.session в git (уже в .gitignore)")
-        print("   2. Настройте TELEGRAM_CHANNELS в .env")
-        print("   3. Перезапустите Docker контейнеры:")
-        print("      docker compose restart celery_worker bot")
-        print("   4. Запустите сбор через /fetch в боте")
-        print()
+            await _authorize_by_phone(client)
 
         await client.disconnect()
-
-    except ApiIdInvalidError:
-        print("❌ Ошибка: Неверный API ID или API Hash")
-        print("   Проверьте credentials в .env файле")
-
-    except PhoneNumberInvalidError:
-        print("❌ Ошибка: Неверный формат номера телефона")
-        print("   Используйте формат: +79991234567")
-
-    except KeyboardInterrupt:
         print()
-        print("❌ Отменено пользователем")
-
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        print()
-        print("Возможные причины:")
-        print("  - Неверный Bot Token")
-        print("  - Неверный код подтверждения")
-        print("  - Проблемы с сетью")
-        print()
+        print(f"Файл сессии сохранен: {session_name}.session")
+        return 0
+    finally:
+        if client.is_connected():
+            await client.disconnect()
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n❌ Отменено")
-    except Exception as e:
-        print(f"\n❌ Критическая ошибка: {e}")
-        sys.exit(1)
+    raise SystemExit(asyncio.run(main()))

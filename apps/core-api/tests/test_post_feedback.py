@@ -136,3 +136,63 @@ def test_lookup_post_by_telegram_message_and_feedback_snapshot() -> None:
             finally:
                 db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_patch_scheduled_post_accepts_datetime_and_delete_post() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.news.patch-delete"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    post_id = None
+
+    db = SessionLocal()
+    try:
+        post = ScheduledPost(
+            text="review post",
+            title="Пост на проверке",
+            publish_at=datetime.now(timezone.utc) + timedelta(hours=2),
+            status=ScheduledPostStatus.review,
+        )
+        db.add(post)
+        db.commit()
+        db.refresh(post)
+        post_id = post.id
+    finally:
+        db.close()
+
+    try:
+        patch_response = client.patch(
+            f"/api/v1/scheduled-posts/{post_id}",
+            json={
+                "status": "scheduled",
+                "publish_at": (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat(),
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert patch_response.status_code == 200
+        assert patch_response.json()["status"] == "scheduled"
+
+        delete_response = client.delete(
+            f"/api/v1/scheduled-posts/{post_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert delete_response.status_code == 204
+
+        archived_response = client.get(
+            f"/api/v1/scheduled-posts/{post_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert archived_response.status_code == 200
+        payload = archived_response.json()
+        assert payload["status"] == "failed"
+        assert payload["last_error"] == "deleted_irrelevant"
+        assert payload["attempts"] == payload["max_attempts"]
+    finally:
+        if post_id is not None:
+            db = SessionLocal()
+            try:
+                db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id == post_id))
+                db.execute(delete(ScheduledPost).where(ScheduledPost.id == post_id))
+                db.commit()
+            finally:
+                db.close()
+        _delete_api_key_by_name(api_key_name)

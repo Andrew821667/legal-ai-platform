@@ -31,10 +31,17 @@ docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api python
 make deploy
 ```
 Скрипт:
+- сначала тянет свежие image;
 - ждёт готовность Postgres,
-- применяет миграции,
+- применяет миграции уже свежим образом `core-api`,
 - идемпотентно проверяет admin key,
 - перезапускает только изменившиеся сервисы.
+
+Критичное правило для миграций `core-api`:
+- если менялись Alembic migration, модели `core-api` или контракты `users/leads`, сначала нужно обновить `CORE_API_IMAGE`;
+- миграции должны выполняться только свежим образом `core-api`, а не тем, который уже был на VPS;
+- порядок должен быть таким: `docker compose pull` -> `alembic upgrade head` -> restart `core-api` -> restart `lead-bot` и остальных consumers;
+- если сделать наоборот, `lead-bot` может стартовать на новой логике против старой схемы БД и уйти в частичный fallback на SQLite.
 
 Критичное правило для `lead-bot`:
 - production compose поднимает `lead-bot` из образа `LEAD_BOT_IMAGE`, а не через `build`;
@@ -52,6 +59,56 @@ docker compose -f infra/compose/docker-compose.prod.yml logs --tail=50 lead-bot
 
 В логах не должно быть:
 - `JobQueue is not available`
+
+Отдельный deploy-порядок для миграции `lead-bot legacy -> core-api`:
+1. Обновить образы:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml pull core-api lead-bot
+```
+2. Применить миграции `core-api`:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
+```
+3. Перезапустить `core-api`:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps core-api
+```
+4. Дождаться health:
+```bash
+curl -sf http://localhost:8000/health
+```
+5. Только после этого перезапустить `lead-bot`:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps lead-bot
+```
+6. Проверить логи:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api lead-bot
+```
+
+Что проверить после migration `users/leads`:
+- в `core-api` нет ошибок по отсутствующим колонкам `users.*` и `leads.*`;
+- `lead-bot` не пишет предупреждения про fallback/ошибки синхронизации `core-api`;
+- `/profile`, `/consent_status`, `/export_data`, admin user card и lead notifications работают без расхождения данных.
+
+Локальный порядок проверки migration `users/leads`:
+1. Поднять Postgres и `core-api`.
+2. Применить миграции:
+```bash
+cd apps/core-api
+../../.venv/bin/alembic upgrade head
+```
+3. Прогнать API-тесты:
+```bash
+cd /Users/andrew/Мои\ AI\ проекты/legal-ai-platform
+.venv/bin/pytest apps/core-api/tests/test_leads_api.py apps/core-api/tests/test_users_api.py -q
+```
+4. Прогнать legacy-тесты лид-бота:
+```bash
+cd apps/lead-bot/legacy
+../../../../legal-ai-platform/.venv/bin/pytest tests/test_database.py tests/test_imports.py tests/test_admin_interface.py -q
+```
+5. Перезапустить локальный `lead-bot` только после успешных миграций `core-api`.
 
 ## Ночные и периодические задачи (cron)
 News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
