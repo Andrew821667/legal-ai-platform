@@ -118,6 +118,7 @@ _PILLAR_RUBRICS = {
     "tools": ("tools",),
     "market": ("market",),
 }
+_QUEUE_THEME_FILTERS = ("all",) + tuple(_PILLAR_LABELS)
 _TELEGRAM_CHANNEL_NOTES = {
     "allthingslegal": "Международная повестка legal tech, legal AI, legal ops и рынка юридических технологий.",
     "legal_tech": "Русскоязычные новости и кейсы по legal tech, автоматизации юристов и AI-сервисам.",
@@ -271,10 +272,11 @@ def _status_label(status: str) -> str:
     if _is_calendar_context(status):
         return "🗓 Календарь публикаций"
     if _is_auto_queue_context(status):
-        queue_filter = _auto_queue_filter_from_context(status)
+        queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+        theme_suffix = "" if theme_filter == "all" else f" / {_pillar_label(theme_filter)}"
         if queue_filter == "all":
-            return "⏱ Автоочередь"
-        return f"⏱ Автоочередь: {publication_kind_label(queue_filter)}"
+            return f"⏱ Автоочередь{theme_suffix}"
+        return f"⏱ Автоочередь: {publication_kind_label(queue_filter)}{theme_suffix}"
     mapping = {
         "draft": "📝 Авторские черновики",
         "review": "🟡 На проверке",
@@ -318,17 +320,25 @@ def _parse_review_filter_callback(data: str) -> tuple[str, int]:
     return review_filter, offset
 
 
-def _parse_manual_queue_callback(data: str) -> tuple[str, int]:
-    # Формат: mq:<filter>:<offset>, legacy: mq:<offset>
+def _parse_manual_queue_callback(data: str) -> tuple[str, str, int]:
+    # Формат: mq:<filter>:<theme>:<offset>, fallback: mq:<filter>:<offset>, legacy: mq:<offset>
     parts = data.split(":")
     if len(parts) == 2:
-        return "due", int(parts[1])
+        return "due", "all", int(parts[1])
+    if len(parts) >= 4:
+        queue_filter = parts[1]
+        if queue_filter not in _MANUAL_QUEUE_FILTERS:
+            queue_filter = "due"
+        theme_filter = parts[2]
+        if theme_filter not in _QUEUE_THEME_FILTERS:
+            theme_filter = "all"
+        return queue_filter, theme_filter, int(parts[3])
     if len(parts) >= 3:
         queue_filter = parts[1]
         if queue_filter not in _MANUAL_QUEUE_FILTERS:
             queue_filter = "due"
-        return queue_filter, int(parts[2])
-    return "due", 0
+        return queue_filter, "all", int(parts[2])
+    return "due", "all", 0
 
 
 def _parse_batch_publish_callback(data: str) -> tuple[str, int, str]:
@@ -452,42 +462,68 @@ def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
     return [part for part in parts if part]
 
 
-def _queue_context_from_filter(queue_filter: str) -> str:
-    return "mq_all" if queue_filter == "all" else "mq_due"
+def _queue_context_from_filter(queue_filter: str, theme_filter: str = "all") -> str:
+    normalized_queue = "all" if queue_filter == "all" else "due"
+    normalized_theme = theme_filter if theme_filter in _QUEUE_THEME_FILTERS else "all"
+    return f"mq_{normalized_queue}_{normalized_theme}"
+
+
+def _queue_filters_from_context(context: str) -> tuple[str, str]:
+    normalized = context.removeprefix("mq_")
+    parts = normalized.split("_", 1)
+    queue_filter = parts[0] if parts and parts[0] in _MANUAL_QUEUE_FILTERS else "due"
+    theme_filter = parts[1] if len(parts) == 2 and parts[1] in _QUEUE_THEME_FILTERS else "all"
+    return queue_filter, theme_filter
 
 
 def _queue_filter_from_context(context: str) -> str:
-    return "all" if context == "mq_all" else "due"
+    return _queue_filters_from_context(context)[0]
 
 
 def _is_manual_queue_context(context: str) -> bool:
     return context.startswith("mq_")
 
 
-def _auto_queue_context(queue_filter: str) -> str:
+def _auto_queue_context(queue_filter: str, theme_filter: str = "all") -> str:
     normalized = queue_filter if queue_filter in _AUTO_QUEUE_FILTERS else "all"
-    return f"aq_{normalized}"
+    normalized_theme = theme_filter if theme_filter in _QUEUE_THEME_FILTERS else "all"
+    return f"aq_{normalized}_{normalized_theme}"
+
+
+def _auto_queue_filters_from_context(context: str) -> tuple[str, str]:
+    normalized = context.removeprefix("aq_")
+    parts = normalized.split("_", 1)
+    queue_filter = parts[0] if parts and parts[0] in _AUTO_QUEUE_FILTERS else "all"
+    theme_filter = parts[1] if len(parts) == 2 and parts[1] in _QUEUE_THEME_FILTERS else "all"
+    return queue_filter, theme_filter
 
 
 def _auto_queue_filter_from_context(context: str) -> str:
-    normalized = context.removeprefix("aq_")
-    return normalized if normalized in _AUTO_QUEUE_FILTERS else "all"
+    return _auto_queue_filters_from_context(context)[0]
 
 
 def _is_auto_queue_context(context: str) -> bool:
     return context.startswith("aq_")
 
 
-def _parse_auto_queue_callback(data: str) -> tuple[str, int]:
+def _parse_auto_queue_callback(data: str) -> tuple[str, str, int]:
     parts = data.split(":")
     if len(parts) == 2:
-        return "all", int(parts[1])
+        return "all", "all", int(parts[1])
+    if len(parts) >= 4:
+        queue_filter = parts[1]
+        if queue_filter not in _AUTO_QUEUE_FILTERS:
+            queue_filter = "all"
+        theme_filter = parts[2]
+        if theme_filter not in _QUEUE_THEME_FILTERS:
+            theme_filter = "all"
+        return queue_filter, theme_filter, int(parts[3])
     if len(parts) >= 3:
         queue_filter = parts[1]
         if queue_filter not in _AUTO_QUEUE_FILTERS:
             queue_filter = "all"
-        return queue_filter, int(parts[2])
-    return "all", 0
+        return queue_filter, "all", int(parts[2])
+    return "all", "all", 0
 
 
 def _theme_context(pillar: str) -> str:
@@ -637,6 +673,27 @@ def _manual_post_kind_screen_template(kind: str) -> str:
             "• Где проявился эффект\n"
             "• В каких еще сценариях это применимо"
         ),
+        "digest": (
+            "Опорный шаблон:\n"
+            "• Короткий ввод без воды\n"
+            "• 4-6 самостоятельных пунктов\n"
+            "• Каждый пункт с отдельной пользой или выводом\n"
+            "• В конце один собранный итог"
+        ),
+        "checklist": (
+            "Опорный шаблон:\n"
+            "• Короткий контекст задачи\n"
+            "• 5-7 действий или критериев\n"
+            "• Никаких общих слов вместо шага\n"
+            "• Финальный вывод: что проверять первым"
+        ),
+        "faq": (
+            "Опорный шаблон:\n"
+            "• 4-6 реальных вопросов клиента или руководителя\n"
+            "• Короткие, плотные ответы\n"
+            "• Один вопрос — один смысловой риск или решение\n"
+            "• Финал без повтора FAQ-структуры"
+        ),
     }
     return templates.get(
         kind,
@@ -674,6 +731,30 @@ def _manual_post_kind_prompt_block(kind: str) -> str:
             "3. Затем опиши эффект на языке процесса: скорость, качество, контроль, SLA, снижение рутины, риск-контур.\n"
             "4. Не пиши общих слов вроде 'стало эффективнее' без объяснения, в чем именно это выражается.\n"
             "5. Финал должен содержать практический вывод: где такой сценарий применим еще."
+        ),
+        "digest": (
+            "Жесткие правила для дайджеста:\n"
+            "1. Не превращай дайджест в длинную простыню текста.\n"
+            "2. Каждый пункт должен жить самостоятельно и содержать отдельную мысль.\n"
+            "3. После каждого пункта читатель должен понимать, почему это важно для юрфункции или Legal AI-рынка.\n"
+            "4. Пункты не должны повторять друг друга по смыслу.\n"
+            "5. Финал должен собрать картину недели или темы в один вывод."
+        ),
+        "checklist": (
+            "Жесткие правила для чек-листа:\n"
+            "1. Каждый пункт должен быть проверкой, действием или критерием.\n"
+            "2. Запрещены пункты в стиле 'обратить внимание' без уточнения, на что именно.\n"
+            "3. Пункты должны идти в рабочем порядке: от базового к более сложному.\n"
+            "4. Формулировки должны быть короткими и операционными.\n"
+            "5. В конце дай короткий приоритет: с чего начать в первую очередь."
+        ),
+        "faq": (
+            "Жесткие правила для FAQ:\n"
+            "1. Вопросы должны звучать так, как их реально задает клиент, GC или руководитель юрфункции.\n"
+            "2. Ответ не должен быть длиннее нужного; одна мысль — один ответ.\n"
+            "3. В каждом ответе должен быть предметный критерий, риск или рекомендация.\n"
+            "4. Запрещены канцелярские ответы и повтор одного и того же тезиса разными словами.\n"
+            "5. Финал должен подвести итог, а не просто оборвать список."
         ),
     }
     return prompt_blocks.get(
@@ -1984,11 +2065,18 @@ class NewsAdminBot:
     def _publication_kind(self, row: dict[str, Any]) -> str:
         return publication_kind_from_format_type(str(row.get("format_type") or ""))
 
-    def _load_auto_queue(self, queue_filter: str, offset: int) -> tuple[int, list[dict[str, Any]], int]:
+    def _row_pillar(self, row: dict[str, Any]) -> str:
+        title = str(row.get("title") or "")
+        text = _strip_html_markup(str(row.get("text") or ""))
+        return normalize_rubric_to_pillar(row.get("rubric"), f"{title}\n{text}")
+
+    def _load_auto_queue(self, queue_filter: str, offset: int, theme_filter: str = "all") -> tuple[int, list[dict[str, Any]], int]:
         rows = self._list_posts_rows(status="scheduled", newest_first=False, limit=100)
         overdue = self._overdue_scheduled_count()
         if queue_filter != "all":
             rows = [row for row in rows if self._publication_kind(row) == queue_filter]
+        if theme_filter != "all":
+            rows = [row for row in rows if self._row_pillar(row) == theme_filter]
         total = len(rows)
         return total, rows[offset : offset + _POSTS_PAGE_SIZE], overdue
 
@@ -1999,16 +2087,19 @@ class NewsAdminBot:
         offset: int,
         overdue: int,
         queue_filter: str,
+        theme_filter: str = "all",
     ) -> str:
         tz = ZoneInfo(settings.tz_name)
         schedule = self._schedule_config()
         filter_label = "Все публикации" if queue_filter == "all" else publication_kind_label(queue_filter)
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
         generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         lines = [
             "Автоочередь публикации",
             "",
             f"Фильтр: {filter_label}",
+            f"Тема: {theme_label}",
             f"Автогенерация: {generate_morning} и {generate_evening}",
             f"Автопубликация: {_humanize_interval(publish_interval)}",
             f"Всего scheduled: {total}",
@@ -2037,9 +2128,12 @@ class NewsAdminBot:
                 lines.extend(["", day_label])
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             kind = self._publication_kind(row)
+            pillar = self._row_pillar(row)
+            format_label = _post_format_display_label(row)
             lines.append(
                 f"{idx}. {local_dt.strftime('%H:%M')} {publication_kind_badge(kind)} {publication_kind_label(kind)} — {title[:68]}"
             )
+            lines.append(f"   🧭 {_pillar_label(pillar)} | {format_label}")
         return "\n".join(lines)
 
     def _auto_queue_keyboard(
@@ -2048,6 +2142,7 @@ class NewsAdminBot:
         rows: list[dict[str, Any]],
         offset: int,
         queue_filter: str,
+        theme_filter: str = "all",
     ) -> InlineKeyboardMarkup:
         buttons: list[list[InlineKeyboardButton]] = []
         filter_rows = [
@@ -2064,7 +2159,19 @@ class NewsAdminBot:
                 [
                     _inline_button(
                         f"{'• ' if queue_filter == item_key else ''}{item_label}",
-                        callback_data=f"aq:{item_key}:0",
+                        callback_data=f"aq:{item_key}:{theme_filter}:0",
+                    )
+                    for item_key, item_label in chunk
+                ]
+            )
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        for index in range(0, len(theme_rows), 2):
+            chunk = theme_rows[index : index + 2]
+            buttons.append(
+                [
+                    _inline_button(
+                        f"{'• ' if theme_filter == item_key else ''}{item_label}",
+                        callback_data=f"aq:{queue_filter}:{item_key}:0",
                     )
                     for item_key, item_label in chunk
                 ]
@@ -2077,7 +2184,7 @@ class NewsAdminBot:
                 [
                     InlineKeyboardButton(
                         f"{idx}. {publication_kind_badge(kind)} {title[:40]}",
-                        callback_data=f"pv:{post_id}:{_auto_queue_context(queue_filter)}:{offset}",
+                        callback_data=f"pv:{post_id}:{_auto_queue_context(queue_filter, theme_filter)}:{offset}",
                     )
                 ]
             )
@@ -2086,9 +2193,9 @@ class NewsAdminBot:
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
         next_offset = offset + _POSTS_PAGE_SIZE
         if offset > 0:
-            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"aq:{queue_filter}:{prev_offset}"))
+            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"aq:{queue_filter}:{theme_filter}:{prev_offset}"))
         if next_offset < total:
-            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"aq:{queue_filter}:{next_offset}"))
+            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"aq:{queue_filter}:{theme_filter}:{next_offset}"))
         if nav:
             buttons.append(nav)
         buttons.append(
@@ -2100,10 +2207,10 @@ class NewsAdminBot:
         buttons.append(
             [
                 _inline_button("⏱ Ритм", callback_data="int:menu"),
-                _inline_button("🚀 Ручная очередь", callback_data="mq:due:0"),
+                _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
             ]
         )
-        buttons.append([_inline_button("🔄 Обновить", callback_data=f"aq:{queue_filter}:{offset}")])
+        buttons.append([_inline_button("🔄 Обновить", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}")])
         buttons.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
         return InlineKeyboardMarkup(buttons)
 
@@ -2166,11 +2273,13 @@ class NewsAdminBot:
             publish_at = _compute_quick_publish_at("h1")
         return {"status": "scheduled", "publish_at": publish_at.isoformat()}
 
-    def _load_manual_queue(self, queue_filter: str, offset: int) -> tuple[int, list[dict[str, Any]], int, int]:
+    def _load_manual_queue(self, queue_filter: str, offset: int, theme_filter: str = "all") -> tuple[int, list[dict[str, Any]], int, int]:
         all_rows = self._list_posts_rows(status="scheduled", newest_first=False, limit=100)
         now_utc = datetime.now(timezone.utc)
         due_rows = [row for row in all_rows if (publish_at := self._publish_at_utc(row)) and publish_at <= now_utc]
         filtered_rows = due_rows if queue_filter == "due" else all_rows
+        if theme_filter != "all":
+            filtered_rows = [row for row in filtered_rows if self._row_pillar(row) == theme_filter]
         total = len(filtered_rows)
         return total, filtered_rows[offset : offset + _POSTS_PAGE_SIZE], len(due_rows), len(all_rows)
 
@@ -2430,8 +2539,9 @@ class NewsAdminBot:
                 continue
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             format_label = _post_format_display_label(row)
+            pillar = self._row_pillar(row)
             lines.append(f"{index}. {time_label} {kind_text} — {title[:76]}")
-            lines.append(f"   Формат: {format_label}")
+            lines.append(f"   Формат: {format_label} | Тема: {_pillar_label(pillar)}")
             if slot.longread_topic:
                 lines.append(f"   Тема: {slot.longread_topic}")
 
@@ -2444,8 +2554,9 @@ class NewsAdminBot:
                 title = str(row.get("title") or "Без заголовка").replace("\n", " ")
                 kind = self._publication_kind(row)
                 format_label = _post_format_display_label(row)
+                pillar = self._row_pillar(row)
                 lines.append(f"• {time_label} {publication_kind_badge(kind)} {title[:72]}")
-                lines.append(f"  Формат: {format_label}")
+                lines.append(f"  Формат: {format_label} | Тема: {_pillar_label(pillar)}")
         return "\n".join(lines)
 
     def _calendar_day_keyboard(self, day_key: str, rows: list[dict[str, Any]]) -> InlineKeyboardMarkup:
@@ -2728,12 +2839,15 @@ class NewsAdminBot:
         queue_filter: str,
         due_total: int,
         scheduled_total: int,
+        theme_filter: str = "all",
     ) -> str:
         filter_label = "к публикации сейчас" if queue_filter == "due" else "все готовые"
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
         if not rows:
             return (
                 "Ручная очередь публикации\n\n"
                 f"Фильтр: {filter_label}\n"
+                f"Тема: {theme_label}\n"
                 f"Готовые сейчас: {due_total} из {scheduled_total}\n\n"
                 "Сейчас записей нет."
             )
@@ -2742,6 +2856,7 @@ class NewsAdminBot:
         lines = [
             "Ручная очередь публикации",
             f"Фильтр: {filter_label}",
+            f"Тема: {theme_label}",
             f"Готовые сейчас: {due_total} из {scheduled_total}",
             "Режимы топ-3/топ-5 доступны только в фильтре «К публикации сейчас».",
             "",
@@ -2751,9 +2866,10 @@ class NewsAdminBot:
             publish_at = str(row.get("publish_at") or "")
             publish_at_utc = self._publish_at_utc(row)
             due_mark = "⚡" if publish_at_utc and publish_at_utc <= now_utc else "🕒"
+            pillar = self._row_pillar(row)
             format_label = _post_format_display_label(row)
             lines.append(f"{idx}. {due_mark} {title[:84]}")
-            lines.append(f"   ⏰ {publish_at} | {format_label}")
+            lines.append(f"   ⏰ {publish_at} | 🧭 {_pillar_label(pillar)} | {format_label}")
         return "\n".join(lines)
 
     def _posts_keyboard(self, total: int, rows: list[dict[str, Any]], offset: int, status: str) -> InlineKeyboardMarkup:
@@ -2827,14 +2943,27 @@ class NewsAdminBot:
         rows: list[dict[str, Any]],
         offset: int,
         queue_filter: str,
+        theme_filter: str = "all",
     ) -> InlineKeyboardMarkup:
         buttons: list[list[InlineKeyboardButton]] = [
             [
-                InlineKeyboardButton("⚡ К публикации сейчас", callback_data="mq:due:0"),
-                InlineKeyboardButton("📚 Все готовые", callback_data="mq:all:0"),
+                InlineKeyboardButton("⚡ К публикации сейчас", callback_data=f"mq:due:{theme_filter}:0"),
+                InlineKeyboardButton("📚 Все готовые", callback_data=f"mq:all:{theme_filter}:0"),
             ]
         ]
-        context = _queue_context_from_filter(queue_filter)
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        for index in range(0, len(theme_rows), 2):
+            chunk = theme_rows[index : index + 2]
+            buttons.append(
+                [
+                    _inline_button(
+                        f"{'• ' if theme_filter == item_key else ''}{item_label}",
+                        callback_data=f"mq:{queue_filter}:{item_key}:0",
+                    )
+                    for item_key, item_label in chunk
+                ]
+            )
+        context = _queue_context_from_filter(queue_filter, theme_filter)
         for idx, row in enumerate(rows, start=offset + 1):
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
@@ -2856,13 +2985,13 @@ class NewsAdminBot:
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
         next_offset = offset + _POSTS_PAGE_SIZE
         if offset > 0:
-            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"mq:{queue_filter}:{prev_offset}"))
+            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"mq:{queue_filter}:{theme_filter}:{prev_offset}"))
         if next_offset < total:
-            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"mq:{queue_filter}:{next_offset}"))
+            nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"mq:{queue_filter}:{theme_filter}:{next_offset}"))
         if nav:
             buttons.append(nav)
 
-        buttons.append([InlineKeyboardButton("🔄 Обновить очередь", callback_data=f"mq:{queue_filter}:{offset}")])
+        buttons.append([InlineKeyboardButton("🔄 Обновить очередь", callback_data=f"mq:{queue_filter}:{theme_filter}:{offset}")])
         buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
         return InlineKeyboardMarkup(buttons)
 
@@ -2934,8 +3063,8 @@ class NewsAdminBot:
         if status in ("review", "failed"):
             rows.append([InlineKeyboardButton("✅ В готовые", callback_data=f"pr:{post_id}:{status}:{offset}")])
         if _is_auto_queue_context(status):
-            queue_filter = _auto_queue_filter_from_context(status)
-            rows.append([InlineKeyboardButton("🔙 К автоочереди", callback_data=f"aq:{queue_filter}:{offset}")])
+            queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+            rows.append([InlineKeyboardButton("🔙 К автоочереди", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}")])
         elif _is_calendar_context(status):
             rows.append([InlineKeyboardButton("🔙 К календарю", callback_data=f"cal:day:{_calendar_date_from_context(status)}")])
         elif _is_theme_context(status):
@@ -2943,8 +3072,8 @@ class NewsAdminBot:
         elif _is_source_context(status):
             rows.append([InlineKeyboardButton("🔙 К источнику", callback_data=f"src:{_source_from_context(status)}:{offset}")])
         elif _is_manual_queue_context(status):
-            queue_filter = _queue_filter_from_context(status)
-            rows.append([InlineKeyboardButton("🔙 К очереди", callback_data=f"mq:{queue_filter}:{offset}")])
+            queue_filter, theme_filter = _queue_filters_from_context(status)
+            rows.append([InlineKeyboardButton("🔙 К очереди", callback_data=f"mq:{queue_filter}:{theme_filter}:{offset}")])
         else:
             rows.append([InlineKeyboardButton("🔙 К списку", callback_data=f"pl:{status}:{offset}")])
         return InlineKeyboardMarkup(rows)
@@ -3585,11 +3714,11 @@ class NewsAdminBot:
             reply_markup=self._generation_keyboard(),
         )
 
-    async def _show_auto_queue(self, update: Update, queue_filter: str = "all", offset: int = 0) -> None:
-        total, rows, overdue = self._load_auto_queue(queue_filter=queue_filter, offset=offset)
+    async def _show_auto_queue(self, update: Update, queue_filter: str = "all", offset: int = 0, theme_filter: str = "all") -> None:
+        total, rows, overdue = self._load_auto_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
         await update.effective_message.reply_text(
-            self._auto_queue_text(total, rows, offset, overdue, queue_filter),
-            reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter),
+            self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+            reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
         )
 
     async def _show_posts_status(self, update: Update, status: str, offset: int = 0) -> None:
@@ -3599,11 +3728,11 @@ class NewsAdminBot:
             reply_markup=self._posts_keyboard(total, rows, offset, status),
         )
 
-    async def _show_manual_queue(self, update: Update, queue_filter: str = "due", offset: int = 0) -> None:
-        total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+    async def _show_manual_queue(self, update: Update, queue_filter: str = "due", offset: int = 0, theme_filter: str = "all") -> None:
+        total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
         await update.effective_message.reply_text(
-            self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
-            reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+            self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+            reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
         )
 
     async def _show_calendar_summary(self, update: Update) -> None:
@@ -4442,21 +4571,21 @@ class NewsAdminBot:
                 return
 
             if data == "sec:autoqueue":
-                total, rows, overdue = self._load_auto_queue("all", 0)
+                total, rows, overdue = self._load_auto_queue("all", 0, "all")
                 await self._safe_edit_message_text(
                     query,
-                    self._auto_queue_text(total, rows, 0, overdue, "all"),
-                    reply_markup=self._auto_queue_keyboard(total, rows, 0, "all"),
+                    self._auto_queue_text(total, rows, 0, overdue, "all", "all"),
+                    reply_markup=self._auto_queue_keyboard(total, rows, 0, "all", "all"),
                 )
                 return
 
             if data.startswith("aq:"):
-                queue_filter, offset = _parse_auto_queue_callback(data)
-                total, rows, overdue = self._load_auto_queue(queue_filter, offset)
+                queue_filter, theme_filter, offset = _parse_auto_queue_callback(data)
+                total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
                 await self._safe_edit_message_text(
                     query,
-                    self._auto_queue_text(total, rows, offset, overdue, queue_filter),
-                    reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter),
+                    self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+                    reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                 )
                 return
 
@@ -4872,11 +5001,11 @@ class NewsAdminBot:
 
         try:
             if data.startswith("mq:"):
-                queue_filter, offset = _parse_manual_queue_callback(data)
-                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                queue_filter, theme_filter, offset = _parse_manual_queue_callback(data)
+                total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
                 await self._safe_edit_message_text(query, 
-                    self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
-                    reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                    self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+                    reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                 )
                 return
 
@@ -5113,23 +5242,23 @@ class NewsAdminBot:
                     )
                     return
                 if _is_auto_queue_context(status):
-                    queue_filter = _auto_queue_filter_from_context(status)
-                    total, rows, overdue = self._load_auto_queue(queue_filter, offset)
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         "Пост удален, негативный feedback сохранен.\n\n"
-                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter),
-                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                     return
                 if _is_manual_queue_context(status):
-                    queue_filter = _queue_filter_from_context(status)
-                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    queue_filter, theme_filter = _queue_filters_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         "Пост удален, негативный feedback сохранен.\n\n"
-                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
-                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                     return
                 if _is_calendar_context(status):
@@ -5182,13 +5311,13 @@ class NewsAdminBot:
                     )
                     return
                 if _is_auto_queue_context(status):
-                    queue_filter = _auto_queue_filter_from_context(status)
-                    total, rows, overdue = self._load_auto_queue(queue_filter, 0)
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, 0, theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         "Пост переведён в готовые (scheduled).\n\n"
-                        + self._auto_queue_text(total, rows, 0, overdue, queue_filter),
-                        reply_markup=self._auto_queue_keyboard(total, rows, 0, queue_filter),
+                        + self._auto_queue_text(total, rows, 0, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, 0, queue_filter, theme_filter),
                     )
                     return
                 total, rows = self._load_posts(status="scheduled", offset=0)
@@ -5213,13 +5342,13 @@ class NewsAdminBot:
                     )
                     return
                 if _is_auto_queue_context(status):
-                    queue_filter = _auto_queue_filter_from_context(status)
-                    total, rows, overdue = self._load_auto_queue(queue_filter, 0)
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, 0, theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         "Пост переведён в проверку (review).\n\n"
-                        + self._auto_queue_text(total, rows, 0, overdue, queue_filter),
-                        reply_markup=self._auto_queue_keyboard(total, rows, 0, queue_filter),
+                        + self._auto_queue_text(total, rows, 0, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, 0, queue_filter, theme_filter),
                     )
                     return
                 total, rows = self._load_review_posts("all", 0)
@@ -5311,21 +5440,21 @@ class NewsAdminBot:
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
                 if _is_manual_queue_context(status):
-                    queue_filter = _queue_filter_from_context(status)
-                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    queue_filter, theme_filter = _queue_filters_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
                     await self._safe_edit_message_text(query, 
                         f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
-                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
-                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                 elif _is_auto_queue_context(status):
-                    queue_filter = _auto_queue_filter_from_context(status)
-                    total, rows, overdue = self._load_auto_queue(queue_filter, offset)
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
-                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter),
-                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                 elif _is_source_context(status):
                     domain = _source_from_context(status)
@@ -5428,21 +5557,21 @@ class NewsAdminBot:
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 context.user_data.pop(_STATE_PENDING_EDIT, None)
                 if _is_manual_queue_context(status):
-                    queue_filter = _queue_filter_from_context(status)
-                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset)
+                    queue_filter, theme_filter = _queue_filters_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
                     await self._safe_edit_message_text(query, 
                         "Редактирование отменено.\n\n"
-                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total),
-                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                 elif _is_auto_queue_context(status):
-                    queue_filter = _auto_queue_filter_from_context(status)
-                    total, rows, overdue = self._load_auto_queue(queue_filter, offset)
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
                     await self._safe_edit_message_text(
                         query,
                         "Редактирование отменено.\n\n"
-                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter),
-                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter),
+                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
                 elif _is_source_context(status):
                     domain = _source_from_context(status)
@@ -5945,13 +6074,13 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_controls,
-                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other):\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z]+:\d+|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
+                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z]+:\d+|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
             )
         )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all):\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual):\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)|mq_due|mq_all|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
+                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual):\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
             )
         )
         app.add_handler(

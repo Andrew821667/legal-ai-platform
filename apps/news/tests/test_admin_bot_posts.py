@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
     _auto_queue_context,
+    _auto_queue_filters_from_context,
     _auto_queue_filter_from_context,
     _button_icon_map,
     _main_menu_markup,
@@ -35,6 +36,7 @@ from news.admin_bot import (
     _parse_manual_queue_callback,
     _parse_post_list_callback,
     _queue_context_from_filter,
+    _queue_filters_from_context,
     _queue_filter_from_context,
     _slot_from_token,
     _slot_token,
@@ -60,33 +62,49 @@ def test_parse_post_list_callback_new_format() -> None:
 
 
 def test_parse_manual_queue_callback_formats() -> None:
-    queue_filter, offset = _parse_manual_queue_callback("mq:4")
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:4")
     assert queue_filter == "due"
+    assert theme_filter == "all"
     assert offset == 4
-    queue_filter, offset = _parse_manual_queue_callback("mq:all:12")
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:all:12")
     assert queue_filter == "all"
+    assert theme_filter == "all"
     assert offset == 12
+    queue_filter, theme_filter, offset = _parse_manual_queue_callback("mq:due:implementation:7")
+    assert queue_filter == "due"
+    assert theme_filter == "implementation"
+    assert offset == 7
 
 
 def test_manual_queue_context_helpers() -> None:
-    assert _queue_context_from_filter("due") == "mq_due"
-    assert _queue_context_from_filter("all") == "mq_all"
+    assert _queue_context_from_filter("due") == "mq_due_all"
+    assert _queue_context_from_filter("all") == "mq_all_all"
+    assert _queue_context_from_filter("due", "implementation") == "mq_due_implementation"
     assert _queue_filter_from_context("mq_due") == "due"
     assert _queue_filter_from_context("mq_all") == "all"
+    assert _queue_filters_from_context("mq_due_implementation") == ("due", "implementation")
     assert _is_manual_queue_context("mq_due")
     assert not _is_manual_queue_context("scheduled")
-    assert _auto_queue_context("daily") == "aq_daily"
+    assert _auto_queue_context("daily") == "aq_daily_all"
+    assert _auto_queue_context("daily", "regulation") == "aq_daily_regulation"
     assert _auto_queue_filter_from_context("aq_humor") == "humor"
+    assert _auto_queue_filters_from_context("aq_humor_market") == ("humor", "market")
     assert _is_auto_queue_context("aq_all")
 
 
 def test_parse_auto_queue_callback_formats() -> None:
-    queue_filter, offset = _parse_auto_queue_callback("aq:daily:8")
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:daily:8")
     assert queue_filter == "daily"
+    assert theme_filter == "all"
     assert offset == 8
-    queue_filter, offset = _parse_auto_queue_callback("aq:other:0")
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:other:0")
     assert queue_filter == "other"
+    assert theme_filter == "all"
     assert offset == 0
+    queue_filter, theme_filter, offset = _parse_auto_queue_callback("aq:daily:regulation:5")
+    assert queue_filter == "daily"
+    assert theme_filter == "regulation"
+    assert offset == 5
 
 
 def test_parse_review_filter_callback_formats() -> None:
@@ -224,12 +242,18 @@ def test_manual_post_kind_prompt_blocks_exist() -> None:
     assert "узкого места клиента" in _manual_post_kind_prompt_block("promo_offer")
     assert "Первая фраза должна содержать четкий тезис" in _manual_post_kind_prompt_block("opinion")
     assert "исходную проблему" in _manual_post_kind_prompt_block("case_story")
+    assert "самостоятельно" in _manual_post_kind_prompt_block("digest")
+    assert "проверкой, действием или критерием" in _manual_post_kind_prompt_block("checklist")
+    assert "реально задает клиент" in _manual_post_kind_prompt_block("faq")
 
 
 def test_manual_post_kind_screen_templates_exist() -> None:
     assert "Где у клиента рвется процесс" in _manual_post_kind_screen_template("promo_offer")
     assert "Жесткий тезис" in _manual_post_kind_screen_template("opinion")
     assert "процесс до изменений" in _manual_post_kind_screen_template("case_story")
+    assert "4-6 самостоятельных пунктов" in _manual_post_kind_screen_template("digest")
+    assert "5-7 действий или критериев" in _manual_post_kind_screen_template("checklist")
+    assert "4-6 реальных вопросов" in _manual_post_kind_screen_template("faq")
 
 
 def test_manual_post_kind_from_format_type_and_display_label() -> None:
