@@ -11,8 +11,14 @@ from core_api.models import IdempotencyKey
 from core_api.security import hash_idempotency_key
 
 
-def cached_response(db: Session, raw_key: str) -> tuple[int, dict[str, Any]] | None:
-    key_hash = hash_idempotency_key(raw_key)
+def _compose_key(raw_key: str, namespace: str | None = None) -> str:
+    if namespace:
+        return f"{namespace}:{raw_key}"
+    return raw_key
+
+
+def cached_response(db: Session, raw_key: str, *, namespace: str | None = None) -> tuple[int, dict[str, Any]] | None:
+    key_hash = hash_idempotency_key(_compose_key(raw_key, namespace))
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     stmt = select(IdempotencyKey).where(
         IdempotencyKey.key_hash == key_hash,
@@ -24,8 +30,8 @@ def cached_response(db: Session, raw_key: str) -> tuple[int, dict[str, Any]] | N
     return record.response_status, record.response_body
 
 
-def store_response(db: Session, raw_key: str, status: int, body: dict[str, Any]) -> None:
-    key_hash = hash_idempotency_key(raw_key)
+def store_response(db: Session, raw_key: str, status: int, body: dict[str, Any], *, namespace: str | None = None) -> None:
+    key_hash = hash_idempotency_key(_compose_key(raw_key, namespace))
     db.add(IdempotencyKey(key_hash=key_hash, response_status=status, response_body=body))
     try:
         db.commit()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -17,22 +18,33 @@ from news.pipeline import (
     canonicalize_url,
     choose_top_articles,
     default_pillar_targets,
+    extract_domain,
     lexical_similarity,
     normalize_rubric_to_pillar,
+    passes_generation_scope,
     pillar_for_article,
     urgency_score,
 )
 from news.rag import PostedContentRAG
 from news.rss_fetcher import fetch_rss_articles
 from news.settings import settings
+from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
 from news.strategy import build_publish_plan
+from news.telegram_ingest import fetch_telegram_articles
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def _parse_sources() -> list[str]:
-    return [url.strip() for url in settings.news_source_urls.split(",") if url.strip()]
+@dataclass(slots=True)
+class GenerationRunResult:
+    previews: list[dict[str, str]]
+    fetched: int
+    pool_selected: int
+    slots_planned: int
+    duplicates: int
+    feedback_skipped: int
+    skipped_slots: int
 
 
 def _parse_priority_domains() -> set[str]:
@@ -50,6 +62,11 @@ def _parse_priority_domains() -> set[str]:
             host = host[4:]
         if host:
             domains.add(host)
+    if domains:
+        return domains
+    for spec in active_source_specs(settings):
+        if spec.domain and spec.integrated:
+            domains.add(spec.domain)
     return domains
 
 
@@ -75,6 +92,25 @@ def _is_enabled(controls: dict[str, bool], key: str, default: bool = True) -> bo
     return controls.get(key, default)
 
 
+def _source_enabled_map(controls: dict[str, bool]) -> dict[str, bool]:
+    catalog = source_catalog(settings)
+    return {
+        key: controls.get(f"news.source.{key}.enabled", True)
+        for key in catalog
+    }
+
+
+def _enabled_telegram_channels(controls: dict[str, bool]) -> list[str]:
+    result: list[str] = []
+    for channel in settings.telegram_channels_list:
+        slug = channel.strip().lstrip("@").lower()
+        if not slug:
+            continue
+        if controls.get(f"news.telegram_channel.{slug}.enabled", True):
+            result.append(channel)
+    return result
+
+
 def _collect_history(
     client: CoreClient,
 ) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]], list[dict[str, str]]]:
@@ -83,7 +119,7 @@ def _collect_history(
     recent_pillar_counts: dict[str, int] = {}
     posted_items: list[dict[str, str]] = []
 
-    for status in ("posted", "review", "scheduled", "publishing"):
+    for status in ("posted", "review", "scheduled", "publishing", "failed"):
         try:
             response = client.list_posts(
                 limit=settings.news_history_scan_limit,
@@ -105,6 +141,22 @@ def _collect_history(
             url = canonicalize_url(row.get("source_url") or "")
             if url:
                 source_urls.add(url)
+
+            if status == "failed":
+                last_error = str(row.get("last_error") or "").strip().lower()
+                if not last_error.startswith("deleted_irrelevant"):
+                    continue
+                posted_items.append(
+                    {
+                        "title": title,
+                        "text": text,
+                        "source_url": row.get("source_url") or "",
+                        "publish_at": row.get("publish_at") or "",
+                        "feedback_snapshot": row.get("feedback_snapshot") or {},
+                        "id": str(row.get("id") or ""),
+                    }
+                )
+                continue
 
             if status != "posted":
                 continue
@@ -148,33 +200,32 @@ def _build_digest_candidate(now_utc: datetime, posted_items: list[dict[str, str]
     )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate scheduled channel posts from RSS + LLM")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--limit", type=int, default=settings.news_top_k)
-    args = parser.parse_args()
-
+def collect_generation_previews(limit: int) -> GenerationRunResult:
     if not settings.api_key_news:
-        logger.error("API_KEY_NEWS is required")
-        return 1
+        raise RuntimeError("API_KEY_NEWS is required")
     if not settings.openai_api_key:
-        logger.error("OPENAI_API_KEY is required for content generation")
-        return 1
+        raise RuntimeError("OPENAI_API_KEY is required for content generation")
 
-    top_limit = max(1, min(args.limit, 20))
+    top_limit = max(1, min(limit, 20))
     now_utc = datetime.now(timezone.utc)
     now_local = now_utc.astimezone(ZoneInfo(settings.tz_name))
 
     core_client = CoreClient(settings.core_api_url, settings.api_key_news)
     controls = _load_controls(core_client)
     if not _is_enabled(controls, "news.generate.enabled", True):
-        logger.info("generation_disabled_by_control_plane")
-        return 0
+        return GenerationRunResult(
+            previews=[],
+            fetched=0,
+            pool_selected=0,
+            slots_planned=0,
+            duplicates=0,
+            feedback_skipped=0,
+            skipped_slots=0,
+        )
 
-    source_urls = _parse_sources()
+    source_urls = resolve_source_urls(settings, enabled_overrides=_source_enabled_map(controls))
     if not source_urls:
-        logger.error("NEWS_SOURCE_URLS is empty; generator cannot run")
-        return 1
+        raise RuntimeError("NEWS_SOURCE_URLS is empty; generator cannot run")
 
     history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
         core_client
@@ -187,8 +238,12 @@ def main() -> int:
     )
 
     articles = fetch_rss_articles(source_urls)
+    telegram_articles = fetch_telegram_articles(_enabled_telegram_channels(controls))
+    if telegram_articles:
+        articles.extend(telegram_articles)
+        logger.info("telegram_articles_appended", extra={"count": len(telegram_articles)})
     priority_domains = _parse_priority_domains()
-    selection_limit = min(60, top_limit * 6)
+    selection_limit = min(120, top_limit * 10)
     selected_articles = choose_top_articles(
         articles,
         limit=selection_limit,
@@ -200,8 +255,15 @@ def main() -> int:
     )
 
     if not selected_articles and digest_candidate is None:
-        logger.info("no_candidates_for_generation")
-        return 0
+        return GenerationRunResult(
+            previews=[],
+            fetched=len(articles),
+            pool_selected=0,
+            slots_planned=0,
+            duplicates=0,
+            feedback_skipped=0,
+            skipped_slots=0,
+        )
 
     allow_alert_slot = (
         _is_enabled(controls, "news.alert_slot.enabled", settings.news_enable_alert_slot)
@@ -209,19 +271,24 @@ def main() -> int:
     )
     publish_plan = build_publish_plan(now_local, top_limit, allow_alert_slot=allow_alert_slot)
     if not publish_plan:
-        logger.info("no_available_publish_slots")
-        return 0
+        return GenerationRunResult(
+            previews=[],
+            fetched=len(articles),
+            pool_selected=len(selected_articles),
+            slots_planned=0,
+            duplicates=0,
+            feedback_skipped=0,
+            skipped_slots=0,
+        )
 
     rag = PostedContentRAG(core_client)
     writer = LLMNewsWriter()
 
     article_queue = list(selected_articles)
     digest_used = False
-    created = 0
-    previewed = 0
+    previews: list[dict[str, str]] = []
     duplicates = 0
     feedback_skipped = 0
-    failed = 0
     skipped_slots = 0
 
     for slot in publish_plan:
@@ -244,6 +311,10 @@ def main() -> int:
                 if not article_queue:
                     break
                 article = article_queue.pop(0)
+
+            if not passes_generation_scope(article):
+                logger.info("candidate_failed_generation_scope", extra={"source_url": article.article_url})
+                continue
 
             article_canonical_url = canonicalize_url(article.article_url)
             if not digest_for_slot and article_canonical_url and article_canonical_url in existing_source_urls:
@@ -284,6 +355,9 @@ def main() -> int:
                 pillar=pillar,
                 negative_feedback_context=negative_feedback_context,
             )
+            if generated is None:
+                logger.info("candidate_rejected_after_llm_review", extra={"source_url": article.article_url})
+                continue
 
             max_similarity = 0.0
             if history_texts:
@@ -306,91 +380,143 @@ def main() -> int:
 
             source_hash = build_source_hash(article.article_url, article.title, article.published_at)
             publish_at_utc = slot.publish_at_local.astimezone(timezone.utc)
-            payload = {
+            preview = {
                 "title": generated["title"],
                 "text": generated["text"],
                 "rubric": generated["rubric"],
                 "format_type": format_type,
                 "cta_type": cta_type,
                 "source_url": article.article_url,
+                "source_feed_url": article.source_url,
+                "source_title": article.title,
+                "source_summary": article.summary,
+                "source_domain": extract_domain(article.article_url),
                 "source_hash": source_hash,
-                "channel_id": settings.telegram_channel_id or None,
-                "channel_username": settings.telegram_channel_username or None,
+                "pillar": pillar,
+                "channel_id": settings.telegram_channel_id or "",
+                "channel_username": settings.telegram_channel_username or "",
                 "publish_at": publish_at_utc.isoformat(),
                 "status": "review",
+                "article_published_at": article.published_at.isoformat() if article.published_at else "",
             }
-
-            if args.dry_run:
-                previewed += 1
-                slot_done = True
-                history_texts.append(generated["text"])
-                if article_canonical_url:
-                    existing_source_urls.add(article_canonical_url)
-                if digest_for_slot:
-                    digest_used = True
-                logger.info(
-                    "dry_run_preview",
-                    extra={
-                        "source_url": article.article_url,
-                        "title": generated["title"][:120],
-                        "format_type": format_type,
-                        "cta_type": cta_type,
-                        "publish_at": payload["publish_at"],
-                        "text_preview": generated["text"][:700],
-                    },
-                )
-                break
-
-            response = core_client.create_scheduled_post(payload)
-            if response.status_code in (200, 201):
-                created += 1
-                slot_done = True
-                history_texts.append(generated["text"])
-                if article_canonical_url:
-                    existing_source_urls.add(article_canonical_url)
-                if digest_for_slot:
-                    digest_used = True
-                logger.info(
-                    "scheduled_post_created",
-                    extra={
-                        "source_url": article.article_url,
-                        "format_type": format_type,
-                        "cta_type": cta_type,
-                        "publish_at": payload["publish_at"],
-                    },
-                )
-                break
-
-            if response.status_code == 409:
-                duplicates += 1
-                logger.info("duplicate_post_skipped", extra={"source_url": article.article_url})
-                if digest_for_slot:
-                    break
-                continue
-
-            failed += 1
+            previews.append(preview)
+            history_texts.append(generated["text"])
+            if article_canonical_url:
+                existing_source_urls.add(article_canonical_url)
+            if digest_for_slot:
+                digest_used = True
             slot_done = True
-            logger.error(
-                "scheduled_post_create_failed",
-                extra={"status": response.status_code, "body": response.text[:500]},
-            )
             break
 
         if not slot_done:
             skipped_slots += 1
 
+    return GenerationRunResult(
+        previews=previews,
+        fetched=len(articles),
+        pool_selected=len(selected_articles),
+        slots_planned=len(publish_plan),
+        duplicates=duplicates,
+        feedback_skipped=feedback_skipped,
+        skipped_slots=skipped_slots,
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate scheduled channel posts from RSS + LLM")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--limit", type=int, default=settings.news_top_k)
+    args = parser.parse_args()
+
+    try:
+        result = collect_generation_previews(args.limit)
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        return 1
+
+    if not result.previews:
+        logger.info(
+            "generation_completed",
+            extra={
+                "fetched": result.fetched,
+                "pool_selected": result.pool_selected,
+                "slots_planned": result.slots_planned,
+                "created_posts": 0,
+                "previewed": 0,
+                "duplicates": result.duplicates,
+                "feedback_skipped": result.feedback_skipped,
+                "failed": 0,
+                "skipped_slots": result.skipped_slots,
+                "dry_run": args.dry_run,
+            },
+        )
+        return 0
+
+    core_client = CoreClient(settings.core_api_url, settings.api_key_news)
+    created = 0
+    failed = 0
+    if args.dry_run:
+        for preview in result.previews:
+            logger.info(
+                "dry_run_preview",
+                extra={
+                    "source_url": preview["source_url"],
+                    "title": preview["title"][:120],
+                    "format_type": preview["format_type"],
+                    "cta_type": preview["cta_type"],
+                    "publish_at": preview["publish_at"],
+                    "text_preview": preview["text"][:700],
+                },
+            )
+    else:
+        for preview in result.previews:
+            payload = {
+                "title": preview["title"],
+                "text": preview["text"],
+                "rubric": preview["rubric"],
+                "format_type": preview["format_type"],
+                "cta_type": preview["cta_type"],
+                "source_url": preview["source_url"],
+                "source_hash": preview["source_hash"],
+                "channel_id": preview["channel_id"] or None,
+                "channel_username": preview["channel_username"] or None,
+                "publish_at": preview["publish_at"],
+                "status": preview["status"],
+            }
+            response = core_client.create_scheduled_post(payload)
+            if response.status_code in (200, 201):
+                created += 1
+                logger.info(
+                    "scheduled_post_created",
+                    extra={
+                        "source_url": preview["source_url"],
+                        "format_type": preview["format_type"],
+                        "cta_type": preview["cta_type"],
+                        "publish_at": preview["publish_at"],
+                    },
+                )
+                continue
+            if response.status_code == 409:
+                logger.info("duplicate_post_skipped", extra={"source_url": preview["source_url"]})
+                continue
+            failed += 1
+            logger.error(
+                "scheduled_post_create_failed",
+                extra={"status": response.status_code, "body": response.text[:500]},
+            )
+
     logger.info(
         "generation_completed",
         extra={
-            "fetched": len(articles),
-            "pool_selected": len(selected_articles),
-            "slots_planned": len(publish_plan),
+            "fetched": result.fetched,
+            "pool_selected": result.pool_selected,
+            "slots_planned": result.slots_planned,
             "created_posts": created,
-            "previewed": previewed,
-            "duplicates": duplicates,
-            "feedback_skipped": feedback_skipped,
+            "previewed": len(result.previews) if args.dry_run else 0,
+            "duplicates": result.duplicates,
+            "feedback_skipped": result.feedback_skipped,
             "failed": failed,
-            "skipped_slots": skipped_slots,
+            "skipped_slots": result.skipped_slots,
             "dry_run": args.dry_run,
         },
     )

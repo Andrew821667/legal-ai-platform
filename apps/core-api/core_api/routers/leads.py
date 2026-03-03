@@ -26,7 +26,7 @@ def upsert_lead(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> Lead:
     if idempotency_key:
-        cached = cached_response(db, idempotency_key)
+        cached = cached_response(db, idempotency_key, namespace="leads.upsert")
         if cached:
             cached_status, cached_body = cached
             return JSONResponse(status_code=cached_status, content=cached_body)
@@ -91,6 +91,7 @@ def upsert_lead(
             idempotency_key,
             status.HTTP_200_OK,
             LeadOut.model_validate(lead).model_dump(mode="json"),
+            namespace="leads.upsert",
         )
 
     return lead
@@ -109,7 +110,7 @@ def list_leads(
 ) -> list[Lead]:
     _ = identity
     capped_limit = max(1, min(limit, 500))
-    query = select(Lead).order_by(Lead.created_at.desc()).limit(capped_limit)
+    query = select(Lead)
     if status_filter is not None:
         query = query.where(Lead.status == status_filter)
     if source_filter is not None:
@@ -120,6 +121,7 @@ def list_leads(
         query = query.where(Lead.telegram_user_id == telegram_user_id)
     if legacy_lead_id is not None:
         query = query.where(Lead.legacy_lead_id == legacy_lead_id)
+    query = query.order_by(Lead.created_at.desc()).limit(capped_limit)
     return list(db.execute(query).scalars().all())
 
 

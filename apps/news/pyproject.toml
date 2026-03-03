@@ -9,6 +9,8 @@ dependencies = [
     "openai>=1.0.0",
     "feedparser>=6.0.11",
     "python-telegram-bot>=22.6",
+    "telethon>=1.34.0",
+    "qrcode>=8.2",
 ]
 
 [tool.uv.sources]

@@ -12,18 +12,31 @@ _KEYWORDS_WEIGHTED: dict[str, float] = {
     "ии": 2.0,
     "ai": 2.0,
     "искусственный интеллект": 3.0,
-    "legaltech": 2.5,
-    "юрид": 1.5,
-    "комплаенс": 1.5,
-    "регуля": 1.2,
-    "суд": 1.0,
-    "договор": 1.0,
-    "прав": 1.0,
-    "санкц": 1.2,
-    "персональн": 1.2,
-    "данн": 1.0,
-    "automated": 0.8,
-    "automation": 0.8,
+    "генератив": 2.2,
+    "llm": 2.2,
+    "gpt": 2.0,
+    "openai": 2.0,
+    "deepseek": 2.0,
+    "legaltech": 2.8,
+    "legal tech": 2.8,
+    "юрид": 2.0,
+    "юрист": 1.8,
+    "lawyer": 1.8,
+    "legal": 1.5,
+    "law ": 1.2,
+    "комплаенс": 1.8,
+    "compliance": 1.8,
+    "privacy": 1.5,
+    "персональн": 1.5,
+    "договор": 1.7,
+    "contract": 1.7,
+    "court": 1.4,
+    "суд": 1.4,
+    "legal ops": 2.0,
+    "юротдел": 1.8,
+    "документооборот": 1.8,
+    "автоматиз": 1.4,
+    "workflow": 1.2,
 }
 
 _STOP_WORDS = {
@@ -48,16 +61,24 @@ _STOP_WORDS = {
 }
 
 _WORD_RE = re.compile(r"[A-Za-zА-Яа-я0-9_]{3,}")
+_TOKEN_MARKER_PATTERNS = {
+    "ai": re.compile(r"(?<![a-z])ai(?![a-z])"),
+    "llm": re.compile(r"(?<![a-z])llm(?![a-z])"),
+    "gpt": re.compile(r"(?<![a-z])gpt(?![a-z])"),
+}
 PILLARS = ("regulation", "case", "implementation", "tools", "market")
 _DEFAULT_PILLAR_TARGETS: dict[str, float] = {
-    "regulation": 0.35,
-    "case": 0.25,
-    "implementation": 0.2,
-    "tools": 0.1,
-    "market": 0.1,
+    "regulation": 0.3,
+    "case": 0.2,
+    "implementation": 0.3,
+    "tools": 0.15,
+    "market": 0.05,
 }
 _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
     "regulation": (
+        "ai act",
+        "закон об ии",
+        "регулирован",
         "регуля",
         "закон",
         "норм",
@@ -72,6 +93,8 @@ _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
         "кейс",
         "внедр",
         "компан",
+        "юрфир",
+        "юротдел",
         "roi",
         "сократ",
         "увелич",
@@ -87,6 +110,11 @@ _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
         "practice",
         "best practice",
         "framework",
+        "legal ops",
+        "договор",
+        "документооборот",
+        "согласован",
+        "юротдел",
     ),
     "tools": (
         "модел",
@@ -99,6 +127,9 @@ _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
         "tool",
     ),
     "market": (
+        "legaltech",
+        "legal tech",
+        "юртех",
         "рынок",
         "инвест",
         "funding",
@@ -134,6 +165,113 @@ _URGENT_KEYWORDS = (
     "ban",
     "penalty",
 )
+_AI_MARKERS = (
+    "ии",
+    "ai",
+    "искусственный интеллект",
+    "генератив",
+    "llm",
+    "gpt",
+    "openai",
+    "deepseek",
+    "anthropic",
+    "copilot",
+    "agent",
+    "нейросет",
+)
+_LEGAL_MARKERS = (
+    "юрид",
+    "юрист",
+    "lawyer",
+    "legal",
+    "law ",
+    "договор",
+    "contract",
+    "комплаенс",
+    "compliance",
+    "privacy",
+    "персональн",
+    "регулирован",
+    "регулятор",
+    "court",
+    "суд",
+    "claims",
+)
+_OPS_MARKERS = (
+    "автоматиз",
+    "workflow",
+    "legal ops",
+    "юротдел",
+    "документооборот",
+    "согласован",
+    "redline",
+    "intake",
+    "triage",
+    "knowledge base",
+    "поиск по документ",
+    "контракт",
+)
+_GENERATION_OPS_MARKERS = (
+    "автоматиз",
+    "workflow",
+    "legal ops",
+    "юротдел",
+    "документооборот",
+    "redline",
+    "intake",
+    "triage",
+    "поиск по документ",
+    "контракт",
+)
+_MARKET_MARKERS = (
+    "legaltech",
+    "legal tech",
+    "юртех",
+    "law firm",
+    "юрфир",
+    "inhouse",
+    "инхаус",
+)
+_HARD_LEGAL_MARKERS = (
+    "юрид",
+    "юрист",
+    "legal",
+    "lawyer",
+    "law firm",
+    "юротдел",
+    "договор",
+    "contract",
+    "комплаенс",
+    "compliance",
+    "privacy",
+    "персональн",
+    "court",
+    "суд",
+    "legal ops",
+    "документооборот",
+)
+_HARD_MARKET_MARKERS = (
+    "legaltech",
+    "legal tech",
+    "юртех",
+    "инхаус",
+    "юрфир",
+)
+_OFFTOPIC_MARKERS = (
+    "археолог",
+    "древн",
+    "римск",
+    "настольн",
+    "игр",
+    "музык",
+    "кино",
+    "погода",
+    "спорт",
+    "ресторан",
+    "астроном",
+)
+_LEGAL_DOMAINS = {"pravo.ru", "garant.ru", "consultant.ru"}
+_AI_TECH_DOMAINS = {"habr.com", "vc.ru"}
 
 
 @dataclass(slots=True)
@@ -213,13 +351,93 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip().lower()
 
 
+def _marker_present(text: str, marker: str) -> bool:
+    pattern = _TOKEN_MARKER_PATTERNS.get(marker)
+    if pattern is not None:
+        return bool(pattern.search(text))
+    return marker in text
+
+
 def keyword_score(text: str) -> float:
     normalized = _normalize_text(text)
     score = 0.0
     for keyword, weight in _KEYWORDS_WEIGHTED.items():
-        if keyword in normalized:
+        if _marker_present(normalized, keyword):
             score += weight
     return score
+
+
+def specialized_relevance_score(article: ArticleCandidate) -> float:
+    text = _normalize_text(f"{article.title}\n{article.summary}")
+    domain = extract_domain(article.article_url or article.source_url)
+
+    ai_hits = sum(1 for marker in _AI_MARKERS if _marker_present(text, marker))
+    legal_hits = sum(1 for marker in _LEGAL_MARKERS if _marker_present(text, marker))
+    ops_hits = sum(1 for marker in _OPS_MARKERS if _marker_present(text, marker))
+    market_hits = sum(1 for marker in _MARKET_MARKERS if _marker_present(text, marker))
+    offtopic_hits = sum(1 for marker in _OFFTOPIC_MARKERS if _marker_present(text, marker))
+
+    score = 0.0
+    if ai_hits:
+        score += 2.0 + min(ai_hits, 3) * 0.4
+    if legal_hits:
+        score += 1.5 + min(legal_hits, 3) * 0.5
+    if ops_hits:
+        score += 1.2 + min(ops_hits, 3) * 0.4
+    if market_hits:
+        score += min(market_hits, 2) * 0.5
+
+    if domain in _LEGAL_DOMAINS and (ai_hits or ops_hits):
+        score += 1.3
+    if domain in _AI_TECH_DOMAINS and (legal_hits or ops_hits or market_hits):
+        score += 0.8
+
+    if ai_hits and (legal_hits or ops_hits or market_hits):
+        score += 1.6
+    elif legal_hits and ops_hits:
+        score += 1.0
+
+    if domain in _AI_TECH_DOMAINS and legal_hits == 0 and market_hits == 0:
+        score -= 6.0
+    if domain not in _LEGAL_DOMAINS and legal_hits == 0 and market_hits == 0:
+        score -= 3.5
+
+    if offtopic_hits and legal_hits == 0 and ops_hits == 0:
+        score -= 4.5
+    if ai_hits and legal_hits == 0 and ops_hits == 0 and market_hits == 0:
+        score -= 2.8
+
+    return score
+
+
+def passes_editorial_scope(article: ArticleCandidate) -> bool:
+    text = _normalize_text(f"{article.title}\n{article.summary}")
+    domain = extract_domain(article.article_url or article.source_url)
+    has_ai = any(_marker_present(text, marker) for marker in _AI_MARKERS)
+    has_hard_legal = any(_marker_present(text, marker) for marker in _HARD_LEGAL_MARKERS)
+    has_hard_market = any(_marker_present(text, marker) for marker in _HARD_MARKET_MARKERS)
+    has_ops = any(_marker_present(text, marker) for marker in _OPS_MARKERS)
+
+    if domain in _LEGAL_DOMAINS:
+        return has_ai or has_ops
+    return has_ai and (has_hard_legal or has_hard_market)
+
+
+def passes_generation_scope(article: ArticleCandidate) -> bool:
+    text = _normalize_text(f"{article.title}\n{article.summary}")
+    domain = extract_domain(article.article_url or article.source_url)
+    has_ai = any(_marker_present(text, marker) for marker in _AI_MARKERS)
+    has_hard_legal = any(_marker_present(text, marker) for marker in _HARD_LEGAL_MARKERS)
+    has_hard_market = any(_marker_present(text, marker) for marker in _HARD_MARKET_MARKERS)
+    has_generation_ops = any(_marker_present(text, marker) for marker in _GENERATION_OPS_MARKERS)
+
+    if domain in _LEGAL_DOMAINS:
+        return has_ai or (has_generation_ops and has_hard_legal)
+    return has_ai and (has_hard_legal or has_hard_market)
+
+
+def is_specialized_candidate(article: ArticleCandidate, *, threshold: float = 3.2) -> bool:
+    return passes_generation_scope(article) and specialized_relevance_score(article) >= threshold
 
 
 def default_pillar_targets() -> dict[str, float]:
@@ -276,6 +494,9 @@ def article_score(
     priority_domains: set[str] | None = None,
 ) -> float:
     base = keyword_score(f"{article.title}\n{article.summary}")
+    specialization = specialized_relevance_score(article)
+    if specialization < 3.2:
+        return -1000.0 + specialization
 
     freshness_bonus = 0.0
     if article.published_at:
@@ -296,7 +517,7 @@ def article_score(
             domain_bonus = 0.8
 
     # Минимальный порог, чтобы не выбирать нерелевантные статьи.
-    return base + freshness_bonus + summary_bonus + summary_penalty + domain_bonus
+    return base + specialization + freshness_bonus + summary_bonus + summary_penalty + domain_bonus
 
 
 def choose_top_articles(
@@ -310,7 +531,9 @@ def choose_top_articles(
 ) -> list[ArticleCandidate]:
     scored: list[tuple[ArticleCandidate, float, float, str]] = []
     for candidate in candidates:
-        base = keyword_score(f"{candidate.title}\n{candidate.summary}")
+        if not is_specialized_candidate(candidate):
+            continue
+        base = keyword_score(f"{candidate.title}\n{candidate.summary}") + specialized_relevance_score(candidate)
         total = article_score(candidate, now_utc, priority_domains=priority_domains)
         pillar = pillar_for_article(candidate)
         scored.append((candidate, total, base, pillar))

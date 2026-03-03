@@ -11,6 +11,7 @@ from news.admin_bot import (
     _calendar_date_from_context,
     _compute_quick_publish_at,
     _format_workers_status,
+    _is_hidden_deleted_post,
     _is_batch_mode_allowed,
     _is_calendar_context,
     _is_manual_queue_context,
@@ -169,3 +170,9 @@ def test_main_menu_buttons_include_style_in_payload() -> None:
     markup = _main_menu_markup()
     first_button = markup.keyboard[0][0]
     assert "style" not in first_button.to_dict()
+
+
+def test_hidden_deleted_post_helper() -> None:
+    assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant"})
+    assert _is_hidden_deleted_post({"last_error": "deleted_irrelevant: ai-noise"})
+    assert not _is_hidden_deleted_post({"last_error": "timeout"})

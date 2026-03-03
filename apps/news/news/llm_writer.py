@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -25,6 +26,8 @@ _SYSTEM_PROMPT = """
 
 Верни СТРОГО JSON-объект (без markdown и пояснений) с полями:
 {
+  "is_relevant": true,
+  "reject_reason": "",
   "title": "краткий заголовок до 110 символов",
   "rubric": "ai_law|compliance|privacy|contracts|litigation|legal_ops|regulation|market",
   "what_happened": "2-4 предложения с фактами",
@@ -33,6 +36,14 @@ _SYSTEM_PROMPT = """
   "next_steps": "3-5 коротких практических шагов через ';'",
   "hashtags": ["#LegalAI", "#AI", "#LegalTech"]
 }
+
+Ставь "is_relevant": false, если статья не относится напрямую к одному из сценариев:
+1) AI в юридической функции, legal ops, договорной работе, комплаенсе, privacy, спорах;
+2) регулирование AI/данных, которое важно юристам и комплаенсу;
+3) legal tech / AI-инструменты, реально применимые юристами;
+4) кейсы внедрения AI, где явно затронута юридическая или комплаенс-функция.
+
+Если это просто общая AI-новость, общий рынок труда в IT, бытовая автоматизация, M&A без AI-контекста, общая корпоративная новость или исторический/научпоп материал без юридической функции - ставь "is_relevant": false и кратко объясняй почему в "reject_reason".
 """.strip()
 _FORMAT_HINTS = {
     "signal": "Формат signal: 450-700 символов, только ключевые факты и 2-3 действия.",
@@ -47,9 +58,9 @@ _FORMAT_MIN_CHARS = {
     "digest": 950,
 }
 _CTA_LIBRARY = {
-    "soft": "Если нужен шаблон для внедрения в вашей функции, напишите «шаблон».",
-    "mid": "Если хотите чек-лист адаптации под ваш процесс, напишите «чек-лист».",
-    "hard": "Если нужен быстрый аудит процесса и дорожная карта внедрения, напишите «аудит».",
+    "soft": "Если хотите понять, как этот сценарий применить в вашей юридической функции, напишите в {bot_link}.",
+    "mid": "Если хотите разобрать ваш процесс и подобрать рабочий сценарий внедрения, напишите в {bot_link}.",
+    "hard": "Если нужен разбор задачи и формат внедрения под ваш юротдел или практику, напишите в {bot_link}.",
 }
 _DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
 _DEFAULT_RUBRIC_BY_PILLAR = {
@@ -116,7 +127,12 @@ class LLMNewsWriter:
 
     @staticmethod
     def _cta_text(cta_type: str) -> str:
-        return _CTA_LIBRARY.get(cta_type, _CTA_LIBRARY["soft"])
+        template = _CTA_LIBRARY.get(cta_type, _CTA_LIBRARY["soft"])
+        if settings.lead_bot_url:
+            bot_link = f'<a href="{html.escape(settings.lead_bot_url, quote=True)}">бот Legal AI PRO</a>'
+        else:
+            bot_link = "бот Legal AI PRO"
+        return template.format(bot_link=bot_link)
 
     def _format_post(
         self,
@@ -152,18 +168,31 @@ class LLMNewsWriter:
         if not hashtags:
             hashtags = list(_DEFAULT_HASHTAGS)
 
-        steps_block = "\n".join(f"• {item}" for item in steps) if steps else "• Проверить применимость кейса к текущим процессам."
+        escaped_title = html.escape(title)
+        escaped_what_happened = html.escape(
+            what_happened or "В статье описан новый кейс внедрения AI с конкретными операционными деталями."
+        )
+        escaped_business_effect = html.escape(
+            business_effect or "Сценарий влияет на скорость процессов, стоимость операций и управляемость качества сервиса."
+        )
+        escaped_legal_risks = html.escape(
+            legal_risks or "Требуется проверить обработку данных, модель ответственности и регуляторные ограничения."
+        )
+        escaped_steps = [html.escape(item) for item in steps]
+        steps_block = "\n".join(f"• {item}" for item in escaped_steps) if escaped_steps else "• Проверить применимость кейса к текущим процессам."
         cta_line = self._cta_text(cta_type)
+        safe_article_url = html.escape(article_url, quote=True)
+        hashtags_line = " ".join(html.escape(tag) for tag in hashtags[:4])
 
         text = normalize_post_text(
-            f"{title}\n\n"
-            f"Что произошло\n{what_happened or 'В статье описан новый кейс внедрения AI с конкретными операционными деталями.'}\n\n"
-            f"Бизнес-эффект\n{business_effect or 'Сценарий влияет на скорость процессов, стоимость операций и управляемость качества сервиса.'}\n\n"
-            f"Юридические риски\n{legal_risks or 'Требуется проверить обработку данных, модель ответственности и регуляторные ограничения.'}\n\n"
-            f"Что делать\n{steps_block}\n\n"
-            f"Следующий шаг\n{cta_line}\n\n"
-            f"Источник: {article_url}\n"
-            f"{' '.join(hashtags[:4])}"
+            f"<b>{escaped_title}</b>\n\n"
+            f"<b>Что произошло</b>\n{escaped_what_happened}\n\n"
+            f"<b>Бизнес-эффект</b>\n{escaped_business_effect}\n\n"
+            f"<b>Юридические риски</b>\n{escaped_legal_risks}\n\n"
+            f"<b>Что делать</b>\n{steps_block}\n\n"
+            f"<b>Следующий шаг</b>\n{cta_line}\n\n"
+            f"<b>Источник</b>: <a href=\"{safe_article_url}\">оригинал статьи</a>\n"
+            f"{hashtags_line}"
         )
         return title, text, rubric
 
@@ -213,7 +242,7 @@ class LLMNewsWriter:
         cta_type: str = "soft",
         pillar: str = "implementation",
         negative_feedback_context: str = "",
-    ) -> dict[str, str]:
+    ) -> dict[str, str] | None:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         user_prompt = (
             f"Источник: {article.source_url}\n"
@@ -241,6 +270,16 @@ class LLMNewsWriter:
         raw = response.choices[0].message.content or ""
         try:
             data = self._extract_json(raw)
+            if data.get("is_relevant") is False:
+                logger.info(
+                    "llm_post_rejected_by_relevance_gate",
+                    extra={
+                        "article_url": article.article_url,
+                        "reason": str(data.get("reject_reason") or "")[:180],
+                        "format_type": format_type,
+                    },
+                )
+                return None
             title, text, rubric = self._format_post(
                 data,
                 article.article_url,

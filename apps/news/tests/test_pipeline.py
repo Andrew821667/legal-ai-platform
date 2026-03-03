@@ -8,6 +8,7 @@ from news.pipeline import (
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
+    is_specialized_candidate,
     normalize_rubric_to_pillar,
     parse_schedule_slots,
     select_rag_examples,
@@ -53,6 +54,30 @@ def test_choose_top_articles_filters_low_relevance() -> None:
     selected = choose_top_articles(articles, limit=2, now_utc=now)
     assert len(selected) == 1
     assert selected[0].article_url == "https://src/1"
+
+
+def test_specialized_filter_rejects_generic_ai_story() -> None:
+    now = datetime(2026, 3, 3, tzinfo=timezone.utc)
+    article = ArticleCandidate(
+        source_url="https://habr.com/ru/rss/news/?fl=ru",
+        article_url="https://habr.com/ru/news/roman-game",
+        title="ИИ расшифровал правила древней римской игры",
+        summary="Археологи использовали нейросеть для реконструкции правил настольной игры.",
+        published_at=now,
+    )
+    assert not is_specialized_candidate(article)
+
+
+def test_specialized_filter_rejects_ai_without_legal_context_from_tech_source() -> None:
+    now = datetime(2026, 3, 3, tzinfo=timezone.utc)
+    article = ArticleCandidate(
+        source_url="https://habr.com/ru/rss/news/?fl=ru",
+        article_url="https://habr.com/ru/news/store-bot",
+        title="Разработчик создал Telegram-бота для заказа продуктов через LLM",
+        summary="Сервис автоматизирует бытовой заказ продуктов и собирает корзину по команде пользователя.",
+        published_at=now,
+    )
+    assert not is_specialized_candidate(article)
 
 
 def test_choose_top_articles_limits_same_source() -> None:

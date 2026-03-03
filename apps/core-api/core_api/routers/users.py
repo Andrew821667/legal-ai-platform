@@ -26,7 +26,7 @@ def upsert_user(
 ) -> User:
     _ = identity
     if idempotency_key:
-        cached = cached_response(db, idempotency_key)
+        cached = cached_response(db, idempotency_key, namespace="users.upsert")
         if cached:
             cached_status, cached_body = cached
             return JSONResponse(status_code=cached_status, content=cached_body)
@@ -75,6 +75,7 @@ def upsert_user(
             idempotency_key,
             status.HTTP_200_OK,
             UserOut.model_validate(user).model_dump(mode="json"),
+            namespace="users.upsert",
         )
 
     return user
@@ -98,9 +99,10 @@ def list_users(
         query = query.where(User.consent_given.is_(False))
     if revoked_only:
         query = query.where(User.consent_revoked.is_(True))
-    query = query.order_by(func.coalesce(User.last_interaction, User.created_at).desc(), User.created_at.desc()).limit(
-        capped_limit
-    )
+    query = query.order_by(
+        func.coalesce(User.last_interaction, User.created_at).desc(),
+        User.created_at.desc(),
+    ).limit(capped_limit)
     return list(db.execute(query).scalars().all())
 
 

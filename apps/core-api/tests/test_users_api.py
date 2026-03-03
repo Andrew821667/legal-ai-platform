@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
@@ -44,11 +46,12 @@ def test_upsert_and_list_users() -> None:
     api_key_name = "pytest.users.read"
     raw_key = _create_api_key(Scope.bot, api_key_name)
     created_ids: list[str] = []
+    idempotency_key = f"user-upsert-1-{uuid4().hex}"
 
     try:
         created = client.post(
             "/api/v1/users",
-            headers={"X-API-Key": raw_key, "Idempotency-Key": "user-upsert-1"},
+            headers={"X-API-Key": raw_key, "Idempotency-Key": idempotency_key},
             json={
                 "telegram_id": 555001111,
                 "username": "core_user",

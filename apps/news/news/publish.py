@@ -96,18 +96,35 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
                 "chat_id": chat_id,
                 "photo": photo_value,
                 "caption": caption,
+                "parse_mode": "HTML",
             },
         )
         message_id = int(response.get("result", {}).get("message_id") or 0)
 
         if remainder:
             for part in _split_text_for_telegram(remainder):
-                _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+                _telegram_request(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": part,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                    },
+                )
         return message_id
 
     primary_message_id = 0
     for part in _split_text_for_telegram(normalized_text):
-        response = _telegram_request("sendMessage", {"chat_id": chat_id, "text": part})
+        response = _telegram_request(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": part,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
+        )
         if primary_message_id == 0:
             primary_message_id = int(response.get("result", {}).get("message_id") or 0)
     return primary_message_id

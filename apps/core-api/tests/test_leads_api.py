@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
@@ -156,11 +158,13 @@ def test_upsert_uses_legacy_lead_id_to_keep_separate_leads() -> None:
     api_key_name = "pytest.leads.legacy-id"
     raw_key = _create_api_key(Scope.bot, api_key_name)
     created_ids: list[str] = []
+    first_key = f"legacy-2001-{uuid4().hex}"
+    second_key = f"legacy-2002-{uuid4().hex}"
 
     try:
         first = client.post(
             "/api/v1/leads",
-            headers={"X-API-Key": raw_key, "Idempotency-Key": "legacy-2001"},
+            headers={"X-API-Key": raw_key, "Idempotency-Key": first_key},
             json={
                 "source": "telegram_bot",
                 "legacy_lead_id": 2001,
@@ -175,7 +179,7 @@ def test_upsert_uses_legacy_lead_id_to_keep_separate_leads() -> None:
 
         second = client.post(
             "/api/v1/leads",
-            headers={"X-API-Key": raw_key, "Idempotency-Key": "legacy-2002"},
+            headers={"X-API-Key": raw_key, "Idempotency-Key": second_key},
             json={
                 "source": "telegram_bot",
                 "legacy_lead_id": 2002,

@@ -24,7 +24,7 @@ def create_event(
 ) -> Event:
     _ = identity
     if idempotency_key:
-        cached = cached_response(db, idempotency_key)
+        cached = cached_response(db, idempotency_key, namespace="events.create")
         if cached:
             cached_status, cached_body = cached
             return JSONResponse(status_code=cached_status, content=cached_body)
@@ -42,6 +42,12 @@ def create_event(
     db.refresh(event)
 
     if idempotency_key:
-        store_response(db, idempotency_key, 200, EventOut.model_validate(event).model_dump(mode="json"))
+        store_response(
+            db,
+            idempotency_key,
+            200,
+            EventOut.model_validate(event).model_dump(mode="json"),
+            namespace="events.create",
+        )
 
     return event
