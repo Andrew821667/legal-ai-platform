@@ -38,6 +38,7 @@ _SYSTEM_PROMPT = """
    - внедрение / legal ops / кейс -> «Что это значит для юрфункции»;
    - инструмент / продукт -> «Что это значит для команд»;
    - рынок / вендоры / сделки / геополитика -> «Что это значит для рынка» или «На что смотреть дальше».
+10) Предпочитай русский юридический язык. Английские термины используй только там, где без них теряется точность (например AI Act, SLA, legal hold), и не перегружай ими текст.
 
 Верни СТРОГО JSON-объект (без markdown и пояснений) с полями:
 {
@@ -236,6 +237,28 @@ _GENERIC_LEGAL_PATTERNS = (
     "важно учитывать риски",
     "нужно проверить юридические аспекты",
 )
+_RUBRIC_LEGAL_TEMPLATE_HINTS = {
+    "privacy": (
+        "Если материал относится к privacy, юридический блок должен говорить про правовое основание обработки, "
+        "трансграничную передачу, локализацию, DPA/поручение обработки, права доступа к данным и режим работы с output."
+    ),
+    "contracts": (
+        "Если материал относится к contracts, юридический блок должен говорить про SLA, scope использования модели, "
+        "ограничения на output, распределение ответственности, indemnity, audit rights и риск vendor lock-in."
+    ),
+    "litigation": (
+        "Если материал относится к litigation, юридический блок должен говорить про explainability, admissibility, "
+        "chain of custody, legal hold, document review, human-in-the-loop и контроль качества доказательственной базы."
+    ),
+    "regulation": (
+        "Если материал относится к regulation, юридический блок должен говорить про применимость AI Act, privacy law, "
+        "классификацию риска, governance, логирование, внутренний контроль, санкционные и экспортные ограничения."
+    ),
+    "ai_law": (
+        "Если материал относится к ai_law, юридический блок должен говорить про права на output, обучение на данных, "
+        "IP и лицензии, automated decision-making, роль человека в принятии решения, explainability и enforceability."
+    ),
+}
 
 
 class LLMNewsWriter:
@@ -464,49 +487,129 @@ class LLMNewsWriter:
         return "На что смотреть дальше", html.escape(conclusion_or_effect or business_effect or html.unescape(steps_block))
 
     @staticmethod
-    def _infer_legal_focus_hint(article: ArticleCandidate, pillar: str) -> str:
+    def _infer_rubric_hint(article: ArticleCandidate, pillar: str) -> str:
         haystack = " ".join(
             part for part in (article.title or "", article.summary or "", article.article_url or "") if part
         ).lower()
 
+        if any(
+            marker in haystack
+            for marker in ("privacy", "gdpr", "персональн", "локализац", "трансгранич", "cross-border", "dpa")
+        ):
+            return "privacy"
+        if any(
+            marker in haystack
+            for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform", "procurement", "indemn")
+        ):
+            return "contracts"
+        if any(
+            marker in haystack
+            for marker in (
+                "litigation",
+                "суд",
+                "e-discovery",
+                "ediscovery",
+                "legal hold",
+                "document review",
+                "chain of custody",
+                "evidence",
+            )
+        ):
+            return "litigation"
+        if any(
+            marker in haystack
+            for marker in (
+                "ai act",
+                "регулирован",
+                "compliance",
+                "governance",
+                "sanction",
+                "санкц",
+                "экспорт",
+                "risk classification",
+            )
+        ):
+            return "regulation"
+        if any(
+            marker in haystack
+            for marker in (
+                "copyright",
+                "ip ",
+                "output",
+                "training data",
+                "foundation model",
+                "automated decision",
+                "bias",
+                "discrimination",
+                "explainability",
+            )
+        ):
+            return "ai_law"
+        if pillar == "market":
+            return "market"
+        if pillar in {"implementation", "case"}:
+            return "legal_ops"
+        return "market" if pillar == "tools" else "regulation"
+
+    @classmethod
+    def _rubric_template_hint(cls, rubric: str) -> str:
+        return _RUBRIC_LEGAL_TEMPLATE_HINTS.get(
+            rubric,
+            "Юридический блок должен быть предметным и привязанным к фактам статьи, а не общим перечнем рисков.",
+        )
+
+    @classmethod
+    def _infer_legal_focus_hint(cls, article: ArticleCandidate, pillar: str) -> str:
+        haystack = " ".join(
+            part for part in (article.title or "", article.summary or "", article.article_url or "") if part
+        ).lower()
+        inferred_rubric = cls._infer_rubric_hint(article, pillar)
         if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
             return (
                 "Сфокусируй юридический блок на персональных данных: правовое основание обработки, "
-                "трансграничную передачу, локализацию, права доступа к данным и договорный режим с вендором."
+                "трансграничную передачу, локализацию, права доступа к данным и договорный режим с вендором. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform")):
             return (
                 "Сфокусируй юридический блок на договорном контуре: SLA, ответственность поставщика, "
-                "ограничения по использованию output, конфиденциальность, audit rights и vendor lock-in."
+                "ограничения по использованию output, конфиденциальность, audit rights и vendor lock-in. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("litigation", "суд", "e-discovery", "ediscovery", "legal hold", "document review")):
             return (
                 "Сфокусируй юридический блок на спорах и доказуемости: explainability, chain of custody, "
-                "сохранность доказательств, legal hold и human-in-the-loop."
+                "сохранность доказательств, legal hold и human-in-the-loop. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("ai act", "регулирован", "compliance", "governance", "sanction", "санкц", "экспорт")):
             return (
                 "Сфокусируй юридический блок на регуляторике и governance: применимость AI Act / privacy law, "
-                "внутренний контроль, логирование, санкционные и экспортные ограничения, распределение ответственности."
+                "внутренний контроль, логирование, санкционные и экспортные ограничения, распределение ответственности. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar == "market":
             return (
                 "Сфокусируй третий блок на юридико-рыночных последствиях: vendor due diligence, режим закупки, "
-                "санкционные ограничения, устойчивость поставщика и contractual safeguards."
+                "санкционные ограничения, устойчивость поставщика и contractual safeguards. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar in {"implementation", "case"}:
             return (
                 "Сфокусируй юридический блок на практическом внедрении: контроль качества output, "
-                "процедуры проверки юристом, конфиденциальность и распределение ответственности."
+                "процедуры проверки юристом, конфиденциальность и распределение ответственности. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar == "tools":
             return (
                 "Сфокусируй юридический блок на выборе инструмента: режим доступа к данным, SLA, "
-                "права на output, аудит действий модели и ограничения использования."
+                "права на output, аудит действий модели и ограничения использования. "
+                + cls._rubric_template_hint(inferred_rubric)
             )
         return (
             "Юридический блок должен быть предметным: укажи конкретные правовые вопросы, "
-            "которые юристу придется проверить в связи с этой новостью."
+            "которые юристу придется проверить в связи с этой новостью. "
+            + cls._rubric_template_hint(inferred_rubric)
         )
 
     @staticmethod
@@ -524,6 +627,32 @@ class LLMNewsWriter:
         haystack = " ".join(
             part for part in (article.title or "", article.summary or "", article.article_url or "") if part
         ).lower()
+        inferred_rubric = rubric or cls._infer_rubric_hint(article, pillar)
+        if inferred_rubric == "privacy":
+            return (
+                "Юристу стоит проверить правовое основание обработки, трансграничную передачу, локализацию, "
+                "DPA с вендором, режим доступа к данным и ограничения на повторное использование output."
+            )
+        if inferred_rubric == "contracts":
+            return (
+                "Юристу стоит проверить SLA, scope допустимого использования модели, права на output, indemnity, "
+                "audit rights, распределение ответственности и риск vendor lock-in при смене поставщика."
+            )
+        if inferred_rubric == "litigation":
+            return (
+                "Юристу стоит оценить explainability модели, admissibility результата, chain of custody, "
+                "legal hold, полноту document review и обязательный human-in-the-loop в спорном контуре."
+            )
+        if inferred_rubric == "regulation":
+            return (
+                "Юристу стоит проверить применимость AI Act и privacy-требований, классификацию риска, "
+                "внутренний governance-контур, логирование, санкционные и экспортные ограничения."
+            )
+        if inferred_rubric == "ai_law":
+            return (
+                "Юристу стоит проверить права на output и training data, лицензионный режим модели, "
+                "границы automated decision-making, explainability, human review и enforceability решений."
+            )
         if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
             return (
                 "Юристу стоит проверить правовое основание обработки данных, трансграничную передачу, "
@@ -801,13 +930,16 @@ class LLMNewsWriter:
         negative_feedback_context: str = "",
     ) -> dict[str, str] | None:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
+        inferred_rubric = self._infer_rubric_hint(article, pillar)
         user_prompt = (
             f"Источник: {article.source_url}\n"
             f"URL статьи: {article.article_url}\n"
             f"Заголовок: {article.title}\n"
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
             f"Целевая смысловая корзина: {pillar}\n"
+            f"Предполагаемая рубрика: {inferred_rubric}\n"
             f"Приоритетный юридический угол: {self._infer_legal_focus_hint(article, pillar)}\n"
+            f"Шаблон юридического комментария для этой рубрики: {self._rubric_template_hint(inferred_rubric)}\n"
             f"{format_hint}\n"
             f"{_FORMAT_SHAPE_HINTS.get(format_type, '')}\n"
             f"CTA-уровень: {cta_type}\n\n"

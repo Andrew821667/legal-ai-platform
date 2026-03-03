@@ -112,6 +112,62 @@ def test_fallback_legal_commentary_for_contract_tooling_is_specific() -> None:
     assert "vendor lock-in" in lowered or "lock-in" in lowered
 
 
+def test_infer_rubric_hint_for_litigation_article() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/legal-hold-ai",
+        title="AI document review and legal hold in litigation",
+        summary="The article discusses AI document review, legal hold and chain of custody requirements.",
+        published_at=datetime.now(timezone.utc),
+    )
+    assert LLMNewsWriter._infer_rubric_hint(article, "case") == "litigation"
+
+
+def test_fallback_legal_commentary_for_regulation_article_is_specific() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/ai-act-governance",
+        title="AI Act governance and risk classification update",
+        summary="The article covers AI Act obligations, governance and logging duties for enterprise deployments.",
+        published_at=datetime.now(timezone.utc),
+    )
+    text = LLMNewsWriter._fallback_legal_commentary(article, "regulation", "regulation")
+    lowered = text.lower()
+    assert "ai act" in lowered
+    assert "логирован" in lowered
+    assert "санкцион" in lowered or "экспорт" in lowered or "классификац" in lowered
+
+
+def test_fallback_legal_commentary_for_ai_law_article_is_specific() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/output-copyright",
+        title="AI output copyright and automated decision making",
+        summary="The article discusses copyright in AI output, training data and automated decision making.",
+        published_at=datetime.now(timezone.utc),
+    )
+    text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "ai_law")
+    lowered = text.lower()
+    assert "output" in lowered
+    assert "training data" in lowered
+    assert "automated decision" in lowered
+
+
+def test_fallback_legal_commentary_for_litigation_article_is_specific() -> None:
+    article = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/ediscovery-ai",
+        title="AI in e-discovery and document review",
+        summary="The article discusses e-discovery, document review and explainability in litigation workflows.",
+        published_at=datetime.now(timezone.utc),
+    )
+    text = LLMNewsWriter._fallback_legal_commentary(article, "case", "litigation")
+    lowered = text.lower()
+    assert "chain of custody" in lowered
+    assert "legal hold" in lowered
+    assert "human-in-the-loop" in lowered
+
+
 def test_generic_legal_commentary_detection() -> None:
     assert LLMNewsWriter._looks_generic_legal_commentary("Есть риски, которые нужно учитывать.")
     assert not LLMNewsWriter._looks_generic_legal_commentary(
