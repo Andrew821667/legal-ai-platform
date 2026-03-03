@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo
 
 from telegram import (
     BotCommand,
+    InputMediaPhoto,
+    InputMediaVideo,
     InlineKeyboardButton as _PTBInlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton as _PTBKeyboardButton,
@@ -3093,22 +3095,52 @@ class NewsAdminBot:
             raise RuntimeError("TELEGRAM_CHANNEL_ID or TELEGRAM_CHANNEL_USERNAME is required")
 
         if media_urls:
-            photo_value = media_urls[0]
             caption = (text or "")[:1020]
             remainder = (text or "")[1020:].strip()
-            if photo_value.startswith("tgphoto://"):
-                payload = photo_value.replace("tgphoto://", "", 1)
-                message = await context.bot.send_photo(chat_id=chat_id, photo=payload, caption=caption, parse_mode="HTML")
-            elif photo_value.startswith("tgvideo://"):
-                payload = photo_value.replace("tgvideo://", "", 1)
-                message = await context.bot.send_video(chat_id=chat_id, video=payload, caption=caption, parse_mode="HTML")
-            elif photo_value.startswith("tgdocument://"):
-                payload = photo_value.replace("tgdocument://", "", 1)
-                message = await context.bot.send_document(chat_id=chat_id, document=payload, caption=caption, parse_mode="HTML")
+
+            def _resolve_media_item(media: str) -> tuple[str, str]:
+                if media.startswith("tgphoto://"):
+                    return "photo", media.replace("tgphoto://", "", 1)
+                if media.startswith("tgvideo://"):
+                    return "video", media.replace("tgvideo://", "", 1)
+                if media.startswith("tgdocument://"):
+                    return "document", media.replace("tgdocument://", "", 1)
+                return "photo", media.replace("tg://", "", 1) if media.startswith("tg://") else media
+
+            resolved = [_resolve_media_item(item) for item in media_urls if item]
+            album_eligible = len(resolved) > 1 and all(kind in {"photo", "video"} for kind, _ in resolved)
+
+            if album_eligible:
+                media_group: list[Any] = []
+                for index, (kind, payload) in enumerate(resolved[:10]):
+                    kwargs: dict[str, Any] = {}
+                    if index == 0 and caption:
+                        kwargs["caption"] = caption
+                        kwargs["parse_mode"] = "HTML"
+                    if kind == "photo":
+                        media_group.append(InputMediaPhoto(media=payload, **kwargs))
+                    else:
+                        media_group.append(InputMediaVideo(media=payload, **kwargs))
+                messages = await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+                message = messages[0]
             else:
-                if photo_value.startswith("tg://"):
-                    photo_value = photo_value.replace("tg://", "", 1)
-                message = await context.bot.send_photo(chat_id=chat_id, photo=photo_value, caption=caption, parse_mode="HTML")
+                message = None
+                for index, (kind, payload) in enumerate(resolved):
+                    kwargs: dict[str, Any] = {}
+                    if index == 0 and caption:
+                        kwargs["caption"] = caption
+                        kwargs["parse_mode"] = "HTML"
+                    if kind == "photo":
+                        sent = await context.bot.send_photo(chat_id=chat_id, photo=payload, **kwargs)
+                    elif kind == "video":
+                        sent = await context.bot.send_video(chat_id=chat_id, video=payload, **kwargs)
+                    else:
+                        sent = await context.bot.send_document(chat_id=chat_id, document=payload, **kwargs)
+                    if message is None:
+                        message = sent
+                if message is None:
+                    raise RuntimeError("Не удалось отправить медиа")
+
             for part in _split_text_for_telegram(remainder):
                 await context.bot.send_message(chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True)
             return int(message.message_id)
