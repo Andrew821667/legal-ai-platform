@@ -197,6 +197,11 @@ _LEGAL_MARKERS = (
     "court",
     "суд",
     "claims",
+    "litigation",
+    "discovery",
+    "e-discovery",
+    "document review",
+    "legal hold",
 )
 _OPS_MARKERS = (
     "автоматиз",
@@ -211,6 +216,14 @@ _OPS_MARKERS = (
     "knowledge base",
     "поиск по документ",
     "контракт",
+    "document review",
+    "redlining",
+    "legal hold",
+    "e-discovery",
+    "ediscovery",
+    "agentic",
+    "ai agent",
+    "agent",
 )
 _GENERATION_OPS_MARKERS = (
     "автоматиз",
@@ -223,6 +236,13 @@ _GENERATION_OPS_MARKERS = (
     "triage",
     "поиск по документ",
     "контракт",
+    "document review",
+    "redlining",
+    "legal hold",
+    "e-discovery",
+    "ediscovery",
+    "agentic",
+    "ai agent",
 )
 _MARKET_MARKERS = (
     "legaltech",
@@ -273,6 +293,38 @@ _OFFTOPIC_MARKERS = (
 )
 _LEGAL_DOMAINS = {"pravo.ru", "garant.ru", "consultant.ru"}
 _AI_TECH_DOMAINS = {"habr.com", "vc.ru"}
+_SPECIFICITY_MARKERS = (
+    "ai act",
+    "gdpr",
+    "openai",
+    "deepseek",
+    "anthropic",
+    "google ai",
+    "персональн",
+    "трансгранич",
+    "локализац",
+    "конфиденциаль",
+    "коммерческ",
+    "договор",
+    "sla",
+    "indemn",
+    "ответствен",
+    "лиценз",
+    "интеллектуальн",
+    "privacy",
+    "compliance",
+    "governance",
+    "аудит",
+    "логирован",
+    "human-in-the-loop",
+    "document review",
+    "e-discovery",
+    "legal hold",
+    "agentic",
+    "ai agent",
+    "gc office",
+    "in-house legal",
+)
 
 
 @dataclass(slots=True)
@@ -493,6 +545,7 @@ def article_score(
     article: ArticleCandidate,
     now_utc: datetime,
     priority_domains: set[str] | None = None,
+    source_priority_weights: dict[str, float] | None = None,
 ) -> float:
     base = keyword_score(f"{article.title}\n{article.summary}")
     specialization = specialized_relevance_score(article)
@@ -517,8 +570,21 @@ def article_score(
         if domain in priority_domains:
             domain_bonus = 0.8
 
+    source_priority_bonus = 0.0
+    if source_priority_weights:
+        source_url_key = canonicalize_url(article.source_url)
+        article_domain = extract_domain(article.article_url)
+        source_domain = extract_domain(article.source_url)
+        source_weight = source_priority_weights.get(source_url_key)
+        if source_weight is None and source_domain:
+            source_weight = source_priority_weights.get(source_domain)
+        if source_weight is None and article_domain:
+            source_weight = source_priority_weights.get(article_domain)
+        if source_weight is not None:
+            source_priority_bonus = max(-1.5, min(2.0, source_weight - 1.0))
+
     # Минимальный порог, чтобы не выбирать нерелевантные статьи.
-    return base + specialization + freshness_bonus + summary_bonus + summary_penalty + domain_bonus
+    return base + specialization + freshness_bonus + summary_bonus + summary_penalty + domain_bonus + source_priority_bonus
 
 
 def choose_top_articles(
@@ -526,6 +592,7 @@ def choose_top_articles(
     limit: int,
     now_utc: datetime,
     priority_domains: set[str] | None = None,
+    source_priority_weights: dict[str, float] | None = None,
     max_per_source: int = 2,
     recent_pillar_counts: dict[str, int] | None = None,
     target_pillar_shares: dict[str, float] | None = None,
@@ -535,7 +602,12 @@ def choose_top_articles(
         if not is_specialized_candidate(candidate):
             continue
         base = keyword_score(f"{candidate.title}\n{candidate.summary}") + specialized_relevance_score(candidate)
-        total = article_score(candidate, now_utc, priority_domains=priority_domains)
+        total = article_score(
+            candidate,
+            now_utc,
+            priority_domains=priority_domains,
+            source_priority_weights=source_priority_weights,
+        )
         pillar = pillar_for_article(candidate)
         scored.append((candidate, total, base, pillar))
     scored.sort(key=lambda x: x[1], reverse=True)

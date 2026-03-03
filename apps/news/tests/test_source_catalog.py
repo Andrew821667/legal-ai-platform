@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from news.settings import Settings
-from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
+from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog, source_priority_map, telegram_channel_priority_map
 
 
 def test_source_catalog_marks_telegram_unconfigured_by_default() -> None:
@@ -44,3 +44,33 @@ def test_source_catalog_includes_extended_google_news_buckets() -> None:
     assert "google_news_regulation_ru" in catalog
     assert "google_news_regulation_en" in catalog
     assert "google_news_market_en" in catalog
+    assert "google_news_privacy_ru" in catalog
+    assert "google_news_privacy_en" in catalog
+    assert "google_news_contracts_ru" in catalog
+    assert "google_news_contracts_en" in catalog
+    assert "google_news_legal_depts_en" in catalog
+    assert "google_news_ediscovery_en" in catalog
+    assert "google_news_agents_en" in catalog
+    assert "google_news_vendors_en" in catalog
+    assert "vedomosti_technology" in catalog
+    assert "vedomosti_regulations" in catalog
+    assert "vedomosti_security_law" in catalog
+
+
+def test_source_catalog_marks_garant_unintegrated() -> None:
+    settings = Settings(news_source_keys="garant", news_source_urls="")
+    catalog = source_catalog(settings)
+    assert catalog["garant"].integrated is False
+
+
+def test_source_priority_map_prefers_legal_sources() -> None:
+    settings = Settings(news_source_keys="pravo_ru,garant,lenta", news_source_urls="")
+    priorities = source_priority_map(settings)
+    assert priorities["pravo.ru"] > priorities["lenta.ru"]
+    assert priorities["garant.ru"] > priorities["lenta.ru"]
+
+
+def test_telegram_channel_priority_map_prefers_legal_channels() -> None:
+    settings = Settings()
+    priorities = telegram_channel_priority_map(settings, ["@allthingslegal", "@ai_newz"])
+    assert priorities["https://t.me/allthingslegal"] > priorities["https://t.me/ai_newz"]

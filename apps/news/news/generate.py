@@ -28,7 +28,13 @@ from news.pipeline import (
 from news.rag import PostedContentRAG
 from news.rss_fetcher import fetch_rss_articles
 from news.settings import settings
-from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
+from news.source_catalog import (
+    active_source_specs,
+    resolve_source_urls,
+    source_catalog,
+    source_priority_map,
+    telegram_channel_priority_map,
+)
 from news.strategy import build_publish_plan
 from news.telegram_ingest import fetch_telegram_articles
 
@@ -317,6 +323,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     source_urls = resolve_source_urls(settings, enabled_overrides=_source_enabled_map(controls))
     if not source_urls:
         raise RuntimeError("NEWS_SOURCE_URLS is empty; generator cannot run")
+    source_priorities = source_priority_map(settings, enabled_overrides=_source_enabled_map(controls))
 
     history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
         core_client
@@ -327,10 +334,12 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     )
 
     articles = fetch_rss_articles(source_urls)
-    telegram_articles = fetch_telegram_articles(_enabled_telegram_channels(controls))
+    enabled_channels = _enabled_telegram_channels(controls)
+    telegram_articles = fetch_telegram_articles(enabled_channels)
     if telegram_articles:
         articles.extend(telegram_articles)
         logger.info("telegram_articles_appended", extra={"count": len(telegram_articles)})
+        source_priorities.update(telegram_channel_priority_map(settings, enabled_channels))
     priority_domains = _parse_priority_domains()
     selection_limit = min(200, max(80, top_limit * 16))
     selected_articles = choose_top_articles(
@@ -338,6 +347,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         limit=selection_limit,
         now_utc=now_utc,
         priority_domains=priority_domains,
+        source_priority_weights=source_priorities,
         max_per_source=settings.news_max_per_source,
         recent_pillar_counts=recent_pillar_counts,
         target_pillar_shares=default_pillar_targets(),

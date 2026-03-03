@@ -109,6 +109,36 @@ def test_choose_top_articles_limits_same_source() -> None:
     assert "source-b.com" in domains
 
 
+def test_choose_top_articles_prefers_higher_priority_source() -> None:
+    now = datetime(2026, 2, 25, tzinfo=timezone.utc)
+    candidate_a = ArticleCandidate(
+        source_url="https://source-a.com/rss",
+        article_url="https://source-a.com/1",
+        title="AI в договорной работе",
+        summary="Автоматизация redline, юридические риски, workflow и legal ops.",
+        published_at=now,
+    )
+    candidate_b = ArticleCandidate(
+        source_url="https://source-b.com/rss",
+        article_url="https://source-b.com/1",
+        title="AI в договорной работе",
+        summary="Автоматизация redline, юридические риски, workflow и legal ops.",
+        published_at=now,
+    )
+
+    selected = choose_top_articles(
+        [candidate_b, candidate_a],
+        limit=1,
+        now_utc=now,
+        source_priority_weights={
+            "https://source-a.com/rss": 1.8,
+            "https://source-b.com/rss": 0.8,
+        },
+    )
+    assert len(selected) == 1
+    assert selected[0].article_url == "https://source-a.com/1"
+
+
 def test_select_rag_examples_returns_related_texts() -> None:
     examples = [
         RAGExample(title="AI комплаенс", text="Риски персональных данных и регуляторика", rubric="compliance"),

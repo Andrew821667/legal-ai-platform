@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     google_news_query_regulation_ru: str = '("регулирование ИИ" OR "закон об ИИ" OR "ответственность за ИИ" OR "персональные данные ИИ" OR "AI compliance")'
     google_news_query_regulation_en: str = '("AI regulation" OR "AI Act" OR "AI compliance" OR "AI governance" OR "AI privacy law")'
     google_news_query_market_en: str = '("legal tech" OR legaltech OR "legal AI" OR "AI contract review" OR "AI compliance platform")'
+    google_news_query_privacy_ru: str = '("ИИ и персональные данные" OR "AI и персональные данные" OR "трансграничная передача ИИ" OR "privacy AI" OR "AI governance privacy")'
+    google_news_query_privacy_en: str = '("AI privacy" OR "AI data protection" OR "AI governance privacy" OR "generative AI privacy" OR "AI cross-border data")'
+    google_news_query_contracts_ru: str = '("AI договоры" OR "автоматизация договорной работы" OR "contract review AI" OR "AI redlining" OR "договорный ИИ")'
+    google_news_query_contracts_en: str = '("AI contract review" OR "contract automation AI" OR "legal AI contracts" OR "redlining AI" OR "contract lifecycle AI")'
+    google_news_query_legal_depts_en: str = '("AI legal department" OR "GC AI" OR "in-house legal AI" OR "legal operations AI" OR "corporate legal automation")'
+    google_news_query_ediscovery_en: str = '("e-discovery AI" OR "document review AI" OR "AI for eDiscovery" OR "litigation AI" OR "legal hold AI")'
+    google_news_query_agents_en: str = '("agentic legal AI" OR "legal AI agent" OR "AI agent for lawyers" OR "agentic AI contract review" OR "AI workflow legal")'
+    google_news_query_vendors_en: str = '("legal AI platform" OR "AI legal assistant" OR "contract review platform" OR "AI compliance platform" OR "legal tech product")'
     google_news_lang_ru: str = "ru"
     google_news_lang_en: str = "en"
     google_news_region_ru: str = "RU"

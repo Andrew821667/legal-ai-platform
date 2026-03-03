@@ -145,7 +145,7 @@ _AUTO_FOOTER_MODE_BY_FORMAT = {
     "deep": "soft",
     "digest": "soft",
     "daily": "none",
-    "weekly_review": "soft",
+    "weekly_review": "none",
     "longread": "soft",
     "humor": "none",
 }
@@ -182,6 +182,27 @@ _INCOMPLETE_TRAILING_WORDS = (
     "когда",
     "для",
     "через",
+)
+_QUALITY_SPECIFICITY_MARKERS = (
+    "ai act",
+    "gdpr",
+    "openai",
+    "deepseek",
+    "anthropic",
+    "персональн",
+    "трансгранич",
+    "локализац",
+    "конфиденциаль",
+    "договор",
+    "ответствен",
+    "лиценз",
+    "privacy",
+    "compliance",
+    "governance",
+    "логирован",
+    "аудит",
+    "человек",
+    "human-in-the-loop",
 )
 
 
@@ -326,6 +347,13 @@ class LLMNewsWriter:
             return False
         return True
 
+    @staticmethod
+    def _has_specificity_signal(text: str) -> bool:
+        normalized = html.unescape(re.sub(r"<[^>]+>", "", text or "")).lower()
+        if re.search(r"\d", normalized):
+            return True
+        return any(marker in normalized for marker in _QUALITY_SPECIFICITY_MARKERS)
+
     def _format_post(
         self,
         data: dict[str, Any],
@@ -469,8 +497,7 @@ class LLMNewsWriter:
         for marker in required_markers:
             if marker not in normalized:
                 return False
-        # Минимум один маркер конкретики (число/дата/процент)
-        if not re.search(r"\d", normalized):
+        if not LLMNewsWriter._has_specificity_signal(normalized):
             return False
         if len(normalized) >= 3980:
             return False

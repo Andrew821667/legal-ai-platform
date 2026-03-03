@@ -14,6 +14,19 @@ class SourceSpec:
     url: str | None = None
     domain: str | None = None
     integrated: bool = True
+    priority: float = 1.0
+
+
+_TELEGRAM_CHANNEL_PRIORITIES: dict[str, float] = {
+    "allthingslegal": 1.9,
+    "legal_tech": 1.8,
+    "law_gpt": 1.7,
+    "openai_ru": 1.1,
+    "ai_newz": 0.8,
+    "anthropicai": 0.7,
+    "googleai": 0.7,
+    "ai_machinelearning_big_data": 0.7,
+}
 
 
 def build_google_news_rss_url(query: str, lang: str, region: str) -> str:
@@ -92,6 +105,78 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         getattr(settings, "google_news_region_en", "US"),
     )
+    google_privacy_ru = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_privacy_ru",
+            '("ИИ и персональные данные" OR "AI и персональные данные" OR "трансграничная передача ИИ" OR "privacy AI" OR "AI governance privacy")',
+        ),
+        getattr(settings, "google_news_lang_ru", "ru"),
+        getattr(settings, "google_news_region_ru", "RU"),
+    )
+    google_privacy_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_privacy_en",
+            '("AI privacy" OR "AI data protection" OR "AI governance privacy" OR "generative AI privacy" OR "AI cross-border data")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_contracts_ru = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_contracts_ru",
+            '("AI договоры" OR "автоматизация договорной работы" OR "contract review AI" OR "AI redlining" OR "договорный ИИ")',
+        ),
+        getattr(settings, "google_news_lang_ru", "ru"),
+        getattr(settings, "google_news_region_ru", "RU"),
+    )
+    google_contracts_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_contracts_en",
+            '("AI contract review" OR "contract automation AI" OR "legal AI contracts" OR "redlining AI" OR "contract lifecycle AI")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_legal_depts_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_depts_en",
+            '("AI legal department" OR "GC AI" OR "in-house legal AI" OR "legal operations AI" OR "corporate legal automation")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_ediscovery_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ediscovery_en",
+            '("e-discovery AI" OR "document review AI" OR "AI for eDiscovery" OR "litigation AI" OR "legal hold AI")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_agents_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_agents_en",
+            '("agentic legal AI" OR "legal AI agent" OR "AI agent for lawyers" OR "agentic AI contract review" OR "AI workflow legal")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_vendors_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_vendors_en",
+            '("legal AI platform" OR "AI legal assistant" OR "contract review platform" OR "AI compliance platform" OR "legal tech product")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
     return {
         "google_news_ru": SourceSpec(
             key="google_news_ru",
@@ -100,6 +185,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по русскоязычным темам AI в праве и автоматизации юрфункции",
             url=google_ru,
             domain="news.google.com",
+            priority=1.35,
         ),
         "google_news_en": SourceSpec(
             key="google_news_en",
@@ -108,6 +194,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по англоязычным темам legal AI и legal ops",
             url=google_en,
             domain="news.google.com",
+            priority=1.35,
         ),
         "google_news_ops_ru": SourceSpec(
             key="google_news_ops_ru",
@@ -116,6 +203,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по русскоязычным сценариям AI в юротделе, договорной работе и документообороте",
             url=google_ops_ru,
             domain="news.google.com",
+            priority=1.55,
         ),
         "google_news_ops_en": SourceSpec(
             key="google_news_ops_en",
@@ -124,6 +212,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по legal operations, contract automation и AI для юрфункции",
             url=google_ops_en,
             domain="news.google.com",
+            priority=1.55,
         ),
         "google_news_regulation_ru": SourceSpec(
             key="google_news_regulation_ru",
@@ -132,6 +221,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по регулированию ИИ, ответственности и данным на русском языке",
             url=google_regulation_ru,
             domain="news.google.com",
+            priority=1.6,
         ),
         "google_news_regulation_en": SourceSpec(
             key="google_news_regulation_en",
@@ -140,6 +230,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по AI regulation, AI Act, governance, privacy law",
             url=google_regulation_en,
             domain="news.google.com",
+            priority=1.6,
         ),
         "google_news_market_en": SourceSpec(
             key="google_news_market_en",
@@ -148,6 +239,79 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Поисковый RSS по рынку legal AI, legaltech и продуктовым AI-решениям для юристов",
             url=google_market_en,
             domain="news.google.com",
+            priority=1.3,
+        ),
+        "google_news_privacy_ru": SourceSpec(
+            key="google_news_privacy_ru",
+            name="Google News AI Privacy RU",
+            kind="search_rss",
+            note="Поисковый RSS по AI, персональным данным, трансграничной передаче и privacy на русском языке",
+            url=google_privacy_ru,
+            domain="news.google.com",
+            priority=1.65,
+        ),
+        "google_news_privacy_en": SourceSpec(
+            key="google_news_privacy_en",
+            name="Google News AI Privacy EN",
+            kind="search_rss",
+            note="Поисковый RSS по AI privacy, data protection, governance и cross-border data",
+            url=google_privacy_en,
+            domain="news.google.com",
+            priority=1.65,
+        ),
+        "google_news_contracts_ru": SourceSpec(
+            key="google_news_contracts_ru",
+            name="Google News AI Contracts RU",
+            kind="search_rss",
+            note="Поисковый RSS по AI в договорной работе, review, redline и контрактным процессам",
+            url=google_contracts_ru,
+            domain="news.google.com",
+            priority=1.7,
+        ),
+        "google_news_contracts_en": SourceSpec(
+            key="google_news_contracts_en",
+            name="Google News AI Contracts EN",
+            kind="search_rss",
+            note="Поисковый RSS по contract automation, contract review и contract lifecycle AI",
+            url=google_contracts_en,
+            domain="news.google.com",
+            priority=1.7,
+        ),
+        "google_news_legal_depts_en": SourceSpec(
+            key="google_news_legal_depts_en",
+            name="Google News In-House Legal AI EN",
+            kind="search_rss",
+            note="Поисковый RSS по AI для инхаус-команд, GC office и автоматизации корпоративной юрфункции",
+            url=google_legal_depts_en,
+            domain="news.google.com",
+            priority=1.75,
+        ),
+        "google_news_ediscovery_en": SourceSpec(
+            key="google_news_ediscovery_en",
+            name="Google News eDiscovery AI EN",
+            kind="search_rss",
+            note="Поисковый RSS по eDiscovery, document review, litigation AI и legal hold automation",
+            url=google_ediscovery_en,
+            domain="news.google.com",
+            priority=1.6,
+        ),
+        "google_news_agents_en": SourceSpec(
+            key="google_news_agents_en",
+            name="Google News Agentic Legal AI EN",
+            kind="search_rss",
+            note="Поисковый RSS по agentic legal AI, AI agents для юристов и AI workflow для юрфункции",
+            url=google_agents_en,
+            domain="news.google.com",
+            priority=1.5,
+        ),
+        "google_news_vendors_en": SourceSpec(
+            key="google_news_vendors_en",
+            name="Google News Legal AI Vendors EN",
+            kind="search_rss",
+            note="Поисковый RSS по продуктам, платформам и вендорам в сегменте legal AI и legaltech",
+            url=google_vendors_en,
+            domain="news.google.com",
+            priority=1.35,
         ),
         "pravo_ru": SourceSpec(
             key="pravo_ru",
@@ -156,14 +320,47 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Юррынок, практика, судебка, legal ops",
             url="https://www.pravo.ru/rss/",
             domain="pravo.ru",
+            priority=1.8,
         ),
         "garant": SourceSpec(
             key="garant",
             name="Гарант",
             kind="rss",
-            note="Регуляторика, изменения законодательства, правовые обзоры",
+            note="Официальный источник, но прямой RSS сейчас закрыт DDoS-Guard и нестабилен для автоматического сбора",
             url="https://www.garant.ru/rss/news/",
             domain="garant.ru",
+            priority=1.8,
+            integrated=False,
+        ),
+        "vedomosti_technology": SourceSpec(
+            key="vedomosti_technology",
+            name="Ведомости.Технологии",
+            kind="rss",
+            note="Резервный источник: официальный RSS Ведомостей, но в текущей среде нестабилен по DNS и не включен в активный сбор",
+            url="https://www.vedomosti.ru/rss/rubric/technology",
+            domain="vedomosti.ru",
+            priority=1.15,
+            integrated=False,
+        ),
+        "vedomosti_regulations": SourceSpec(
+            key="vedomosti_regulations",
+            name="Ведомости.Правила",
+            kind="rss",
+            note="Резервный источник: официальный RSS Ведомостей по регулированию, но в текущей среде нестабилен по DNS и не включен в активный сбор",
+            url="https://www.vedomosti.ru/rss/rubric/economics/regulations",
+            domain="vedomosti.ru",
+            priority=1.25,
+            integrated=False,
+        ),
+        "vedomosti_security_law": SourceSpec(
+            key="vedomosti_security_law",
+            name="Ведомости.Безопасность и право",
+            kind="rss",
+            note="Резервный источник: официальный RSS Ведомостей по праву и безопасности, но в текущей среде нестабилен по DNS и не включен в активный сбор",
+            url="https://www.vedomosti.ru/rss/rubric/politics/security_law",
+            domain="vedomosti.ru",
+            priority=1.3,
+            integrated=False,
         ),
         "habr_news": SourceSpec(
             key="habr_news",
@@ -172,6 +369,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="AI и автоматизация, только через жесткий topical filter",
             url="https://habr.com/ru/rss/news/?fl=ru",
             domain="habr.com",
+            priority=1.0,
         ),
         "habr_hubs": SourceSpec(
             key="habr_hubs",
@@ -180,6 +378,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Технические и продуктовые материалы, только через жесткий topical filter",
             url="https://habr.com/ru/rss/hubs/",
             domain="habr.com",
+            priority=0.95,
         ),
         "vc": SourceSpec(
             key="vc",
@@ -188,6 +387,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Enterprise AI, продукты и legal tech, только через topical filter",
             url="https://vc.ru/rss/all",
             domain="vc.ru",
+            priority=1.0,
         ),
         "tass": SourceSpec(
             key="tass",
@@ -196,6 +396,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Общий новостной поток, допускается только через topical/legal filter",
             url="https://tass.ru/rss/v2.xml",
             domain="tass.ru",
+            priority=0.85,
         ),
         "lenta": SourceSpec(
             key="lenta",
@@ -204,6 +405,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Общий новостной поток, используется только через topical/legal filter",
             url="https://lenta.ru/rss/news",
             domain="lenta.ru",
+            priority=0.7,
         ),
         "interfax": SourceSpec(
             key="interfax",
@@ -212,6 +414,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Технологии и наука, только через topical/legal filter",
             url="https://www.interfax.ru/rss.asp",
             domain="interfax.ru",
+            priority=0.95,
         ),
         "telegram_channels": SourceSpec(
             key="telegram_channels",
@@ -223,6 +426,7 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
                 else "Источник поддержан кодом, но требует TELEGRAM_API_ID / TELEGRAM_API_HASH / TELEGRAM_CHANNELS / session"
             ),
             integrated=telegram_ready,
+            priority=1.3,
         ),
         "perplexity_ru": SourceSpec(
             key="perplexity_ru",
@@ -258,8 +462,15 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_regulation_ru",
         "google_news_regulation_en",
         "google_news_market_en",
+        "google_news_privacy_ru",
+        "google_news_privacy_en",
+        "google_news_contracts_ru",
+        "google_news_contracts_en",
+        "google_news_legal_depts_en",
+        "google_news_ediscovery_en",
+        "google_news_agents_en",
+        "google_news_vendors_en",
         "pravo_ru",
-        "garant",
         "habr_news",
         "habr_hubs",
         "vc",
@@ -304,8 +515,29 @@ def active_source_specs(settings: Any, enabled_overrides: dict[str, bool] | None
                     note="Источник задан URL напрямую",
                     url=item,
                     domain=None,
+                    priority=1.0,
                 )
             )
             continue
         specs.append(spec)
     return specs
+
+
+def source_priority_map(settings: Any, enabled_overrides: dict[str, bool] | None = None) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for spec in active_source_specs(settings, enabled_overrides=enabled_overrides):
+        if spec.url:
+            result[spec.url.strip()] = float(spec.priority)
+        if spec.domain:
+            result[spec.domain.strip().lower()] = float(spec.priority)
+    return result
+
+
+def telegram_channel_priority_map(settings: Any, channels: list[str]) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for raw_channel in channels:
+        slug = raw_channel.strip().lstrip("@").lower()
+        if not slug:
+            continue
+        result[f"https://t.me/{slug}"] = _TELEGRAM_CHANNEL_PRIORITIES.get(slug, 1.0)
+    return result
