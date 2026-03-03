@@ -25,6 +25,34 @@ services:
     memswap_limit: 1g
     restart: unless-stopped
 
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    container_name: legal-ai-web
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
+      TZ: ${TZ:-Europe/Moscow}
+    depends_on:
+      core-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    mem_limit: 384m
+    memswap_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   core-api:
     image: ${CORE_API_IMAGE:-ghcr.io/andrew821667/legal-ai-core-api:latest}
     container_name: legal-ai-core-api
@@ -196,6 +224,8 @@ services:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     depends_on:
+      web:
+        condition: service_healthy
       core-api:
         condition: service_healthy
     mem_limit: 128m

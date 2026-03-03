@@ -19,7 +19,7 @@ curl http://localhost:8000/health
 make prod
 ```
 Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-publish`,
-`news-admin-bot`, `news-reader-bot`, `caddy`.
+`news-admin-bot`, `news-reader-bot`, `web`, `caddy`.
 3. Применить миграции и создать первый admin-key:
 ```bash
 docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
@@ -32,10 +32,13 @@ make deploy
 ```
 Скрипт:
 - сначала тянет свежие image;
+- поднимает `postgres`, если он не запущен;
 - ждёт готовность Postgres,
 - применяет миграции уже свежим образом `core-api`,
 - идемпотентно проверяет admin key,
-- перезапускает только изменившиеся сервисы.
+- перезапускает image-based сервисы,
+- пересобирает build-based сервисы (`web`, `news-*`, `news-reader-bot`),
+- затем перезапускает `caddy`.
 
 Критичное правило для миграций `core-api`:
 - если менялись Alembic migration, модели `core-api` или контракты `users/leads`, сначала нужно обновить `CORE_API_IMAGE`;
@@ -60,6 +63,11 @@ docker compose -f infra/compose/docker-compose.prod.yml logs --tail=50 lead-bot
 В логах не должно быть:
 - `JobQueue is not available`
 
+Критичное правило для `web` и `news`:
+- `web`, `news-generate`, `news-publish`, `news-admin-bot`, `news-reader-bot` в production compose собираются из текущего checkout на сервере;
+- поэтому после `git pull` нужен именно `docker compose up -d --build ...`, а не только `docker compose pull`;
+- если ограничиться только `pull`, код этих сервисов на VPS не обновится.
+
 Отдельный deploy-порядок для миграции `lead-bot legacy -> core-api`:
 1. Обновить образы:
 ```bash
@@ -77,13 +85,19 @@ docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps core-api
 ```bash
 curl -sf http://localhost:8000/health
 ```
-5. Только после этого перезапустить `lead-bot`:
+5. Только после этого перезапустить `web` и `lead-bot`:
 ```bash
+docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps web
 docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps lead-bot
 ```
-6. Проверить логи:
+6. Затем пересобрать и поднять news-сервисы:
 ```bash
-docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api lead-bot
+docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps news-generate news-publish news-admin-bot news-reader-bot
+docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps caddy
+```
+7. Проверить логи:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api web lead-bot news-generate news-publish news-admin-bot news-reader-bot caddy
 ```
 
 Что проверить после migration `users/leads`:
