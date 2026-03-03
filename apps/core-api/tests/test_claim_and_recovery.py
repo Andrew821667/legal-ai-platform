@@ -96,7 +96,7 @@ def test_claim_scheduled_posts_marks_publishing() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
-def test_claim_failed_scheduled_post_after_cooldown() -> None:
+def test_claim_does_not_pick_failed_scheduled_post() -> None:
     client = TestClient(app)
     api_key_name = "pytest.news.claim.failed"
     raw_key = _create_api_key(Scope.news, api_key_name)
@@ -124,11 +124,7 @@ def test_claim_failed_scheduled_post_after_cooldown() -> None:
             "/api/v1/scheduled-posts/claim?limit=1",
             headers={"X-API-Key": raw_key},
         )
-        assert response.status_code == 200
-        payload = response.json()
-        assert len(payload) == 1
-        assert payload[0]["id"] == str(post_id)
-        assert payload[0]["status"] == ScheduledPostStatus.publishing.value
+        assert response.status_code == 204
     finally:
         if post_id is not None:
             db = SessionLocal()

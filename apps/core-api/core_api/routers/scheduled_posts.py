@@ -4,13 +4,12 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ActorType, PostFeedbackSignal, ScheduledPost, ScheduledPostStatus, Scope
 from core_api.post_feedback import apply_feedback_signal
@@ -89,20 +88,12 @@ def claim_scheduled_posts(
     db: Session = Depends(get_db),
 ) -> list[ScheduledPost] | Response:
     now = datetime.now(timezone.utc)
-    retry_failed_after = now - timedelta(minutes=get_settings().news_retry_failed_after_minutes)
     stmt = (
         select(ScheduledPost)
         .where(
-            or_(
-                and_(
-                    ScheduledPost.status == ScheduledPostStatus.scheduled,
-                    ScheduledPost.publish_at <= now,
-                ),
-                and_(
-                    ScheduledPost.status == ScheduledPostStatus.failed,
-                    ScheduledPost.attempts < ScheduledPost.max_attempts,
-                    ScheduledPost.updated_at <= retry_failed_after,
-                ),
+            and_(
+                ScheduledPost.status == ScheduledPostStatus.scheduled,
+                ScheduledPost.publish_at <= now,
             )
         )
         .order_by(ScheduledPost.publish_at.asc())
