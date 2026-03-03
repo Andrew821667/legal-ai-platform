@@ -9,39 +9,39 @@ export default function ComparisonTable() {
   const comparisons = [
     {
       task: "Анализ договора (20 страниц)",
-      withoutAI: "2-3 часа",
-      withAI: "5-10 минут",
-      improvement: "95%"
+      withoutAI: "ручная проверка всего документа",
+      withAI: "первичный AI-разбор и подсветка зон внимания",
+      improvement: "быстрее первый проход"
     },
     {
       task: "Поиск судебной практики",
-      withoutAI: "4-6 часов",
-      withAI: "10-15 минут",
-      improvement: "93%"
+      withoutAI: "ручной поиск и сверка вручную",
+      withAI: "быстрый shortlist релевантных материалов",
+      improvement: "меньше рутины"
     },
     {
       task: "Due Diligence (100 документов)",
-      withoutAI: "5-7 дней",
-      withAI: "4-6 часов",
-      improvement: "90%"
+      withoutAI: "сплошной ручной просмотр",
+      withAI: "первичная сортировка и кластеризация",
+      improvement: "быстрее обзор массива"
     },
     {
       task: "Мониторинг законодательства",
-      withoutAI: "Вручную, нерегулярно",
-      withAI: "Автоматически 24/7",
-      improvement: "100%"
+      withoutAI: "вручную и нерегулярно",
+      withAI: "по настроенному сценарию мониторинга",
+      improvement: "лучше контроль"
     },
     {
       task: "Генерация типового договора",
-      withoutAI: "1-2 часа",
-      withAI: "2-5 минут",
-      improvement: "95%"
+      withoutAI: "с нуля или по старому шаблону",
+      withAI: "черновик под проверку юриста",
+      improvement: "быстрее старт"
     },
     {
       task: "Анализ рисков в документе",
-      withoutAI: "Субъективно, долго",
-      withAI: "Объективно, мгновенно",
-      improvement: "98%"
+      withoutAI: "целиком вручную",
+      withAI: "автоподсветка спорных условий",
+      improvement: "лучше приоритизация"
     }
   ];
 
@@ -59,7 +59,7 @@ export default function ComparisonTable() {
             Работа с AI vs Без AI
           </h2>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            Сравните эффективность работы юридического отдела до и после внедрения AI
+            Сравниваем не “замену юриста”, а то, где AI ускоряет первый проход и снижает объем рутины.
           </p>
         </div>
 
@@ -110,7 +110,7 @@ export default function ComparisonTable() {
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-lg shadow-lg">
-                          -{item.improvement}
+                          {item.improvement}
                         </span>
                       </td>
                     </tr>
@@ -124,23 +124,23 @@ export default function ComparisonTable() {
         {/* Summary */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
-            <div className="text-4xl font-bold text-amber-400 mb-2">80%+</div>
-            <div className="text-slate-300">Экономия времени в среднем</div>
+            <div className="text-4xl font-bold text-amber-400 mb-2">Пилот</div>
+            <div className="text-slate-300">Сначала проверяем гипотезу на одном процессе</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
-            <div className="text-4xl font-bold text-green-400 mb-2">24/7</div>
-            <div className="text-slate-300">Работа без выходных и перерывов</div>
+            <div className="text-4xl font-bold text-green-400 mb-2">Контроль</div>
+            <div className="text-slate-300">Финальное решение и проверка остаются у юриста</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 text-center">
-            <div className="text-4xl font-bold text-blue-400 mb-2">98%</div>
-            <div className="text-slate-300">Точность анализа документов</div>
+            <div className="text-4xl font-bold text-blue-400 mb-2">Оценка</div>
+            <div className="text-slate-300">Считаем эффект только на ваших вводных и конкретном процессе</div>
           </div>
         </div>
 
         {/* CTA */}
         <div className="text-center mt-12">
           <p className="text-lg text-slate-300 mb-6">
-            Узнайте, сколько времени и денег сэкономит ваша компания
+            Разберем, где у вас есть смысл запускать пилот в первую очередь
           </p>
           <a
             href="#calculator"

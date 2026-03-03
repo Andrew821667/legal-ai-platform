@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Автоматизация земельного права с AI | Legal AI PRO",
     description:
-      "Снижаем риски в земельных сделках и ускоряем проверку документации.",
+      "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
     url: "/services/land-law-ai",
     type: "article",
   },
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "Автоматизация земельного права с AI | Legal AI PRO",
     description:
-      "Снижаем риски в земельных сделках и ускоряем проверку документации.",
+      "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
   },
   robots: {
     index: true,

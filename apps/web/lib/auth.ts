@@ -25,6 +25,7 @@ export async function verifyPassword(
 
 /**
  * Pre-generated hash for 'admin123' (for reference)
- * Use this in NEXT_PUBLIC_ADMIN_PASSWORD env variable
+ * Use this only as a server-side reference.
+ * The public site must not expose admin passwords through NEXT_PUBLIC_* variables.
  */
 export const ADMIN_PASSWORD_HASH = '$2a$10$8X3jJZK5lNvYq4KzN3FqX.rHqXQ1Y8xGqVxZ6kF1JXvHq8WqKzN3e';

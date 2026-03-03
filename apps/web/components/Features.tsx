@@ -8,36 +8,42 @@ export default function Features() {
   const { ref: sectionRef, isVisible: sectionVisible } = useScrollAnimation();
   const { ref: gridRef, isVisible: gridVisible } = useScrollAnimation({ threshold: 0.05 });
 
+  const openLeadForm = () => {
+    if (typeof window === "undefined") return;
+    const target = document.getElementById("lead-form");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const features = [
     {
       icon: Briefcase,
-      title: "20+ лет опыта",
-      description: `20+ лет в юридической практике.
-        Понимаем процессы изнутри и внедряем AI там, где он реально помогает.`,
+      title: "Юридическая практика",
+      description: `Опираемся на практический опыт внутри юридической функции.
+        Поэтому автоматизируем не “в целом AI”, а конкретные рабочие процессы.`,
     },
     {
       icon: Bot,
-      title: "Сами создаем код",
-      description: `Разрабатываем решения внутри команды.
-        Быстрее запускаем и лучше контролируем качество.`,
+      title: "Собственная разработка",
+      description: `Сами проектируем backend, ботов и контуры публикации.
+        Это дает контроль над качеством, безопасностью и скоростью изменений.`,
     },
     {
       icon: Flag,
-      title: "Российские AI",
-      description: `Используем YandexGPT и GigaChat.
-        Поддерживаем требования импортозамещения и 152-ФЗ.`,
+      title: "Гибкий стек моделей",
+      description: `Подбираем модель и архитектуру под задачу: локальные ограничения,
+        требования по данным, стоимость владения и ожидаемое качество.`,
     },
     {
       icon: TrendingUp,
-      title: "80%+ экономия",
-      description: `Проверка договоров и поиск практики занимают минуты.
-        Команда тратит больше времени на важные задачи, а не на рутину.`,
+      title: "Фокус на рутине и контроле",
+      description: `Начинаем с процессов, где эффект измерим: заявки, договоры,
+        маршрутизация задач, контроль сроков и подготовка типовых материалов.`,
     },
     {
       icon: Zap,
-      title: "ROI 4-6 месяцев",
-      description: `Проекты обычно окупаются за 4-6 месяцев.
-        Стоимость и сроки фиксируем до старта работ.`,
+      title: "Пилот вместо абстракций",
+      description: `Сначала проверяем гипотезу на реальном процессе, а затем
+        масштабируем решение только там, где оно действительно работает.`,
     }
   ];
 
@@ -91,14 +97,13 @@ export default function Features() {
           <p className="text-lg text-slate-700 mb-6">
             Хотите понять, что можно автоматизировать у вас?
           </p>
-          <a
-            href="https://t.me/legal_ai_helper_new_bot"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={openLeadForm}
             className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg"
           >
-            Написать нам в Telegram →
-          </a>
+            Оставить заявку →
+          </button>
         </div>
       </div>
     </section>

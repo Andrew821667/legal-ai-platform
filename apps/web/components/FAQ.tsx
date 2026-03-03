@@ -12,7 +12,7 @@ export default function FAQ() {
   const categories = [
     { id: "general", name: "Общие вопросы", emoji: "💡" },
     { id: "technical", name: "Технические", emoji: "⚙️" },
-    { id: "pricing", name: "Стоимость и ROI", emoji: "💰" },
+    { id: "pricing", name: "Стоимость и оценка", emoji: "💰" },
     { id: "implementation", name: "Внедрение", emoji: "🚀" }
   ];
 

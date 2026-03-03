@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Корпоративное право и M&A с AI | Legal AI PRO",
     description:
-      "Помогаем ускорить Due Diligence и принимать решения по сделкам на основе проверенных данных.",
+      "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
     url: "/services/corporate-ma-ai",
     type: "article",
   },
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "Корпоративное право и M&A с AI | Legal AI PRO",
     description:
-      "Помогаем ускорить Due Diligence и принимать решения по сделкам на основе проверенных данных.",
+      "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
   },
   robots: {
     index: true,
@@ -63,7 +63,7 @@ export default function CorporateMAPage() {
             Эффект для команды
           </h2>
           <ul className="space-y-3 text-slate-700">
-            <li>Сокращение времени проверки документов с недель до дней.</li>
+            <li>Более быстрый первый обзор документов и структурирование массива.</li>
             <li>Меньше ручной рутины в корпоративном блоке.</li>
             <li>Более предсказуемый процесс закрытия сделок.</li>
           </ul>

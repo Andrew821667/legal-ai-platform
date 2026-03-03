@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -27,6 +28,7 @@ export default function LeadCaptureForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   useEffect(() => {
     const handler = (event: CustomEvent<{ offer: LeadOffer }>) => {
@@ -67,6 +69,10 @@ export default function LeadCaptureForm() {
 
     if (!contact.trim()) {
       setError("Укажите контакт: email, телефон или Telegram.");
+      return;
+    }
+    if (!consentAccepted) {
+      setError("Нужно согласие на обработку персональных данных.");
       return;
     }
 
@@ -179,6 +185,24 @@ export default function LeadCaptureForm() {
               />
             </label>
 
+            <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              />
+              <span className="text-sm text-slate-600">
+                Я соглашаюсь на обработку персональных данных и, при использовании зарубежной
+                инфраструктуры аналитики и хостинга, на возможную трансграничную передачу данных в
+                объеме, необходимом для работы сайта. Подробнее:{" "}
+                <Link href="/privacy" className="text-amber-700 underline">
+                  политика конфиденциальности
+                </Link>
+                .
+              </span>
+            </label>
+
             {error && (
               <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {error}
@@ -201,7 +225,7 @@ export default function LeadCaptureForm() {
           </form>
 
           <p className="text-xs text-slate-500 mt-4">
-            Нажимая кнопку, вы соглашаетесь с обработкой персональных данных.
+            Форму используем только для связи по вашему запросу и первичной квалификации задачи.
           </p>
         </div>
       </div>

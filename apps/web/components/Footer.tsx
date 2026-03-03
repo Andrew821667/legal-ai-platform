@@ -4,9 +4,9 @@ export default function Footer() {
       { name: "Преимущества", href: "/#features" },
       { name: "Услуги", href: "/#services" },
       { name: "FAQ", href: "/#faq" },
-      { name: "Источники", href: "/#sources" },
+      { name: "Подход к внедрению", href: "/#trust" },
       { name: "Бесплатно начать", href: "/#lead-magnets" },
-      { name: "Кейсы (подробно)", href: "/cases" },
+      { name: "Сценарии внедрения", href: "/cases" },
       { name: "О команде", href: "/team" },
       { name: "Регионы", href: "/regions" },
     ],
@@ -19,7 +19,7 @@ export default function Footer() {
       { name: "Все услуги", href: "/services" },
     ],
     resources: [
-      { name: "Калькулятор ROI", href: "/#calculator" },
+      { name: "Оценка пилота", href: "/#calculator" },
       { name: "Бесплатная консультация", href: "/#lead-magnets" },
       { name: "Чек-лист по договорам", href: "/#lead-magnets" },
       { name: "Демо-анализ", href: "/#lead-magnets" },
@@ -40,15 +40,15 @@ export default function Footer() {
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2">
                 <span className="text-amber-500">✓</span>
-                <span className="text-sm">20+ лет юридической практики</span>
+                <span className="text-sm">Пилотный подход вместо абстрактных обещаний</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-amber-500">✓</span>
-                <span className="text-sm">Российские AI (YandexGPT, GigaChat)</span>
+                <span className="text-sm">Контроль данных, ролей и ручной проверки</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-amber-500">✓</span>
-                <span className="text-sm">ROI 4-6 месяцев</span>
+                <span className="text-sm">Подбор стека под задачу и ограничения</span>
               </div>
             </div>
 
@@ -201,8 +201,8 @@ export default function Footer() {
                 ✓ Обновлено: {new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}
               </span>
               <span className="text-slate-600">|</span>
-              <a href="/#sources" className="text-amber-500 hover:text-amber-400 transition-colors">
-                Источники и исследования
+              <a href="/#trust" className="text-amber-500 hover:text-amber-400 transition-colors">
+                Подход к внедрению
               </a>
             </div>
           </div>

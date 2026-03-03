@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import AdminPanel from "@/components/AdminPanel";
 
 export const metadata: Metadata = {
-  title: "Admin",
+  title: "Admin | Legal AI PRO",
   robots: {
     index: false,
     follow: false,
@@ -16,5 +16,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPage() {
-  redirect("/?admin=true");
+  return <AdminPanel initialOpen />;
 }

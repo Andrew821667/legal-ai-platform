@@ -189,7 +189,7 @@ export default function PrivacyPolicy() {
             </p>
             
             <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li><strong>Vercel:</strong> хостинг сайта (США, сертифицирован по Privacy Shield)</li>
+              <li><strong>Провайдер хостинга:</strong> инфраструктура, через которую размещается сайт и его серверные функции</li>
               <li><strong>Google (Analytics):</strong> веб-аналитика</li>
               <li><strong>Yandex (Metrika):</strong> веб-аналитика (Россия)</li>
               <li><strong>Telegram:</strong> коммуникация через бот</li>

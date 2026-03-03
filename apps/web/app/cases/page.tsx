@@ -2,24 +2,24 @@ import type { Metadata } from "next";
 import CaseStudies from "@/components/CaseStudies";
 
 export const metadata: Metadata = {
-  title: "Кейсы внедрения Legal AI",
+  title: "Сценарии внедрения Legal AI",
   description:
-    "Реальные кейсы внедрения AI в юридической работе: договоры, судебные процессы и Due Diligence с измеримым результатом.",
+    "Типовые сценарии внедрения AI в юридической функции: договоры, судебный контур и обзор массивов документов.",
   alternates: {
     canonical: "/cases",
   },
   openGraph: {
-    title: "Кейсы внедрения Legal AI | Legal AI PRO",
+    title: "Сценарии внедрения Legal AI | Legal AI PRO",
     description:
-      "Примеры проектов с измеримыми результатами в автоматизации юридических процессов.",
+      "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
     url: "/cases",
     type: "article",
   },
   twitter: {
     card: "summary",
-    title: "Кейсы внедрения Legal AI | Legal AI PRO",
+    title: "Сценарии внедрения Legal AI | Legal AI PRO",
     description:
-      "Примеры проектов с измеримыми результатами в автоматизации юридических процессов.",
+      "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
   },
   robots: {
     index: true,

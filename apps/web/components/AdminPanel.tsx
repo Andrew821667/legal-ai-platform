@@ -29,14 +29,13 @@ import ExportButton from './admin/ExportButton';
 import NotificationBadge from './admin/NotificationBadge';
 import IssueFilters from './admin/IssueFilters';
 import AutomationControlsPanel from './admin/AutomationControlsPanel';
-import { verifyPassword } from '@/lib/auth';
 
 interface AdminPanelProps {
-  password?: string; // Пароль для доступа (по умолчанию: "admin123")
+  initialOpen?: boolean;
 }
 
-export default function AdminPanel({ password = "admin123" }: AdminPanelProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
+  const [isOpen, setIsOpen] = useState(initialOpen);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [inputPassword, setInputPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -145,14 +144,23 @@ export default function AdminPanel({ password = "admin123" }: AdminPanelProps) {
     // Не сбрасываем аутентификацию при закрытии
   };
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputPassword === password) {
+    try {
+      const response = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: inputPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.detail || 'Неверный пароль');
+      }
       setIsAuthenticated(true);
       setError('');
       setInputPassword('');
-    } else {
-      setError('Неверный пароль');
+    } catch (err: any) {
+      setError(err?.message || 'Неверный пароль');
       setInputPassword('');
     }
   };

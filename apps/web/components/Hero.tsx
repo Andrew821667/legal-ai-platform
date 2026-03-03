@@ -43,8 +43,8 @@ export default function Hero() {
             </h2>
 
             <p className="text-base text-slate-400 mb-8 max-w-4xl mx-auto lg:mx-0 animate-fade-in-delay-1">
-              Автоматизируем договоры, суды и комплаенс.
-              В среднем сокращаем рутину до 80% и выходим на окупаемость за 4-6 месяцев.
+              Помогаем выстроить практичную автоматизацию для заявок, договорной работы,
+              типовых юридических процессов и внутреннего контроля.
             </p>
             
             {/* Stats - SIMPLIFIED for readability */}
@@ -55,13 +55,13 @@ export default function Hero() {
                 label="лет юридической практики"
               />
               <AnimatedStat
-                value={80}
-                suffix="%+"
-                label="меньше рутины в типовых задачах"
+                value={3}
+                suffix=""
+                label="ключевых сценария для старта: заявки, договоры, контроль"
               />
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 hover:border-amber-400/50 hover:scale-105 transition-all duration-300">
-                <div className="text-3xl font-bold text-amber-400 mb-1">4-6 мес</div>
-                <div className="text-sm text-slate-300">средний срок окупаемости</div>
+                <div className="text-3xl font-bold text-amber-400 mb-1">2-6 нед.</div>
+                <div className="text-sm text-slate-300">обычный срок пилота и первичной настройки</div>
               </div>
             </div>
 
