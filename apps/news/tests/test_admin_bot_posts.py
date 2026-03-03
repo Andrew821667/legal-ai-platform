@@ -19,6 +19,7 @@ from news.admin_bot import (
     _is_calendar_context,
     _is_manual_queue_context,
     _manual_post_kind_label,
+    _manual_post_kind_style_hint,
     _parse_review_filter_callback,
     _review_origin,
     _review_origin_badge,
@@ -207,6 +208,12 @@ def test_manual_post_kind_label_exists() -> None:
 def test_manual_post_kind_structure_exists() -> None:
     assert "боль клиента" in _manual_post_kind_structure("promo_offer")
     assert "тезис" in _manual_post_kind_structure("opinion")
+
+
+def test_manual_post_kind_style_hints_exist() -> None:
+    assert "агрессивного продавливания" in _manual_post_kind_style_hint("promo_offer")
+    assert "авторский" in _manual_post_kind_style_hint("opinion")
+    assert "действием или критерием" in _manual_post_kind_style_hint("checklist")
 
 
 def test_review_origin_helpers() -> None:
