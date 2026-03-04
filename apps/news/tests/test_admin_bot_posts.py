@@ -279,3 +279,27 @@ def test_review_origin_helpers() -> None:
     assert _review_origin("operator_ai_digest") == "ai"
     assert _review_origin_badge("manual_checklist") == "✍️"
     assert _review_origin_badge("daily") == "🤖"
+
+
+def test_apply_footer_to_post_text_inserts_before_source() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "<b>Что произошло</b>\nТекст.\n\n"
+        "<b>Источник</b>: <a href=\"https://example.com\">оригинал статьи</a>\n"
+        "#LegalAI"
+    )
+    updated = NewsAdminBot._apply_footer_to_post_text(
+        original,
+        "Если хотите примерить такой сценарий к вашей юрфункции, напишите в @legal_ai_helper_new_bot.",
+    )
+    assert "<b>Следующий шаг</b>" in updated
+    assert updated.index("<b>Следующий шаг</b>") < updated.index("<b>Источник</b>")
+    assert "@legal_ai_helper_new_bot" in updated
+
+
+def test_post_card_keyboard_has_add_footer_button() -> None:
+    bot = NewsAdminBot()
+    markup = bot._post_card_keyboard("123", "review", 0)
+    payload = markup.to_dict()
+    labels = [button["text"] for row in payload["inline_keyboard"] for button in row]
+    assert "🧩 Добавить футер" in labels

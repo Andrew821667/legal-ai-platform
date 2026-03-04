@@ -42,7 +42,7 @@ from news.feedback import classify_comment_signal, summarize_reaction_counts
 from news.generate import collect_generation_previews
 from news.llm_writer import build_manual_footer, compose_manual_post_html
 from news.logging_config import setup_logging
-from news.pipeline import extract_domain, normalize_rubric_to_pillar
+from news.pipeline import extract_domain, normalize_post_text, normalize_rubric_to_pillar
 from news.settings import settings
 from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
 from news.strategy import (
@@ -261,6 +261,10 @@ _MANUAL_THEMES = {
     },
 }
 _MANUAL_THEME_ORDER = tuple(_MANUAL_THEMES)
+_FOOTER_BLOCK_RE = re.compile(
+    r"(?:\n\n)?<b>Следующий шаг</b>\n.*?(?=(?:\n\n<b>Источник</b>|\n<b>Источник</b>|\n\n#|$))",
+    re.DOTALL,
+)
 
 
 def _is_hidden_deleted_post(row: dict[str, Any]) -> bool:
@@ -3197,6 +3201,7 @@ class NewsAdminBot:
                     [InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"ppc:{post_id}:{status}:{offset}")],
                     [InlineKeyboardButton("✍️ Редактировать вручную", callback_data=f"pm:{post_id}:{status}:{offset}")],
                     [InlineKeyboardButton("🤖 Редактировать через LLM", callback_data=f"pa:{post_id}:{status}:{offset}")],
+                    [InlineKeyboardButton("🧩 Добавить футер", callback_data=f"pf:{post_id}:{status}:{offset}")],
                     [InlineKeyboardButton("🗑 Нерелевантно / удалить", callback_data=f"pdd:{post_id}:{status}:{offset}", style=_BUTTON_STYLE_DANGER)],
                 ]
             )
@@ -3648,6 +3653,93 @@ class NewsAdminBot:
         if not content:
             raise RuntimeError("LLM вернул пустой ответ")
         return content
+
+    def _fallback_footer_text(self, post: dict[str, Any]) -> str:
+        format_type = str(post.get("format_type") or "")
+        manual_kind = _manual_post_kind_from_format_type(format_type)
+        if manual_kind != "service_page":
+            footer = build_manual_footer(manual_kind)
+            if footer:
+                return footer
+
+        title = str(post.get("title") or "")
+        text = _strip_html_markup(str(post.get("text") or ""))
+        rubric = str(post.get("rubric") or "")
+        pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{text}")
+        if pillar == "tools":
+            return "Если хотите подобрать такой AI-инструмент под задачи юротдела без лишних лицензий и рисков по данным, напишите в @legal_ai_helper_new_bot."
+        if pillar in {"implementation", "case"}:
+            return "Если хотите примерить такой сценарий автоматизации к вашим заявкам, договорам или внутренним юридическим процессам, напишите в @legal_ai_helper_new_bot."
+        if pillar == "regulation":
+            return "Если хотите разобрать, как такой регуляторный сигнал влияет на ваш AI-, privacy- или compliance-контур, напишите в @legal_ai_helper_new_bot."
+        if pillar == "market":
+            return "Если хотите перевести этот рыночный сигнал в план действий для юрфункции или Legal AI-продукта, напишите в @legal_ai_helper_new_bot."
+        return "Если хотите разобрать, как этот сценарий применим к вашей юридической функции, напишите в @legal_ai_helper_new_bot."
+
+    def _generate_footer_with_llm(self, post: dict[str, Any]) -> str:
+        client = self._get_openai_client()
+        title = str(post.get("title") or "Без заголовка").strip()
+        text = _strip_html_markup(str(post.get("text") or "")).strip()
+        format_type = str(post.get("format_type") or "standard").strip()
+        cta_type = str(post.get("cta_type") or "soft").strip()
+        rubric = str(post.get("rubric") or "").strip()
+        pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{text}")
+
+        if self._use_max_tokens_param:
+            completion_kwargs: dict[str, Any] = {"max_tokens": 220}
+        else:
+            completion_kwargs = {"max_completion_tokens": 220}
+
+        response = client.chat.completions.create(
+            model=settings.news_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты редактор Telegram-канала Legal AI PRO. "
+                        "Сформируй только footer для уже готового поста. "
+                        "Footer должен быть коротким, деловым, ненавязчивым и логично продолжать именно этот материал. "
+                        "Если пост про инструменты, внедрение, legal ops или практический кейс, предложи спокойный следующий шаг. "
+                        "Если пост нейтральный или регуляторный, footer должен быть мягким и не выглядеть как навязчивая продажа. "
+                        "Верни только текст footer на 1-2 предложения, без заголовка 'Следующий шаг', без markdown и без JSON."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Заголовок: {title}\n"
+                        f"Формат: {format_type}\n"
+                        f"CTA-режим: {cta_type}\n"
+                        f"Рубрика: {rubric or '—'}\n"
+                        f"Тематика: {_pillar_label(pillar)}\n\n"
+                        f"Текст поста:\n{text}\n\n"
+                        "Сформируй только footer."
+                    ),
+                },
+            ],
+            temperature=0.35,
+            **completion_kwargs,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        content = re.sub(r"^\s*(?:следующий шаг|footer)\s*:?\s*", "", content, flags=re.IGNORECASE).strip()
+        content = re.sub(r"\s+", " ", content).strip()
+        return content or self._fallback_footer_text(post)
+
+    @staticmethod
+    def _apply_footer_to_post_text(original_text: str, footer_text: str) -> str:
+        text = (original_text or "").strip()
+        text = _FOOTER_BLOCK_RE.sub("", text).strip()
+        footer_text = re.sub(r"\s+", " ", (footer_text or "").strip())
+        if not footer_text:
+            return normalize_post_text(text)
+
+        footer_block = f"<b>Следующий шаг</b>\n{html.escape(footer_text)}"
+        source_index = text.find("<b>Источник</b>")
+        if source_index != -1:
+            updated = f"{text[:source_index].rstrip()}\n\n{footer_block}\n\n{text[source_index:].lstrip()}"
+        else:
+            updated = f"{text.rstrip()}\n\n{footer_block}"
+        return normalize_post_text(updated)
 
     def _draft_post_with_llm(self, title: str, source_material: str, post_kind: str, *, source_mode: str = "ai", theme: str = "") -> str:
         client = self._get_openai_client()
@@ -5675,6 +5767,24 @@ class NewsAdminBot:
                 )
                 return
 
+            if data.startswith("pf:"):
+                _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                offset = int(offset_raw)
+                post = self._get_post(post_id)
+                footer_text = self._generate_footer_with_llm(post)
+                if not footer_text:
+                    raise RuntimeError("LLM не смог предложить footer")
+                updated_text = self._apply_footer_to_post_text(str(post.get("text") or ""), footer_text)
+                self.client.patch_post(post_id, {"text": updated_text}).raise_for_status()
+                self._invalidate_post_caches()
+                updated_post = self._get_post(post_id)
+                await self._safe_edit_message_text(
+                    query,
+                    "Footer добавлен в драфт.\n\n" + self._post_card_text(updated_post),
+                    reply_markup=self._post_card_keyboard(post_id, status, offset),
+                )
+                return
+
             if data.startswith("ps:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 draft = context.user_data.get(_STATE_DRAFT_EDIT)
@@ -6224,7 +6334,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
+                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pf:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
             )
         )
         app.add_handler(
