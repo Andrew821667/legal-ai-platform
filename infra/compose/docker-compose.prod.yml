@@ -54,7 +54,10 @@ services:
         max-file: "5"
 
   core-api:
-    image: ${CORE_API_IMAGE:-ghcr.io/andrew821667/legal-ai-core-api:latest}
+    image: ${CORE_API_IMAGE:-legal-ai-core-api:local}
+    build:
+      context: ../..
+      dockerfile: apps/core-api/Dockerfile
     container_name: legal-ai-core-api
     env_file:
       - ../../.env
@@ -63,12 +66,18 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
       TZ: ${TZ:-Europe/Moscow}
     ports:
-      - "8000:8000"
+      - "${CORE_API_PUBLISH_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').getcode() == 200 else 1)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -82,7 +91,10 @@ services:
         max-file: "5"
 
   lead-bot:
-    image: ${LEAD_BOT_IMAGE:-ghcr.io/andrew821667/legal-ai-lead-bot:latest}
+    image: ${LEAD_BOT_IMAGE:-legal-ai-lead-bot:local}
+    build:
+      context: ../..
+      dockerfile: apps/lead-bot/Dockerfile
     container_name: legal-ai-lead-bot
     env_file:
       - ../../.env
@@ -214,10 +226,10 @@ services:
     image: caddy:2-alpine
     container_name: legal-ai-caddy
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
     volumes:
-      - ../caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ${CADDYFILE_PATH:-../caddy/Caddyfile}:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     environment:

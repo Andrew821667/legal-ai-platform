@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
       POSTGRES_DB: ${POSTGRES_DB:-legalai}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
 
@@ -20,7 +20,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
-      - "8000:8000"
+      - "${CORE_API_PUBLISH_PORT:-8000}:8000"
     depends_on:
       - postgres
 
@@ -34,7 +34,7 @@ services:
       CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
     ports:
-      - "3000:3000"
+      - "${WEB_PUBLISH_PORT:-3000}:3000"
     depends_on:
       - core-api
 

@@ -12,6 +12,19 @@ make dev
 curl http://localhost:8000/health
 ```
 
+## Локальный full-stack через docker-compose
+```bash
+cd "/Users/andrew/Мои AI проекты/legal-ai-platform"
+CORE_API_PUBLISH_PORT=8001 \
+CADDYFILE_PATH=../caddy/Caddyfile.local \
+docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --build
+```
+
+Примечания:
+- `core-api` контейнер сам выполняет `alembic upgrade head` при старте, поэтому чистая локальная БД поднимается без отдельного ручного шага миграций.
+- Для локального full-stack используйте `infra/caddy/Caddyfile.local`: он слушает только `:80` и не пытается получать боевой TLS-сертификат для `legalaipro.ru`.
+- `reader-bot` в таком запуске требует `READER_BOT_TOKEN` в корневом `.env`.
+
 ## Первый запуск на production
 1. Развернуть `.env`.
 2. Поднять сервисы:
