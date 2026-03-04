@@ -2885,7 +2885,7 @@ class NewsAdminBot:
         theme_filter: str = "all",
     ) -> str:
         label = _review_origin_label(review_filter)
-        kind_label = _PUBLICATION_KIND_LABELS.get(kind_filter, "Все виды")
+        kind_label = "Все виды" if kind_filter == "all" else publication_kind_label(kind_filter)
         theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
         if not rows:
             return (

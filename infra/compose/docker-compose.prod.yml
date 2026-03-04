@@ -33,7 +33,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      CORE_API_URL: http://core-api:8000
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
@@ -94,18 +94,21 @@ services:
     image: ${LEAD_BOT_IMAGE:-legal-ai-lead-bot:local}
     build:
       context: ../..
-      dockerfile: apps/lead-bot/Dockerfile
+      dockerfile: apps/lead-bot/legacy/Dockerfile
     container_name: legal-ai-lead-bot
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      CORE_API_URL: http://core-api:8000
       API_KEY_BOT: ${API_KEY_BOT}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${LEAD_BOT_TOKEN}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
       core-api:
         condition: service_healthy
+    volumes:
+      - lead_bot_data:/app/data
+      - lead_bot_logs:/app/logs
     mem_limit: 256m
     memswap_limit: 256m
     restart: unless-stopped
@@ -123,7 +126,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      CORE_API_URL: http://core-api:8000
       API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: >
@@ -148,7 +151,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      CORE_API_URL: http://core-api:8000
       API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: >
@@ -173,7 +176,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      CORE_API_URL: http://core-api:8000
       API_KEY_NEWS: ${API_KEY_NEWS}
       NEWS_ADMIN_BOT_TOKEN: ${NEWS_ADMIN_BOT_TOKEN}
       NEWS_ADMIN_IDS: ${NEWS_ADMIN_IDS}
@@ -253,3 +256,5 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  lead_bot_data:
+  lead_bot_logs:

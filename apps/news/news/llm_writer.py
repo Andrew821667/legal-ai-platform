@@ -440,6 +440,10 @@ class LLMNewsWriter:
 
     @classmethod
     def _auto_footer_text(cls, format_type: str, cta_type: str, pillar: str) -> str:
+        if format_type == "daily":
+            if pillar in {"implementation", "tools", "case"}:
+                return cls._cta_text(cta_type, pillar)
+            return ""
         mode = _AUTO_FOOTER_MODE_BY_FORMAT.get(format_type, "soft")
         if mode == "none":
             return ""

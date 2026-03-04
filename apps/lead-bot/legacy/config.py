@@ -13,11 +13,22 @@ from dotenv import load_dotenv
 # 2) затем корневой .env репозитория как fallback для недостающих ключей.
 _THIS_DIR = Path(__file__).resolve().parent
 _LOCAL_ENV = _THIS_DIR / ".env"
-_ROOT_ENV = _THIS_DIR.parents[2] / ".env"
+
+
+def _find_root_env(start_dir: Path) -> Path | None:
+    current = start_dir
+    for candidate in [current, *current.parents]:
+        env_path = candidate / ".env"
+        if env_path.exists():
+            return env_path
+    return None
+
+
+_ROOT_ENV = _find_root_env(_THIS_DIR)
 
 if _LOCAL_ENV.exists():
     load_dotenv(_LOCAL_ENV, override=False)
-if _ROOT_ENV.exists():
+if _ROOT_ENV is not None:
     load_dotenv(_ROOT_ENV, override=False)
 
 class Config:
