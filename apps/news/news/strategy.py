@@ -315,6 +315,8 @@ def _apply_schedule_row(config: ScheduleConfig, row: dict[str, Any] | None, alia
             topics = [str(item).strip() for item in topics_raw if str(item).strip()]
             if topics:
                 config.longread_topics = topics
+            elif _LONGREAD_TOPIC_FALLBACK:
+                config.longread_topics = list(_LONGREAD_TOPIC_FALLBACK)
 
 
 def _day_slots(current_day: date, config: ScheduleConfig) -> list[tuple[str, tuple[int, int], bool]]:

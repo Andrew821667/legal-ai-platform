@@ -43,7 +43,16 @@ from news.feedback import classify_comment_signal, summarize_reaction_counts
 from news.generate import collect_generation_previews
 from news.llm_writer import build_manual_footer, compose_manual_post_html
 from news.logging_config import setup_logging
-from news.pipeline import extract_domain, normalize_post_text, normalize_rubric_to_pillar
+from news.pipeline import (
+    GENERATION_THEME_DEFS,
+    extract_domain,
+    generation_theme_keys,
+    generation_theme_label,
+    generation_theme_note,
+    generation_themes_for_text,
+    normalize_post_text,
+    normalize_rubric_to_pillar,
+)
 from news.settings import settings
 from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
 from news.strategy import (
@@ -120,6 +129,7 @@ _PILLAR_RUBRICS = {
     "market": ("market",),
 }
 _QUEUE_THEME_FILTERS = ("all",) + tuple(_PILLAR_LABELS)
+_LONGREAD_TOPIC_LIBRARY = tuple(dict.fromkeys(settings.news_longread_topics_list))
 _TELEGRAM_CHANNEL_NOTES = {
     "allthingslegal": "Международная повестка legal tech, legal AI, legal ops и рынка юридических технологий.",
     "legal_tech": "Русскоязычные новости и кейсы по legal tech, автоматизации юристов и AI-сервисам.",
@@ -1332,6 +1342,19 @@ class NewsAdminBot:
             return value
         return settings.news_review_retention_days
 
+    def _enabled_generation_theme_keys(self, *, force_refresh: bool = False) -> set[str]:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        raw_enabled = config.get("enabled_themes")
+        if isinstance(raw_enabled, list):
+            return {str(item).strip() for item in raw_enabled if str(item).strip() in GENERATION_THEME_DEFS}
+        return set(generation_theme_keys())
+
+    def _longread_topics_active(self, *, force_refresh: bool = False) -> list[str]:
+        schedule = self._schedule_config(force_refresh=force_refresh)
+        topics = [item.strip() for item in schedule.longread_topics if str(item).strip()]
+        return list(dict.fromkeys(topics))
+
     def _source_enabled_map(self, *, force_refresh: bool = False) -> dict[str, bool]:
         controls = self._controls_map(force_refresh=force_refresh)
         return {
@@ -1351,6 +1374,7 @@ class NewsAdminBot:
         publish_interval = publish_config.get("interval_seconds") if isinstance(publish_config.get("interval_seconds"), int) else settings.news_publish_interval_seconds
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
         retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
+        enabled_themes = self._enabled_generation_theme_keys()
         autopilot_enabled = control_map.get("news.generate.enabled", True) and control_map.get(
             "news.publish.enabled", True
         )
@@ -1365,6 +1389,7 @@ class NewsAdminBot:
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
             f"Хранение драфтов На проверке: {retention_days} дн.",
+            f"Активных контент-тем: {len(enabled_themes)}/{len(GENERATION_THEME_DEFS)}",
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"Обзор недели: {schedule_slot_label(schedule.weekly_review_slot)}",
             f"Лонгрид: {schedule_slot_label(schedule.longread_slot)}",
@@ -1803,6 +1828,16 @@ class NewsAdminBot:
         buttons.append([_inline_button("🔙 К источникам", callback_data="sec:sources")])
         return InlineKeyboardMarkup(buttons)
 
+    def _generation_theme_stats(self) -> dict[str, int]:
+        counts: dict[str, int] = {theme_key: 0 for theme_key in GENERATION_THEME_DEFS}
+        for status in ("review", "scheduled", "posted", "failed"):
+            for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
+                title = str(row.get("title") or "")
+                text = str(row.get("text") or "")
+                for theme_key in generation_themes_for_text(f"{title}\n{text}"):
+                    counts[theme_key] = counts.get(theme_key, 0) + 1
+        return counts
+
     def _theme_stats(self) -> dict[str, int]:
         counts: dict[str, int] = {pillar: 0 for pillar in _PILLAR_LABELS}
         for status in ("review", "scheduled", "posted", "failed"):
@@ -1813,13 +1848,24 @@ class NewsAdminBot:
                 counts[pillar] = counts.get(pillar, 0) + 1
         return counts
 
-    def _themes_text(self, counts: dict[str, int]) -> str:
+    def _themes_text(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> str:
+        generation_counts = generation_counts or self._generation_theme_stats()
+        enabled_generation_themes = self._enabled_generation_theme_keys()
         lines = [
             "Тематики публикаций",
             "",
-            "Канал узкоспециализированный: только AI в юриспруденции, автоматизация юрфункции, legal tech и связанные регуляторные изменения.",
+            "Верхний блок управляет именно генерацией: какие темы допускаются в новые драфты.",
+            "Нижний блок показывает исторические корзины уже созданных и опубликованных постов.",
             "",
+            "Активные генерационные темы:",
         ]
+        for theme_key in generation_theme_keys():
+            mark = "✅" if theme_key in enabled_generation_themes else "☐"
+            lines.append(
+                f"• {mark} {generation_theme_label(theme_key)}: {generation_counts.get(theme_key, 0)} пост(ов)"
+            )
+            lines.append(f"   {generation_theme_note(theme_key)}")
+        lines.extend(["", "Исторические корзины канала:", ""])
         target_share = {
             "regulation": "30%",
             "case": "20%",
@@ -1834,8 +1880,23 @@ class NewsAdminBot:
                 lines.append(f"   Рубрики: {rubric_labels}")
         return "\n".join(lines)
 
-    def _themes_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
+    def _themes_keyboard(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
+        generation_counts = generation_counts or self._generation_theme_stats()
+        enabled_generation_themes = self._enabled_generation_theme_keys()
+        theme_keys = list(generation_theme_keys())
+        for index in range(0, len(theme_keys), 2):
+            chunk = theme_keys[index : index + 2]
+            rows.append(
+                [
+                    _inline_button(
+                        f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})",
+                        callback_data=f"gt:{theme_key}",
+                    )
+                    for theme_key in chunk
+                ]
+            )
+        rows.append([_inline_button("📚 Темы воскресных лонгридов", callback_data="lt:menu")])
         pillars = list(_PILLAR_LABELS)
         for index in range(0, len(pillars), 2):
             chunk = pillars[index : index + 2]
@@ -2047,8 +2108,25 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(buttons)
 
     def _automation_keyboard(self, controls: list[dict[str, Any]]) -> InlineKeyboardMarkup:
+        control_map = {str(row.get("key") or ""): bool(row.get("enabled", True)) for row in controls}
+        full_automation_enabled = control_map.get("news.generate.enabled", True) and control_map.get("news.publish.enabled", True)
         rows: list[list[InlineKeyboardButton]] = [
             [_inline_button("🏠 Рабочий стол", callback_data="refresh")],
+            [
+                _inline_button(
+                    "🟢 Полная автоматизация" if not full_automation_enabled else "⛔ Полная автоматизация",
+                    callback_data=f"fa:{'1' if not full_automation_enabled else '0'}",
+                    style=_BUTTON_STYLE_SUCCESS if not full_automation_enabled else _BUTTON_STYLE_DANGER,
+                ),
+            ],
+            [
+                _inline_button("🗓 Сетка публикаций", callback_data="sch:menu"),
+                _inline_button("📚 Темы лонгридов", callback_data="lt:menu"),
+            ],
+            [
+                _inline_button("🧭 Темы генерации", callback_data="sec:themes"),
+                _inline_button("📰 Источники", callback_data="sec:sources"),
+            ],
             [
                 _inline_button("✅ Включить всё", callback_data="all:1", style=_BUTTON_STYLE_SUCCESS),
                 _inline_button("⛔ Отключить всё", callback_data="all:0", style=_BUTTON_STYLE_DANGER),
@@ -2431,13 +2509,48 @@ class NewsAdminBot:
             )
         return "\n".join(lines)
 
-    def _calendar_summary_keyboard(self, groups: list[tuple[str, list[Any]]]) -> InlineKeyboardMarkup:
+    def _calendar_month_text(self, groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
+        overdue_count = self._overdue_scheduled_count()
+        schedule = self._schedule_config()
+        lines = [
+            "Календарь автопубликаций — месячный вид",
+            "",
+            "Сетка:",
+            f"• Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
+            f"• Пятница: обзор недели в {schedule_slot_label(schedule.weekly_review_slot)}",
+            f"• Суббота: юмор в {schedule_slot_label(schedule.humor_slot)}",
+            f"• Воскресенье: лонгрид в {schedule_slot_label(schedule.longread_slot)}",
+            "",
+        ]
+        if overdue_count:
+            lines.append(f"⚠️ Просроченных scheduled-постов: {overdue_count}")
+            lines.append("")
+        month_groups = groups[:28]
+        if not month_groups:
+            lines.append("На ближайшие недели слотов нет.")
+            return "\n".join(lines)
+        for day_key, slots in month_groups:
+            day_date = datetime.fromisoformat(day_key).date()
+            slot_badges = " ".join(publication_kind_badge(slot.publication_kind) for slot in slots)
+            scheduled_rows = self._scheduled_rows_for_day(day_key)
+            lines.append(
+                f"• {day_date.strftime('%d.%m')} | {slot_badges} | занято {min(len(scheduled_rows), len(slots))}/{len(slots)}"
+            )
+        return "\n".join(lines)
+
+    def _calendar_summary_keyboard(self, groups: list[tuple[str, list[Any]]], view: str = "week") -> InlineKeyboardMarkup:
         buttons: list[list[InlineKeyboardButton]] = []
         tz = ZoneInfo(settings.tz_name)
         now_local = datetime.now(tz).date()
         overdue_count = self._overdue_scheduled_count()
+        buttons.append(
+            [
+                _inline_button(f"{'• ' if view == 'week' else ''}Неделя", callback_data="cal:summary"),
+                _inline_button(f"{'• ' if view == 'month' else ''}Месяц", callback_data="cal:view:month"),
+            ]
+        )
         row_buffer: list[InlineKeyboardButton] = []
-        for day_key, slots in groups[:8]:
+        for day_key, slots in groups[: (8 if view == 'week' else 14)]:
             day_date = datetime.fromisoformat(day_key).date()
             if day_date == now_local:
                 day_label = "Сегодня"
@@ -2689,10 +2802,11 @@ class NewsAdminBot:
             rows.append([_inline_button(meta["label"], callback_data=f"sch:view:{alias}")])
         rows.append(
             [
+                _inline_button("📚 Темы лонгридов", callback_data="lt:menu"),
                 _inline_button("⏱ Ритм генерации", callback_data="int:menu"),
-                _inline_button("🔙 К календарю", callback_data="cal:summary"),
             ]
         )
+        rows.append([_inline_button("🔙 К календарю", callback_data="cal:summary")])
         return InlineKeyboardMarkup(rows)
 
     def _schedule_detail_text(self, alias: str) -> str:
@@ -2740,7 +2854,37 @@ class NewsAdminBot:
                 row_buffer = []
         if row_buffer:
             rows.append(row_buffer)
+        if alias == "longread":
+            rows.append([_inline_button("📚 Темы лонгридов", callback_data="lt:menu")])
         rows.append([_inline_button("🔙 К сетке", callback_data="sch:menu")])
+        return InlineKeyboardMarkup(rows)
+
+    def _longread_topics_text(self) -> str:
+        active_topics = self._longread_topics_active(force_refresh=True)
+        lines = [
+            "Темы воскресных лонгридов",
+            "",
+            "Воскресный лонгрид выбирается автоматически из активного пула тем.",
+            "Вы можете отключать или включать отдельные темы. Автовыбор будет вращаться только по активным позициям.",
+            "",
+            f"Активно тем: {len(active_topics)} из {len(_LONGREAD_TOPIC_LIBRARY)}",
+            "",
+        ]
+        for index, topic in enumerate(_LONGREAD_TOPIC_LIBRARY, start=1):
+            mark = "✅" if topic in active_topics else "☐"
+            lines.append(f"{index}. {mark} {topic}")
+        return "\n".join(lines)
+
+    def _longread_topics_keyboard(self) -> InlineKeyboardMarkup:
+        active_topics = set(self._longread_topics_active(force_refresh=True))
+        rows: list[list[InlineKeyboardButton]] = []
+        for index, topic in enumerate(_LONGREAD_TOPIC_LIBRARY, start=1):
+            label = f"{'✅' if topic in active_topics else '☐'} {index}. {topic[:34]}"
+            rows.append([_inline_button(label, callback_data=f"lt:toggle:{index}")])
+        rows.append([
+            _inline_button("♻️ Сбросить к базовому пулу", callback_data="lt:reset"),
+            _inline_button("🔙 К сетке", callback_data="sch:menu"),
+        ])
         return InlineKeyboardMarkup(rows)
 
     def _interval_settings_text(self) -> str:
@@ -3997,9 +4141,10 @@ class NewsAdminBot:
 
     async def _show_themes_message(self, update: Update) -> None:
         counts = self._theme_stats()
+        generation_counts = self._generation_theme_stats()
         await update.effective_message.reply_text(
-            self._themes_text(counts),
-            reply_markup=self._themes_keyboard(counts),
+            self._themes_text(counts, generation_counts),
+            reply_markup=self._themes_keyboard(counts, generation_counts),
         )
 
     async def _show_generation_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -4255,7 +4400,16 @@ class NewsAdminBot:
                 await self._safe_edit_message_text(
                     query,
                     self._calendar_summary_text(groups),
-                    reply_markup=self._calendar_summary_keyboard(groups),
+                    reply_markup=self._calendar_summary_keyboard(groups, view="week"),
+                )
+                return
+
+            if data == "cal:view:month":
+                groups = self._calendar_groups()
+                await self._safe_edit_message_text(
+                    query,
+                    self._calendar_month_text(groups),
+                    reply_markup=self._calendar_summary_keyboard(groups, view="month"),
                 )
                 return
 
@@ -4892,6 +5046,69 @@ class NewsAdminBot:
                 )
                 return
 
+            if data == "lt:menu":
+                await self._safe_edit_message_text(
+                    query,
+                    self._longread_topics_text(),
+                    reply_markup=self._longread_topics_keyboard(),
+                )
+                return
+
+            if data.startswith("lt:toggle:"):
+                index = int(data.split(":")[-1]) - 1
+                if index < 0 or index >= len(_LONGREAD_TOPIC_LIBRARY):
+                    await query.answer("Неизвестная тема лонгрида.", show_alert=True)
+                    return
+                topic = _LONGREAD_TOPIC_LIBRARY[index]
+                row = self._controls_lookup(force_refresh=True).get("news.schedule.longread", {})
+                config = dict(row.get("config") or {})
+                current_topics = [str(item).strip() for item in config.get("topics", []) if str(item).strip()]
+                if not current_topics:
+                    current_topics = list(self._longread_topics_active(force_refresh=True))
+                if topic in current_topics and len(current_topics) == 1:
+                    await query.answer("Нужна хотя бы одна активная тема лонгрида.", show_alert=True)
+                    return
+                if topic in current_topics:
+                    current_topics = [item for item in current_topics if item != topic]
+                else:
+                    current_topics.append(topic)
+                config["topics"] = [item for item in _LONGREAD_TOPIC_LIBRARY if item in current_topics]
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or "Воскресный лонгрид",
+                    "description": row.get("description") or "Автоматический воскресный лонгрид по одной из тематик канала.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control("news.schedule.longread", payload).raise_for_status()
+                self._controls_cache = None
+                await self._safe_edit_message_text(
+                    query,
+                    self._longread_topics_text(),
+                    reply_markup=self._longread_topics_keyboard(),
+                )
+                return
+
+            if data == "lt:reset":
+                row = self._controls_lookup(force_refresh=True).get("news.schedule.longread", {})
+                config = dict(row.get("config") or {})
+                config["topics"] = list(_LONGREAD_TOPIC_LIBRARY)
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or "Воскресный лонгрид",
+                    "description": row.get("description") or "Автоматический воскресный лонгрид по одной из тематик канала.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control("news.schedule.longread", payload).raise_for_status()
+                self._controls_cache = None
+                await self._safe_edit_message_text(
+                    query,
+                    self._longread_topics_text(),
+                    reply_markup=self._longread_topics_keyboard(),
+                )
+                return
+
             if data.startswith("sch:view:"):
                 _, _, alias = data.split(":", maxsplit=2)
                 await self._safe_edit_message_text(
@@ -5107,10 +5324,45 @@ class NewsAdminBot:
 
             if data == "sec:themes":
                 counts = self._theme_stats()
+                generation_counts = self._generation_theme_stats()
                 await self._safe_edit_message_text(
                     query,
-                    self._themes_text(counts),
-                    reply_markup=self._themes_keyboard(counts),
+                    self._themes_text(counts, generation_counts),
+                    reply_markup=self._themes_keyboard(counts, generation_counts),
+                )
+                return
+
+            if data.startswith("gt:"):
+                _, theme_key = data.split(":", maxsplit=1)
+                if theme_key not in GENERATION_THEME_DEFS:
+                    await query.answer("Неизвестная контент-тема.", show_alert=True)
+                    return
+                row = self._generate_control_row(force_refresh=True)
+                config = dict(row.get("config") or {})
+                enabled_themes = self._enabled_generation_theme_keys(force_refresh=True)
+                if theme_key in enabled_themes and len(enabled_themes) == 1:
+                    await query.answer("Нужна хотя бы одна активная тема генерации.", show_alert=True)
+                    return
+                if theme_key in enabled_themes:
+                    enabled_themes.remove(theme_key)
+                else:
+                    enabled_themes.add(theme_key)
+                config["enabled_themes"] = [key for key in generation_theme_keys() if key in enabled_themes]
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or "Генерация контента (news.generate)",
+                    "description": row.get("description") or "Автогенерация драфтов из источников по двум слотам в сутки.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control("news.generate.enabled", payload).raise_for_status()
+                self._controls_cache = None
+                counts = self._theme_stats()
+                generation_counts = self._generation_theme_stats()
+                await self._safe_edit_message_text(
+                    query,
+                    self._themes_text(counts, generation_counts),
+                    reply_markup=self._themes_keyboard(counts, generation_counts),
                 )
                 return
 
@@ -5213,6 +5465,27 @@ class NewsAdminBot:
                 return
 
             if data == "automation":
+                controls = self._load_controls(force_refresh=True)
+                await self._safe_edit_message_text(
+                    query,
+                    self._controls_text(controls),
+                    reply_markup=self._automation_keyboard(controls),
+                )
+                return
+
+            if data.startswith("fa:"):
+                enabled = data.split(":", maxsplit=1)[1] == "1"
+                for key in ("news.generate.enabled", "news.publish.enabled"):
+                    row = self._controls_lookup(force_refresh=True).get(key, {})
+                    payload = {
+                        "scope": "news",
+                        "title": row.get("title") or key,
+                        "description": row.get("description") or "",
+                        "enabled": enabled,
+                        "config": dict(row.get("config") or {}),
+                    }
+                    self.admin_client.update_automation_control(key, payload).raise_for_status()
+                self._controls_cache = None
                 controls = self._load_controls(force_refresh=True)
                 await self._safe_edit_message_text(
                     query,
@@ -5686,24 +5959,64 @@ class NewsAdminBot:
             if data.startswith("ppc:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
-                post = self._get_post(post_id)
-                title = str(post.get("title") or "Без заголовка").replace("\n", " ")
-                context.user_data[_STATE_PENDING_PUBLISH_REASON] = {
-                    "post_id": post_id,
-                    "status": status,
-                    "offset": offset,
-                }
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
-                await self._safe_edit_message_text(query, 
-                    "Ручная публикация: шаг 1 из 2\n\n"
-                    f"Пост: {title[:120]}\n"
-                    f"ID: {post_id}\n\n"
-                    "Напишите одним сообщением причину ручной публикации "
-                    "(например: «Срочный разбор для консультации с клиентом»).",
-                    reply_markup=self._publish_reason_keyboard(post_id, status, offset),
-                )
+                await self._safe_edit_message_text(query, "Публикуем пост...", reply_markup=None)
+                await self._publish_now(context, post_id)
+                self._invalidate_post_caches()
+                if _is_manual_queue_context(status):
+                    queue_filter, theme_filter = _queue_filters_from_context(status)
+                    total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n"
+                        + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
+                        reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
+                    )
+                elif _is_auto_queue_context(status):
+                    queue_filter, theme_filter = _auto_queue_filters_from_context(status)
+                    total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n"
+                        + self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
+                        reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
+                    )
+                elif _is_source_context(status):
+                    source_key = _source_from_context(status)
+                    total, rows = self._load_source_posts(source_key, offset)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n"
+                        + self._source_posts_text(source_key, total, rows, offset),
+                        reply_markup=self._source_posts_keyboard(source_key, total, rows, offset),
+                    )
+                elif _is_theme_context(status):
+                    pillar = _theme_from_context(status)
+                    total, rows = self._load_theme_posts(pillar, offset)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n"
+                        + self._theme_posts_text(pillar, total, rows, offset),
+                        reply_markup=self._theme_posts_keyboard(pillar, total, rows, offset),
+                    )
+                elif _is_calendar_context(status):
+                    day_key = _calendar_date_from_context(status)
+                    rows = self._calendar_day_rows(day_key)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n" + self._calendar_day_text(day_key, rows),
+                        reply_markup=self._calendar_day_keyboard(day_key, rows),
+                    )
+                else:
+                    total, rows = self._load_posts(status=status, offset=offset)
+                    await self._safe_edit_message_text(
+                        query,
+                        "Пост успешно опубликован вручную.\n\n" + self._posts_text(total, rows, offset, status),
+                        reply_markup=self._posts_keyboard(total, rows, offset, status),
+                    )
                 return
 
             if data.startswith("ppn:"):
@@ -5723,22 +6036,15 @@ class NewsAdminBot:
             if data.startswith("ppy:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
-                draft = context.user_data.get(_STATE_DRAFT_PUBLISH)
-                if not draft or str(draft.get("post_id")) != post_id:
-                    await query.message.reply_text("Причина публикации не найдена. Нажмите «Опубликовать сейчас» заново.")
-                    return
-                reason = _normalize_operator_note(str(draft.get("reason") or ""))
-                if not reason:
-                    await query.message.reply_text("Причина публикации пустая. Повторите запуск публикации.")
-                    return
-                await self._publish_now(context, post_id, reason)
                 context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
                 context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
+                await self._safe_edit_message_text(query, "Публикуем пост...", reply_markup=None)
+                await self._publish_now(context, post_id)
                 if _is_manual_queue_context(status):
                     queue_filter, theme_filter = _queue_filters_from_context(status)
                     total, rows, due_total, scheduled_total = self._load_manual_queue(queue_filter=queue_filter, offset=offset, theme_filter=theme_filter)
                     await self._safe_edit_message_text(query, 
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._manual_queue_text(total, rows, offset, queue_filter, due_total, scheduled_total, theme_filter),
                         reply_markup=self._manual_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
@@ -5747,7 +6053,7 @@ class NewsAdminBot:
                     total, rows, overdue = self._load_auto_queue(queue_filter, offset, theme_filter)
                     await self._safe_edit_message_text(
                         query,
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._auto_queue_text(total, rows, offset, overdue, queue_filter, theme_filter),
                         reply_markup=self._auto_queue_keyboard(total, rows, offset, queue_filter, theme_filter),
                     )
@@ -5756,7 +6062,7 @@ class NewsAdminBot:
                     total, rows = self._load_source_posts(domain, offset)
                     await self._safe_edit_message_text(
                         query,
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._source_posts_text(domain, total, rows, offset),
                         reply_markup=self._source_posts_keyboard(domain, total, rows, offset),
                     )
@@ -5765,7 +6071,7 @@ class NewsAdminBot:
                     total, rows = self._load_theme_posts(pillar, offset)
                     await self._safe_edit_message_text(
                         query,
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._theme_posts_text(pillar, total, rows, offset),
                         reply_markup=self._theme_posts_keyboard(pillar, total, rows, offset),
                     )
@@ -5774,14 +6080,14 @@ class NewsAdminBot:
                     rows = self._calendar_day_rows(day_key)
                     await self._safe_edit_message_text(
                         query,
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._calendar_day_text(day_key, rows),
                         reply_markup=self._calendar_day_keyboard(day_key, rows),
                     )
                 else:
                     total, rows = self._load_posts(status=status, offset=offset)
                     await self._safe_edit_message_text(query, 
-                        f"Пост успешно опубликован вручную.\nПричина: {reason}\n\n"
+                        "Пост успешно опубликован вручную.\n\n"
                         + self._posts_text(total, rows, offset, status),
                         reply_markup=self._posts_keyboard(total, rows, offset, status),
                     )
@@ -6379,7 +6685,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_calendar,
-                pattern=r"^(cal:summary|cal:day:\d{4}-\d{2}-\d{2}|cav:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}|cap:\d{4}-\d{2}-\d{2}|cpc:\d{4}-\d{2}-\d{2}|cpn:\d{4}-\d{2}-\d{2}|cas:(?:tomorrow|spread):\d{4}-\d{2}-\d{2}|car:\d{4}-\d{2}-\d{2}:\d{4})$",
+                pattern=r"^(cal:(?:summary|view:month)|cal:day:\d{4}-\d{2}-\d{2}|cav:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}|cap:\d{4}-\d{2}-\d{2}|cpc:\d{4}-\d{2}-\d{2}|cpn:\d{4}-\d{2}-\d{2}|cas:(?:tomorrow|spread):\d{4}-\d{2}-\d{2}|car:\d{4}-\d{2}-\d{2}:\d{4})$",
             )
         )
         app.add_handler(
@@ -6391,13 +6697,13 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_controls,
-                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z]+:\d+|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
+                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z_]+:\d+|lt:(?:menu|reset)|lt:toggle:\d+|gt:[a-z_]+|fa:[01]|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
             )
         )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|pf:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
+                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pf:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
             )
         )
         app.add_handler(

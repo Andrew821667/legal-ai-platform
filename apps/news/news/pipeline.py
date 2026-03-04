@@ -5,7 +5,7 @@ import re
 from html.parser import HTMLParser
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from typing import Any, Iterable
 from urllib.parse import urlparse, urlunparse
 
 
@@ -74,6 +74,75 @@ _DEFAULT_PILLAR_TARGETS: dict[str, float] = {
     "implementation": 0.3,
     "tools": 0.15,
     "market": 0.05,
+}
+GENERATION_THEME_DEFS: dict[str, dict[str, Any]] = {
+    "legal_function_ai": {
+        "label": "AI в работе юротдела",
+        "note": "Скорость, SLA, маршрутизация, загрузка команды, качество юридического сервиса.",
+        "keywords": ("юротдел", "legal ops", "legal department", "in-house legal", "gc office", "sla", "triage"),
+    },
+    "contracts_ai": {
+        "label": "AI в договорной работе",
+        "note": "Review, redline, playbook, lifecycle, переговоры и контроль рисков по договорам.",
+        "keywords": ("договор", "contract", "redline", "redlining", "playbook", "contract lifecycle", "clm"),
+    },
+    "leads_ai": {
+        "label": "AI в обработке заявок",
+        "note": "Intake, квалификация, клиентский путь, ответы и маршрутизация обращений.",
+        "keywords": ("intake", "lead", "triage", "заявк", "квалификац", "маршрутизац", "client intake"),
+    },
+    "documents_ai": {
+        "label": "AI в документообороте",
+        "note": "Шаблоны, сбор данных, генерация документов и контроль качества.",
+        "keywords": ("документооборот", "document", "template", "шаблон", "генерац документов", "knowledge base"),
+    },
+    "disputes_ai": {
+        "label": "AI в спорах и претензионной работе",
+        "note": "Судебная аналитика, eDiscovery, legal hold, стратегия спора.",
+        "keywords": ("litigation", "e-discovery", "ediscovery", "legal hold", "суд", "претензи", "dispute"),
+    },
+    "privacy_compliance_ai": {
+        "label": "AI в privacy, комплаенсе и governance",
+        "note": "ПДн, трансграничка, governance, контроль рисков и регуляторный контур.",
+        "keywords": ("privacy", "персональн", "gdpr", "compliance", "governance", "локализац", "трансгранич"),
+    },
+    "legal_ops_automation": {
+        "label": "Legal Ops и автоматизация процессов",
+        "note": "Workflow, playbook, операционная модель и автоматизация юридической функции.",
+        "keywords": ("workflow", "legal ops", "автоматиз", "playbook", "процесс", "workflow automation"),
+    },
+    "tools_products_ai": {
+        "label": "AI-инструменты и продукты для юристов",
+        "note": "Платформы, copilot, vendor evaluation, прикладные AI-инструменты.",
+        "keywords": ("tool", "platform", "copilot", "vendor", "assistant", "продукт", "инструмент"),
+    },
+    "ai_regulation": {
+        "label": "Регулирование AI",
+        "note": "AI Act, AI law, ответственность, sanctions, privacy law, export controls.",
+        "keywords": ("ai act", "регулирован", "ai law", "закон", "санкц", "export", "liability"),
+    },
+    "legal_ai_market": {
+        "label": "Рынок Legal AI и legal tech",
+        "note": "Сделки, рост вендоров, кейсы рынка, консолидация и новые сегменты.",
+        "keywords": ("рынок", "market", "funding", "acquisition", "legal tech", "legaltech", "vendor"),
+    },
+    "general_ai": {
+        "label": "Общий AI и продуктовые сигналы",
+        "note": "Широкие AI-посты как источник идей для внедрения, но в небольшом объеме.",
+        "keywords": ("ai assistant", "ai product", "copilot", "enterprise ai", "business ai", "workflow ai", "product launch"),
+    },
+    "frontier_ai": {
+        "label": "Модели, агенты и frontier AI",
+        "note": "Frontier models, reasoning, агенты и крупные технологические сдвиги.",
+        "keywords": ("frontier", "reasoning", "multimodal", "foundation model", "agentic", "ai agent", "model release"),
+    },
+}
+_PILLAR_TO_GENERATION_THEMES: dict[str, tuple[str, ...]] = {
+    "regulation": ("ai_regulation", "privacy_compliance_ai", "disputes_ai"),
+    "case": ("legal_ops_automation", "contracts_ai", "disputes_ai"),
+    "implementation": ("legal_function_ai", "legal_ops_automation", "contracts_ai", "documents_ai", "leads_ai"),
+    "tools": ("tools_products_ai", "general_ai", "frontier_ai"),
+    "market": ("legal_ai_market", "tools_products_ai", "general_ai"),
 }
 _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
     "regulation": (
@@ -508,6 +577,50 @@ def is_specialized_candidate(article: ArticleCandidate, *, threshold: float = 3.
 
 def default_pillar_targets() -> dict[str, float]:
     return dict(_DEFAULT_PILLAR_TARGETS)
+
+
+def generation_theme_keys() -> tuple[str, ...]:
+    return tuple(GENERATION_THEME_DEFS)
+
+
+def generation_theme_label(theme_key: str) -> str:
+    row = GENERATION_THEME_DEFS.get(theme_key)
+    if row is None:
+        return theme_key
+    return str(row.get("label") or theme_key)
+
+
+def generation_theme_note(theme_key: str) -> str:
+    row = GENERATION_THEME_DEFS.get(theme_key)
+    if row is None:
+        return ""
+    return str(row.get("note") or "")
+
+
+def generation_themes_for_text(text: str) -> set[str]:
+    normalized = _normalize_text(text)
+    matched: set[str] = set()
+    for theme_key, row in GENERATION_THEME_DEFS.items():
+        keywords = tuple(str(item).strip().lower() for item in row.get("keywords", ()) if str(item).strip())
+        if any(keyword in normalized for keyword in keywords):
+            matched.add(theme_key)
+
+    if matched:
+        return matched
+
+    pillar = infer_pillar(text)
+    matched.update(_PILLAR_TO_GENERATION_THEMES.get(pillar, ()))
+    if matched:
+        return matched
+
+    return {"general_ai"}
+
+
+def article_matches_enabled_generation_themes(article: ArticleCandidate, enabled_theme_keys: set[str] | None) -> bool:
+    if not enabled_theme_keys:
+        return True
+    article_themes = generation_themes_for_text(f"{article.title}\n{article.summary}")
+    return bool(article_themes & enabled_theme_keys)
 
 
 def infer_pillar(text: str) -> str:

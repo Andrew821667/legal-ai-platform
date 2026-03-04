@@ -15,11 +15,13 @@ from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.pipeline import (
     ArticleCandidate,
+    article_matches_enabled_generation_themes,
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
     default_pillar_targets,
     extract_domain,
+    generation_theme_keys,
     lexical_similarity,
     normalize_rubric_to_pillar,
     passes_generation_scope,
@@ -118,6 +120,17 @@ def _enabled_telegram_channels(controls: dict[str, bool]) -> list[str]:
         if controls.get(f"news.telegram_channel.{slug}.enabled", True):
             result.append(channel)
     return result
+
+
+def _enabled_generation_themes(control_rows: list[dict[str, Any]]) -> set[str]:
+    row_map = {str(row.get("key") or ""): row for row in control_rows}
+    generate_row = row_map.get("news.generate.enabled") or {}
+    config = generate_row.get("config") or {}
+    raw_enabled = config.get("enabled_themes")
+    available = set(generation_theme_keys())
+    if isinstance(raw_enabled, list):
+        return {str(item).strip() for item in raw_enabled if str(item).strip() in available}
+    return available
 
 
 def _collect_history(
@@ -331,6 +344,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
         core_client
     )
+    enabled_generation_themes = _enabled_generation_themes(control_rows)
     feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
     negative_feedback_context = (
         render_negative_feedback_context(negative_feedback_examples) if feedback_guard_enabled else ""
@@ -344,6 +358,11 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         logger.info("telegram_articles_appended", extra={"count": len(telegram_articles)})
         source_priorities.update(telegram_channel_priority_map(settings, enabled_channels))
         source_buckets.update(telegram_channel_bucket_map(enabled_channels))
+    articles = [
+        article
+        for article in articles
+        if article_matches_enabled_generation_themes(article, enabled_generation_themes)
+    ]
     priority_domains = _parse_priority_domains()
     selection_limit = min(200, max(80, top_limit * 16))
     selected_articles = choose_top_articles(
