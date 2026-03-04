@@ -303,3 +303,28 @@ def test_post_card_keyboard_has_add_footer_button() -> None:
     payload = markup.to_dict()
     labels = [button["text"] for row in payload["inline_keyboard"] for button in row]
     assert "🧩 Добавить футер" in labels
+
+
+def test_fallback_footer_text_is_varied_for_different_posts() -> None:
+    bot = NewsAdminBot()
+    first = bot._fallback_footer_text(
+        {
+            "id": "post-1",
+            "title": "Первый кейс",
+            "rubric": "legal_ops",
+            "format_type": "daily",
+            "text": "<b>Текст</b>",
+        }
+    )
+    second = bot._fallback_footer_text(
+        {
+            "id": "post-2",
+            "title": "Второй кейс",
+            "rubric": "legal_ops",
+            "format_type": "daily",
+            "text": "<b>Текст</b>",
+        }
+    )
+    assert "@legal_ai_helper_new_bot" in first
+    assert "@legal_ai_helper_new_bot" in second
+    assert first != second
