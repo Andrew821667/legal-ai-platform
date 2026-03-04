@@ -90,7 +90,7 @@ _MANUAL_QUEUE_FILTERS = ("due", "all")
 _AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
 _REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
 _BATCH_PUBLISH_MODES = ("page", "top3", "top5")
-_INTERVAL_SETTING_KINDS = ("generate_morning", "generate_evening", "publish", "limit", "retention")
+_INTERVAL_SETTING_KINDS = ("generate_morning", "generate_evening", "publish", "limit", "retention", "broad_ai")
 _MAIN_MENU_WORKSPACE = "🏠 Рабочий стол"
 _MAIN_MENU_CREATE = "➕ Создать"
 
@@ -1357,6 +1357,24 @@ class NewsAdminBot:
             return value
         return settings.news_review_retention_days
 
+    def _configured_broad_ai_limit(self, *, force_refresh: bool = False) -> int:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = config.get("broad_ai_limit")
+        if isinstance(value, int) and value >= 0:
+            return value
+        return 1
+
+    def _configured_broad_ai_options(self, *, force_refresh: bool = False) -> list[int]:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        raw = config.get("broad_ai_limit_options")
+        if isinstance(raw, list):
+            options = sorted({int(item) for item in raw if isinstance(item, int) and item >= 0})
+            if options:
+                return options
+        return [0, 1, 2, 3]
+
     def _enabled_generation_theme_keys(self, *, force_refresh: bool = False) -> set[str]:
         row = self._generate_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -1388,6 +1406,7 @@ class NewsAdminBot:
         generate_evening = str(generate_config.get("evening_time") or settings.news_generate_evening_slot).strip() or settings.news_generate_evening_slot
         publish_interval = publish_config.get("interval_seconds") if isinstance(publish_config.get("interval_seconds"), int) else settings.news_publish_interval_seconds
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
+        broad_ai_limit = generate_config.get("broad_ai_limit") if isinstance(generate_config.get("broad_ai_limit"), int) else 1
         retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
         enabled_themes = self._enabled_generation_theme_keys()
         autopilot_enabled = control_map.get("news.generate.enabled", True) and control_map.get(
@@ -1404,6 +1423,7 @@ class NewsAdminBot:
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
             f"Хранение драфтов На проверке: {retention_days} дн.",
+            f"Broad-AI лимит в цикле: {broad_ai_limit}",
             f"Активных контент-тем: {len(enabled_themes)}/{len(GENERATION_THEME_DEFS)}",
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"Обзор недели: {schedule_slot_label(schedule.weekly_review_slot)}",
@@ -1982,6 +2002,7 @@ class NewsAdminBot:
         generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
+        broad_ai_limit = self._configured_broad_ai_limit()
         retention_days = self._configured_review_retention_days()
         discussion_ready = bool((settings.news_discussion_chat_id or "").strip() or (settings.news_discussion_chat_username or "").strip())
         telegram_channel_count = len(self._telegram_channel_enabled_map())
@@ -1993,6 +2014,7 @@ class NewsAdminBot:
             f"Слоты автогенерации: {generate_morning} и {generate_evening}\n"
             f"Интервал автопубликации: {_humanize_interval(publish_interval)}\n"
             f"Лимит генерации за цикл: {generate_limit}\n"
+            f"Broad-AI лимит за цикл: {broad_ai_limit}\n"
             f"Хранение в «На проверке»: {retention_days} дн.\n"
             f"Источников RSS/search: {source_count}\n"
             f"Telegram-каналов: {telegram_channel_count}\n"
@@ -2927,12 +2949,14 @@ class NewsAdminBot:
         publish_interval = self._configured_publish_interval(force_refresh=True)
         generate_limit = self._configured_generate_limit(force_refresh=True)
         retention_days = self._configured_review_retention_days(force_refresh=True)
+        broad_ai_limit = self._configured_broad_ai_limit(force_refresh=True)
         return (
             "Ритм автоматической генерации и публикации\n\n"
             f"• Автогенерация: {generate_morning} и {generate_evening}\n"
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
             f"• Лимит генерации за цикл: {generate_limit}\n\n"
             f"• Хранение драфтов На проверке: {retention_days} дн.\n\n"
+            f"• Broad-AI в одном цикле: {broad_ai_limit}\n\n"
             "Генератор просыпается часто, но реально создает новые драфты только в указанные слоты."
         )
 
@@ -2946,6 +2970,7 @@ class NewsAdminBot:
                     _inline_button("Лимит за цикл", callback_data="int:view:limit"),
                     _inline_button("Хранение", callback_data="int:view:retention"),
                 ],
+                [_inline_button("Broad-AI лимит", callback_data="int:view:broad_ai")],
                 [_inline_button("🔙 К сетке", callback_data="sch:menu")],
             ]
         )
@@ -2967,13 +2992,19 @@ class NewsAdminBot:
             current = self._configured_review_retention_days(force_refresh=True)
             options = settings.news_review_retention_options_list
             label = "Хранение драфтов На проверке"
+        elif kind == "broad_ai":
+            current = self._configured_broad_ai_limit(force_refresh=True)
+            options = self._configured_broad_ai_options(force_refresh=True)
+            label = "Лимит broad-AI за цикл"
         else:
             current = self._configured_generate_limit(force_refresh=True)
             options = settings.news_generate_limit_options_list
             label = "Лимит генерации за цикл"
 
         options_line = ", ".join(
-            _humanize_interval(item) if kind == "publish" else (f"{item} дн." if kind == "retention" else str(item))
+            _humanize_interval(item)
+            if kind == "publish"
+            else (f"{item} дн." if kind == "retention" else str(item))
             for item in options
         )
         current_label = _humanize_interval(current) if kind == "publish" else (f"{current} дн." if kind == "retention" else str(current))
@@ -2992,6 +3023,8 @@ class NewsAdminBot:
             options = settings.news_publish_interval_options_list
         elif kind == "retention":
             options = settings.news_review_retention_options_list
+        elif kind == "broad_ai":
+            options = self._configured_broad_ai_options(force_refresh=True)
         else:
             options = settings.news_generate_limit_options_list
 
@@ -5261,6 +5294,9 @@ class NewsAdminBot:
                     elif kind == "retention":
                         value = int(raw_value)
                         config["retention_days"] = value
+                    elif kind == "broad_ai":
+                        value = int(raw_value)
+                        config["broad_ai_limit"] = value
                     else:
                         value = int(raw_value)
                         config["generate_limit"] = value
@@ -6742,7 +6778,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_controls,
-                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z_]+:\d+|lt:(?:menu|reset)|lt:toggle:\d+|gt:[a-z_]+|fa:[01]|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
+                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention|broad_ai)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention|broad_ai):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z_]+:\d+|lt:(?:menu|reset)|lt:toggle:\d+|gt:[a-z_]+|fa:[01]|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
             )
         )
         app.add_handler(

@@ -133,6 +133,16 @@ def _enabled_generation_themes(control_rows: list[dict[str, Any]]) -> set[str]:
     return available
 
 
+def _broad_ai_limit(control_rows: list[dict[str, Any]]) -> int:
+    row_map = {str(row.get("key") or ""): row for row in control_rows}
+    generate_row = row_map.get("news.generate.enabled") or {}
+    config = generate_row.get("config") or {}
+    value = config.get("broad_ai_limit")
+    if isinstance(value, int) and value >= 0:
+        return value
+    return 1
+
+
 def _collect_history(
     client: CoreClient,
 ) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]], list[dict[str, str]]]:
@@ -345,6 +355,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         core_client
     )
     enabled_generation_themes = _enabled_generation_themes(control_rows)
+    broad_ai_limit = _broad_ai_limit(control_rows)
     feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
     negative_feedback_context = (
         render_negative_feedback_context(negative_feedback_examples) if feedback_guard_enabled else ""
@@ -372,7 +383,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         priority_domains=priority_domains,
         source_priority_weights=source_priorities,
         source_bucket_weights=source_buckets,
-        max_bucket_counts={"broad_ai": 1},
+        max_bucket_counts={"broad_ai": broad_ai_limit},
         max_per_source=settings.news_max_per_source,
         recent_pillar_counts=recent_pillar_counts,
         target_pillar_shares=default_pillar_targets(),

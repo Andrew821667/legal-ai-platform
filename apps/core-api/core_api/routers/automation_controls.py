@@ -24,11 +24,13 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "enabled": True,
         "config": {
             "generate_limit": 5,
+            "broad_ai_limit": 1,
             "morning_time": "08:00",
             "evening_time": "17:00",
             "morning_options": ["07:00", "07:30", "08:00", "08:30", "09:00"],
             "evening_options": ["16:00", "16:30", "17:00", "17:30", "18:00"],
             "limit_options": [3, 5, 7, 10],
+            "broad_ai_limit_options": [0, 1, 2, 3],
             "retention_days": 3,
             "retention_options": [1, 2, 3, 5, 7],
         },
