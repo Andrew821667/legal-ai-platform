@@ -110,6 +110,13 @@ _PILLAR_LABELS = {
     "tools": "AI-инструменты для практики юриста",
     "market": "Рынок Legal AI и legal tech",
 }
+_PILLAR_BADGES = {
+    "regulation": "⚖️",
+    "case": "📚",
+    "implementation": "⚙️",
+    "tools": "🧰",
+    "market": "📈",
+}
 _RUBRIC_LABELS = {
     "ai_law": "AI law / регулирование",
     "compliance": "Комплаенс и governance",
@@ -296,7 +303,7 @@ def _status_label(status: str) -> str:
         return "🗓 Календарь публикаций"
     if _is_auto_queue_context(status):
         queue_filter, theme_filter = _auto_queue_filters_from_context(status)
-        theme_suffix = "" if theme_filter == "all" else f" / {_pillar_label(theme_filter)}"
+        theme_suffix = "" if theme_filter == "all" else f" / {_pillar_display(theme_filter)}"
         if queue_filter == "all":
             return f"⏱ Автоочередь{theme_suffix}"
         return f"⏱ Автоочередь: {publication_kind_label(queue_filter)}{theme_suffix}"
@@ -435,6 +442,14 @@ def _slot_label(slot: str) -> str:
 
 def _pillar_label(pillar: str) -> str:
     return _PILLAR_LABELS.get(pillar, pillar)
+
+
+def _pillar_badge(pillar: str) -> str:
+    return _PILLAR_BADGES.get(pillar, "🧭")
+
+
+def _pillar_display(pillar: str) -> str:
+    return f"{_pillar_badge(pillar)} {_pillar_label(pillar)}"
 
 
 def _rubric_label(rubric: str) -> str:
@@ -1875,7 +1890,9 @@ class NewsAdminBot:
         }
         for pillar, label in _PILLAR_LABELS.items():
             rubric_labels = ", ".join(_rubric_label(item) for item in _PILLAR_RUBRICS.get(pillar, ()))
-            lines.append(f"• {label}: {counts.get(pillar, 0)} пост(ов), целевая доля {target_share.get(pillar, 'n/a')}")
+            lines.append(
+                f"• {_pillar_badge(pillar)} {label}: {counts.get(pillar, 0)} пост(ов), целевая доля {target_share.get(pillar, 'n/a')}"
+            )
             if rubric_labels:
                 lines.append(f"   Рубрики: {rubric_labels}")
         return "\n".join(lines)
@@ -1903,7 +1920,7 @@ class NewsAdminBot:
             rows.append(
                 [
                     _inline_button(
-                        f"{_pillar_label(pillar)} ({counts.get(pillar, 0)})",
+                        f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})",
                         callback_data=f"th:{pillar}:0",
                     )
                     for pillar in chunk
@@ -2236,7 +2253,7 @@ class NewsAdminBot:
         tz = ZoneInfo(settings.tz_name)
         schedule = self._schedule_config()
         filter_label = "Все публикации" if queue_filter == "all" else publication_kind_label(queue_filter)
-        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_display(theme_filter)
         generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
         lines = [
@@ -2308,7 +2325,7 @@ class NewsAdminBot:
                     for item_key, item_label in chunk
                 ]
             )
-        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_display(pillar)) for pillar in _PILLAR_LABELS]
         for index in range(0, len(theme_rows), 2):
             chunk = theme_rows[index : index + 2]
             buttons.append(
@@ -2545,12 +2562,30 @@ class NewsAdminBot:
         overdue_count = self._overdue_scheduled_count()
         buttons.append(
             [
+                _inline_button(f"{'• ' if view == 'day' else ''}День", callback_data=f"cal:view:day:{now_local.isoformat()}"),
                 _inline_button(f"{'• ' if view == 'week' else ''}Неделя", callback_data="cal:summary"),
                 _inline_button(f"{'• ' if view == 'month' else ''}Месяц", callback_data="cal:view:month"),
             ]
         )
+        if view == "day":
+            day_key = now_local.isoformat()
+            buttons.append([InlineKeyboardButton("📅 Открыть расписание на сегодня", callback_data=f"cal:day:{day_key}")])
+            if overdue_count:
+                buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:0")])
+            buttons.append(
+                [
+                    InlineKeyboardButton("🕒 Время слотов", callback_data="sch:menu"),
+                    InlineKeyboardButton("⏱ Ритм генерации", callback_data="int:menu"),
+                ]
+            )
+            buttons.append([InlineKeyboardButton("🔄 Обновить календарь", callback_data=f"cal:view:day:{day_key}")])
+            buttons.append([InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh")])
+            return InlineKeyboardMarkup(buttons)
+
         row_buffer: list[InlineKeyboardButton] = []
-        for day_key, slots in groups[: (8 if view == 'week' else 14)]:
+        max_days = 8 if view == "week" else 28
+        max_columns = 2 if view == "week" else 4
+        for day_key, slots in groups[:max_days]:
             day_date = datetime.fromisoformat(day_key).date()
             if day_date == now_local:
                 day_label = "Сегодня"
@@ -2561,7 +2596,7 @@ class NewsAdminBot:
             row_buffer.append(
                 InlineKeyboardButton(f"{day_label} ({len(slots)})", callback_data=f"cal:day:{day_key}")
             )
-            if len(row_buffer) == 2:
+            if len(row_buffer) == max_columns:
                 buttons.append(row_buffer)
                 row_buffer = []
         if row_buffer:
@@ -3043,7 +3078,7 @@ class NewsAdminBot:
     ) -> str:
         label = _review_origin_label(review_filter)
         kind_label = "Все виды" if kind_filter == "all" else publication_kind_label(kind_filter)
-        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_display(theme_filter)
         if not rows:
             return (
                 "🟡 На проверке\n\n"
@@ -3087,7 +3122,7 @@ class NewsAdminBot:
         theme_filter: str = "all",
     ) -> str:
         filter_label = "к публикации сейчас" if queue_filter == "due" else "все готовые"
-        theme_label = "Все темы" if theme_filter == "all" else _pillar_label(theme_filter)
+        theme_label = "Все темы" if theme_filter == "all" else _pillar_display(theme_filter)
         if not rows:
             return (
                 "Ручная очередь публикации\n\n"
@@ -3179,7 +3214,7 @@ class NewsAdminBot:
                     for item_key, item_label in chunk
                 ]
             )
-        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_display(pillar)) for pillar in _PILLAR_LABELS]
         for index in range(0, len(theme_rows), 2):
             chunk = theme_rows[index : index + 2]
             buttons.append(
@@ -3252,7 +3287,7 @@ class NewsAdminBot:
                 InlineKeyboardButton("📚 Все готовые", callback_data=f"mq:all:{theme_filter}:0"),
             ]
         ]
-        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_label(pillar)) for pillar in _PILLAR_LABELS]
+        theme_rows = [("all", "Все темы")] + [(pillar, _pillar_display(pillar)) for pillar in _PILLAR_LABELS]
         for index in range(0, len(theme_rows), 2):
             chunk = theme_rows[index : index + 2]
             buttons.append(
@@ -3322,7 +3357,7 @@ class NewsAdminBot:
             f"Формат: {format_label}",
             f"Format type: {format_type}",
             f"CTA: {cta_type}",
-            f"Тематика: {_pillar_label(pillar)}",
+            f"Тематика: {_pillar_display(pillar)}",
             f"Рубрика: {_rubric_label(rubric)}",
         ]
         if telegram_message_id:
@@ -4410,6 +4445,16 @@ class NewsAdminBot:
                     query,
                     self._calendar_month_text(groups),
                     reply_markup=self._calendar_summary_keyboard(groups, view="month"),
+                )
+                return
+
+            if data.startswith("cal:view:day:"):
+                day_key = data.split(":", maxsplit=3)[3]
+                rows = self._calendar_day_rows(day_key)
+                await self._safe_edit_message_text(
+                    query,
+                    self._calendar_day_text(day_key, rows),
+                    reply_markup=self._calendar_day_keyboard(day_key, rows),
                 )
                 return
 
@@ -6685,7 +6730,7 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_calendar,
-                pattern=r"^(cal:(?:summary|view:month)|cal:day:\d{4}-\d{2}-\d{2}|cav:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}|cap:\d{4}-\d{2}-\d{2}|cpc:\d{4}-\d{2}-\d{2}|cpn:\d{4}-\d{2}-\d{2}|cas:(?:tomorrow|spread):\d{4}-\d{2}-\d{2}|car:\d{4}-\d{2}-\d{2}:\d{4})$",
+                pattern=r"^(cal:(?:summary|view:month)|cal:view:day:\d{4}-\d{2}-\d{2}|cal:day:\d{4}-\d{2}-\d{2}|cav:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}|cap:\d{4}-\d{2}-\d{2}|cpc:\d{4}-\d{2}-\d{2}|cpn:\d{4}-\d{2}-\d{2}|cas:(?:tomorrow|spread):\d{4}-\d{2}-\d{2}|car:\d{4}-\d{2}-\d{2}:\d{4})$",
             )
         )
         app.add_handler(

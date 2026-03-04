@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     google_news_query_frontier_en: str = '("frontier AI model" OR "foundation model" OR "reasoning model" OR "multimodal AI" OR "frontier model")'
     google_news_query_enterprise_ai_en: str = '("enterprise AI" OR "AI copilots business" OR "AI workflow automation" OR "AI agents enterprise" OR "business AI platform")'
     google_news_query_ai_products_en: str = '("AI product launch" OR "AI platform launch" OR "generative AI product" OR "AI assistant release" OR "AI tool launch")'
+    google_news_query_ai_research_en: str = '("AI research" OR "foundation model release" OR "LLM benchmark" OR "reasoning model" OR "agent benchmark")'
+    google_news_query_ai_policy_global_en: str = '("AI policy" OR "AI governance framework" OR "model safety policy" OR "AI standards" OR "AI risk management")'
     google_news_lang_ru: str = "ru"
     google_news_lang_en: str = "en"
     google_news_region_ru: str = "RU"

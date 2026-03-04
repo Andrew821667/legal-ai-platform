@@ -136,13 +136,23 @@ GENERATION_THEME_DEFS: dict[str, dict[str, Any]] = {
         "note": "Frontier models, reasoning, агенты и крупные технологические сдвиги.",
         "keywords": ("frontier", "reasoning", "multimodal", "foundation model", "agentic", "ai agent", "model release"),
     },
+    "enterprise_ai": {
+        "label": "Enterprise AI и корпоративные внедрения",
+        "note": "Корпоративные AI-платформы, copilot-контуры, интеграция в бизнес-процессы.",
+        "keywords": ("enterprise ai", "corporate ai", "copilot", "workflow ai", "business ai", "platform rollout"),
+    },
+    "model_risk_and_safety": {
+        "label": "Риски моделей и AI-безопасность",
+        "note": "Model risk, safety, red teaming, guardrails, устойчивость и контроль поведения моделей.",
+        "keywords": ("model risk", "ai safety", "red team", "guardrail", "hallucination", "alignment", "safety eval"),
+    },
 }
 _PILLAR_TO_GENERATION_THEMES: dict[str, tuple[str, ...]] = {
     "regulation": ("ai_regulation", "privacy_compliance_ai", "disputes_ai"),
     "case": ("legal_ops_automation", "contracts_ai", "disputes_ai"),
     "implementation": ("legal_function_ai", "legal_ops_automation", "contracts_ai", "documents_ai", "leads_ai"),
-    "tools": ("tools_products_ai", "general_ai", "frontier_ai"),
-    "market": ("legal_ai_market", "tools_products_ai", "general_ai"),
+    "tools": ("tools_products_ai", "general_ai", "frontier_ai", "enterprise_ai"),
+    "market": ("legal_ai_market", "tools_products_ai", "general_ai", "enterprise_ai", "model_risk_and_safety"),
 }
 _PILLAR_KEYWORDS: dict[str, tuple[str, ...]] = {
     "regulation": (

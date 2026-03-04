@@ -217,6 +217,24 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         getattr(settings, "google_news_region_en", "US"),
     )
+    google_ai_research_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_research_en",
+            '("AI research" OR "foundation model release" OR "LLM benchmark" OR "reasoning model" OR "agent benchmark")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
+    google_ai_policy_global_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_policy_global_en",
+            '("AI policy" OR "AI governance framework" OR "model safety policy" OR "AI standards" OR "AI risk management")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        getattr(settings, "google_news_region_en", "US"),
+    )
     return {
         "google_news_ru": SourceSpec(
             key="google_news_ru",
@@ -383,6 +401,56 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             priority=0.95,
             bucket="broad_ai",
         ),
+        "google_news_ai_research_en": SourceSpec(
+            key="google_news_ai_research_en",
+            name="Google News AI Research EN",
+            kind="search_rss",
+            note="Зарубежный поисковый RSS по AI research, benchmark-ам моделей, reasoning и release новых поколений моделей",
+            url=google_ai_research_en,
+            domain="news.google.com",
+            priority=0.9,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_policy_global_en": SourceSpec(
+            key="google_news_ai_policy_global_en",
+            name="Google News AI Policy Global EN",
+            kind="search_rss",
+            note="Зарубежный поисковый RSS по AI governance frameworks, policy и risk management",
+            url=google_ai_policy_global_en,
+            domain="news.google.com",
+            priority=1.1,
+            bucket="broad_ai",
+        ),
+        "ai_news_global": SourceSpec(
+            key="ai_news_global",
+            name="AI News Global",
+            kind="rss",
+            note="Международные новости по AI-продуктам, внедрениям и рыночным сигналам.",
+            url="https://www.artificialintelligence-news.com/feed/",
+            domain="artificialintelligence-news.com",
+            priority=0.9,
+            bucket="broad_ai",
+        ),
+        "unite_ai": SourceSpec(
+            key="unite_ai",
+            name="Unite.AI",
+            kind="rss",
+            note="Международные материалы по AI-платформам, моделям, продуктам и внедрению в бизнес-процессы.",
+            url="https://www.unite.ai/feed/",
+            domain="unite.ai",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "marktechpost": SourceSpec(
+            key="marktechpost",
+            name="MarkTechPost",
+            kind="rss",
+            note="Международный AI-поток по моделям, агентам, инструментам и applied use-cases.",
+            url="https://www.marktechpost.com/feed/",
+            domain="marktechpost.com",
+            priority=0.85,
+            bucket="broad_ai",
+        ),
         "pravo_ru": SourceSpec(
             key="pravo_ru",
             name="Право.ru",
@@ -543,6 +611,11 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_frontier_en",
         "google_news_enterprise_ai_en",
         "google_news_ai_products_en",
+        "google_news_ai_research_en",
+        "google_news_ai_policy_global_en",
+        "ai_news_global",
+        "unite_ai",
+        "marktechpost",
         "pravo_ru",
         "habr_news",
         "habr_hubs",
