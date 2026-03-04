@@ -7,6 +7,8 @@ from news.admin_bot import (
     _auto_queue_filters_from_context,
     _auto_queue_filter_from_context,
     _button_icon_map,
+    _callback_payload_text,
+    _callback_prefix_matcher,
     _main_menu_markup,
     _batch_mode_label,
     _batch_mode_limit,
@@ -29,6 +31,10 @@ from news.admin_bot import (
     _review_origin,
     _review_origin_badge,
     _manual_post_kind_structure,
+    _is_calendar_callback,
+    _is_controls_callback,
+    _is_create_callback,
+    _is_posts_callback,
     NewsAdminBot,
     _normalize_operator_note,
     _parse_auto_queue_callback,
@@ -74,6 +80,24 @@ def test_parse_manual_queue_callback_formats() -> None:
     assert queue_filter == "due"
     assert theme_filter == "implementation"
     assert offset == 7
+
+
+def test_callback_payload_text_and_prefix_matcher() -> None:
+    assert _callback_payload_text("cal:summary") == "cal:summary"
+    assert _callback_payload_text(123) == ""
+    assert _callback_prefix_matcher("refresh", exact=frozenset({"refresh"}))
+    assert _callback_prefix_matcher("gen:pick:5", prefixes=("gen:",))
+    assert not _callback_prefix_matcher("rv:all:0", prefixes=("gen:",))
+
+
+def test_callback_route_matchers() -> None:
+    assert _is_calendar_callback("cal:summary")
+    assert _is_create_callback("cn:start")
+    assert _is_controls_callback("refresh")
+    assert _is_controls_callback("sec:sources")
+    assert _is_posts_callback("pv:123:review:0")
+    assert not _is_posts_callback("sec:sources")
+    assert not _is_controls_callback("rv:all:0")
 
 
 def test_manual_queue_context_helpers() -> None:

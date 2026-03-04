@@ -102,6 +102,8 @@ _ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _POST_CACHE_TTL_SECONDS = 12
 _QUEUE_CACHE_TTL_SECONDS = 15
+_DERIVED_CACHE_TTL_SECONDS = 20
+_CALENDAR_CACHE_TTL_SECONDS = 20
 
 _PILLAR_LABELS = {
     "regulation": "AI в праве и регулирование",
@@ -137,6 +139,51 @@ _PILLAR_RUBRICS = {
 }
 _QUEUE_THEME_FILTERS = ("all",) + tuple(_PILLAR_LABELS)
 _LONGREAD_TOPIC_LIBRARY = tuple(dict.fromkeys(settings.news_longread_topics_list))
+_CALENDAR_CALLBACK_PREFIXES = ("cal:", "cav:", "cap:", "cpc:", "cpn:", "cas:", "car:")
+_CREATE_CALLBACK_PREFIXES = ("cn:", "ck:", "ct:", "cm:", "cl:", "cd:", "cr:", "ce:", "cs:")
+_CONTROLS_CALLBACK_EXACT = frozenset({"noop", "refresh", "sections", "automation", "status", "workers", "resetstale"})
+_CONTROLS_CALLBACK_PREFIXES = (
+    "sch:",
+    "int:",
+    "sec:",
+    "aq:",
+    "srd:",
+    "srt:",
+    "stc:",
+    "scc:",
+    "src:",
+    "th:",
+    "lt:",
+    "gt:",
+    "fa:",
+    "gen:",
+    "all:",
+    "set:",
+)
+_POSTS_CALLBACK_PREFIXES = (
+    "mq:",
+    "mbp:",
+    "mbc:",
+    "mbn:",
+    "pl:",
+    "rv:",
+    "pv:",
+    "pt:",
+    "ppc:",
+    "ppy:",
+    "ppn:",
+    "pdd:",
+    "pdn:",
+    "pdy:",
+    "pm:",
+    "pa:",
+    "pf:",
+    "rr:",
+    "pr:",
+    "ps:",
+    "px:",
+    "ba:",
+)
 _TELEGRAM_CHANNEL_NOTES = {
     "allthingslegal": "Международная повестка legal tech, legal AI, legal ops и рынка юридических технологий.",
     "legal_tech": "Русскоязычные новости и кейсы по legal tech, автоматизации юристов и AI-сервисам.",
@@ -356,6 +403,46 @@ def _parse_review_filter_callback(data: str) -> tuple[str, str, str, int]:
     elif len(parts) >= 3 and parts[2].isdigit():
         offset = int(parts[2])
     return review_filter, kind_filter, theme_filter, offset
+
+
+def _callback_payload_text(payload: object) -> str:
+    if isinstance(payload, str):
+        return payload
+    return ""
+
+
+def _callback_prefix_matcher(
+    payload: object,
+    *,
+    prefixes: tuple[str, ...] = (),
+    exact: frozenset[str] | None = None,
+) -> bool:
+    data = _callback_payload_text(payload)
+    if not data:
+        return False
+    if exact and data in exact:
+        return True
+    return any(data.startswith(prefix) for prefix in prefixes)
+
+
+def _is_calendar_callback(payload: object) -> bool:
+    return _callback_prefix_matcher(payload, prefixes=_CALENDAR_CALLBACK_PREFIXES)
+
+
+def _is_create_callback(payload: object) -> bool:
+    return _callback_prefix_matcher(payload, prefixes=_CREATE_CALLBACK_PREFIXES)
+
+
+def _is_controls_callback(payload: object) -> bool:
+    return _callback_prefix_matcher(
+        payload,
+        prefixes=_CONTROLS_CALLBACK_PREFIXES,
+        exact=_CONTROLS_CALLBACK_EXACT,
+    )
+
+
+def _is_posts_callback(payload: object) -> bool:
+    return _callback_prefix_matcher(payload, prefixes=_POSTS_CALLBACK_PREFIXES)
 
 
 def _parse_manual_queue_callback(data: str) -> tuple[str, str, int]:
@@ -1225,6 +1312,7 @@ class NewsAdminBot:
         self._controls_cache: tuple[datetime, list[dict[str, Any]]] | None = None
         self._queue_snapshot_cache: tuple[datetime, tuple[dict[str, int], str]] | None = None
         self._posts_cache: dict[tuple[str, bool, int], tuple[datetime, list[dict[str, Any]]]] = {}
+        self._derived_cache: dict[str, tuple[datetime, Any]] = {}
 
     def _is_admin(self, update: Update) -> bool:
         user = update.effective_user
@@ -1254,9 +1342,29 @@ class NewsAdminBot:
         self._controls_cache = (now, list(rows))
         return rows
 
+    def _derived_cache_get(self, key: str, *, ttl_seconds: int, force_refresh: bool = False) -> Any | None:
+        if force_refresh:
+            return None
+        cached = self._derived_cache.get(key)
+        if cached is None:
+            return None
+        now = datetime.now(timezone.utc)
+        if (now - cached[0]).total_seconds() > ttl_seconds:
+            self._derived_cache.pop(key, None)
+            return None
+        return cached[1]
+
+    def _derived_cache_set(self, key: str, payload: Any) -> None:
+        self._derived_cache[key] = (datetime.now(timezone.utc), payload)
+
+    def _invalidate_controls_cache(self) -> None:
+        self._controls_cache = None
+        self._derived_cache.clear()
+
     def _invalidate_post_caches(self) -> None:
         self._queue_snapshot_cache = None
         self._posts_cache.clear()
+        self._derived_cache.clear()
 
     def _list_posts_rows(
         self,
@@ -1632,7 +1740,12 @@ class NewsAdminBot:
         rows.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
         return InlineKeyboardMarkup(rows)
 
-    def _source_stats(self) -> dict[str, dict[str, int]]:
+    def _source_stats(self, *, force_refresh: bool = False) -> dict[str, dict[str, int]]:
+        cache_key = "source_stats"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return {key: dict(value) for key, value in cached.items()}
+
         catalog = source_catalog(settings)
         stats: dict[str, dict[str, int]] = {key: {"review": 0, "scheduled": 0, "posted": 0, "failed": 0} for key in catalog}
         for status in ("review", "scheduled", "posted", "failed"):
@@ -1656,6 +1769,7 @@ class NewsAdminBot:
                         stats.setdefault(key, {"review": 0, "scheduled": 0, "posted": 0, "failed": 0})
                         stats[key][status] = stats[key].get(status, 0) + 1
                         break
+        self._derived_cache_set(cache_key, {key: dict(value) for key, value in stats.items()})
         return stats
 
     def _telegram_channel_enabled_map(self, force_refresh: bool = False) -> dict[str, bool]:
@@ -1666,7 +1780,12 @@ class NewsAdminBot:
             result[slug] = controls.get(_telegram_channel_control_key(slug), True)
         return result
 
-    def _telegram_channel_history_counts(self) -> dict[str, dict[str, int]]:
+    def _telegram_channel_history_counts(self, *, force_refresh: bool = False) -> dict[str, dict[str, int]]:
+        cache_key = "telegram_channel_history_counts"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return {key: dict(value) for key, value in cached.items()}
+
         stats: dict[str, dict[str, int]] = {}
         for status in ("review", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
@@ -1679,6 +1798,7 @@ class NewsAdminBot:
                 slug = _telegram_channel_slug(path_parts[-1])
                 bucket = stats.setdefault(slug, {"review": 0, "scheduled": 0, "posted": 0, "failed": 0})
                 bucket[status] = bucket.get(status, 0) + 1
+        self._derived_cache_set(cache_key, {key: dict(value) for key, value in stats.items()})
         return stats
 
     def _source_detail_text(self, source_key: str) -> str:
@@ -1813,19 +1933,23 @@ class NewsAdminBot:
             ]
         )
 
-    def _load_source_posts(self, source_key: str, offset: int) -> tuple[int, list[dict[str, Any]]]:
-        spec = source_catalog(settings).get(source_key)
-        rows: list[dict[str, Any]] = []
-        for status in ("review", "scheduled", "posted", "failed"):
-            rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
-        if source_key == "telegram_channels":
-            filtered = [row for row in rows if extract_domain(str(row.get("source_url") or "")) == "t.me"]
-        elif spec and spec.url:
-            filtered = [row for row in rows if str(row.get("source_feed_url") or row.get("source_url") or "") == spec.url]
-        elif spec and spec.domain:
-            filtered = [row for row in rows if extract_domain(str(row.get("source_url") or "")) == spec.domain]
-        else:
-            filtered = rows
+    def _load_source_posts(self, source_key: str, offset: int, *, force_refresh: bool = False) -> tuple[int, list[dict[str, Any]]]:
+        cache_key = f"source_posts:{source_key}"
+        filtered = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if filtered is None:
+            spec = source_catalog(settings).get(source_key)
+            rows: list[dict[str, Any]] = []
+            for status in ("review", "scheduled", "posted", "failed"):
+                rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
+            if source_key == "telegram_channels":
+                filtered = [row for row in rows if extract_domain(str(row.get("source_url") or "")) == "t.me"]
+            elif spec and spec.url:
+                filtered = [row for row in rows if str(row.get("source_feed_url") or row.get("source_url") or "") == spec.url]
+            elif spec and spec.domain:
+                filtered = [row for row in rows if extract_domain(str(row.get("source_url") or "")) == spec.domain]
+            else:
+                filtered = rows
+            self._derived_cache_set(cache_key, list(filtered))
         total = len(filtered)
         return total, filtered[offset : offset + _POSTS_PAGE_SIZE]
 
@@ -1863,7 +1987,12 @@ class NewsAdminBot:
         buttons.append([_inline_button("🔙 К источникам", callback_data="sec:sources")])
         return InlineKeyboardMarkup(buttons)
 
-    def _generation_theme_stats(self) -> dict[str, int]:
+    def _generation_theme_stats(self, *, force_refresh: bool = False) -> dict[str, int]:
+        cache_key = "generation_theme_stats"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return dict(cached)
+
         counts: dict[str, int] = {theme_key: 0 for theme_key in GENERATION_THEME_DEFS}
         for status in ("review", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
@@ -1871,9 +2000,15 @@ class NewsAdminBot:
                 text = str(row.get("text") or "")
                 for theme_key in generation_themes_for_text(f"{title}\n{text}"):
                     counts[theme_key] = counts.get(theme_key, 0) + 1
+        self._derived_cache_set(cache_key, dict(counts))
         return counts
 
-    def _theme_stats(self) -> dict[str, int]:
+    def _theme_stats(self, *, force_refresh: bool = False) -> dict[str, int]:
+        cache_key = "theme_stats"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return dict(cached)
+
         counts: dict[str, int] = {pillar: 0 for pillar in _PILLAR_LABELS}
         for status in ("review", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
@@ -1881,6 +2016,7 @@ class NewsAdminBot:
                 text = str(row.get("text") or "")
                 pillar = normalize_rubric_to_pillar(row.get("rubric"), f"{title}\n{text}")
                 counts[pillar] = counts.get(pillar, 0) + 1
+        self._derived_cache_set(cache_key, dict(counts))
         return counts
 
     def _themes_text(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> str:
@@ -1949,17 +2085,21 @@ class NewsAdminBot:
         rows.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
         return InlineKeyboardMarkup(rows)
 
-    def _load_theme_posts(self, pillar: str, offset: int) -> tuple[int, list[dict[str, Any]]]:
-        rows: list[dict[str, Any]] = []
-        for status in ("review", "scheduled", "posted", "failed"):
-            rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
-        filtered: list[dict[str, Any]] = []
-        for row in rows:
-            title = str(row.get("title") or "")
-            text = str(row.get("text") or "")
-            row_pillar = normalize_rubric_to_pillar(row.get("rubric"), f"{title}\n{text}")
-            if row_pillar == pillar:
-                filtered.append(row)
+    def _load_theme_posts(self, pillar: str, offset: int, *, force_refresh: bool = False) -> tuple[int, list[dict[str, Any]]]:
+        cache_key = f"theme_posts:{pillar}"
+        filtered = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if filtered is None:
+            rows: list[dict[str, Any]] = []
+            for status in ("review", "scheduled", "posted", "failed"):
+                rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
+            filtered = []
+            for row in rows:
+                title = str(row.get("title") or "")
+                text = str(row.get("text") or "")
+                row_pillar = normalize_rubric_to_pillar(row.get("rubric"), f"{title}\n{text}")
+                if row_pillar == pillar:
+                    filtered.append(row)
+            self._derived_cache_set(cache_key, list(filtered))
         total = len(filtered)
         return total, filtered[offset : offset + _POSTS_PAGE_SIZE]
 
@@ -2466,26 +2606,46 @@ class NewsAdminBot:
         total = len(filtered_rows)
         return total, filtered_rows[offset : offset + _POSTS_PAGE_SIZE], len(due_rows), len(all_rows)
 
-    def _scheduled_rows_for_day(self, day_key: str) -> list[dict[str, Any]]:
+    def _scheduled_rows_by_day(self, *, force_refresh: bool = False) -> dict[str, list[dict[str, Any]]]:
+        cache_key = "scheduled_rows_by_day"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_CALENDAR_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return cached
+
         tz = ZoneInfo(settings.tz_name)
-        target_day = datetime.fromisoformat(day_key).date()
         rows = self._list_posts_rows(status="scheduled", newest_first=False, limit=100)
-        result: list[dict[str, Any]] = []
+        grouped: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             publish_at = self._publish_at_utc(row)
             if publish_at is None:
                 continue
-            if publish_at.astimezone(tz).date() == target_day:
-                result.append(row)
-        return sorted(result, key=lambda item: self._publish_at_utc(item) or datetime.max.replace(tzinfo=timezone.utc))
+            day_key = publish_at.astimezone(tz).date().isoformat()
+            grouped.setdefault(day_key, []).append(row)
+        for day_key in grouped:
+            grouped[day_key].sort(
+                key=lambda item: self._publish_at_utc(item) or datetime.max.replace(tzinfo=timezone.utc)
+            )
+        self._derived_cache_set(cache_key, grouped)
+        return grouped
 
-    def _calendar_groups(self) -> list[tuple[str, list[Any]]]:
+    def _scheduled_rows_for_day(self, day_key: str, *, force_refresh: bool = False) -> list[dict[str, Any]]:
+        grouped = self._scheduled_rows_by_day(force_refresh=force_refresh)
+        return list(grouped.get(day_key, []))
+
+    def _calendar_groups(self, *, force_refresh: bool = False) -> list[tuple[str, list[Any]]]:
+        cache_key = "calendar_groups"
+        cached = self._derived_cache_get(cache_key, ttl_seconds=_CALENDAR_CACHE_TTL_SECONDS, force_refresh=force_refresh)
+        if cached is not None:
+            return cached
+
         tz = ZoneInfo(settings.tz_name)
         now_local = datetime.now(tz)
         grouped: dict[str, list[Any]] = {}
         for slot in build_schedule_window(now_local, days=14, control_rows=self._load_controls(), future_only=True):
             grouped.setdefault(slot.day.isoformat(), []).append(slot)
-        return sorted(grouped.items(), key=lambda item: item[0])
+        result = sorted(grouped.items(), key=lambda item: item[0])
+        self._derived_cache_set(cache_key, result)
+        return result
 
     def _overdue_scheduled_count(self) -> int:
         rows = self._list_posts_rows(status="scheduled", newest_first=False, limit=100)
@@ -2494,6 +2654,7 @@ class NewsAdminBot:
 
     def _calendar_summary_text(self, groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
         overdue_count = self._overdue_scheduled_count()
+        scheduled_by_day = self._scheduled_rows_by_day()
         schedule = self._schedule_config()
         generate_morning, generate_evening = self._configured_generate_times()
         publish_interval = self._configured_publish_interval()
@@ -2538,7 +2699,7 @@ class NewsAdminBot:
                 day_label = f"{day_key} (завтра)"
             else:
                 day_label = day_key
-            scheduled_rows = self._scheduled_rows_for_day(day_key)
+            scheduled_rows = scheduled_by_day.get(day_key, [])
             slot_labels = ", ".join(
                 f"{slot.publish_at_local.strftime('%H:%M')} {publication_kind_badge(slot.publication_kind)}"
                 for slot in slots
@@ -2550,6 +2711,7 @@ class NewsAdminBot:
 
     def _calendar_month_text(self, groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
         overdue_count = self._overdue_scheduled_count()
+        scheduled_by_day = self._scheduled_rows_by_day()
         schedule = self._schedule_config()
         lines = [
             "Календарь автопубликаций — месячный вид",
@@ -2571,7 +2733,7 @@ class NewsAdminBot:
         for day_key, slots in month_groups:
             day_date = datetime.fromisoformat(day_key).date()
             slot_badges = " ".join(publication_kind_badge(slot.publication_kind) for slot in slots)
-            scheduled_rows = self._scheduled_rows_for_day(day_key)
+            scheduled_rows = scheduled_by_day.get(day_key, [])
             lines.append(
                 f"• {day_date.strftime('%d.%m')} | {slot_badges} | занято {min(len(scheduled_rows), len(slots))}/{len(slots)}"
             )
@@ -5159,7 +5321,7 @@ class NewsAdminBot:
                     "config": config,
                 }
                 self.admin_client.update_automation_control("news.schedule.longread", payload).raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._longread_topics_text(),
@@ -5179,7 +5341,7 @@ class NewsAdminBot:
                     "config": config,
                 }
                 self.admin_client.update_automation_control("news.schedule.longread", payload).raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._longread_topics_text(),
@@ -5210,7 +5372,7 @@ class NewsAdminBot:
                 }
                 response = self.admin_client.update_automation_control(control_key, payload)
                 response.raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._schedule_detail_text(alias),
@@ -5235,7 +5397,7 @@ class NewsAdminBot:
                 }
                 response = self.admin_client.update_automation_control(control_key, payload)
                 response.raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._schedule_detail_text(alias),
@@ -5309,7 +5471,7 @@ class NewsAdminBot:
                     }
                     response = self.admin_client.update_automation_control("news.generate.enabled", payload)
                     response.raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._interval_detail_text(kind),
@@ -5354,7 +5516,7 @@ class NewsAdminBot:
                 }
                 response = self.client.update_automation_control(_source_control_key(source_key), payload)
                 response.raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._source_detail_text(source_key),
@@ -5384,7 +5546,7 @@ class NewsAdminBot:
                 }
                 response = self.client.update_automation_control(_telegram_channel_control_key(normalized), payload)
                 response.raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 await self._safe_edit_message_text(
                     query,
                     self._telegram_channel_detail_text(normalized),
@@ -5437,7 +5599,7 @@ class NewsAdminBot:
                     "config": config,
                 }
                 self.admin_client.update_automation_control("news.generate.enabled", payload).raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 counts = self._theme_stats()
                 generation_counts = self._generation_theme_stats()
                 await self._safe_edit_message_text(
@@ -5566,7 +5728,7 @@ class NewsAdminBot:
                         "config": dict(row.get("config") or {}),
                     }
                     self.admin_client.update_automation_control(key, payload).raise_for_status()
-                self._controls_cache = None
+                self._invalidate_controls_cache()
                 controls = self._load_controls(force_refresh=True)
                 await self._safe_edit_message_text(
                     query,
@@ -6766,25 +6928,25 @@ class NewsAdminBot:
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_calendar,
-                pattern=r"^(cal:(?:summary|view:month)|cal:view:day:\d{4}-\d{2}-\d{2}|cal:day:\d{4}-\d{2}-\d{2}|cav:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}|cap:\d{4}-\d{2}-\d{2}|cpc:\d{4}-\d{2}-\d{2}|cpn:\d{4}-\d{2}-\d{2}|cas:(?:tomorrow|spread):\d{4}-\d{2}-\d{2}|car:\d{4}-\d{2}-\d{2}:\d{4})$",
+                pattern=_is_calendar_callback,
             )
         )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_create,
-                pattern=r"^(cn:(?:start|manual|ai|transcript|cancel)|ck:[a-z_]+|ct:[a-z_]+|cm:(?:skip|clear|done)|cl:(?:skip|clear)|cd:view|cr:(?:lastfirst|reverse)|ce:(?:kind|theme|media|link|source|title|text|ai)|cs:(?:draft|review)|cs:scheduled:(?:h1|e19|t10))$",
+                pattern=_is_create_callback,
             )
         )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_controls,
-                pattern=r"^(noop|refresh|sections|automation|status|workers|resetstale|sch:menu|sch:view:[a-z_]+|sch:toggle:[a-z_]+|sch:set:[a-z_]+:\d{4}|int:menu|int:view:(?:generate_morning|generate_evening|publish|limit|retention|broad_ai)|int:set:(?:generate_morning|generate_evening):\d{4}|int:set:(?:publish|limit|retention|broad_ai):\d+|sec:(?:worklists|autoqueue|sources|themes|generate)|aq:(?:all|daily|weekly_review|longread|humor|other)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|srd:[a-z0-9_.-]+|srt:[a-z0-9_.-]+|stc:[a-z0-9_.-]+|scc:[a-z0-9_.-]+|src:[a-z0-9_.-]+:\d+|th:[a-z_]+:\d+|lt:(?:menu|reset)|lt:toggle:\d+|gt:[a-z_]+|fa:[01]|gen:(?:pick:\d+|list:\d+|view:\d+|save:\d+|clear)|all:[01]|set:[a-z0-9_.-]+:[01])$",
+                pattern=_is_controls_callback,
             )
         )
         app.add_handler(
             CallbackQueryHandler(
                 self.cb_posts,
-                pattern=r"^(mq:(?:due|all)(?::(?:all|regulation|case|implementation|tools|market))?:\d+|mq:\d+|mbp:(?:due|all):\d+(?::(?:page|top3|top5))?|mbc:(?:due|all):\d+(?::(?:page|top3|top5))?|mbn:(?:due|all):\d+(?::(?:page|top3|top5))?|pl:(?:draft|review|scheduled|posted|failed):\d+|pl:\d+|rv:(?:all|ai|manual)(?::(?:all|daily|weekly_review|longread|humor|other))?(?::(?:all|regulation|case|implementation|tools|market))?:\d+|pv:[0-9a-f-]{36}:(?:draft|review|scheduled|posted|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pt:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+:(?:h1|e19|t10)|ppc:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ppy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ppn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdd:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdn:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pdy:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pm:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pa:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|pf:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|rr:[0-9a-f-]{36}:draft:\d+|pr:[0-9a-f-]{36}:(?:review|failed):\d+|ps:[0-9a-f-]{36}:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|px:(?:draft|review|scheduled|failed|aq_(?:all|daily|weekly_review|longread|humor|other)(?:_(?:all|regulation|case|implementation|tools|market))?|mq_(?:due|all)(?:_(?:all|regulation|case|implementation|tools|market))?|cal_\d{8}|th_[a-z_]+|src_[a-z0-9_.-]+):\d+|ba:(?:ready:(?:review|failed)|review:draft):\d+)$",
+                pattern=_is_posts_callback,
             )
         )
         app.add_handler(
