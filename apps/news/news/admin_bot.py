@@ -1453,6 +1453,13 @@ class NewsAdminBot:
             ]
         ]
 
+    @staticmethod
+    def _two_column_rows(buttons: list[InlineKeyboardButton]) -> list[list[InlineKeyboardButton]]:
+        rows: list[list[InlineKeyboardButton]] = []
+        for index in range(0, len(buttons), 2):
+            rows.append(buttons[index : index + 2])
+        return rows
+
     def _list_posts_rows(
         self,
         *,
@@ -1716,40 +1723,39 @@ class NewsAdminBot:
         )
 
     def _workspace_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
-            [
-                [_inline_button("➕ Создать пост", callback_data="cn:start", style=_BUTTON_STYLE_SUCCESS)],
-                [_inline_button("📂 Рабочие списки", callback_data="sec:worklists")],
-                [_inline_button("⏱ Автоочередь", callback_data="sec:autoqueue")],
-                [_inline_button("🗓 Календарь", callback_data="cal:summary")],
-                [_inline_button("📰 Источники", callback_data="sec:sources")],
-                [_inline_button("🧭 Тематики", callback_data="sec:themes")],
-                [_inline_button("⚙️ Генерация", callback_data="sec:generate")],
-                [_inline_button("🛠 Система", callback_data="sec:system")],
-                [_inline_button("🔄 Обновить рабочий стол", callback_data="refresh")],
-            ]
-        )
+        section_buttons = [
+            _inline_button("📂 Рабочие списки", callback_data="sec:worklists"),
+            _inline_button("⏱ Автоочередь", callback_data="sec:autoqueue"),
+            _inline_button("🗓 Календарь", callback_data="cal:summary"),
+            _inline_button("📰 Источники", callback_data="sec:sources"),
+            _inline_button("🧭 Тематики", callback_data="sec:themes"),
+            _inline_button("⚙️ Генерация", callback_data="sec:generate"),
+            _inline_button("🛠 Система", callback_data="sec:system"),
+            _inline_button("🔄 Обновить", callback_data="refresh"),
+        ]
+        rows: list[list[InlineKeyboardButton]] = [
+            [_inline_button("➕ Создать пост", callback_data="cn:start", style=_BUTTON_STYLE_SUCCESS)],
+            *self._two_column_rows(section_buttons),
+        ]
+        return InlineKeyboardMarkup(rows)
 
     def _worklists_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = [
-            [_inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0")],
-            [_inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0")],
-            [
-                _inline_button(
-                    f"✅ Готовые ({counts.get('scheduled', 0)})",
-                    callback_data="pl:scheduled:0",
-                    style=_BUTTON_STYLE_SUCCESS,
-                )
-            ],
-            [_inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0")],
-            [
-                _inline_button(
-                    f"❌ Ошибки ({counts.get('failed', 0)})",
-                    callback_data="pl:failed:0",
-                    style=_BUTTON_STYLE_DANGER,
-                )
-            ],
+        worklist_buttons = [
+            _inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0"),
+            _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0"),
+            _inline_button(
+                f"✅ Готовые ({counts.get('scheduled', 0)})",
+                callback_data="pl:scheduled:0",
+                style=_BUTTON_STYLE_SUCCESS,
+            ),
+            _inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0"),
+            _inline_button(
+                f"❌ Ошибки ({counts.get('failed', 0)})",
+                callback_data="pl:failed:0",
+                style=_BUTTON_STYLE_DANGER,
+            ),
         ]
+        rows = self._two_column_rows(worklist_buttons)
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
@@ -1780,19 +1786,21 @@ class NewsAdminBot:
         )
 
     def _system_keyboard(self) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = [
-            [_inline_button("📊 Статус API", callback_data="status")],
-            [_inline_button("👷 Воркеры", callback_data="workers")],
-            [_inline_button("🤖 Автоматизация", callback_data="automation")],
-            [_inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER)],
-            [_inline_button("❓ Помощь", callback_data="sec:help")],
-        ]
+        rows = self._two_column_rows(
+            [
+                _inline_button("📊 Статус API", callback_data="status"),
+                _inline_button("👷 Воркеры", callback_data="workers"),
+                _inline_button("🤖 Автоматизация", callback_data="automation"),
+                _inline_button("❓ Помощь", callback_data="sec:help"),
+                _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
+            ]
+        )
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
     def _workers_keyboard(self, payload: dict[str, Any]) -> InlineKeyboardMarkup:
         workers = payload.get("workers") or []
-        rows: list[list[InlineKeyboardButton]] = []
+        worker_buttons: list[InlineKeyboardButton] = []
         for row in workers[:20]:
             worker_id = str(row.get("worker_id") or "").strip()
             if not worker_id:
@@ -1800,7 +1808,8 @@ class NewsAdminBot:
             active = bool(row.get("active"))
             mark = "🟢" if active else "⚪"
             token = _worker_callback_token(worker_id)
-            rows.append([_inline_button(f"{mark} {worker_id}", callback_data=f"wrk:{token}")])
+            worker_buttons.append(_inline_button(f"{mark} {worker_id}"[:32], callback_data=f"wrk:{token}"))
+        rows = self._two_column_rows(worker_buttons)
         rows.append([_inline_button("🔄 Обновить список", callback_data="workers")])
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
         return InlineKeyboardMarkup(rows)
@@ -2204,18 +2213,22 @@ class NewsAdminBot:
         rows: list[list[InlineKeyboardButton]] = []
         generation_counts = generation_counts or self._generation_theme_stats()
         enabled_generation_themes = self._enabled_generation_theme_keys()
+        generation_buttons: list[InlineKeyboardButton] = []
         for theme_key in generation_theme_keys():
-            rows.append(
-                [
-                    _inline_button(
-                        f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})",
-                        callback_data=f"gt:{theme_key}",
-                    )
-                ]
+            generation_buttons.append(
+                _inline_button(
+                    f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})"[:40],
+                    callback_data=f"gt:{theme_key}",
+                )
             )
+        rows.extend(self._two_column_rows(generation_buttons))
         rows.append([_inline_button("📚 Темы воскресных лонгридов", callback_data="lt:menu")])
+        pillar_buttons: list[InlineKeyboardButton] = []
         for pillar in _PILLAR_LABELS:
-            rows.append([_inline_button(f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})", callback_data=f"th:{pillar}:0")])
+            pillar_buttons.append(
+                _inline_button(f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})"[:40], callback_data=f"th:{pillar}:0")
+            )
+        rows.extend(self._two_column_rows(pillar_buttons))
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
@@ -2450,6 +2463,7 @@ class NewsAdminBot:
             ],
             [_inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER)],
         ]
+        control_buttons: list[InlineKeyboardButton] = []
         for row in controls:
             key = str(row.get("key") or "")
             enabled = _is_enabled(row.get("enabled", True))
@@ -2457,15 +2471,14 @@ class NewsAdminBot:
             icon = "🟢" if enabled else "🔴"
             title = str(row.get("title") or key)
             button_text = f"{icon} {title}"
-            rows.append(
-                [
-                    _inline_button(
-                        button_text[:60],
-                        callback_data=f"set:{key}:{next_value}",
-                        style=_BUTTON_STYLE_SUCCESS if not enabled else _BUTTON_STYLE_DANGER,
-                    )
-                ]
+            control_buttons.append(
+                _inline_button(
+                    button_text[:34],
+                    callback_data=f"set:{key}:{next_value}",
+                    style=_BUTTON_STYLE_SUCCESS if not enabled else _BUTTON_STYLE_DANGER,
+                )
             )
+        rows.extend(self._two_column_rows(control_buttons))
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
         return InlineKeyboardMarkup(rows)
 
@@ -2666,8 +2679,12 @@ class NewsAdminBot:
                 _inline_button("🕒 Время слотов", callback_data="sch:menu"),
             ]
         )
-        buttons.append([_inline_button("⏱ Ритм", callback_data="int:menu")])
-        buttons.append([_inline_button("🔄 Обновить", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}")])
+        buttons.append(
+            [
+                _inline_button("⏱ Ритм", callback_data="int:menu"),
+                _inline_button("🔄 Обновить", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}"),
+            ]
+        )
         buttons.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(buttons)
 
@@ -3149,10 +3166,11 @@ class NewsAdminBot:
         return "\n".join(lines)
 
     def _schedule_settings_keyboard(self) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
+        section_buttons: list[InlineKeyboardButton] = []
         for alias in schedule_aliases():
             meta = schedule_alias_meta(alias)
-            rows.append([_inline_button(meta["label"], callback_data=f"sch:view:{alias}")])
+            section_buttons.append(_inline_button(meta["label"], callback_data=f"sch:view:{alias}"))
+        rows: list[list[InlineKeyboardButton]] = self._two_column_rows(section_buttons)
         rows.append(
             [
                 _inline_button("📚 Темы лонгридов", callback_data="lt:menu"),
@@ -3230,10 +3248,11 @@ class NewsAdminBot:
 
     def _longread_topics_keyboard(self) -> InlineKeyboardMarkup:
         active_topics = set(self._longread_topics_active(force_refresh=True))
-        rows: list[list[InlineKeyboardButton]] = []
+        topic_buttons: list[InlineKeyboardButton] = []
         for index, topic in enumerate(_LONGREAD_TOPIC_LIBRARY, start=1):
             label = f"{'✅' if topic in active_topics else '☐'} {index}. {topic[:34]}"
-            rows.append([_inline_button(label, callback_data=f"lt:toggle:{index}")])
+            topic_buttons.append(_inline_button(label, callback_data=f"lt:toggle:{index}"))
+        rows: list[list[InlineKeyboardButton]] = self._two_column_rows(topic_buttons)
         rows.append([_inline_button("♻️ Сбросить к базовому пулу", callback_data="lt:reset")])
         rows.extend(self._submenu_nav_rows(back_callback="sch:menu", back_label="🔙 К сетке"))
         return InlineKeyboardMarkup(rows)
@@ -3255,16 +3274,16 @@ class NewsAdminBot:
         )
 
     def _interval_settings_keyboard(self) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = [
-            [_inline_button("Утренний слот", callback_data="int:view:generate_morning")],
-            [_inline_button("Вечерний слот", callback_data="int:view:generate_evening")],
-            [_inline_button("Публикация", callback_data="int:view:publish")],
+        rows: list[list[InlineKeyboardButton]] = self._two_column_rows(
             [
+                _inline_button("Утренний слот", callback_data="int:view:generate_morning"),
+                _inline_button("Вечерний слот", callback_data="int:view:generate_evening"),
+                _inline_button("Публикация", callback_data="int:view:publish"),
                 _inline_button("Лимит за цикл", callback_data="int:view:limit"),
                 _inline_button("Хранение", callback_data="int:view:retention"),
-            ],
-            [_inline_button("Broad-AI лимит", callback_data="int:view:broad_ai")],
-        ]
+                _inline_button("Broad-AI лимит", callback_data="int:view:broad_ai"),
+            ]
+        )
         rows.extend(self._submenu_nav_rows(back_callback="sch:menu", back_label="🔙 К сетке"))
         return InlineKeyboardMarkup(rows)
 
@@ -3816,40 +3835,28 @@ class NewsAdminBot:
         )
 
     def _create_start_keyboard(self) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
+        rows = self._two_column_rows(
             [
-                [InlineKeyboardButton("✍️ Написать вручную", callback_data="cn:manual")],
-                [InlineKeyboardButton("🤖 Сгенерировать по тезисам", callback_data="cn:ai")],
-                [InlineKeyboardButton("🎙 Из транскриба / voice", callback_data="cn:transcript")],
-                [
-                    InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
-                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
-                ],
+                InlineKeyboardButton("✍️ Написать вручную", callback_data="cn:manual"),
+                InlineKeyboardButton("🤖 По тезисам", callback_data="cn:ai"),
+                InlineKeyboardButton("🎙 Из транскриба / voice", callback_data="cn:transcript"),
             ]
         )
+        rows.extend(self._submenu_nav_rows(back_callback="cn:cancel"))
+        return InlineKeyboardMarkup(rows)
 
     def _create_kind_keyboard(self) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
-        for kind in _MANUAL_POST_TYPE_ORDER:
-            rows.append([InlineKeyboardButton(_manual_post_kind_label(kind), callback_data=f"ck:{kind}")])
-        rows.append(
-            [
-                InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
-                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
-            ]
+        rows = self._two_column_rows(
+            [InlineKeyboardButton(_manual_post_kind_label(kind), callback_data=f"ck:{kind}") for kind in _MANUAL_POST_TYPE_ORDER]
         )
+        rows.extend(self._submenu_nav_rows(back_callback="cn:cancel"))
         return InlineKeyboardMarkup(rows)
 
     def _create_theme_keyboard(self) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
-        for theme in _MANUAL_THEME_ORDER:
-            rows.append([InlineKeyboardButton(_manual_theme_label(theme), callback_data=f"ct:{theme}")])
-        rows.append(
-            [
-                InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
-                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
-            ]
+        rows = self._two_column_rows(
+            [InlineKeyboardButton(_manual_theme_label(theme), callback_data=f"ct:{theme}") for theme in _MANUAL_THEME_ORDER]
         )
+        rows.extend(self._submenu_nav_rows(back_callback="cn:cancel"))
         return InlineKeyboardMarkup(rows)
 
     def _create_media_keyboard(
