@@ -1593,6 +1593,18 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 action="admin_runtime_toggle_admin_test",
             )
 
+        elif action in {"admin_runtime_timeout_15", "admin_runtime_timeout_25", "admin_runtime_timeout_40"}:
+            config.LLM_TIMEOUT_SECONDS = float(action.split("_")[-1])
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"🕒 Timeout LLM обновлен: {config.LLM_TIMEOUT_SECONDS:.0f} сек\n\n"
+                    f"{_format_runtime_settings_for_admin()}"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action=action,
+            )
+
         elif action in {"admin_runtime_idle_3", "admin_runtime_idle_5", "admin_runtime_idle_10"}:
             config.PENDING_LEADS_IDLE_MINUTES = int(action.split("_")[-1])
             await utils.safe_edit_text(

@@ -150,6 +150,11 @@ ADMIN_RUNTIME_MENU = [
         InlineKeyboardButton("🧪 Тест-лиды on/off", callback_data="admin_runtime_toggle_admin_test"),
     ],
     [
+        InlineKeyboardButton("🕒 Timeout 15s", callback_data="admin_runtime_timeout_15"),
+        InlineKeyboardButton("🕒 Timeout 25s", callback_data="admin_runtime_timeout_25"),
+        InlineKeyboardButton("🕒 Timeout 40s", callback_data="admin_runtime_timeout_40"),
+    ],
+    [
         InlineKeyboardButton("⏱ Idle 3m", callback_data="admin_runtime_idle_3"),
         InlineKeyboardButton("⏱ Idle 5m", callback_data="admin_runtime_idle_5"),
         InlineKeyboardButton("⏱ Idle 10m", callback_data="admin_runtime_idle_10"),
