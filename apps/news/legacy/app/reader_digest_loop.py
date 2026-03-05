@@ -109,6 +109,7 @@ def _load_control_sync() -> dict[str, object]:
         "enabled": True,
         "slot_time": _DEFAULT_SLOT_TIME,
         "max_users_per_cycle": _DEFAULT_MAX_USERS_PER_CYCLE,
+        "run_once_token": "",
     }
     if not _core_api_enabled():
         return default
@@ -134,6 +135,7 @@ def _load_control_sync() -> dict[str, object]:
         "enabled": bool(row.get("enabled", True)),
         "slot_time": _normalize_slot_time(str(config.get("slot_time") or _DEFAULT_SLOT_TIME)),
         "max_users_per_cycle": max(1, min(int(max_users), 500)),
+        "run_once_token": str(config.get("run_once_token") or "").strip(),
     }
 
 
@@ -146,6 +148,7 @@ async def _load_control() -> dict[str, object]:
             "enabled": True,
             "slot_time": _DEFAULT_SLOT_TIME,
             "max_users_per_cycle": _DEFAULT_MAX_USERS_PER_CYCLE,
+            "run_once_token": "",
         }
 
 
@@ -391,6 +394,7 @@ async def main() -> int:
     )
 
     last_slot_key = ""
+    last_manual_run_token: str | None = None
     last_tick_heartbeat_at = 0.0
     timezone = ZoneInfo(settings.tz)
 
@@ -402,9 +406,13 @@ async def main() -> int:
                 enabled = bool(control.get("enabled", True))
                 slot_time = _normalize_slot_time(str(control.get("slot_time") or _DEFAULT_SLOT_TIME))
                 max_users = int(control.get("max_users_per_cycle") or _DEFAULT_MAX_USERS_PER_CYCLE)
+                manual_run_token = str(control.get("run_once_token") or "").strip()
                 now_local = datetime.now(timezone)
                 today_key = now_local.date().isoformat()
                 current_hhmm = now_local.strftime("%H:%M")
+
+                if last_manual_run_token is None:
+                    last_manual_run_token = manual_run_token
 
                 if enabled and current_hhmm == slot_time:
                     slot_key = f"{today_key}:{slot_time}"
@@ -429,12 +437,34 @@ async def main() -> int:
                         )
                         last_slot_key = slot_key
 
+                if manual_run_token and manual_run_token != last_manual_run_token:
+                    await _send_worker_heartbeat(
+                        {
+                            "action": "digest_manual_run_start",
+                            "token": manual_run_token,
+                            "enabled": enabled,
+                            "max_users": max_users,
+                        }
+                    )
+                    stats = await _run_digest_cycle(bot, max_users=max_users)
+                    await _send_worker_heartbeat(
+                        {
+                            "action": "digest_manual_run_done",
+                            "token": manual_run_token,
+                            "enabled": enabled,
+                            "max_users": max_users,
+                            **stats,
+                        }
+                    )
+                    last_manual_run_token = manual_run_token
+
                 now_ts = time.time()
                 heartbeat_info: dict[str, object] = {
                     "mode": "poll",
                     "enabled": enabled,
                     "slot_time": slot_time,
                     "max_users": max_users,
+                    "manual_run_token": manual_run_token[-32:] if manual_run_token else "",
                 }
                 if now_ts - last_tick_heartbeat_at >= _TICK_HEARTBEAT_SECONDS:
                     heartbeat_info["action"] = "tick"

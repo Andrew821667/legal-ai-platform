@@ -102,6 +102,8 @@ _INTERVAL_SETTING_KINDS = (
     "telegram_morning",
     "telegram_evening",
     "telegram_limit",
+    "reader_digest_slot",
+    "reader_digest_limit",
 )
 _MAIN_MENU_WORKSPACE = "🏠 Рабочий стол"
 _MAIN_MENU_CREATE = "➕ Создать"
@@ -157,6 +159,7 @@ _CONTROLS_CALLBACK_EXACT = frozenset({"noop", "refresh", "sections", "automation
 _CONTROLS_CALLBACK_PREFIXES = (
     "sch:",
     "int:",
+    "rdg:",
     "sec:",
     "reader:",
     "thm:",
@@ -1572,6 +1575,9 @@ class NewsAdminBot:
     def _telegram_ingest_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
         return self._controls_lookup(force_refresh=force_refresh).get("news.telegram_ingest.enabled", {})
 
+    def _reader_digest_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        return self._controls_lookup(force_refresh=force_refresh).get("news.reader_digest.enabled", {})
+
     def _configured_generate_interval(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -1612,6 +1618,42 @@ class NewsAdminBot:
         if isinstance(value, int) and value > 0:
             return max(10, min(value, 200))
         return max(10, min(settings.telegram_fetch_limit, 200))
+
+    def _configured_reader_digest_time(self, *, force_refresh: bool = False) -> str:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = str(config.get("slot_time") or "12:15").strip()
+        if re.match(r"^\d{2}:\d{2}$", value):
+            return value
+        return "12:15"
+
+    def _configured_reader_digest_time_options(self, *, force_refresh: bool = False) -> list[str]:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        raw = config.get("slot_options")
+        if isinstance(raw, list):
+            options = [str(item).strip() for item in raw if isinstance(item, str) and re.match(r"^\d{2}:\d{2}$", str(item).strip())]
+            if options:
+                return list(dict.fromkeys(options))
+        return ["09:15", "10:15", "11:15", "12:15", "13:15", "14:15", "20:15"]
+
+    def _configured_reader_digest_limit(self, *, force_refresh: bool = False) -> int:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = config.get("max_users_per_cycle")
+        if isinstance(value, int) and value > 0:
+            return max(1, min(value, 500))
+        return 30
+
+    def _configured_reader_digest_limit_options(self, *, force_refresh: bool = False) -> list[int]:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        raw = config.get("max_users_options")
+        if isinstance(raw, list):
+            options = sorted({int(item) for item in raw if isinstance(item, int) and item > 0})
+            if options:
+                return options
+        return [10, 20, 30, 50, 100]
 
     def _configured_generate_limit(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
@@ -1686,6 +1728,15 @@ class NewsAdminBot:
             if isinstance(ingest_config.get("fetch_limit"), int)
             else settings.telegram_fetch_limit
         )
+        reader_digest_row = {str(row.get("key") or ""): row for row in controls}.get("news.reader_digest.enabled", {})
+        reader_digest_config = reader_digest_row.get("config") or {}
+        reader_digest_enabled = bool(reader_digest_row.get("enabled", True))
+        reader_digest_slot = str(reader_digest_config.get("slot_time") or "12:15").strip() or "12:15"
+        reader_digest_limit = (
+            reader_digest_config.get("max_users_per_cycle")
+            if isinstance(reader_digest_config.get("max_users_per_cycle"), int)
+            else 30
+        )
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
         broad_ai_limit = generate_config.get("broad_ai_limit") if isinstance(generate_config.get("broad_ai_limit"), int) else 1
         retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
@@ -1706,6 +1757,7 @@ class NewsAdminBot:
             f"Telegram-парсер: {ingest_morning} и {ingest_evening}; лимит канала {ingest_fetch_limit}",
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
+            f"Reader-дайджест: {'🟢' if reader_digest_enabled else '🔴'} {reader_digest_slot}; лимит {reader_digest_limit}",
             f"Хранение драфтов На проверке: {retention_days} дн.",
             f"Broad-AI лимит в цикле: {broad_ai_limit}",
             f"Активных контент-тем: {len(enabled_themes)}/{len(GENERATION_THEME_DEFS)}",
@@ -1872,6 +1924,7 @@ class NewsAdminBot:
             [
                 _inline_button("📊 Статус API", callback_data="status"),
                 _inline_button("👷 Воркеры", callback_data="workers"),
+                _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🤖 Автоматизация", callback_data="automation"),
                 _inline_button("❓ Помощь", callback_data="sec:help"),
@@ -1888,6 +1941,42 @@ class NewsAdminBot:
                 _inline_button(f"{'• ' if days == 14 else ''}14 дн", callback_data="reader:summary:14"),
                 _inline_button(f"{'• ' if days == 30 else ''}30 дн", callback_data="reader:summary:30"),
                 _inline_button("🔄 Обновить", callback_data=f"reader:summary:{days}"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
+    def _reader_digest_text(self, *, force_refresh: bool = True) -> str:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        enabled = bool(row.get("enabled", True))
+        slot = self._configured_reader_digest_time(force_refresh=force_refresh)
+        max_users = self._configured_reader_digest_limit(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        run_token = str(config.get("run_once_token") or "").strip()
+        return (
+            "Reader digest-воркер\n\n"
+            f"Статус: {'🟢 включен' if enabled else '🔴 выключен'}\n"
+            f"Слот авторассылки: {slot}\n"
+            f"Лимит пользователей за цикл: {max_users}\n\n"
+            "Тестовый прогон запускает одну внеплановую рассылку сразу после ближайшего цикла опроса воркера.\n"
+            + (f"Последний запрос теста: {run_token}\n" if run_token else "")
+        )
+
+    def _reader_digest_keyboard(self, *, force_refresh: bool = True) -> InlineKeyboardMarkup:
+        row = self._reader_digest_control_row(force_refresh=force_refresh)
+        enabled = bool(row.get("enabled", True))
+        rows = self._two_column_rows(
+            [
+                _inline_button(
+                    "⛔ Выключить воркер" if enabled else "🟢 Включить воркер",
+                    callback_data=f"set:news.reader_digest.enabled:{'0' if enabled else '1'}",
+                    style=_BUTTON_STYLE_DANGER if enabled else _BUTTON_STYLE_SUCCESS,
+                ),
+                _inline_button("🕒 Слот рассылки", callback_data="int:view:reader_digest_slot"),
+                _inline_button("👥 Лимит цикла", callback_data="int:view:reader_digest_limit"),
+                _inline_button("🧪 Тестовый прогон", callback_data="rdg:run", style=_BUTTON_STYLE_SUCCESS),
+                _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
+                _inline_button("👷 Воркеры", callback_data="workers"),
             ]
         )
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
@@ -3475,12 +3564,15 @@ class NewsAdminBot:
         generate_limit = self._configured_generate_limit(force_refresh=True)
         retention_days = self._configured_review_retention_days(force_refresh=True)
         broad_ai_limit = self._configured_broad_ai_limit(force_refresh=True)
+        reader_digest_slot = self._configured_reader_digest_time(force_refresh=True)
+        reader_digest_limit = self._configured_reader_digest_limit(force_refresh=True)
         return (
             "Ритм автоматической генерации и публикации\n\n"
             f"• Telegram-парсер: {telegram_morning} и {telegram_evening} (до {telegram_fetch_limit} сообщений/канал)\n"
             f"• Автогенерация: {generate_morning} и {generate_evening}\n"
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
             f"• Лимит генерации за цикл: {generate_limit}\n\n"
+            f"• Reader-дайджест: {reader_digest_slot} (до {reader_digest_limit} пользователей)\n"
             f"• Хранение драфтов На проверке: {retention_days} дн.\n\n"
             f"• Broad-AI в одном цикле: {broad_ai_limit}\n\n"
             "Генератор просыпается часто, но реально создает новые драфты только в указанные слоты."
@@ -3496,6 +3588,8 @@ class NewsAdminBot:
                 _inline_button("Вечерний слот", callback_data="int:view:generate_evening"),
                 _inline_button("Публикация", callback_data="int:view:publish"),
                 _inline_button("Лимит за цикл", callback_data="int:view:limit"),
+                _inline_button("Reader: слот", callback_data="int:view:reader_digest_slot"),
+                _inline_button("Reader: лимит", callback_data="int:view:reader_digest_limit"),
                 _inline_button("Хранение", callback_data="int:view:retention"),
                 _inline_button("Broad-AI лимит", callback_data="int:view:broad_ai"),
             ]
@@ -3524,6 +3618,14 @@ class NewsAdminBot:
             current = self._configured_telegram_fetch_limit(force_refresh=True)
             options = [30, 50, 80, 100, 150]
             label = "Лимит сообщений Telegram-парсера"
+        elif kind == "reader_digest_slot":
+            current = self._configured_reader_digest_time(force_refresh=True)
+            options = self._configured_reader_digest_time_options(force_refresh=True)
+            label = "Слот рассылки reader-digest"
+        elif kind == "reader_digest_limit":
+            current = self._configured_reader_digest_limit(force_refresh=True)
+            options = self._configured_reader_digest_limit_options(force_refresh=True)
+            label = "Лимит получателей за цикл reader-digest"
         elif kind == "publish":
             current = self._configured_publish_interval(force_refresh=True)
             options = settings.news_publish_interval_options_list
@@ -3565,6 +3667,10 @@ class NewsAdminBot:
             options = settings.news_telegram_ingest_evening_options_list
         elif kind == "telegram_limit":
             options = [30, 50, 80, 100, 150]
+        elif kind == "reader_digest_slot":
+            options = self._configured_reader_digest_time_options(force_refresh=True)
+        elif kind == "reader_digest_limit":
+            options = self._configured_reader_digest_limit_options(force_refresh=True)
         elif kind == "publish":
             options = settings.news_publish_interval_options_list
         elif kind == "retention":
@@ -3583,6 +3689,9 @@ class NewsAdminBot:
             elif kind == "retention":
                 label = f"{option} дн."
                 value = str(option)
+            elif kind == "reader_digest_slot":
+                label = str(option)
+                value = str(option).replace(":", "")
             else:
                 label = str(option)
                 value = str(option).replace(":", "")
@@ -5911,6 +6020,14 @@ class NewsAdminBot:
                 )
                 return
 
+            if data == "rdg:menu":
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_digest_text(force_refresh=True),
+                    reply_markup=self._reader_digest_keyboard(force_refresh=True),
+                )
+                return
+
             if data == "sec:help":
                 await self._safe_edit_message_text(
                     query,
@@ -6128,6 +6245,24 @@ class NewsAdminBot:
                         "news.telegram_ingest.enabled",
                         payload,
                     )
+                    response.raise_for_status()
+                elif kind in {"reader_digest_slot", "reader_digest_limit"}:
+                    row = self._reader_digest_control_row(force_refresh=True)
+                    config = dict(row.get("config") or {})
+                    if kind == "reader_digest_slot":
+                        value = f"{raw_value[:2]}:{raw_value[2:]}"
+                        config["slot_time"] = value
+                    else:
+                        value = int(raw_value)
+                        config["max_users_per_cycle"] = max(1, min(value, 500))
+                    payload = {
+                        "scope": "news",
+                        "title": row.get("title") or "Reader digest-воркер",
+                        "description": row.get("description") or "Авторассылка персональных дайджестов reader-бота.",
+                        "enabled": bool(row.get("enabled", True)),
+                        "config": config,
+                    }
+                    response = self.admin_client.update_automation_control("news.reader_digest.enabled", payload)
                     response.raise_for_status()
                 else:
                     row = self._generate_control_row(force_refresh=True)
@@ -6515,6 +6650,28 @@ class NewsAdminBot:
                 await self._safe_edit_message_text(
                     query,
                     await self._panel_text(controls) + "\n\n" + await self._queue_text(),
+                )
+                return
+
+            if data == "rdg:run":
+                row = self._reader_digest_control_row(force_refresh=True)
+                config = dict(row.get("config") or {})
+                run_token = datetime.now(timezone.utc).isoformat()
+                config["run_once_token"] = run_token
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or "Reader digest-воркер",
+                    "description": row.get("description") or "Авторассылка персональных дайджестов reader-бота.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control("news.reader_digest.enabled", payload).raise_for_status()
+                self._invalidate_controls_cache()
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_digest_text(force_refresh=True)
+                    + "\n\n🧪 Тестовый прогон отправлен воркеру. Проверьте меню «Воркеры» через 10-20 секунд.",
+                    reply_markup=self._reader_digest_keyboard(force_refresh=True),
                 )
                 return
 

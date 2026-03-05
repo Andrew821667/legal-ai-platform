@@ -198,6 +198,18 @@ NEWS_DISCUSSION_CHAT_ID=-100...
   - `TELEGRAM_SESSION_NAME_DOCKER=/app/data/telegram_bot`
   - `NEWS_TELEGRAM_CACHE_PATH=/app/data/news_telegram_cache.json`
 
+Reader digest worker:
+- отдельный сервис `news-reader-digest`, heartbeat id: `news-reader-digest`;
+- control key: `news.reader_digest.enabled`;
+- основные config-поля:
+  - `slot_time` — время авторассылки digest;
+  - `max_users_per_cycle` — лимит пользователей за один проход;
+  - `run_once_token` — ручной one-shot прогон (устанавливается из админ-бота кнопкой «Тестовый прогон»).
+- проверка активности:
+```bash
+curl -s "$CORE_API_URL/api/v1/workers/news-reader-digest/activity?hours=24&limit=20" -H "X-API-Key: $API_KEY_ADMIN"
+```
+
 Кастомные иконки кнопок Telegram:
 - Bot API поддерживает `icon_custom_emoji_id` для `KeyboardButton` и `InlineKeyboardButton`, но для показа нужны реальные document ID кастомных emoji;
 - в проекте для этого предусмотрены env-переменные:
