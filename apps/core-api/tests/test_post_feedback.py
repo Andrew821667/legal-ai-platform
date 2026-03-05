@@ -8,7 +8,7 @@ from sqlalchemy import delete
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, PostFeedbackSignal, ScheduledPost, ScheduledPostStatus, Scope
+from core_api.models import ApiKey, PostFeedbackSignal, PostFeedbackSource, ScheduledPost, ScheduledPostStatus, Scope
 from core_api.security import generate_api_key, hash_api_key
 
 
@@ -192,6 +192,104 @@ def test_patch_scheduled_post_accepts_datetime_and_delete_post() -> None:
             try:
                 db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id == post_id))
                 db.execute(delete(ScheduledPost).where(ScheduledPost.id == post_id))
+                db.commit()
+            finally:
+                db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_reader_feedback_summary_endpoint() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.news.reader-summary"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    post_ids: list = []
+
+    db = SessionLocal()
+    try:
+        post_a = ScheduledPost(
+            text="posted post a",
+            title="Пост А",
+            publish_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            status=ScheduledPostStatus.posted,
+        )
+        post_b = ScheduledPost(
+            text="posted post b",
+            title="Пост Б",
+            publish_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            status=ScheduledPostStatus.posted,
+        )
+        db.add(post_a)
+        db.add(post_b)
+        db.commit()
+        db.refresh(post_a)
+        db.refresh(post_b)
+        post_ids = [post_a.id, post_b.id]
+
+        db.add_all(
+            [
+                PostFeedbackSignal(
+                    post_id=post_a.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.weekly.opened",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                ),
+                PostFeedbackSignal(
+                    post_id=post_a.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.consultation.intent",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                ),
+                PostFeedbackSignal(
+                    post_id=post_a.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.not_useful.too_generic",
+                    signal_value=-1,
+                    actor_name="reader_bot",
+                ),
+                PostFeedbackSignal(
+                    post_id=post_b.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.idea.requested",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                ),
+                PostFeedbackSignal(
+                    post_id=post_b.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.useful",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        response = client.get(
+            "/api/v1/scheduled-posts/feedback/reader-summary?days=7",
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        stats = payload["stats"]
+        assert stats["signals_total"] >= 5
+        assert stats["weekly_opened"] >= 1
+        assert stats["consultation_intent"] >= 1
+        assert stats["idea_requested"] >= 1
+        assert stats["useful_feedback"] >= 1
+        assert stats["not_useful_feedback"] >= 1
+        assert any(item["reason"] == "too_generic" for item in payload["top_negative_reasons"])
+        assert any(item["title"] in {"Пост А", "Пост Б"} for item in payload["top_posts"])
+    finally:
+        if post_ids:
+            db = SessionLocal()
+            try:
+                db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id.in_(post_ids)))
+                db.execute(delete(ScheduledPost).where(ScheduledPost.id.in_(post_ids)))
                 db.commit()
             finally:
                 db.close()

@@ -158,6 +158,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "sch:",
     "int:",
     "sec:",
+    "reader:",
     "thm:",
     "aq:",
     "srd:",
@@ -223,6 +224,7 @@ _WORKER_LABELS = {
     "news-generate": "🧠 Генератор драфтов",
     "news-telegram-ingest": "📡 Telegram-парсер",
     "news-publish": "📤 Публикатор канала",
+    "news-reader-digest": "📬 Reader-дайджест",
 }
 _MANUAL_POST_TYPES = {
     "promo_offer": {
@@ -1870,6 +1872,7 @@ class NewsAdminBot:
             [
                 _inline_button("📊 Статус API", callback_data="status"),
                 _inline_button("👷 Воркеры", callback_data="workers"),
+                _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🤖 Автоматизация", callback_data="automation"),
                 _inline_button("❓ Помощь", callback_data="sec:help"),
                 _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
@@ -1877,6 +1880,69 @@ class NewsAdminBot:
         )
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
+
+    def _reader_summary_keyboard(self, days: int = 7) -> InlineKeyboardMarkup:
+        rows = self._two_column_rows(
+            [
+                _inline_button(f"{'• ' if days == 7 else ''}7 дн", callback_data="reader:summary:7"),
+                _inline_button(f"{'• ' if days == 14 else ''}14 дн", callback_data="reader:summary:14"),
+                _inline_button(f"{'• ' if days == 30 else ''}30 дн", callback_data="reader:summary:30"),
+                _inline_button("🔄 Обновить", callback_data=f"reader:summary:{days}"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
+    def _reader_summary_text(self, days: int = 7) -> str:
+        response = self.admin_client.reader_feedback_summary(days=days)
+        response.raise_for_status()
+        payload = response.json() or {}
+        stats = payload.get("stats") or {}
+        top_reasons = payload.get("top_negative_reasons") or []
+        top_posts = payload.get("top_posts") or []
+
+        reason_label_map = {
+            "too_complex": "слишком сложно",
+            "not_relevant": "не по теме",
+            "outdated": "устарело",
+            "shallow": "поверхностно",
+            "other": "прочее",
+        }
+
+        lines = [
+            f"Reader-метрики за {days} дн.",
+            "",
+            f"Сигналов всего: {stats.get('signals_total', 0)}",
+            f"Открыт weekly digest: {stats.get('weekly_opened', 0)}",
+            f"Запрошено «Идея внедрения»: {stats.get('idea_requested', 0)}",
+            f"Намерение на консультацию: {stats.get('consultation_intent', 0)}",
+            f"Полезно (👍): {stats.get('useful_feedback', 0)}",
+            f"Не полезно (👎): {stats.get('not_useful_feedback', 0)}",
+            "",
+            "Негативные причины:",
+        ]
+        if top_reasons:
+            for row in top_reasons[:5]:
+                reason = reason_label_map.get(str(row.get("reason") or ""), str(row.get("reason") or "other"))
+                lines.append(f"• {reason}: {int(row.get('count') or 0)}")
+        else:
+            lines.append("• пока нет")
+
+        lines.append("")
+        lines.append("Топ публикаций по интересу reader → консультация:")
+        if top_posts:
+            for idx, row in enumerate(top_posts[:5], start=1):
+                title = str(row.get("title") or "Без заголовка")
+                lines.append(
+                    f"{idx}. {title[:70]} — "
+                    f"consult={int(row.get('consultation_intent') or 0)}, "
+                    f"idea={int(row.get('idea_requested') or 0)}, "
+                    f"useful={int(row.get('useful_feedback') or 0)}"
+                )
+        else:
+            lines.append("• пока нет данных")
+
+        return "\n".join(lines)
 
     def _workers_keyboard(self, payload: dict[str, Any]) -> InlineKeyboardMarkup:
         workers = payload.get("workers") or []
@@ -6449,6 +6515,21 @@ class NewsAdminBot:
                 await self._safe_edit_message_text(
                     query,
                     await self._panel_text(controls) + "\n\n" + await self._queue_text(),
+                )
+                return
+
+            if data.startswith("reader:summary"):
+                days = 7
+                parts = data.split(":")
+                if len(parts) >= 3:
+                    try:
+                        days = max(1, min(int(parts[2]), 90))
+                    except ValueError:
+                        days = 7
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_summary_text(days),
+                    reply_markup=self._reader_summary_keyboard(days),
                 )
                 return
 

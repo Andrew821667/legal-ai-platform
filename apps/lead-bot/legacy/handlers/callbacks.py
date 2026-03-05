@@ -28,6 +28,7 @@ import content
 import funnel
 from handlers.constants import *
 from handlers.helpers import notify_admin_new_lead
+from handlers.user import process_pending_start_payload
 
 logger = logging.getLogger(__name__)
 
@@ -654,6 +655,12 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=reply_markup,
             action="consent_welcome_after_yes",
         )
+        await process_pending_start_payload(
+            message=query.message,
+            context=context,
+            user_data=user_data,
+            user=user,
+        )
         return
 
     if action in ("consent_transborder_yes", "consent_transborder_no"):
@@ -685,6 +692,12 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             welcome_message,
             reply_markup=reply_markup,
             action="consent_welcome_after_transborder",
+        )
+        await process_pending_start_payload(
+            message=query.message,
+            context=context,
+            user_data=user_data,
+            user=user,
         )
         return
 

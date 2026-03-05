@@ -149,6 +149,19 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "config": {},
     },
     {
+        "key": "news.reader_digest.enabled",
+        "scope": Scope.news,
+        "title": "Reader digest-воркер",
+        "description": "Авторассылка персональных дайджестов подписчикам reader-бота.",
+        "enabled": True,
+        "config": {
+            "slot_time": "12:15",
+            "slot_options": ["09:15", "10:15", "11:15", "12:15", "13:15", "14:15", "20:15"],
+            "max_users_per_cycle": 30,
+            "max_users_options": [10, 20, 30, 50, 100],
+        },
+    },
+    {
         "key": "lead_bot.autorespond.enabled",
         "scope": Scope.bot,
         "title": "Автоответы лид-бота",

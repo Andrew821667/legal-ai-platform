@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from typing import Any
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -122,6 +124,101 @@ def claim_scheduled_posts(
     for post in posts:
         db.refresh(post)
     return posts
+
+
+@router.get("/feedback/reader-summary")
+def reader_feedback_summary(
+    days: int = Query(default=7, ge=1, le=90),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _ = identity
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    stmt = (
+        select(PostFeedbackSignal, ScheduledPost.title)
+        .join(ScheduledPost, ScheduledPost.id == PostFeedbackSignal.post_id)
+        .where(PostFeedbackSignal.created_at >= since)
+        .where(
+            or_(
+                PostFeedbackSignal.signal_key.like("reader.%"),
+                PostFeedbackSignal.actor_name == "reader_bot",
+            )
+        )
+        .order_by(PostFeedbackSignal.created_at.desc())
+        .limit(5000)
+    )
+    rows = db.execute(stmt).all()
+
+    reason_counts: dict[str, int] = defaultdict(int)
+    post_stats: dict[str, dict[str, Any]] = {}
+    stats = {
+        "signals_total": 0,
+        "weekly_opened": 0,
+        "idea_requested": 0,
+        "consultation_intent": 0,
+        "useful_feedback": 0,
+        "not_useful_feedback": 0,
+    }
+
+    for row in rows:
+        signal: PostFeedbackSignal = row[0]
+        title: str | None = row[1]
+        signal_key = (signal.signal_key or "").strip()
+        stats["signals_total"] += 1
+
+        if signal_key == "reader.weekly.opened":
+            stats["weekly_opened"] += 1
+        elif signal_key == "reader.idea.requested":
+            stats["idea_requested"] += 1
+        elif signal_key == "reader.consultation.intent" and signal.signal_value > 0:
+            stats["consultation_intent"] += 1
+        elif signal_key == "reader.useful" and signal.signal_value > 0:
+            stats["useful_feedback"] += 1
+        elif signal_key.startswith("reader.not_useful."):
+            stats["not_useful_feedback"] += 1
+            reason = signal_key.removeprefix("reader.not_useful.").strip() or "other"
+            reason_counts[reason] += 1
+
+        post_id = str(signal.post_id)
+        post_entry = post_stats.setdefault(
+            post_id,
+            {
+                "post_id": post_id,
+                "title": title or "Без заголовка",
+                "idea_requested": 0,
+                "consultation_intent": 0,
+                "useful_feedback": 0,
+            },
+        )
+        if signal_key == "reader.idea.requested":
+            post_entry["idea_requested"] += 1
+        elif signal_key == "reader.consultation.intent" and signal.signal_value > 0:
+            post_entry["consultation_intent"] += 1
+        elif signal_key == "reader.useful" and signal.signal_value > 0:
+            post_entry["useful_feedback"] += 1
+
+    top_posts = sorted(
+        post_stats.values(),
+        key=lambda item: (
+            int(item.get("consultation_intent", 0)),
+            int(item.get("idea_requested", 0)),
+            int(item.get("useful_feedback", 0)),
+        ),
+        reverse=True,
+    )[:5]
+    top_negative_reasons = sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+
+    return {
+        "days": days,
+        "since": since.isoformat(),
+        "stats": stats,
+        "top_negative_reasons": [
+            {"reason": reason, "count": count}
+            for reason, count in top_negative_reasons
+        ],
+        "top_posts": top_posts,
+    }
 
 
 @router.get("/{post_id}", response_model=ScheduledPostOut)

@@ -6,6 +6,9 @@ import sqlite3
 import time
 import re
 import asyncio
+import json
+import urllib.error
+import urllib.request
 from typing import Optional, Dict
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
@@ -30,12 +33,169 @@ from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
+_READER_START_PAYLOAD_RE = re.compile(r"^readerq_(?P<post_id>[0-9a-fA-F-]{36})$")
 _EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
 _EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
+_PENDING_START_PAYLOAD_KEY = "pending_start_payload"
 
 
 def _button_text_equals(text: str | None, expected: str) -> bool:
     return normalize_button_text(text).casefold() == normalize_button_text(expected).casefold()
+
+
+def _extract_start_payload(context: ContextTypes.DEFAULT_TYPE) -> str:
+    args = getattr(context, "args", None) or []
+    if not args:
+        return ""
+    return str(args[0]).strip()
+
+
+def _news_api_key() -> str:
+    return (config.API_KEY_NEWS or config.API_KEY_ADMIN or config.API_KEY_BOT or "").strip()
+
+
+def _fetch_post_context(post_id: str) -> Dict[str, str]:
+    base_url = (config.CORE_API_URL or "").rstrip("/")
+    api_key = _news_api_key()
+    if not base_url or not api_key:
+        return {}
+
+    request = urllib.request.Request(
+        url=f"{base_url}/api/v1/scheduled-posts/{post_id}",
+        headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
+            raw = response.read().decode("utf-8", errors="ignore")
+            payload = json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as error:
+        logger.warning("reader referral post fetch failed (%s): %s", error.code, post_id)
+        return {}
+    except Exception as error:
+        logger.warning("reader referral post fetch error for %s: %s", post_id, error)
+        return {}
+
+    return {
+        "title": str(payload.get("title") or "").strip(),
+        "text": str(payload.get("text") or "").strip(),
+        "source_url": str(payload.get("source_url") or "").strip(),
+        "rubric": str(payload.get("rubric") or "").strip(),
+        "format_type": str(payload.get("format_type") or "").strip(),
+    }
+
+
+def _build_reader_referral_lead_payload(
+    *,
+    user_first_name: str,
+    post_id: str,
+    post_context: Dict[str, str],
+) -> Dict:
+    title = (post_context.get("title") or "").strip()
+    source_url = (post_context.get("source_url") or "").strip()
+    rubric = (post_context.get("rubric") or "").strip()
+    notes_parts = ["[READER_REFERRAL]", f"post_id={post_id}"]
+    if title:
+        notes_parts.append(f"title={title}")
+    if source_url:
+        notes_parts.append(f"source_url={source_url}")
+    if rubric:
+        notes_parts.append(f"rubric={rubric}")
+
+    pain_point = (
+        f"Нужно разобрать материал «{title}» и понять, как применить в юрфункции."
+        if title
+        else "Нужно разобрать материал из канала и применить в юридической работе."
+    )
+    return {
+        "name": user_first_name or "Клиент из Reader",
+        "pain_point": pain_point,
+        "temperature": "warm",
+        "status": "new",
+        "service_category": "ai_legal_consulting",
+        "specific_need": "Разбор публикации и план внедрения",
+        "lead_magnet_type": "consultation",
+        "lead_magnet_delivered": 0,
+        "notification_sent": 0,
+        "conversation_stage": "qualify",
+        "cta_variant": "reader_referral",
+        "cta_shown": 1,
+        "notes": "\n".join(notes_parts)[:3500],
+    }
+
+
+async def _handle_reader_referral_start(
+    *,
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_data: Dict,
+    user,
+    post_id: str,
+) -> bool:
+    post_context = _fetch_post_context(post_id)
+    lead_payload = _build_reader_referral_lead_payload(
+        user_first_name=user.first_name or "",
+        post_id=post_id,
+        post_context=post_context,
+    )
+
+    lead_id = database.db.create_new_lead(user_data["id"], lead_payload)
+    database.db.track_event(
+        user_data["id"],
+        "reader_referral_start",
+        payload={
+            "post_id": post_id,
+            "post_title": post_context.get("title") or "",
+            "source_url": post_context.get("source_url") or "",
+        },
+        lead_id=lead_id,
+    )
+    await notify_admin_new_lead(
+        context,
+        lead_id,
+        lead_payload,
+        user_data,
+        is_update=False,
+    )
+
+    title = (post_context.get("title") or "").strip()
+    title_block = f"Материал: {title}\n\n" if title else ""
+    await utils.safe_reply_text(
+        message,
+        (
+            "✅ Переход из ридер-бота принят, заявка создана.\n\n"
+            f"{title_block}"
+            "Можете сразу описать ваш вопрос по внедрению в 1-2 предложениях "
+            "или отправить телефон кнопкой ниже."
+        ),
+        reply_markup=_consultation_contact_markup(),
+        action="reader_referral_start",
+    )
+    return True
+
+
+async def process_pending_start_payload(
+    *,
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_data: Dict,
+    user,
+) -> bool:
+    payload = str((context.user_data or {}).pop(_PENDING_START_PAYLOAD_KEY, "") or "").strip()
+    if not payload:
+        return False
+
+    match = _READER_START_PAYLOAD_RE.match(payload)
+    if not match:
+        return False
+
+    return await _handle_reader_referral_start(
+        message=message,
+        context=context,
+        user_data=user_data,
+        user=user,
+        post_id=match.group("post_id"),
+    )
 
 # Import admin panel function (avoid at module level due to potential circular import)
 def get_show_admin_panel():
@@ -564,6 +724,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     try:
         user = update.effective_user
+        start_payload = _extract_start_payload(context)
+        if start_payload:
+            context.user_data[_PENDING_START_PAYLOAD_KEY] = start_payload
         logger.info(f"User {user.id} started bot")
 
         # Создаем или обновляем пользователя в БД
@@ -581,9 +744,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user.id != config.ADMIN_TELEGRAM_ID:
             consent_state = database.db.get_user_consent_state(user_id)
             if not _is_pdn_consent_granted(consent_state):
+                consent_text = content.CONSENT_STEP_1_TEXT
+                if _READER_START_PAYLOAD_RE.match(start_payload):
+                    consent_text = (
+                        f"{consent_text}\n\n"
+                        "После подтверждения согласия сразу подхвачу ваш запрос по материалу из ридер-бота."
+                    )
                 await utils.safe_reply_text(
                     update.message,
-                    content.CONSENT_STEP_1_TEXT,
+                    consent_text,
                     reply_markup=_pdn_consent_markup(),
                     action="start_consent_step_1",
                 )
@@ -599,6 +768,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             action="start_welcome",
         )
+
+        user_data = database.db.get_user_by_id(user_id)
+        if user_data:
+            await process_pending_start_payload(
+                message=update.message,
+                context=context,
+                user_data=user_data,
+                user=user,
+            )
 
     except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in start_command: {e}")

@@ -156,3 +156,11 @@ class CoreClient:
             headers=self.headers,
             timeout=self.timeout,
         )
+
+    def reader_feedback_summary(self, days: int = 7) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/scheduled-posts/feedback/reader-summary",
+            params={"days": days},
+            headers=self.headers,
+            timeout=self.timeout,
+        )

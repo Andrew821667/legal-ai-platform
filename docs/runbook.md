@@ -33,7 +33,7 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 make prod
 ```
 Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-telegram-ingest`, `news-publish`,
-`news-admin-bot`, `news-reader-bot`, `web`, `caddy`.
+`news-admin-bot`, `news-reader-bot`, `news-reader-digest`, `web`, `caddy`.
 3. Применить миграции и создать первый admin-key:
 ```bash
 docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
@@ -51,7 +51,7 @@ make deploy
 - применяет миграции уже свежим образом `core-api`,
 - идемпотентно проверяет admin key,
 - перезапускает image-based сервисы,
-- пересобирает build-based сервисы (`web`, `news-*`, `news-reader-bot`),
+- пересобирает build-based сервисы (`web`, `news-*`, `news-reader-bot`, `news-reader-digest`),
 - затем перезапускает `caddy`.
 
 Критичное правило для миграций `core-api`:
@@ -78,7 +78,7 @@ docker compose -f infra/compose/docker-compose.prod.yml logs --tail=50 lead-bot
 - `JobQueue is not available`
 
 Критичное правило для `web` и `news`:
-- `web`, `news-generate`, `news-telegram-ingest`, `news-publish`, `news-admin-bot`, `news-reader-bot` в production compose собираются из текущего checkout на сервере;
+- `web`, `news-generate`, `news-telegram-ingest`, `news-publish`, `news-admin-bot`, `news-reader-bot`, `news-reader-digest` в production compose собираются из текущего checkout на сервере;
 - поэтому после `git pull` нужен именно `docker compose up -d --build ...`, а не только `docker compose pull`;
 - если ограничиться только `pull`, код этих сервисов на VPS не обновится.
 
@@ -106,12 +106,12 @@ docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps lead-bot
 ```
 6. Затем пересобрать и поднять news-сервисы:
 ```bash
-docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot
+docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot news-reader-digest
 docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps caddy
 ```
 7. Проверить логи:
 ```bash
-docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api web lead-bot news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot caddy
+docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api web lead-bot news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot news-reader-digest caddy
 ```
 
 Что проверить после migration `users/leads`:
@@ -146,9 +146,10 @@ cd apps/lead-bot/legacy
 - `PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS` — допустимый лаг scheduler без warning/misfire.
 
 ## Ночные и периодические задачи (cron)
-News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`) запускается в compose в постоянных loop-процессах:
+News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`, `news-reader-digest`) запускается в compose в постоянных loop-процессах:
 - `news-telegram-ingest` и `news-generate` реально выполняют работу только в слотах из control-plane;
 - `news-publish` опрашивает очередь по интервалу `NEWS_PUBLISH_INTERVAL_SECONDS`.
+- `news-reader-digest` отправляет reader-дайджесты по слоту из `news.reader_digest.enabled.config.slot_time`.
 Чтобы не было пакетных публикаций при накопившихся due-постах, ограничивайте клейм:
 `NEWS_PUBLISH_CLAIM_LIMIT=1` (или через `news.publish.enabled.config.claim_limit`).
 
@@ -220,6 +221,12 @@ NEWS_READER_BUTTON_ICON_MAP=read_more=5309965701241379366,useful=531253642385163
 ```bash
 cd apps/news/legacy
 python -u -m app.reader_bot
+```
+
+Запуск reader digest-воркера (локально):
+```bash
+cd apps/news/legacy
+python -u -m app.reader_digest_loop
 ```
 
 ## Control Plane автоматизаций
