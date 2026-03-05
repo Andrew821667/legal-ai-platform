@@ -77,6 +77,7 @@ async def main():
             BotCommand(command="lead_magnet", description="🎯 Лид-магнит: дайджест за контакты"),
             BotCommand(command="ask_question", description="🤖 Задать вопрос по LegalTech"),
             BotCommand(command="today", description="📰 Персональные новости за сегодня"),
+            BotCommand(command="weekly", description="📆 Недельный дайджест"),
             BotCommand(command="search", description="🔍 Поиск по архиву"),
             BotCommand(command="saved", description="🔖 Сохранённые статьи"),
             BotCommand(command="settings", description="⚙️ Настройки профиля"),

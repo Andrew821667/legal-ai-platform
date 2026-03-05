@@ -30,6 +30,7 @@ from app.services.reader_service import (
     create_user_profile,
     update_user_profile,
     get_personalized_feed,
+    get_weekly_digest_candidates,
     search_publications,
     save_user_feedback,
     save_article,
@@ -73,6 +74,11 @@ class LeadMagnetStates(StatesGroup):
     followup_questions = State()
 
 
+class ArticleConsultationStates(StatesGroup):
+    """State for article -> consultation transfer flow."""
+    wait_question = State()
+
+
 # ==================== Helper Functions ====================
 
 
@@ -108,6 +114,87 @@ def format_article_message(article: ReaderPublication, index: Optional[int] = No
     )
 
 
+def _trim_text(text: str, limit: int = 360) -> str:
+    cleaned = " ".join((text or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit].rstrip() + "..."
+
+
+async def _build_weekly_digest_text(articles: list[ReaderPublication], db: AsyncSession) -> str:
+    """Build weekly digest text via LLM with deterministic fallback."""
+    if not articles:
+        return "📭 За неделю релевантных публикаций пока не найдено."
+
+    source_lines = []
+    for idx, article in enumerate(articles[:8], 1):
+        source_lines.append(
+            f"{idx}) {article.draft.title}\n"
+            f"{_trim_text(article.draft.content, 260)}"
+        )
+    source_blob = "\n\n".join(source_lines)
+
+    try:
+        from app.modules.llm_provider import get_llm_provider
+
+        llm = get_llm_provider(settings.default_llm_provider)
+        digest = await llm.generate_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты редактор канала про AI в юридической функции. "
+                        "Сделай короткий недельный дайджест по материалам. "
+                        "Структура:\n"
+                        "1) Главный тренд недели (1-2 предложения)\n"
+                        "2) Что важно юристу/руководителю (3 пункта)\n"
+                        "3) Какие внедрения имеет смысл пилотировать (2 пункта)\n"
+                        "Пиши только по-русски, без Markdown-таблиц и без ссылок."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Материалы за неделю:\n\n{source_blob}",
+                },
+            ],
+            max_tokens=650,
+            temperature=0.35,
+            operation="reader_weekly_digest",
+            db=db,
+        )
+        digest_text = " ".join((digest or "").split()).strip()
+        if digest_text:
+            return (
+                "📆 <b>Недельный дайджест для вас</b>\n\n"
+                f"{escape(digest_text)}\n\n"
+                "Ниже добавил карточки ключевых публикаций."
+            )
+    except Exception:
+        logger.exception("reader_weekly_digest_generation_failed")
+
+    # Fallback if LLM unavailable
+    lines = []
+    for idx, article in enumerate(articles[:6], 1):
+        lines.append(
+            f"{idx}. <b>{escape(_trim_text(article.draft.title, 110))}</b>\n"
+            f"{escape(_trim_text(article.draft.content, 170))}"
+        )
+    return (
+        "📆 <b>Недельный дайджест для вас</b>\n\n"
+        "Ключевые материалы недели:\n\n"
+        + "\n\n".join(lines)
+    )
+
+
+def _build_helper_link(payload: str | None = None) -> str:
+    helper_username = (settings.news_helper_bot_username or "").strip().lstrip("@")
+    if not helper_username:
+        return ""
+    if payload:
+        return f"https://t.me/{helper_username}?start={payload}"
+    return f"https://t.me/{helper_username}"
+
+
 def get_article_keyboard(publication_id: str, user_saved: bool = False, show_read_button: bool = True) -> InlineKeyboardMarkup:
     """Get keyboard for article with like/dislike/save buttons."""
     save_text = "❌ Удалить из сохранённых" if user_saved else "🔖 Сохранить"
@@ -122,7 +209,8 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
         ])
 
     keyboard.append([
-        InlineKeyboardButton(text="💡 Идея внедрения", callback_data=f"idea:{publication_id}")
+        InlineKeyboardButton(text="💡 Идея внедрения", callback_data=f"idea:{publication_id}"),
+        InlineKeyboardButton(text="❓ Вопрос по статье", callback_data=f"article_q:{publication_id}"),
     ])
 
     # Feedback buttons
@@ -172,6 +260,7 @@ async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
             await message.answer(
                 "Команды ридера:\n"
                 "/today - персональная лента\n"
+                "/weekly - недельный дайджест\n"
                 "/search - поиск по архиву\n"
                 "/saved - сохраненные\n"
                 "/settings - профиль"
@@ -200,6 +289,7 @@ async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
             f"С возвращением, {message.from_user.first_name}! 👋\n\n"
             f"Что хотите сделать?\n\n"
             f"/today - Персональные новости за сегодня\n"
+            f"/weekly - Недельный дайджест\n"
             f"/search - Поиск по архиву\n"
             f"/saved - Сохранённые статьи ({len(saved_articles)})\n"
             f"/settings - Настройки профиля\n"
@@ -537,6 +627,52 @@ async def cmd_today(message: Message, db: AsyncSession):
             parse_mode="HTML",
             reply_markup=keyboard
         )
+
+
+@router.message(Command("weekly"))
+async def cmd_weekly(message: Message, db: AsyncSession):
+    """Show weekly digest tailored to user interests."""
+    user_id = message.from_user.id
+    profile = await get_user_profile(user_id, db)
+
+    if not profile:
+        await message.answer("Сначала завершите настройку профиля: /start")
+        return
+
+    await update_last_active(user_id, db)
+    articles = await get_weekly_digest_candidates(user_id, limit=8, days=7, db=db)
+
+    if not articles:
+        await message.answer(
+            "📭 За последнюю неделю пока нет новых релевантных материалов.\n\n"
+            "Попробуйте /today или /search."
+        )
+        return
+
+    digest_text = await _build_weekly_digest_text(articles, db)
+    await message.answer(
+        digest_text,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+    # Show top cards after digest summary
+    for i, article in enumerate(articles[:3], 1):
+        await message.answer(
+            format_article_message(article, index=i),
+            parse_mode="HTML",
+            reply_markup=get_article_keyboard(str(article.id)),
+        )
+
+    await push_reader_feedback(
+        publication_id=str(articles[0].id),
+        user_id=user_id,
+        source="reaction",
+        signal_key="reader.weekly.opened",
+        signal_value=1,
+        text="Reader opened weekly digest",
+        payload={"articles_count": len(articles)},
+    )
 
 
 # ==================== /search - Search ====================
@@ -917,6 +1053,137 @@ async def generate_automation_idea_callback(callback: CallbackQuery, db: AsyncSe
         text="Reader requested automation idea",
         payload={"event": "idea_requested"},
     )
+
+
+@router.callback_query(F.data.startswith("article_q:"))
+async def start_article_question_flow(callback: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """Start question transfer flow from an article to lead bot."""
+    article_id = callback.data.split(":")[1]
+
+    article = await get_publication_by_id(article_id, db)
+    if not article:
+        await callback.answer("❌ Статья не найдена", show_alert=True)
+        return
+
+    await state.update_data(
+        article_id=str(article.id),
+        article_title=article.draft.title,
+    )
+    await state.set_state(ArticleConsultationStates.wait_question)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить", callback_data="article_q_cancel")],
+        ]
+    )
+    await callback.message.answer(
+        "✍️ <b>Вопрос по статье</b>\n\n"
+        "Напишите 1-2 предложения: что именно хотите разобрать по этому материалу.\n"
+        "Я подготовлю структурированную формулировку для обращения в консультацию.",
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
+    await callback.answer("Готово, жду ваш вопрос")
+
+
+@router.callback_query(F.data == "article_q_cancel", StateFilter(ArticleConsultationStates.wait_question))
+async def cancel_article_question_flow(callback: CallbackQuery, state: FSMContext):
+    """Cancel article question flow."""
+    await state.clear()
+    await callback.answer("Отменено")
+    await callback.message.answer("Окей, продолжаем. Откройте /today или /weekly.")
+
+
+@router.message(StateFilter(ArticleConsultationStates.wait_question), F.text)
+async def handle_article_question_text(message: Message, state: FSMContext, db: AsyncSession):
+    """Convert free-form question to consultation draft and route to helper bot."""
+    user_id = message.from_user.id
+    user_question = (message.text or "").strip()
+    if len(user_question) < 6:
+        await message.answer("Нужно чуть подробнее: хотя бы 6-8 символов.")
+        return
+
+    data = await state.get_data()
+    article_id = str(data.get("article_id") or "").strip()
+    article_title = str(data.get("article_title") or "Материал из канала").strip()
+    article = await get_publication_by_id(article_id, db) if article_id else None
+
+    consultation_text = ""
+    try:
+        from app.modules.llm_provider import get_llm_provider
+
+        llm = get_llm_provider(settings.default_llm_provider)
+        consultation_text = await llm.generate_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты помощник пресейла Legal AI. Переформулируй вопрос клиента для консультации. "
+                        "Формат строго из 3 блоков:\n"
+                        "Контекст:\n"
+                        "Задача:\n"
+                        "Ожидаемый результат:\n"
+                        "Кратко, предметно, до 700 символов, русский язык."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Заголовок статьи: {article_title}\n"
+                        f"Фрагмент статьи: {_trim_text(article.draft.content if article else '', 1000)}\n"
+                        f"Вопрос пользователя: {user_question}"
+                    ),
+                },
+            ],
+            max_tokens=420,
+            temperature=0.35,
+            operation="reader_question_transfer",
+            db=db,
+        )
+    except Exception:
+        logger.exception("reader_question_transfer_generation_failed", user_id=user_id, article_id=article_id)
+
+    if not consultation_text.strip():
+        consultation_text = (
+            f"Контекст: Обсуждаем материал «{article_title}».\n"
+            f"Задача: {user_question}\n"
+            "Ожидаемый результат: получить вариант внедрения и оценку рисков/этапов."
+        )
+
+    payload = f"readerq_{article_id}" if article_id else "readerq"
+    helper_link = _build_helper_link(payload)
+    keyboard_rows = []
+    if helper_link:
+        keyboard_rows.append(
+            [InlineKeyboardButton(text="✉️ Написать в Ассистент Legal AI PRO", url=helper_link)]
+        )
+    keyboard_rows.append(
+        [InlineKeyboardButton(text="🔁 Сформулировать заново", callback_data=f"article_q:{article_id}")]
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+    await message.answer(
+        "🧭 <b>Подготовил черновик обращения</b>\n\n"
+        "<b>Текст для отправки:</b>\n"
+        f"<code>{escape(_trim_text(consultation_text, 1400))}</code>\n\n"
+        "Если нужно, можно сформулировать заново.",
+        parse_mode="HTML",
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+
+    if article_id:
+        await push_reader_feedback(
+            publication_id=article_id,
+            user_id=user_id,
+            source="comment",
+            signal_key="reader.consultation.intent",
+            signal_value=1,
+            text=user_question,
+            payload={"article_title": article_title},
+        )
+
+    await state.clear()
 
 
 # ==================== /settings ====================
@@ -1308,7 +1575,7 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if text.startswith("/"):
         await message.answer(
             "Неизвестная команда.\n\n"
-            "Доступно: /start, /today, /search, /saved, /settings, /lead_magnet"
+            "Доступно: /start, /today, /weekly, /search, /saved, /settings, /lead_magnet"
         )
         return
 

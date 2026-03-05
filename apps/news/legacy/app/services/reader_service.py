@@ -17,6 +17,15 @@ from app.models.reader_publications import ReaderPublication
 
 logger = logging.getLogger(__name__)
 
+TOPIC_KEYWORDS: dict[str, list[str]] = {
+    "gdpr": ["gdpr", "персональн", "пдн", "защита данных", "privacy"],
+    "ai_law": ["искусственн", "нейросет", "машинн", "ai", "ml"],
+    "crypto": ["крипто", "блокчейн", "биткоин", "токен", "nft"],
+    "corporate": ["корпоративн", "акционер", "устав", "ооо", "ао"],
+    "tax": ["налог", "ндс", "ндфл", "налоговая", "фнс"],
+    "ip": ["авторск", "патент", "товарн", "интеллектуальн"],
+}
+
 
 # ==================== User Profile Management ====================
 
@@ -292,23 +301,13 @@ async def get_personalized_feed(
     result = await db.execute(query)
     publications = result.scalars().all()
 
-    # Filter by topics (simple keyword match)
-    topic_keywords = {
-        'gdpr': ['gdpr', 'персональн', 'пдн', 'защита данных', 'privacy'],
-        'ai_law': ['искусственн', 'нейросет', 'машинн', 'ai', 'ml'],
-        'crypto': ['крипто', 'блокчейн', 'биткоин', 'токен', 'nft'],
-        'corporate': ['корпоративн', 'акционер', 'устав', 'ооо', 'ао'],
-        'tax': ['налог', 'ндс', 'ндфл', 'налоговая', 'фнс'],
-        'ip': ['авторск', 'патент', 'товарн', 'интеллектуальн']
-    }
-
     filtered = []
     for pub in publications:
         content_lower = ((pub.title or "") + " " + (pub.text or "")).lower()
 
         # Check if any user topic matches
         for user_topic in profile.topics:
-            keywords = topic_keywords.get(user_topic, [])
+            keywords = TOPIC_KEYWORDS.get(user_topic, [])
             if any(kw in content_lower for kw in keywords):
                 filtered.append(pub)
                 break  # Found match, add article
@@ -329,6 +328,72 @@ async def get_recent_publications(limit: int, db: AsyncSession) -> List[ReaderPu
     )
     result = await db.execute(query)
     return result.scalars().all()
+
+
+async def get_weekly_digest_candidates(
+    user_id: int,
+    limit: int = 8,
+    days: int = 7,
+    db: AsyncSession = None,
+) -> List[ReaderPublication]:
+    """
+    Select a compact list of weekly digest candidates.
+    Priority: user topics -> recency -> uniqueness by title.
+    """
+    profile = await get_user_profile(user_id, db)
+    user_topics = list(profile.topics or []) if profile else []
+
+    since = datetime.utcnow() - timedelta(days=max(days, 1))
+    query = (
+        select(ReaderPublication)
+        .where(cast(ReaderPublication.status, String) == "posted")
+        .where(ReaderPublication.publish_at >= since)
+        .order_by(desc(ReaderPublication.publish_at))
+        .limit(max(limit * 8, 40))
+    )
+    result = await db.execute(query)
+    publications = result.scalars().all()
+    if not publications:
+        return []
+
+    selected: List[ReaderPublication] = []
+    seen_titles: set[str] = set()
+
+    def _title_key(pub: ReaderPublication) -> str:
+        return " ".join((pub.title or "").lower().split())[:220]
+
+    def _matches_topics(pub: ReaderPublication) -> bool:
+        if not user_topics:
+            return True
+        content_lower = ((pub.title or "") + " " + (pub.text or "")).lower()
+        for topic in user_topics:
+            for kw in TOPIC_KEYWORDS.get(topic, []):
+                if kw in content_lower:
+                    return True
+        return False
+
+    # First pass: strictly by user topics
+    for pub in publications:
+        key = _title_key(pub)
+        if not key or key in seen_titles:
+            continue
+        if _matches_topics(pub):
+            selected.append(pub)
+            seen_titles.add(key)
+        if len(selected) >= limit:
+            return selected
+
+    # Second pass: fill with generally relevant recent posts
+    for pub in publications:
+        key = _title_key(pub)
+        if not key or key in seen_titles:
+            continue
+        selected.append(pub)
+        seen_titles.add(key)
+        if len(selected) >= limit:
+            break
+
+    return selected
 
 
 async def get_publication_by_id(publication_id: str | UUID, db: AsyncSession) -> Optional[ReaderPublication]:
