@@ -134,8 +134,32 @@ ADMIN_SECURITY_MENU = [
     [InlineKeyboardButton("📋 Черный список", callback_data="admin_blacklist_list")],
     [InlineKeyboardButton("🚫 Блокировать по ID", callback_data="admin_blacklist_add_prompt")],
     [InlineKeyboardButton("✅ Разблокировать по ID", callback_data="admin_blacklist_remove_prompt")],
+    [InlineKeyboardButton("⚙️ Runtime-настройки", callback_data="admin_runtime_settings")],
     [InlineKeyboardButton("🧹 Сбросить счетчики безопасности", callback_data="admin_security_reset")],
     [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")],
+]
+
+ADMIN_RUNTIME_MENU = [
+    [
+        InlineKeyboardButton("🟢 Мягкий пресет", callback_data="admin_runtime_preset_soft"),
+        InlineKeyboardButton("🟡 Стандарт", callback_data="admin_runtime_preset_standard"),
+    ],
+    [InlineKeyboardButton("🔴 Строгий пресет", callback_data="admin_runtime_preset_strict")],
+    [
+        InlineKeyboardButton("🎬 Streaming on/off", callback_data="admin_runtime_toggle_streaming"),
+        InlineKeyboardButton("🧪 Тест-лиды on/off", callback_data="admin_runtime_toggle_admin_test"),
+    ],
+    [
+        InlineKeyboardButton("⏱ Idle 3m", callback_data="admin_runtime_idle_3"),
+        InlineKeyboardButton("⏱ Idle 5m", callback_data="admin_runtime_idle_5"),
+        InlineKeyboardButton("⏱ Idle 10m", callback_data="admin_runtime_idle_10"),
+    ],
+    [
+        InlineKeyboardButton("📦 Batch 10", callback_data="admin_runtime_batch_10"),
+        InlineKeyboardButton("📦 Batch 20", callback_data="admin_runtime_batch_20"),
+        InlineKeyboardButton("📦 Batch 50", callback_data="admin_runtime_batch_50"),
+    ],
+    [InlineKeyboardButton("◀️ Назад в безопасность", callback_data="admin_section_security")],
 ]
 
 # Меню очистки данных

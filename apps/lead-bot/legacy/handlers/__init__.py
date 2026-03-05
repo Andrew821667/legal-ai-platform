@@ -13,6 +13,7 @@ from handlers.constants import (
     ADMIN_USERS_MENU,
     ADMIN_EXPORT_MENU,
     ADMIN_SECURITY_MENU,
+    ADMIN_RUNTIME_MENU,
     ADMIN_CLEANUP_MENU,
 )
 
@@ -97,6 +98,7 @@ __all__ = [
     'ADMIN_USERS_MENU',
     'ADMIN_EXPORT_MENU',
     'ADMIN_SECURITY_MENU',
+    'ADMIN_RUNTIME_MENU',
     'ADMIN_CLEANUP_MENU',
     # Helpers
     'extract_email',

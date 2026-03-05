@@ -982,6 +982,82 @@ def _format_blacklist_for_admin() -> str:
     return "\n".join(lines)
 
 
+def _detect_runtime_preset() -> str:
+    sm = security.security_manager
+    minute = sm.RATE_LIMITS.get("messages_per_minute")
+    hour = sm.RATE_LIMITS.get("messages_per_hour")
+    day = sm.RATE_LIMITS.get("messages_per_day")
+    cooldown = round(float(sm.COOLDOWN_SECONDS), 1)
+    max_len = int(sm.MAX_MESSAGE_LENGTH)
+    if (minute, hour, day, cooldown, max_len) == (20, 120, 400, 0.3, 6000):
+        return "soft"
+    if (minute, hour, day, cooldown, max_len) == (10, 50, 200, 1.0, 4000):
+        return "standard"
+    if (minute, hour, day, cooldown, max_len) == (6, 30, 120, 1.5, 3000):
+        return "strict"
+    return "custom"
+
+
+def _apply_runtime_preset(preset_name: str) -> str:
+    sm = security.security_manager
+    if preset_name == "soft":
+        sm.RATE_LIMITS = {
+            "messages_per_minute": 20,
+            "messages_per_hour": 120,
+            "messages_per_day": 400,
+        }
+        sm.COOLDOWN_SECONDS = 0.3
+        sm.MAX_MESSAGE_LENGTH = 6000
+        return "🟢 Применен мягкий пресет."
+    if preset_name == "strict":
+        sm.RATE_LIMITS = {
+            "messages_per_minute": 6,
+            "messages_per_hour": 30,
+            "messages_per_day": 120,
+        }
+        sm.COOLDOWN_SECONDS = 1.5
+        sm.MAX_MESSAGE_LENGTH = 3000
+        return "🔴 Применен строгий пресет."
+
+    sm.RATE_LIMITS = {
+        "messages_per_minute": 10,
+        "messages_per_hour": 50,
+        "messages_per_day": 200,
+    }
+    sm.COOLDOWN_SECONDS = 1.0
+    sm.MAX_MESSAGE_LENGTH = 4000
+    return "🟡 Применен стандартный пресет."
+
+
+def _format_runtime_settings_for_admin() -> str:
+    sm = security.security_manager
+    preset = _detect_runtime_preset()
+    preset_label = {
+        "soft": "🟢 soft",
+        "standard": "🟡 standard",
+        "strict": "🔴 strict",
+        "custom": "⚪ custom",
+    }[preset]
+    return (
+        "⚙️ Runtime-настройки лид-бота\n\n"
+        f"Профиль лимитов: {preset_label}\n\n"
+        "Анти-спам:\n"
+        f"• в минуту: {sm.RATE_LIMITS['messages_per_minute']}\n"
+        f"• в час: {sm.RATE_LIMITS['messages_per_hour']}\n"
+        f"• в день: {sm.RATE_LIMITS['messages_per_day']}\n"
+        f"• cooldown: {sm.COOLDOWN_SECONDS:.1f} сек\n"
+        f"• макс длина сообщения: {sm.MAX_MESSAGE_LENGTH}\n\n"
+        "Диалог/LLM:\n"
+        f"• streaming preview: {'ON' if config.STREAMING_PREVIEW else 'OFF'}\n"
+        f"• timeout LLM: {config.LLM_TIMEOUT_SECONDS:.1f} сек\n"
+        f"• тест-лиды админа: {'ON' if config.ALLOW_ADMIN_TEST_LEADS else 'OFF'}\n\n"
+        "Pending leads:\n"
+        f"• idle timeout: {config.PENDING_LEADS_IDLE_MINUTES} мин\n"
+        f"• batch size: {config.PENDING_LEADS_JOB_MAX_BATCH}\n"
+        f"• check interval: {config.PENDING_LEADS_CHECK_INTERVAL_SECONDS} сек (после рестарта для нового расписания)"
+    )
+
+
 async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback кнопок админ-панели"""
     query = update.callback_query
@@ -1201,6 +1277,15 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 "🛡️ РАЗДЕЛ: БЕЗОПАСНОСТЬ\n\nВыберите действие:",
                 reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
                 action="admin_section_security",
+            )
+
+        elif action == "admin_runtime_settings":
+            _clear_admin_lookup_state(context)
+            await utils.safe_edit_text(
+                query.message,
+                _format_runtime_settings_for_admin(),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action="admin_runtime_settings",
             )
 
         elif action == "admin_section_commands":
@@ -1472,6 +1557,64 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 ),
                 reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
                 action="admin_security_reset",
+            )
+
+        elif action in {"admin_runtime_preset_soft", "admin_runtime_preset_standard", "admin_runtime_preset_strict"}:
+            preset_key = action.rsplit("_", 1)[-1]
+            apply_message = _apply_runtime_preset(preset_key)
+            await utils.safe_edit_text(
+                query.message,
+                f"{apply_message}\n\n{_format_runtime_settings_for_admin()}",
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action=action,
+            )
+
+        elif action == "admin_runtime_toggle_streaming":
+            config.STREAMING_PREVIEW = not config.STREAMING_PREVIEW
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"🎬 Streaming preview: {'ON' if config.STREAMING_PREVIEW else 'OFF'}\n\n"
+                    f"{_format_runtime_settings_for_admin()}"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action="admin_runtime_toggle_streaming",
+            )
+
+        elif action == "admin_runtime_toggle_admin_test":
+            config.ALLOW_ADMIN_TEST_LEADS = not config.ALLOW_ADMIN_TEST_LEADS
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"🧪 Тест-лиды админа: {'ON' if config.ALLOW_ADMIN_TEST_LEADS else 'OFF'}\n\n"
+                    f"{_format_runtime_settings_for_admin()}"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action="admin_runtime_toggle_admin_test",
+            )
+
+        elif action in {"admin_runtime_idle_3", "admin_runtime_idle_5", "admin_runtime_idle_10"}:
+            config.PENDING_LEADS_IDLE_MINUTES = int(action.split("_")[-1])
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"⏱ Idle timeout обновлен: {config.PENDING_LEADS_IDLE_MINUTES} мин\n\n"
+                    f"{_format_runtime_settings_for_admin()}"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action=action,
+            )
+
+        elif action in {"admin_runtime_batch_10", "admin_runtime_batch_20", "admin_runtime_batch_50"}:
+            config.PENDING_LEADS_JOB_MAX_BATCH = int(action.split("_")[-1])
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"📦 Batch size обновлен: {config.PENDING_LEADS_JOB_MAX_BATCH}\n\n"
+                    f"{_format_runtime_settings_for_admin()}"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_RUNTIME_MENU),
+                action=action,
             )
 
         elif action == "admin_leads":
