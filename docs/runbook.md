@@ -164,6 +164,21 @@ Cron оставляем для служебных задач:
 0 4 * * * /opt/legal-ai/infra/scripts/cron_cleanup_idempotency.sh >> /var/log/cleanup.log 2>&1
 ```
 
+SLA-алерты в `healthcheck.sh`:
+- неактивные обязательные воркеры (`REQUIRED_NEWS_WORKERS`);
+- отсутствие новых драфтов дольше порога (`DRAFT_MAX_IDLE_HOURS`);
+- просроченная очередь публикации (`DUE_POSTS_ALERT_THRESHOLD`).
+
+Доп. настройки алертов:
+```bash
+SLA_ALERTS_ENABLED=1
+REQUIRED_NEWS_WORKERS=news-generate,news-telegram-ingest,news-publish,news-reader-digest
+DRAFT_MAX_IDLE_HOURS=24
+DUE_POSTS_ALERT_THRESHOLD=0
+ALERT_COOLDOWN_SECONDS=1800
+ALERT_STATE_FILE=/tmp/legal-ai-alert-state.json
+```
+
 Ручная проверка генерации без записи в БД:
 ```bash
 uv run --package news python -m news.generate --dry-run --limit 5

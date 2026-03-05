@@ -1926,6 +1926,7 @@ class NewsAdminBot:
                 _inline_button("👷 Воркеры", callback_data="workers"),
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
+                _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
                 _inline_button("🤖 Автоматизация", callback_data="automation"),
                 _inline_button("❓ Помощь", callback_data="sec:help"),
                 _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
@@ -1941,6 +1942,20 @@ class NewsAdminBot:
                 _inline_button(f"{'• ' if days == 14 else ''}14 дн", callback_data="reader:summary:14"),
                 _inline_button(f"{'• ' if days == 30 else ''}30 дн", callback_data="reader:summary:30"),
                 _inline_button("🔄 Обновить", callback_data=f"reader:summary:{days}"),
+                _inline_button("🎯 Открыть воронку", callback_data=f"reader:funnel:{days}"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
+    def _reader_funnel_keyboard(self, days: int = 7) -> InlineKeyboardMarkup:
+        rows = self._two_column_rows(
+            [
+                _inline_button(f"{'• ' if days == 7 else ''}7 дн", callback_data="reader:funnel:7"),
+                _inline_button(f"{'• ' if days == 14 else ''}14 дн", callback_data="reader:funnel:14"),
+                _inline_button(f"{'• ' if days == 30 else ''}30 дн", callback_data="reader:funnel:30"),
+                _inline_button("🔄 Обновить", callback_data=f"reader:funnel:{days}"),
+                _inline_button("📚 К метрикам", callback_data=f"reader:summary:{days}"),
             ]
         )
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
@@ -2030,6 +2045,49 @@ class NewsAdminBot:
                 )
         else:
             lines.append("• пока нет данных")
+
+        return "\n".join(lines)
+
+    def _reader_funnel_text(self, days: int = 7) -> str:
+        response = self.admin_client.reader_funnel_summary(days=days)
+        response.raise_for_status()
+        payload = response.json() or {}
+        feedback = payload.get("feedback") or {}
+        leads = payload.get("leads") or {}
+        conversion = payload.get("conversion") or {}
+        recent_referrals = payload.get("recent_referrals") or []
+
+        lines = [
+            f"Reader → Lead воронка за {days} дн.",
+            "",
+            "Reader-сигналы",
+            f"• Weekly opened: {feedback.get('weekly_opened', 0)} (users: {feedback.get('weekly_users', 0)})",
+            f"• Идея внедрения: {feedback.get('idea_requested', 0)} (users: {feedback.get('idea_users', 0)})",
+            f"• Интент консультации: {feedback.get('consultation_intent', 0)} (users: {feedback.get('consultation_users', 0)})",
+            "",
+            "Reader-referral лиды",
+            f"• Создано лидов: {leads.get('reader_referral_created', 0)}",
+            f"• С контактом: {leads.get('reader_referral_with_contact', 0)} ({conversion.get('reader_lead_contact_rate_pct', 0)}%)",
+            f"• Qualified+: {leads.get('reader_referral_qualified_plus', 0)} ({conversion.get('reader_lead_qualified_rate_pct', 0)}%)",
+            f"• Booked+: {leads.get('reader_referral_booked_plus', 0)}",
+            f"• Won: {leads.get('reader_referral_won', 0)}",
+            "",
+            "Конверсия",
+            f"• Consultation users: {conversion.get('consultation_users_total', 0)}",
+            f"• Перешли в reader-referral lead: {conversion.get('consultation_users_to_reader_lead', 0)}",
+            f"• CR consultation → lead: {conversion.get('consultation_to_reader_lead_rate_pct', 0)}%",
+        ]
+
+        lines.append("")
+        lines.append("Последние reader-referral лиды:")
+        if recent_referrals:
+            for idx, row in enumerate(recent_referrals[:5], start=1):
+                status = str(row.get("status") or "new")
+                name = str(row.get("name") or "Без имени").strip() or "Без имени"
+                contact_mark = "контакт ✅" if row.get("with_contact") else "контакт ☐"
+                lines.append(f"{idx}. {name[:36]} — {status}, {contact_mark}")
+        else:
+            lines.append("• пока нет")
 
         return "\n".join(lines)
 
@@ -6687,6 +6745,21 @@ class NewsAdminBot:
                     query,
                     self._reader_summary_text(days),
                     reply_markup=self._reader_summary_keyboard(days),
+                )
+                return
+
+            if data.startswith("reader:funnel"):
+                days = 7
+                parts = data.split(":")
+                if len(parts) >= 3:
+                    try:
+                        days = max(1, min(int(parts[2]), 90))
+                    except ValueError:
+                        days = 7
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_funnel_text(days),
+                    reply_markup=self._reader_funnel_keyboard(days),
                 )
                 return
 

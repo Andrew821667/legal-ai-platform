@@ -8,7 +8,17 @@ from sqlalchemy import delete
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, PostFeedbackSignal, PostFeedbackSource, ScheduledPost, ScheduledPostStatus, Scope
+from core_api.models import (
+    ApiKey,
+    Lead,
+    LeadStatus,
+    LeadSource,
+    PostFeedbackSignal,
+    PostFeedbackSource,
+    ScheduledPost,
+    ScheduledPostStatus,
+    Scope,
+)
 from core_api.security import generate_api_key, hash_api_key
 
 
@@ -293,4 +303,87 @@ def test_reader_feedback_summary_endpoint() -> None:
                 db.commit()
             finally:
                 db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_reader_funnel_summary_endpoint() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.news.reader-funnel"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    post_ids: list = []
+    lead_ids: list = []
+
+    db = SessionLocal()
+    try:
+        post = ScheduledPost(
+            text="posted post for funnel",
+            title="Пост воронки",
+            publish_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            status=ScheduledPostStatus.posted,
+        )
+        db.add(post)
+        db.commit()
+        db.refresh(post)
+        post_ids = [post.id]
+
+        db.add_all(
+            [
+                PostFeedbackSignal(
+                    post_id=post.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.consultation.intent",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                    telegram_user_id=111,
+                ),
+                PostFeedbackSignal(
+                    post_id=post.id,
+                    source=PostFeedbackSource.comment,
+                    signal_key="reader.idea.requested",
+                    signal_value=1,
+                    actor_name="reader_bot",
+                    telegram_user_id=111,
+                ),
+            ]
+        )
+
+        lead = Lead(
+            source=LeadSource.telegram_bot,
+            telegram_user_id=111,
+            name="Reader Lead",
+            email="reader@example.com",
+            cta_variant="reader_referral",
+            status=LeadStatus.qualified,
+            notes="[READER_REFERRAL]\npost_id=...",
+        )
+        db.add(lead)
+        db.commit()
+        db.refresh(lead)
+        lead_ids = [lead.id]
+    finally:
+        db.close()
+
+    try:
+        response = client.get(
+            "/api/v1/scheduled-posts/feedback/reader-funnel?days=7",
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["feedback"]["consultation_users"] >= 1
+        assert payload["leads"]["reader_referral_created"] >= 1
+        assert payload["conversion"]["consultation_users_to_reader_lead"] >= 1
+        assert payload["conversion"]["consultation_to_reader_lead_rate_pct"] >= 0
+        assert payload["recent_referrals"]
+    finally:
+        db = SessionLocal()
+        try:
+            if post_ids:
+                db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id.in_(post_ids)))
+                db.execute(delete(ScheduledPost).where(ScheduledPost.id.in_(post_ids)))
+            if lead_ids:
+                db.execute(delete(Lead).where(Lead.id.in_(lead_ids)))
+            db.commit()
+        finally:
+            db.close()
         _delete_api_key_by_name(api_key_name)

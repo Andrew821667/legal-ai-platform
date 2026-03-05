@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
-from core_api.models import ActorType, PostFeedbackSignal, ScheduledPost, ScheduledPostStatus, Scope
+from core_api.models import ActorType, Lead, LeadStatus, PostFeedbackSignal, ScheduledPost, ScheduledPostStatus, Scope
 from core_api.post_feedback import apply_feedback_signal
 from core_api.schemas import PostFeedbackCreate, PostFeedbackOut, ScheduledPostCreate, ScheduledPostOut, ScheduledPostPatch
 
@@ -218,6 +218,146 @@ def reader_feedback_summary(
             for reason, count in top_negative_reasons
         ],
         "top_posts": top_posts,
+    }
+
+
+@router.get("/feedback/reader-funnel")
+def reader_funnel_summary(
+    days: int = Query(default=7, ge=1, le=90),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _ = identity
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    feedback_stmt = (
+        select(PostFeedbackSignal)
+        .where(PostFeedbackSignal.created_at >= since)
+        .where(
+            or_(
+                PostFeedbackSignal.signal_key.in_(
+                    (
+                        "reader.weekly.opened",
+                        "reader.idea.requested",
+                        "reader.consultation.intent",
+                    )
+                ),
+                PostFeedbackSignal.actor_name == "reader_bot",
+            )
+        )
+        .order_by(PostFeedbackSignal.created_at.desc())
+        .limit(10000)
+    )
+    feedback_rows = list(db.execute(feedback_stmt).scalars().all())
+
+    feedback_stats = {
+        "weekly_opened": 0,
+        "idea_requested": 0,
+        "consultation_intent": 0,
+    }
+    weekly_users: set[int] = set()
+    idea_users: set[int] = set()
+    consult_users: set[int] = set()
+
+    for item in feedback_rows:
+        signal_key = (item.signal_key or "").strip()
+        user_id = item.telegram_user_id
+        if signal_key == "reader.weekly.opened":
+            feedback_stats["weekly_opened"] += 1
+            if user_id is not None:
+                weekly_users.add(int(user_id))
+        elif signal_key == "reader.idea.requested":
+            feedback_stats["idea_requested"] += 1
+            if user_id is not None:
+                idea_users.add(int(user_id))
+        elif signal_key == "reader.consultation.intent" and item.signal_value > 0:
+            feedback_stats["consultation_intent"] += 1
+            if user_id is not None:
+                consult_users.add(int(user_id))
+
+    leads_stmt = (
+        select(Lead)
+        .where(Lead.created_at >= since)
+        .where(
+            or_(
+                Lead.cta_variant == "reader_referral",
+                Lead.notes.ilike("%[READER_REFERRAL]%"),
+            )
+        )
+        .order_by(Lead.created_at.desc())
+        .limit(10000)
+    )
+    leads = list(db.execute(leads_stmt).scalars().all())
+
+    referral_total = len(leads)
+    with_contact = 0
+    qualified_plus = 0
+    booked_plus = 0
+    won = 0
+    referral_user_ids: set[int] = set()
+    recent_referrals: list[dict[str, Any]] = []
+
+    qualified_statuses = {LeadStatus.qualified, LeadStatus.booked, LeadStatus.proposal, LeadStatus.won}
+    booked_statuses = {LeadStatus.booked, LeadStatus.proposal, LeadStatus.won}
+    for lead in leads:
+        has_contact = any(
+            bool(str(value).strip())
+            for value in (lead.phone, lead.email, lead.contact)
+            if value is not None
+        )
+        if has_contact:
+            with_contact += 1
+        if lead.status in qualified_statuses:
+            qualified_plus += 1
+        if lead.status in booked_statuses:
+            booked_plus += 1
+        if lead.status == LeadStatus.won:
+            won += 1
+        if lead.telegram_user_id is not None:
+            referral_user_ids.add(int(lead.telegram_user_id))
+        if len(recent_referrals) < 5:
+            recent_referrals.append(
+                {
+                    "lead_id": str(lead.id),
+                    "created_at": lead.created_at.isoformat(),
+                    "name": lead.name or "",
+                    "status": lead.status.value,
+                    "with_contact": has_contact,
+                }
+            )
+
+    converted_consult_users = sorted(consult_users.intersection(referral_user_ids))
+    consult_to_lead_rate = round(
+        (len(converted_consult_users) / len(consult_users) * 100.0) if consult_users else 0.0,
+        2,
+    )
+    referral_contact_rate = round((with_contact / referral_total * 100.0) if referral_total else 0.0, 2)
+    referral_qualified_rate = round((qualified_plus / referral_total * 100.0) if referral_total else 0.0, 2)
+
+    return {
+        "days": days,
+        "since": since.isoformat(),
+        "feedback": {
+            **feedback_stats,
+            "weekly_users": len(weekly_users),
+            "idea_users": len(idea_users),
+            "consultation_users": len(consult_users),
+        },
+        "leads": {
+            "reader_referral_created": referral_total,
+            "reader_referral_with_contact": with_contact,
+            "reader_referral_qualified_plus": qualified_plus,
+            "reader_referral_booked_plus": booked_plus,
+            "reader_referral_won": won,
+        },
+        "conversion": {
+            "consultation_users_total": len(consult_users),
+            "consultation_users_to_reader_lead": len(converted_consult_users),
+            "consultation_to_reader_lead_rate_pct": consult_to_lead_rate,
+            "reader_lead_contact_rate_pct": referral_contact_rate,
+            "reader_lead_qualified_rate_pct": referral_qualified_rate,
+        },
+        "recent_referrals": recent_referrals,
     }
 
 

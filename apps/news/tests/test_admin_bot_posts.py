@@ -321,7 +321,7 @@ def test_system_keyboard_exposes_service_actions() -> None:
     payload = markup.to_dict()
     rows = payload.get("inline_keyboard") or []
     callbacks = {btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")}
-    assert {"status", "workers", "rdg:menu", "automation", "resetstale", "sec:help", "refresh"} <= callbacks
+    assert {"status", "workers", "rdg:menu", "reader:funnel:7", "automation", "resetstale", "sec:help", "refresh"} <= callbacks
 
 
 def test_help_text_has_reduced_fallback_commands() -> None:
