@@ -1067,6 +1067,9 @@ def _format_workers_status(payload: dict[str, Any]) -> str:
 
     if not workers:
         lines.append("Список пуст.")
+        lines.append("")
+        lines.append("Это нормально, если сервисы-воркеры не запущены в текущем compose-профиле.")
+        lines.append("Воркеры нужны для фоновых задач (например, contract-worker), но для контент-бота могут быть не обязательны.")
         return "\n".join(lines)
 
     lines.append("")
@@ -1367,6 +1370,14 @@ class NewsAdminBot:
         self._posts_cache.clear()
         self._derived_cache.clear()
 
+    def _submenu_nav_rows(self, *, back_callback: str, back_label: str = "🔙 Назад") -> list[list[InlineKeyboardButton]]:
+        return [
+            [
+                _inline_button(back_label, callback_data=back_callback),
+                _inline_button("🏠 Рабочий стол", callback_data="refresh"),
+            ]
+        ]
+
     def _list_posts_rows(
         self,
         *,
@@ -1633,55 +1644,39 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(
             [
                 [_inline_button("➕ Создать пост", callback_data="cn:start", style=_BUTTON_STYLE_SUCCESS)],
-                [
-                    _inline_button("📂 Рабочие списки", callback_data="sec:worklists"),
-                    _inline_button("⏱ Автоочередь", callback_data="sec:autoqueue"),
-                ],
-                [
-                    _inline_button("🧭 Тематики", callback_data="sec:themes"),
-                    _inline_button("📰 Источники", callback_data="sec:sources"),
-                ],
-                [
-                    _inline_button("⚙️ Генерация", callback_data="sec:generate"),
-                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
-                ],
-                [
-                    _inline_button("🗓 Календарь", callback_data="cal:summary"),
-                    _inline_button("🛠 Система", callback_data="sec:system"),
-                ],
+                [_inline_button("📂 Рабочие списки", callback_data="sec:worklists")],
+                [_inline_button("⏱ Автоочередь", callback_data="sec:autoqueue")],
+                [_inline_button("🗓 Календарь", callback_data="cal:summary")],
+                [_inline_button("📰 Источники", callback_data="sec:sources")],
+                [_inline_button("🧭 Тематики", callback_data="sec:themes")],
+                [_inline_button("⚙️ Генерация", callback_data="sec:generate")],
+                [_inline_button("🛠 Система", callback_data="sec:system")],
                 [_inline_button("🔄 Обновить рабочий стол", callback_data="refresh")],
             ]
         )
 
     def _worklists_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
+        rows: list[list[InlineKeyboardButton]] = [
+            [_inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0")],
+            [_inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0")],
             [
-                [
-                    _inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0"),
-                    _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0"),
-                ],
-                [
-                    _inline_button(
-                        f"✅ Готовые ({counts.get('scheduled', 0)})",
-                        callback_data="pl:scheduled:0",
-                        style=_BUTTON_STYLE_SUCCESS,
-                    ),
-                    _inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0"),
-                ],
-                [
-                    _inline_button(
-                        f"❌ Ошибки ({counts.get('failed', 0)})",
-                        callback_data="pl:failed:0",
-                        style=_BUTTON_STYLE_DANGER,
-                    ),
-                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
-                ],
-                [
-                    _inline_button("🛠 Система", callback_data="sec:system"),
-                    _inline_button("🏠 Рабочий стол", callback_data="refresh"),
-                ],
-            ]
-        )
+                _inline_button(
+                    f"✅ Готовые ({counts.get('scheduled', 0)})",
+                    callback_data="pl:scheduled:0",
+                    style=_BUTTON_STYLE_SUCCESS,
+                )
+            ],
+            [_inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0")],
+            [
+                _inline_button(
+                    f"❌ Ошибки ({counts.get('failed', 0)})",
+                    callback_data="pl:failed:0",
+                    style=_BUTTON_STYLE_DANGER,
+                )
+            ],
+        ]
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+        return InlineKeyboardMarkup(rows)
 
     def _worklists_text(self, counts: dict[str, int], next_publish: str) -> str:
         return (
@@ -1705,26 +1700,20 @@ class NewsAdminBot:
             f"❌ Ошибки: {counts.get('failed', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
             f"Следующая публикация: {next_publish}\n\n"
-            "Отсюда доступны: статус API, статус воркеров, глобальная автоматизация, принудительный reset stale и справка."
+            "Отсюда доступны: статус API, статус воркеров, глобальная автоматизация, принудительный reset stale и справка.\n"
+            "Если воркеры не настроены, раздел «Воркеры» может показывать пустой список."
         )
 
     def _system_keyboard(self) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
-            [
-                [
-                    _inline_button("📊 Статус API", callback_data="status"),
-                    _inline_button("👷 Воркеры", callback_data="workers"),
-                ],
-                [
-                    _inline_button("🤖 Автоматизация", callback_data="automation"),
-                    _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
-                ],
-                [
-                    _inline_button("❓ Помощь", callback_data="sec:help"),
-                    _inline_button("🏠 Рабочий стол", callback_data="refresh"),
-                ],
-            ]
-        )
+        rows: list[list[InlineKeyboardButton]] = [
+            [_inline_button("📊 Статус API", callback_data="status")],
+            [_inline_button("👷 Воркеры", callback_data="workers")],
+            [_inline_button("🤖 Автоматизация", callback_data="automation")],
+            [_inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER)],
+            [_inline_button("❓ Помощь", callback_data="sec:help")],
+        ]
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+        return InlineKeyboardMarkup(rows)
 
     def _help_text(self) -> str:
         return (
@@ -1736,7 +1725,7 @@ class NewsAdminBot:
             "📰 Источники / 🧭 Тематики — контроль discovery-слоя и генерации\n"
             "🤖 Автоматизация — тумблеры, интервалы, слоты и лимиты\n"
             "🛠 Система — статус API, воркеры, reset stale, сервисные функции\n\n"
-            "Fallback-команды:\n"
+            "Команды (если нужно):\n"
             "/start, /admin, /newpost, /generate_now, /calendar, /help"
         )
 
@@ -1787,7 +1776,7 @@ class NewsAdminBot:
                 ]
             )
         rows.append([_inline_button("⚙️ Генерация", callback_data="sec:generate")])
-        rows.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
     def _source_stats(self, *, force_refresh: bool = False) -> dict[str, dict[str, int]]:
@@ -1934,7 +1923,7 @@ class NewsAdminBot:
                             for item in chunk
                         ]
                     )
-        rows.append([_inline_button("🔙 К источникам", callback_data="sec:sources")])
+        rows.extend(self._submenu_nav_rows(back_callback="sec:sources", back_label="🔙 К источникам"))
         return InlineKeyboardMarkup(rows)
 
     def _telegram_channel_detail_text(self, slug: str) -> str:
@@ -1979,7 +1968,10 @@ class NewsAdminBot:
                     )
                 ],
                 [InlineKeyboardButton("🔗 Открыть канал", url=f"https://t.me/{normalized}")],
-                [_inline_button("🔙 К Telegram Channels", callback_data="srd:telegram_channels")],
+                [
+                    _inline_button("🔙 К Telegram Channels", callback_data="srd:telegram_channels"),
+                    _inline_button("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
@@ -2034,7 +2026,7 @@ class NewsAdminBot:
             nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"src:{source_key}:{next_offset}"))
         if nav:
             buttons.append(nav)
-        buttons.append([_inline_button("🔙 К источникам", callback_data="sec:sources")])
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:sources", back_label="🔙 К источникам"))
         return InlineKeyboardMarkup(buttons)
 
     def _generation_theme_stats(self, *, force_refresh: bool = False) -> dict[str, int]:
@@ -2075,10 +2067,10 @@ class NewsAdminBot:
         lines = [
             "Тематики публикаций",
             "",
-            "Верхний блок управляет именно генерацией: какие темы допускаются в новые драфты.",
-            "Нижний блок показывает исторические корзины уже созданных и опубликованных постов.",
+            "Раздел 1. Темы, которые участвуют в автогенерации новых драфтов.",
+            "Раздел 2. Исторические корзины уже созданных и опубликованных постов.",
             "",
-            "Активные генерационные темы:",
+            "1) Генерационные темы:",
         ]
         for theme_key in generation_theme_keys():
             mark = "✅" if theme_key in enabled_generation_themes else "☐"
@@ -2086,7 +2078,14 @@ class NewsAdminBot:
                 f"• {mark} {generation_theme_label(theme_key)}: {generation_counts.get(theme_key, 0)} пост(ов)"
             )
             lines.append(f"   {generation_theme_note(theme_key)}")
-        lines.extend(["", "Исторические корзины канала:", ""])
+        lines.extend(
+            [
+                "",
+                "2) Исторические корзины канала:",
+                "Нажмите на корзину ниже, чтобы открыть список постов по теме.",
+                "",
+            ]
+        )
         target_share = {
             "regulation": "30%",
             "case": "20%",
@@ -2107,32 +2106,19 @@ class NewsAdminBot:
         rows: list[list[InlineKeyboardButton]] = []
         generation_counts = generation_counts or self._generation_theme_stats()
         enabled_generation_themes = self._enabled_generation_theme_keys()
-        theme_keys = list(generation_theme_keys())
-        for index in range(0, len(theme_keys), 2):
-            chunk = theme_keys[index : index + 2]
+        for theme_key in generation_theme_keys():
             rows.append(
                 [
                     _inline_button(
                         f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})",
                         callback_data=f"gt:{theme_key}",
                     )
-                    for theme_key in chunk
                 ]
             )
         rows.append([_inline_button("📚 Темы воскресных лонгридов", callback_data="lt:menu")])
-        pillars = list(_PILLAR_LABELS)
-        for index in range(0, len(pillars), 2):
-            chunk = pillars[index : index + 2]
-            rows.append(
-                [
-                    _inline_button(
-                        f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})",
-                        callback_data=f"th:{pillar}:0",
-                    )
-                    for pillar in chunk
-                ]
-            )
-        rows.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
+        for pillar in _PILLAR_LABELS:
+            rows.append([_inline_button(f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})", callback_data=f"th:{pillar}:0")])
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
     def _load_theme_posts(self, pillar: str, offset: int, *, force_refresh: bool = False) -> tuple[int, list[dict[str, Any]]]:
@@ -2183,7 +2169,7 @@ class NewsAdminBot:
             nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"th:{pillar}:{next_offset}"))
         if nav:
             buttons.append(nav)
-        buttons.append([_inline_button("🔙 К тематикам", callback_data="sec:themes")])
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:themes", back_label="🔙 К тематикам"))
         return InlineKeyboardMarkup(buttons)
 
     def _generation_text(self, controls: dict[str, bool]) -> str:
@@ -2239,9 +2225,9 @@ class NewsAdminBot:
                     _inline_button("🕒 Время слотов", callback_data="sch:menu"),
                 ],
                 [_inline_button("⏱ Ритм", callback_data="int:menu")],
-                [_inline_button("🏠 Рабочий стол", callback_data="refresh")],
             ]
         )
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
     @staticmethod
@@ -2291,6 +2277,7 @@ class NewsAdminBot:
         if nav:
             rows.append(nav)
         rows.append([_inline_button("🧹 Очистить список", callback_data="gen:clear", style=_BUTTON_STYLE_DANGER)])
+        rows.extend(self._submenu_nav_rows(back_callback="sec:generate", back_label="🔙 К генерации"))
         return InlineKeyboardMarkup(rows)
 
     @staticmethod
@@ -2334,13 +2321,13 @@ class NewsAdminBot:
                 _inline_button("🧹 Очистить", callback_data="gen:clear", style=_BUTTON_STYLE_DANGER),
             ]
         )
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:generate", back_label="🔙 К генерации"))
         return InlineKeyboardMarkup(buttons)
 
     def _automation_keyboard(self, controls: list[dict[str, Any]]) -> InlineKeyboardMarkup:
         control_map = {str(row.get("key") or ""): bool(row.get("enabled", True)) for row in controls}
         full_automation_enabled = control_map.get("news.generate.enabled", True) and control_map.get("news.publish.enabled", True)
         rows: list[list[InlineKeyboardButton]] = [
-            [_inline_button("🏠 Рабочий стол", callback_data="refresh")],
             [
                 _inline_button(
                     "🟢 Полная автоматизация" if not full_automation_enabled else "⛔ Полная автоматизация",
@@ -2381,6 +2368,7 @@ class NewsAdminBot:
                     )
                 ]
             )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
         return InlineKeyboardMarkup(rows)
 
     async def _queue_snapshot(self) -> tuple[dict[str, int], str]:
@@ -2580,14 +2568,9 @@ class NewsAdminBot:
                 _inline_button("🕒 Время слотов", callback_data="sch:menu"),
             ]
         )
-        buttons.append(
-            [
-                _inline_button("⏱ Ритм", callback_data="int:menu"),
-                _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
-            ]
-        )
+        buttons.append([_inline_button("⏱ Ритм", callback_data="int:menu")])
         buttons.append([_inline_button("🔄 Обновить", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}")])
-        buttons.append([_inline_button("🏠 Рабочий стол", callback_data="refresh")])
+        buttons.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(buttons)
 
     async def _panel_text(self, controls: list[dict[str, Any]]) -> str:
@@ -2808,7 +2791,7 @@ class NewsAdminBot:
             day_key = now_local.isoformat()
             buttons.append([InlineKeyboardButton("📅 Открыть расписание на сегодня", callback_data=f"cal:day:{day_key}")])
             if overdue_count:
-                buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:all:0")])
+                buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="aq:all:all:0")])
             buttons.append(
                 [
                     InlineKeyboardButton("🕒 Время слотов", callback_data="sch:menu"),
@@ -2816,7 +2799,7 @@ class NewsAdminBot:
                 ]
             )
             buttons.append([InlineKeyboardButton("🔄 Обновить календарь", callback_data=f"cal:view:day:{day_key}")])
-            buttons.append([InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh")])
+            buttons.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
             return InlineKeyboardMarkup(buttons)
 
         row_buffer: list[InlineKeyboardButton] = []
@@ -2839,7 +2822,7 @@ class NewsAdminBot:
         if row_buffer:
             buttons.append(row_buffer)
         if overdue_count:
-            buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:all:0")])
+            buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="aq:all:all:0")])
         buttons.append(
             [
                 InlineKeyboardButton("🕒 Время слотов", callback_data="sch:menu"),
@@ -2847,7 +2830,7 @@ class NewsAdminBot:
             ]
         )
         buttons.append([InlineKeyboardButton("🔄 Обновить календарь", callback_data="cal:summary")])
-        buttons.append([InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh")])
+        buttons.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(buttons)
 
     def _calendar_day_rows(self, day_key: str) -> list[dict[str, Any]]:
@@ -3049,7 +3032,7 @@ class NewsAdminBot:
                 InlineKeyboardButton("🗓 Все дни", callback_data="cal:summary"),
             ]
         )
-        buttons.append([InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh")])
+        buttons.extend(self._submenu_nav_rows(back_callback="cal:summary", back_label="🔙 К календарю"))
         return InlineKeyboardMarkup(buttons)
 
     def _schedule_settings_text(self) -> str:
@@ -3078,7 +3061,7 @@ class NewsAdminBot:
                 _inline_button("⏱ Ритм генерации", callback_data="int:menu"),
             ]
         )
-        rows.append([_inline_button("🔙 К календарю", callback_data="cal:summary")])
+        rows.extend(self._submenu_nav_rows(back_callback="cal:summary", back_label="🔙 К календарю"))
         return InlineKeyboardMarkup(rows)
 
     def _schedule_detail_text(self, alias: str) -> str:
@@ -3128,7 +3111,7 @@ class NewsAdminBot:
             rows.append(row_buffer)
         if alias == "longread":
             rows.append([_inline_button("📚 Темы лонгридов", callback_data="lt:menu")])
-        rows.append([_inline_button("🔙 К сетке", callback_data="sch:menu")])
+        rows.extend(self._submenu_nav_rows(back_callback="sch:menu", back_label="🔙 К сетке"))
         return InlineKeyboardMarkup(rows)
 
     def _longread_topics_text(self) -> str:
@@ -3153,10 +3136,8 @@ class NewsAdminBot:
         for index, topic in enumerate(_LONGREAD_TOPIC_LIBRARY, start=1):
             label = f"{'✅' if topic in active_topics else '☐'} {index}. {topic[:34]}"
             rows.append([_inline_button(label, callback_data=f"lt:toggle:{index}")])
-        rows.append([
-            _inline_button("♻️ Сбросить к базовому пулу", callback_data="lt:reset"),
-            _inline_button("🔙 К сетке", callback_data="sch:menu"),
-        ])
+        rows.append([_inline_button("♻️ Сбросить к базовому пулу", callback_data="lt:reset")])
+        rows.extend(self._submenu_nav_rows(back_callback="sch:menu", back_label="🔙 К сетке"))
         return InlineKeyboardMarkup(rows)
 
     def _interval_settings_text(self) -> str:
@@ -3176,19 +3157,18 @@ class NewsAdminBot:
         )
 
     def _interval_settings_keyboard(self) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
+        rows: list[list[InlineKeyboardButton]] = [
+            [_inline_button("Утренний слот", callback_data="int:view:generate_morning")],
+            [_inline_button("Вечерний слот", callback_data="int:view:generate_evening")],
+            [_inline_button("Публикация", callback_data="int:view:publish")],
             [
-                [_inline_button("Утренний слот", callback_data="int:view:generate_morning")],
-                [_inline_button("Вечерний слот", callback_data="int:view:generate_evening")],
-                [_inline_button("Публикация", callback_data="int:view:publish")],
-                [
-                    _inline_button("Лимит за цикл", callback_data="int:view:limit"),
-                    _inline_button("Хранение", callback_data="int:view:retention"),
-                ],
-                [_inline_button("Broad-AI лимит", callback_data="int:view:broad_ai")],
-                [_inline_button("🔙 К сетке", callback_data="sch:menu")],
-            ]
-        )
+                _inline_button("Лимит за цикл", callback_data="int:view:limit"),
+                _inline_button("Хранение", callback_data="int:view:retention"),
+            ],
+            [_inline_button("Broad-AI лимит", callback_data="int:view:broad_ai")],
+        ]
+        rows.extend(self._submenu_nav_rows(back_callback="sch:menu", back_label="🔙 К сетке"))
+        return InlineKeyboardMarkup(rows)
 
     def _interval_detail_text(self, kind: str) -> str:
         if kind == "generate_morning":
@@ -3261,17 +3241,27 @@ class NewsAdminBot:
                 row_buffer = []
         if row_buffer:
             rows.append(row_buffer)
-        rows.append([_inline_button("🔙 К интервалам", callback_data="int:menu")])
+        rows.extend(self._submenu_nav_rows(back_callback="int:menu", back_label="🔙 К интервалам"))
         return InlineKeyboardMarkup(rows)
 
     def _day_publish_reason_keyboard(self, day_key: str) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"cpn:{day_key}")]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"cpn:{day_key}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ]
+            ]
+        )
 
     def _day_publish_confirm_keyboard(self, day_key: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("✅ Подтвердить публикацию дня", callback_data=f"cpc:{day_key}")],
-                [InlineKeyboardButton("❌ Отменить", callback_data=f"cpn:{day_key}")],
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"cpn:{day_key}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
@@ -3373,7 +3363,7 @@ class NewsAdminBot:
         theme_label = "Все темы" if theme_filter == "all" else _pillar_display(theme_filter)
         if not rows:
             return (
-                "Ручная очередь публикации\n\n"
+                "Ручная очередь публикации (расширенный режим)\n\n"
                 f"Фильтр: {filter_label}\n"
                 f"Тема: {theme_label}\n"
                 f"Готовые сейчас: {due_total} из {scheduled_total}\n\n"
@@ -3382,7 +3372,7 @@ class NewsAdminBot:
 
         now_utc = datetime.now(timezone.utc)
         lines = [
-            "Ручная очередь публикации",
+            "Ручная очередь публикации (расширенный режим)",
             f"Фильтр: {filter_label}",
             f"Тема: {theme_label}",
             f"Готовые сейчас: {due_total} из {scheduled_total}",
@@ -3424,7 +3414,7 @@ class NewsAdminBot:
             buttons.append(nav)
 
         buttons.append([InlineKeyboardButton("🔄 Обновить список", callback_data=f"pl:{status}:{offset}")])
-        buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:worklists", back_label="🔙 К рабочим спискам"))
         return InlineKeyboardMarkup(buttons)
 
     def _review_posts_keyboard(
@@ -3518,7 +3508,7 @@ class NewsAdminBot:
                 )
             ]
         )
-        buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:worklists", back_label="🔙 К рабочим спискам"))
         return InlineKeyboardMarkup(buttons)
 
     def _manual_queue_keyboard(
@@ -3576,7 +3566,7 @@ class NewsAdminBot:
             buttons.append(nav)
 
         buttons.append([InlineKeyboardButton("🔄 Обновить очередь", callback_data=f"mq:{queue_filter}:{theme_filter}:{offset}")])
-        buttons.append([InlineKeyboardButton("🔙 К рабочим спискам", callback_data="sec:worklists")])
+        buttons.extend(self._submenu_nav_rows(back_callback="sec:worklists", back_label="🔙 К рабочим спискам"))
         return InlineKeyboardMarkup(buttons)
 
     def _post_card_text(self, post: dict[str, Any]) -> str:
@@ -3661,38 +3651,69 @@ class NewsAdminBot:
             rows.append([InlineKeyboardButton("🔙 К очереди", callback_data=f"mq:{queue_filter}:{theme_filter}:{offset}")])
         else:
             rows.append([InlineKeyboardButton("🔙 К списку", callback_data=f"pl:{status}:{offset}")])
+        rows.append([InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh")])
         return InlineKeyboardMarkup(rows)
 
     def _publish_confirm_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("✅ Подтвердить публикацию", callback_data=f"ppy:{post_id}:{status}:{offset}")],
-                [InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")],
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"ppn:{post_id}:{status}:{offset}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
     def _publish_reason_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"ppn:{post_id}:{status}:{offset}")]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"ppn:{post_id}:{status}:{offset}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ]
+            ]
+        )
 
     def _delete_reason_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"pdn:{post_id}:{status}:{offset}")]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"pdn:{post_id}:{status}:{offset}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ]
+            ]
+        )
 
     def _delete_confirm_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("🗑 Удалить пост", callback_data=f"pdy:{post_id}:{status}:{offset}")],
-                [InlineKeyboardButton("❌ Отменить", callback_data=f"pdn:{post_id}:{status}:{offset}")],
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"pdn:{post_id}:{status}:{offset}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
     def _batch_publish_reason_keyboard(self, queue_filter: str, offset: int, mode: str) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}:{mode}")]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"mbn:{queue_filter}:{offset}:{mode}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ]
+            ]
+        )
 
     def _batch_publish_confirm_keyboard(self, queue_filter: str, offset: int, mode: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("✅ Подтвердить пакетную публикацию", callback_data=f"mbc:{queue_filter}:{offset}:{mode}")],
-                [InlineKeyboardButton("❌ Отменить", callback_data=f"mbn:{queue_filter}:{offset}:{mode}")],
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data=f"mbn:{queue_filter}:{offset}:{mode}"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
@@ -3702,36 +3723,35 @@ class NewsAdminBot:
                 [InlineKeyboardButton("✍️ Написать вручную", callback_data="cn:manual")],
                 [InlineKeyboardButton("🤖 Сгенерировать по тезисам", callback_data="cn:ai")],
                 [InlineKeyboardButton("🎙 Из транскриба / voice", callback_data="cn:transcript")],
-                [InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")],
+                [
+                    InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
+                    InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
     def _create_kind_keyboard(self) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
-        items = list(_MANUAL_POST_TYPE_ORDER)
-        for index in range(0, len(items), 2):
-            chunk = items[index : index + 2]
-            rows.append(
-                [
-                    InlineKeyboardButton(_manual_post_kind_label(kind), callback_data=f"ck:{kind}")
-                    for kind in chunk
-                ]
-            )
-        rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
+        for kind in _MANUAL_POST_TYPE_ORDER:
+            rows.append([InlineKeyboardButton(_manual_post_kind_label(kind), callback_data=f"ck:{kind}")])
+        rows.append(
+            [
+                InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
+                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+            ]
+        )
         return InlineKeyboardMarkup(rows)
 
     def _create_theme_keyboard(self) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
-        items = list(_MANUAL_THEME_ORDER)
-        for index in range(0, len(items), 2):
-            chunk = items[index : index + 2]
-            rows.append(
-                [
-                    InlineKeyboardButton(_manual_theme_label(theme), callback_data=f"ct:{theme}")
-                    for theme in chunk
-                ]
-            )
-        rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
+        for theme in _MANUAL_THEME_ORDER:
+            rows.append([InlineKeyboardButton(_manual_theme_label(theme), callback_data=f"ct:{theme}")])
+        rows.append(
+            [
+                InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
+                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+            ]
+        )
         return InlineKeyboardMarkup(rows)
 
     def _create_media_keyboard(
@@ -3750,14 +3770,24 @@ class NewsAdminBot:
             rows.append([InlineKeyboardButton("✅ Готово", callback_data="cm:done")])
         if can_clear:
             rows.insert(0, [InlineKeyboardButton("🗑 Убрать медиа", callback_data="cm:clear")])
-        rows.append([InlineKeyboardButton("❌ Отменить", callback_data="cn:cancel")])
+        rows.append(
+            [
+                InlineKeyboardButton("🔙 Назад", callback_data="cn:cancel"),
+                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+            ]
+        )
         return InlineKeyboardMarkup(rows)
 
     def _create_link_keyboard(self, *, can_clear: bool = False, cancel_callback: str = "cn:cancel") -> InlineKeyboardMarkup:
         rows = [[InlineKeyboardButton("⏭ Без ссылки", callback_data="cl:skip")]]
         if can_clear:
             rows.insert(0, [InlineKeyboardButton("🗑 Убрать ссылку", callback_data="cl:clear")])
-        rows.append([InlineKeyboardButton("❌ Отменить", callback_data=cancel_callback)])
+        rows.append(
+            [
+                InlineKeyboardButton("🔙 Назад", callback_data=cancel_callback),
+                InlineKeyboardButton("🏠 Рабочий стол", callback_data="refresh"),
+            ]
+        )
         return InlineKeyboardMarkup(rows)
 
     def _create_draft_keyboard(self) -> InlineKeyboardMarkup:
@@ -3790,12 +3820,8 @@ class NewsAdminBot:
                 InlineKeyboardButton("🔄 Развернуть медиа", callback_data="cr:reverse"),
             ]
         )
-        rows.append(
-            [
-                InlineKeyboardButton("🧹 Новый с нуля", callback_data="cn:start"),
-                InlineKeyboardButton("❌ Закрыть", callback_data="cn:cancel"),
-            ]
-        )
+        rows.append([InlineKeyboardButton("🧹 Новый с нуля", callback_data="cn:start")])
+        rows.extend(self._submenu_nav_rows(back_callback="cn:start"))
         return InlineKeyboardMarkup(rows)
 
     async def _show_create_start(self, update: Update) -> None:
