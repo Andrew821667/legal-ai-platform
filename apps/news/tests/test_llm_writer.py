@@ -80,9 +80,45 @@ def test_passes_quality_gate_accepts_daily_with_contextual_third_block() -> None
     assert LLMNewsWriter._passes_quality_gate(text, "daily")
 
 
-def test_daily_disables_low_quality_fallback() -> None:
+def test_structured_formats_disable_low_quality_fallback() -> None:
     assert not LLMNewsWriter._allow_quality_fallback("daily")
-    assert LLMNewsWriter._allow_quality_fallback("weekly_review")
+    assert not LLMNewsWriter._allow_quality_fallback("weekly_review")
+    assert not LLMNewsWriter._allow_quality_fallback("longread")
+    assert LLMNewsWriter._allow_quality_fallback("standard")
+
+
+def test_quality_gate_rejects_prompt_leak_markers() -> None:
+    text = (
+        "<b>Обзор недели</b>\n\n"
+        "<b>Ключевые сигналы недели</b>\n1. Пункт один.\n2. Пункт два.\n3. Пункт три.\n4. Пункт четыре.\n"
+        "5. Пункт пять.\n6. Пункт шесть.\n7. Пункт семь.\n8. Пункт восемь.\n\n"
+        "<b>Что это значит для юрфункции</b>\nСтилистика канала: деловой тон и плотный анализ.\n\n"
+        "<b>На что смотреть юристам</b>\nПроверить контур ответственности поставщика.\n\n"
+        "<b>Что проверить у себя</b>\n• Обновить KPI.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI"
+    )
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "prompt_leak:стилистика канала"
+
+
+def test_quality_gate_rejects_weekly_with_few_points() -> None:
+    long_block = (
+        "Юрфункция ускоряет цикл договорной проверки, пересматривает матрицу рисков, "
+        "обновляет SLA и фиксирует роли контроля качества output в каждом процессе. "
+        "Команда также пересобирает процедуры privacy и governance для стабильного внедрения."
+    )
+    text = (
+        "<b>Обзор недели</b>\n\n"
+        "<b>Ключевые сигналы недели</b>\n1. Пункт один.\n2. Пункт два.\n3. Пункт три.\n4. Пункт четыре.\n\n"
+        f"<b>Что это значит для юрфункции</b>\n{long_block} {long_block} {long_block} {long_block} {long_block} {long_block}\n\n"
+        f"<b>На что смотреть юристам</b>\n{long_block} {long_block} {long_block} {long_block} {long_block}\n\n"
+        "<b>Что проверить у себя</b>\n"
+        "• Зафиксировать контрольные точки quality gate.\n"
+        "• Обновить контрактные safeguards для вендоров.\n"
+        "• Проверить режим данных и права на output.\n"
+        "• Назначить ответственных за human-in-the-loop.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+    )
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "weak_weekly_points:4"
 
 
 def test_quality_gate_failure_reason_for_short_daily() -> None:

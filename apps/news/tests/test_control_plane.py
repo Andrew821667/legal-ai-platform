@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from news.control_plane import generate_limit, generate_schedule_times, review_retention_days
+from news.control_plane import generate_limit, generate_schedule_times, publish_claim_limit, review_retention_days
 
 
 def test_generate_schedule_times_defaults() -> None:
@@ -39,3 +39,20 @@ def test_generate_limit_and_retention_from_control_config() -> None:
     ]
     assert generate_limit(rows) == 7
     assert review_retention_days(rows) == 5
+
+
+def test_publish_claim_limit_defaults_to_single_post() -> None:
+    rows: list[dict[str, object]] = []
+    assert publish_claim_limit(rows) == 1
+
+
+def test_publish_claim_limit_from_control_config() -> None:
+    rows = [
+        {
+            "key": "news.publish.enabled",
+            "config": {
+                "claim_limit": 3,
+            },
+        }
+    ]
+    assert publish_claim_limit(rows) == 3

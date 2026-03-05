@@ -8,6 +8,7 @@ import json
 
 import requests
 
+from news.control_plane import publish_claim_limit
 from news.core_client import CoreClient
 from news.logging_config import setup_logging
 from news.settings import settings
@@ -168,17 +169,20 @@ def main() -> int:
         return 1
 
     client = CoreClient(settings.core_api_url, settings.api_key_news)
+    claim_limit = max(settings.news_publish_claim_limit, 1)
     try:
         controls_response = client.list_automation_controls(scope="news")
         controls_response.raise_for_status()
-        controls = {row.get("key"): bool(row.get("enabled", True)) for row in controls_response.json()}
+        control_rows = list(controls_response.json())
+        controls = {row.get("key"): bool(row.get("enabled", True)) for row in control_rows}
+        claim_limit = publish_claim_limit(control_rows)
         if controls.get("news.publish.enabled") is False:
             logger.info("publish_disabled_by_control_plane")
             return 0
     except Exception as exc:
         logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
 
-    claim_response = client.claim_posts(limit=10)
+    claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
         logger.info("no_due_posts")
         return 0

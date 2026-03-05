@@ -145,11 +145,13 @@ def _broad_ai_limit(control_rows: list[dict[str, Any]]) -> int:
 
 def _collect_history(
     client: CoreClient,
-) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]], list[dict[str, str]]]:
+    local_tz: ZoneInfo,
+) -> tuple[list[str], set[str], dict[str, int], list[dict[str, str]], list[dict[str, str]], set[str]]:
     texts: list[str] = []
     source_urls: set[str] = set()
     recent_pillar_counts: dict[str, int] = {}
     posted_items: list[dict[str, str]] = []
+    occupied_slot_keys: set[str] = set()
 
     for status in ("posted", "review", "scheduled", "publishing", "failed"):
         try:
@@ -191,6 +193,17 @@ def _collect_history(
                 continue
 
             if status in {"review", "scheduled", "publishing"}:
+                publish_raw = str(row.get("publish_at") or "").strip()
+                if publish_raw:
+                    try:
+                        publish_at = datetime.fromisoformat(publish_raw.replace("Z", "+00:00"))
+                        if publish_at.tzinfo is None:
+                            publish_at = publish_at.replace(tzinfo=timezone.utc)
+                        occupied_slot_keys.add(
+                            publish_at.astimezone(local_tz).replace(second=0, microsecond=0).isoformat()
+                        )
+                    except ValueError:
+                        pass
                 posted_items.append(
                     {
                         "title": title,
@@ -218,7 +231,14 @@ def _collect_history(
                 }
             )
 
-    return texts, source_urls, recent_pillar_counts, posted_items, select_negative_feedback_examples(posted_items)
+    return (
+        texts,
+        source_urls,
+        recent_pillar_counts,
+        posted_items,
+        select_negative_feedback_examples(posted_items),
+        occupied_slot_keys,
+    )
 
 
 def _normalize_snippet(text: str, limit: int = 260) -> str:
@@ -264,8 +284,7 @@ def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[st
         article_url=f"internal://weekly-review/{year}-W{week}",
         title=f"Обзор недели по Legal AI и автоматизации юрфункции (W{week})",
         summary=(
-            "Собери обзор недели на 8-10 пунктов. Обязательное требование: итоговый пост должен быть цельным и не обрезаться.\n"
-            "Используй только материалы этой недели:\n"
+            "Сигналы недели для итогового обзора:\n"
             + "\n".join(lines)
         ),
         published_at=now_utc,
@@ -329,7 +348,8 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
 
     top_limit = max(1, min(limit, 20))
     now_utc = datetime.now(timezone.utc)
-    now_local = now_utc.astimezone(ZoneInfo(settings.tz_name))
+    local_tz = ZoneInfo(settings.tz_name)
+    now_local = now_utc.astimezone(local_tz)
 
     core_client = CoreClient(settings.core_api_url, settings.api_key_news)
     control_rows = _load_controls(core_client)
@@ -351,9 +371,14 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     source_priorities = source_priority_map(settings, enabled_overrides=_source_enabled_map(controls))
     source_buckets = source_bucket_map(settings, enabled_overrides=_source_enabled_map(controls))
 
-    history_texts, existing_source_urls, recent_pillar_counts, posted_items, negative_feedback_examples = _collect_history(
-        core_client
-    )
+    (
+        history_texts,
+        existing_source_urls,
+        recent_pillar_counts,
+        posted_items,
+        negative_feedback_examples,
+        occupied_slot_keys,
+    ) = _collect_history(core_client, local_tz)
     enabled_generation_themes = _enabled_generation_themes(control_rows)
     broad_ai_limit = _broad_ai_limit(control_rows)
     feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
@@ -400,7 +425,12 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             skipped_slots=0,
         )
 
-    publish_plan = build_publish_plan(now_local, top_limit, control_rows=control_rows)
+    publish_plan = build_publish_plan(
+        now_local,
+        top_limit,
+        control_rows=control_rows,
+        occupied_slot_keys=occupied_slot_keys,
+    )
     if not publish_plan:
         return GenerationRunResult(
             previews=[],

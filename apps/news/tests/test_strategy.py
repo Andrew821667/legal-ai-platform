@@ -23,6 +23,20 @@ def test_build_publish_plan_uses_new_publication_grid() -> None:
     assert all(item.format_type in {"daily", "weekly_review", "longread", "humor"} for item in plan)
 
 
+def test_build_publish_plan_skips_occupied_slots() -> None:
+    now = datetime(2026, 3, 2, 7, 0, tzinfo=ZoneInfo("Europe/Moscow"))  # Monday
+    occupied = {
+        datetime(2026, 3, 2, 9, 0, tzinfo=ZoneInfo("Europe/Moscow")).isoformat(),
+        datetime(2026, 3, 2, 18, 0, tzinfo=ZoneInfo("Europe/Moscow")).isoformat(),
+    }
+    plan = build_publish_plan(now_local=now, count=3, occupied_slot_keys=occupied)
+
+    assert len(plan) == 3
+    assert plan[0].publish_at_local.strftime("%Y-%m-%d %H:%M") == "2026-03-03 09:00"
+    assert plan[1].publish_at_local.strftime("%Y-%m-%d %H:%M") == "2026-03-03 18:00"
+    assert plan[2].publish_at_local.strftime("%Y-%m-%d %H:%M") == "2026-03-04 09:00"
+
+
 def test_build_schedule_window_includes_friday_review_saturday_humor_and_sunday_longread() -> None:
     now = datetime(2026, 3, 6, 8, 0, tzinfo=ZoneInfo("Europe/Moscow"))  # Friday
     slots = build_schedule_window(now, days=3, future_only=True)

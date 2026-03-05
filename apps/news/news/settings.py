@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     news_generate_limit: int = 5
     news_generate_interval_seconds: int = 1800
     news_publish_interval_seconds: int = 300
+    news_publish_claim_limit: int = 1
     news_generate_interval_options: str = "900,1800,2700,3600,7200"
     news_publish_interval_options: str = "60,120,300,600,900"
     news_generate_limit_options: str = "3,5,7,10"

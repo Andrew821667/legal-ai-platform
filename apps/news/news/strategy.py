@@ -233,9 +233,14 @@ def build_publish_plan(
     now_local: datetime,
     count: int,
     control_rows: list[dict[str, Any]] | None = None,
+    occupied_slot_keys: set[str] | None = None,
 ) -> list[PostPlan]:
     plan: list[PostPlan] = []
+    busy = occupied_slot_keys or set()
     for slot in build_schedule_window(now_local, days=21, control_rows=control_rows, future_only=True):
+        slot_key = slot.publish_at_local.replace(second=0, microsecond=0).isoformat()
+        if slot_key in busy:
+            continue
         plan.append(
             PostPlan(
                 publish_at_local=slot.publish_at_local,

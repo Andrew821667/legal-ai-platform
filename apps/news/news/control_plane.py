@@ -63,6 +63,15 @@ def publish_interval_seconds(rows: list[dict[str, Any]]) -> int:
     return settings.news_publish_interval_seconds
 
 
+def publish_claim_limit(rows: list[dict[str, Any]]) -> int:
+    row = controls_map(rows).get("news.publish.enabled") or {}
+    config = row.get("config") or {}
+    value = config.get("claim_limit")
+    if isinstance(value, int) and value > 0:
+        return min(max(value, 1), 50)
+    return max(settings.news_publish_claim_limit, 1)
+
+
 def generate_limit(rows: list[dict[str, Any]]) -> int:
     config = _generate_config(rows)
     value = config.get("generate_limit")

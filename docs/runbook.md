@@ -147,6 +147,8 @@ cd apps/lead-bot/legacy
 ## Ночные и периодические задачи (cron)
 News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
 по интервалам `NEWS_GENERATE_INTERVAL_SECONDS` и `NEWS_PUBLISH_INTERVAL_SECONDS`.
+Чтобы не было пакетных публикаций при накопившихся due-постах, ограничивайте клейм:
+`NEWS_PUBLISH_CLAIM_LIMIT=1` (или через `news.publish.enabled.config.claim_limit`).
 
 Cron оставляем для служебных задач:
 Пример crontab:

@@ -281,6 +281,25 @@ _GENERIC_LEGAL_PATTERNS = (
     "важно учитывать риски",
     "нужно проверить юридические аспекты",
 )
+_PROMPT_LEAK_MARKERS = (
+    "верни строго json",
+    "без markdown",
+    "требования:",
+    "шаблон юридического комментария",
+    "целевая смысловая корзина",
+    "приоритетный юридический угол",
+    "стилистика канала",
+    "role\": \"system\"",
+    "ты шеф-редактор telegram-канала",
+)
+_FALLBACK_SUMMARY_META_PREFIXES = (
+    "собери ",
+    "обязательное требование",
+    "используй только",
+    "сделай ",
+    "тема лонгрида",
+    "опирайся ",
+)
 _RUBRIC_LEGAL_TEMPLATE_HINTS = {
     "privacy": (
         "Если материал относится к privacy, юридический блок должен говорить про правовое основание обработки, "
@@ -326,7 +345,7 @@ class LLMNewsWriter:
 
     @staticmethod
     def _allow_quality_fallback(format_type: str) -> bool:
-        return format_type not in {"daily"}
+        return format_type in {"signal", "standard", "deep", "digest"}
 
     @staticmethod
     def _shorten(text: str, limit: int, *, prefer_sentence: bool = False) -> str:
@@ -489,6 +508,44 @@ class LLMNewsWriter:
         )
         derived = cls._sentence_list(joined)
         return [cls._shorten(item, 220) for item in derived[:10] if item]
+
+    @staticmethod
+    def _sanitize_summary_for_fallback(summary: str) -> str:
+        lines = [line.strip() for line in str(summary or "").splitlines() if line.strip()]
+        cleaned: list[str] = []
+        for line in lines:
+            lowered = line.lower()
+            meta_probe = re.sub(r"^\d+[.)]\s*", "", lowered)
+            if any(meta_probe.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
+                continue
+            cleaned.append(line)
+        return "\n".join(cleaned).strip()
+
+    @classmethod
+    def _extract_internal_weekly_points(cls, summary: str) -> list[str]:
+        points: list[str] = []
+        for raw_line in str(summary or "").splitlines():
+            line = raw_line.strip()
+            match = re.match(r"^\d+[.)]\s*(.+)$", line)
+            if not match:
+                continue
+            payload = re.sub(r"\s+", " ", match.group(1)).strip()
+            lowered_payload = payload.lower()
+            if any(lowered_payload.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
+                continue
+            payload = cls._shorten(payload, 320, prefer_sentence=True) or cls._shorten(payload, 320)
+            if payload:
+                points.append(payload)
+        if len(points) >= 8:
+            return points[:10]
+        sentences = cls._sentence_list(cls._sanitize_summary_for_fallback(summary))
+        for sentence in sentences:
+            candidate = cls._shorten(sentence, 300, prefer_sentence=True) or cls._shorten(sentence, 300)
+            if candidate and candidate not in points:
+                points.append(candidate)
+            if len(points) >= 10:
+                break
+        return points[:10]
 
     @staticmethod
     def _looks_complete_prose(text: str) -> bool:
@@ -937,6 +994,10 @@ class LLMNewsWriter:
     @staticmethod
     def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
         normalized = (text or "").strip()
+        plain_lower = html.unescape(re.sub(r"<[^>]+>", "", normalized)).lower()
+        for marker in _PROMPT_LEAK_MARKERS:
+            if marker in plain_lower:
+                return f"prompt_leak:{marker}"
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
@@ -959,6 +1020,10 @@ class LLMNewsWriter:
             third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
             if len(third_block) < 120:
                 return f"weak_daily_third_block:{len(third_block)}"
+        if format_type == "weekly_review":
+            points_count = len(re.findall(r"(?m)^\s*\d+\.\s", normalized))
+            if points_count < 8:
+                return f"weak_weekly_points:{points_count}"
         if not LLMNewsWriter._has_specificity_signal(normalized):
             return "not_specific_enough"
         if len(normalized) >= 3980:
@@ -1009,7 +1074,8 @@ class LLMNewsWriter:
 
     def _fallback_post(self, article: ArticleCandidate, format_type: str, cta_type: str, pillar: str) -> dict[str, str]:
         title = self._shorten(article.title or "Обзор новости", 110)
-        summary = self._shorten(article.summary, 1300, prefer_sentence=True)
+        summary_raw = self._sanitize_summary_for_fallback(article.summary)
+        summary = self._shorten(summary_raw, 1300, prefer_sentence=True)
         summary = summary or "Источник сообщил о новом кейсе внедрения AI в юридическом процессе."
         business_effect = "Кейс показывает, как сократить ручную работу и повысить скорость обработки типовых задач."
         legal_risks = "Юристу стоит заранее проверить обработку персональных данных, договорную ответственность поставщика, требования к логированию и контроль качества output."
@@ -1022,7 +1088,7 @@ class LLMNewsWriter:
             conclusion = "Дальше важны не общие обещания вендора, а режим доступа к данным, качество output и контрактные ограничения."
         elif pillar in {"implementation", "case"}:
             conclusion = "Практический смысл здесь не в самой новости, а в том, какие процессы и роли можно пересобрать внутри юрфункции."
-        base = {
+        base: dict[str, Any] = {
             "title": title,
             "rubric": _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai"),
             "what_happened": summary[:450],
@@ -1032,6 +1098,54 @@ class LLMNewsWriter:
             "conclusion": conclusion,
             "hashtags": list(_DEFAULT_HASHTAGS),
         }
+        if format_type == "weekly_review":
+            weekly_points = self._extract_internal_weekly_points(summary_raw)
+            if len(weekly_points) < 8:
+                weekly_points.extend(
+                    [
+                        "Команды все чаще считают KPI не по количеству AI-фич, а по скорости прохождения юридического цикла, качеству исходящих документов и снижению операционных ошибок на повторяющихся задачах.",
+                        "Выбор AI-вендора смещается в сторону прозрачности процессов, управляемости данных, стабильности SLA и готовности поставщика подтверждать контроль качества output в критичных сценариях.",
+                        "Роль юриста усиливается в точках контроля качества output, настройки правил эскалации и принятия финального решения там, где цена ошибки для бизнеса выше среднего.",
+                        "Внедрение переходит из режима «тест инструмента» в режим «операционная система юрфункции», где важны регламенты, метрики, ответственность и предсказуемость результата.",
+                        "Рынок показывает, что без связки legal ops, privacy, governance и контрактного контура даже сильный AI-инструмент не дает стабильного эффекта в продакшене.",
+                    ]
+                )
+            base.update(
+                {
+                    "lead": (
+                        "Неделя показала, что рынок Legal AI ускоряется, но устойчивый результат получают только команды, "
+                        "которые одновременно управляют процессом, риском и качеством юридического результата. "
+                        "Ключевой сдвиг: от отдельных экспериментов к системной модели работы юрфункции."
+                    ),
+                    "weekly_points": weekly_points[:10],
+                    "what_happened": (
+                        "За неделю проявилось несколько устойчивых сигналов на стыке Legal AI, автоматизации процессов и требований к управлению рисками. "
+                        "Во многих кейсах фокус сместился с «демо-возможностей» на практические вопросы масштабирования, интеграции в процессы и управляемости качества."
+                    ),
+                    "business_effect": (
+                        "Для юрфункции это означает переход от точечных экспериментов к операционной модели, "
+                        "где важны скорость цикла, качество проверки, предсказуемость output и экономическая эффективность на длинной дистанции. "
+                        "Бизнес ожидает не просто автоматизации шага, а устойчивого сокращения срока обработки обращений, договоров и внутренних запросов."
+                    ),
+                    "legal_risks": (
+                        "Юристу важно заранее определить контур данных, договорные ограничения, ответственность поставщика, "
+                        "режим логирования и контроль качества output в критичных сценариях. "
+                        "Отдельный акцент нужен на правах на данные и output, трансграничной передаче, vendor lock-in, "
+                        "audit rights и понятной модели эскалации при ошибках системы."
+                    ),
+                    "next_steps": (
+                        "Переоценить приоритеты автоматизации на ближайший квартал и выбрать 2-3 процесса с максимальным эффектом; "
+                        "зафиксировать критерии качества, SLA и метрики для каждого этапа; "
+                        "обновить договорный, privacy и governance-контур до запуска масштабного потока; "
+                        "назначить owner-роли за валидацию output и эскалацию юридических рисков"
+                    ),
+                    "conclusion": (
+                        "Главный вывод недели: эффект дает не отдельная модель, а связка процессов, юридического контроля и "
+                        "дисциплины внедрения. На следующем витке выиграют команды, которые строят воспроизводимый контур работы, "
+                        "а не зависят от единичных ручных экспериментов."
+                    ),
+                }
+            )
         _, text, rubric = self._format_post(
             base,
             article.article_url,
