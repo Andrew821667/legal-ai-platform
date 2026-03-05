@@ -794,7 +794,7 @@ def _build_admin_users_page_text(users: list[dict], page: int, total_pages: int,
         f"Страница: {page}/{total_pages}",
         "",
         "Нажмите на пользователя для подробной карточки.",
-        "Поиск вручную: /pdn_user <telegram_id>",
+        "Для поиска по ID используйте кнопку «🔎 Поиск / карточка по ID».",
         "",
     ]
     for user in users:
@@ -968,6 +968,20 @@ def _format_users_for_admin(title: str, users: list[dict]) -> str:
     return "\n".join(lines).strip()
 
 
+def _format_blacklist_for_admin() -> str:
+    blocked_ids = sorted(int(item) for item in security.security_manager.blacklist)
+    if not blocked_ids:
+        return "📋 Черный список\n\nСписок пуст."
+    lines = [
+        "📋 Черный список",
+        "",
+        f"Всего заблокировано: {len(blocked_ids)}",
+        "",
+    ]
+    lines.extend(f"• {telegram_id}" for telegram_id in blocked_ids)
+    return "\n".join(lines)
+
+
 async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback кнопок админ-панели"""
     query = update.callback_query
@@ -996,7 +1010,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
         if action == "admin_users_page_noop":
             return
 
-        if action in {"admin_panel", "admin_section_users", "admin_section_commands"}:
+        if action in {"admin_panel", "admin_section_users", "admin_section_commands", "admin_section_security"}:
             # При выходе в разделы сбрасываем активный режим интерактивного поиска.
             _clear_admin_lookup_state(context)
 
@@ -1178,6 +1192,15 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 "📥 РАЗДЕЛ: ЭКСПОРТ И ЛОГИ\n\nВыберите действие:",
                 reply_markup=InlineKeyboardMarkup(ADMIN_EXPORT_MENU),
                 action="admin_section_export",
+            )
+
+        elif action == "admin_section_security" or action == "admin_security":
+            _clear_admin_lookup_state(context)
+            await utils.safe_edit_text(
+                query.message,
+                "🛡️ РАЗДЕЛ: БЕЗОПАСНОСТЬ\n\nВыберите действие:",
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_section_security",
             )
 
         elif action == "admin_section_commands":
@@ -1367,7 +1390,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 caption="📝 Funnel report (Markdown)"
             )
 
-        elif action == "admin_security":
+        elif action == "admin_security_stats":
             stats = security.security_manager.get_stats()
             stats_since = stats['stats_start_time'].strftime("%d.%m.%Y %H:%M")
             stats_message = (
@@ -1391,8 +1414,64 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             await utils.safe_edit_text(
                 query.message,
                 _clip_for_edit(stats_message),
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
-                action="admin_security",
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_security_stats",
+            )
+
+        elif action == "admin_blacklist_list":
+            await utils.safe_edit_text(
+                query.message,
+                _format_blacklist_for_admin(),
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_blacklist_list",
+            )
+
+        elif action == "admin_blacklist_add_prompt":
+            context.user_data["admin_lookup_action"] = "blacklist_add"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🚫 Блокировка пользователя\n\n"
+                    "Введите сообщение в формате:\n"
+                    "<telegram_id> [причина]\n\n"
+                    "Примеры:\n"
+                    "321681061\n"
+                    "321681061 Спам/флуд"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_blacklist_add_prompt",
+            )
+
+        elif action == "admin_blacklist_remove_prompt":
+            context.user_data["admin_lookup_action"] = "blacklist_remove"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "✅ Разблокировка пользователя\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_blacklist_remove_prompt",
+            )
+
+        elif action == "admin_security_reset":
+            security.security_manager.message_timestamps.clear()
+            security.security_manager.token_usage.clear()
+            security.security_manager.cooldowns.clear()
+            security.security_manager.suspicious_users.clear()
+            security.security_manager.total_tokens_today = 0
+            security.security_manager.reset_stats_time()
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "✅ Счетчики безопасности сброшены.\n\n"
+                    f"Статистика пересчитана с {security.security_manager.stats_start_time.strftime('%d.%m.%Y %H:%M')}."
+                ),
+                reply_markup=InlineKeyboardMarkup(ADMIN_SECURITY_MENU),
+                action="admin_security_reset",
             )
 
         elif action == "admin_leads":

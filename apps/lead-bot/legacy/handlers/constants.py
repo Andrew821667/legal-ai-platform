@@ -66,7 +66,7 @@ ADMIN_PANEL_MENU = [
     [InlineKeyboardButton("📊 Лиды и воронка", callback_data="admin_section_leads")],
     [InlineKeyboardButton("👥 Пользователи", callback_data="admin_section_users")],
     [InlineKeyboardButton("📥 Экспорт и логи", callback_data="admin_section_export")],
-    [InlineKeyboardButton("🛡️ Безопасность", callback_data="admin_security")],
+    [InlineKeyboardButton("🛡️ Безопасность", callback_data="admin_section_security")],
     [InlineKeyboardButton("🧭 Команды и поиск", callback_data="admin_section_commands")],
     [InlineKeyboardButton("🗑️ Очистка данных", callback_data="admin_cleanup")],
     [InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
@@ -126,6 +126,15 @@ ADMIN_EXPORT_MENU = [
     [InlineKeyboardButton("📥 Воронка CSV", callback_data="admin_funnel_export_csv")],
     [InlineKeyboardButton("📝 Воронка Markdown", callback_data="admin_funnel_export_md")],
     [InlineKeyboardButton("📋 Логи (последние)", callback_data="admin_logs")],
+    [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")],
+]
+
+ADMIN_SECURITY_MENU = [
+    [InlineKeyboardButton("📊 Статистика безопасности", callback_data="admin_security_stats")],
+    [InlineKeyboardButton("📋 Черный список", callback_data="admin_blacklist_list")],
+    [InlineKeyboardButton("🚫 Блокировать по ID", callback_data="admin_blacklist_add_prompt")],
+    [InlineKeyboardButton("✅ Разблокировать по ID", callback_data="admin_blacklist_remove_prompt")],
+    [InlineKeyboardButton("🧹 Сбросить счетчики безопасности", callback_data="admin_security_reset")],
     [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")],
 ]
 

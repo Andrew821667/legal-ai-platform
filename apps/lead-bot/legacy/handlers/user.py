@@ -265,6 +265,59 @@ async def _handle_admin_lookup_input(
         )
         return True
 
+    if action == "blacklist_add":
+        parts = message_text.strip().split(maxsplit=1)
+        telegram_id = _parse_id(parts[0]) if parts else None
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Формат: <telegram_id> [причина]\nНапример: 321681061 Спам/флуд",
+                action="admin_blacklist_add_invalid",
+            )
+            return True
+
+        reason = parts[1].strip() if len(parts) > 1 else "Заблокирован администратором через панель"
+        security.security_manager.add_to_blacklist(telegram_id, reason)
+        await utils.safe_reply_text(
+            message,
+            (
+                f"🚫 Пользователь {telegram_id} добавлен в черный список.\n"
+                f"Причина: {reason}\n"
+                f"Всего в списке: {len(security.security_manager.blacklist)}"
+            ),
+            action="admin_blacklist_add_done",
+        )
+        return True
+
+    if action == "blacklist_remove":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_blacklist_remove_invalid",
+            )
+            return True
+
+        if telegram_id not in security.security_manager.blacklist:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь {telegram_id} не найден в черном списке.",
+                action="admin_blacklist_remove_not_found",
+            )
+            return True
+
+        security.security_manager.remove_from_blacklist(telegram_id)
+        await utils.safe_reply_text(
+            message,
+            (
+                f"✅ Пользователь {telegram_id} удален из черного списка.\n"
+                f"Всего в списке: {len(security.security_manager.blacklist)}"
+            ),
+            action="admin_blacklist_remove_done",
+        )
+        return True
+
     if action == "edit":
         field = context.user_data.get("admin_lookup_field")
         if not field:
