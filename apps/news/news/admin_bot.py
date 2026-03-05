@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html
 import hashlib
+import json
 import logging
 import os
 import re
@@ -766,12 +767,8 @@ def _manual_theme_rubric(theme: str) -> str:
 
 
 def _manual_footer_mode_label(kind: str) -> str:
-    footer = build_manual_footer(kind)
-    if not footer:
-        return "без CTA"
-    if kind in {"promo_offer", "service_page"}:
-        return "продающий CTA"
-    return "мягкий CTA"
+    _ = kind
+    return "семантический через LLM (только при релевантности)"
 
 
 def _media_preview_label(media_url: str, index: int) -> str:
@@ -4163,7 +4160,9 @@ class NewsAdminBot:
         source_material = str(draft.get("source_material") or "").strip()
         source_url = str(draft.get("source_url") or "").strip()
         media_urls = draft.get("media_urls") or []
-        footer = build_manual_footer(kind)
+        footer = str(draft.get("footer_text") or "").strip()
+        footer_reason = str(draft.get("footer_fit_reason") or "").strip()
+        footer_state = "добавлен по смыслу" if footer else "не добавлен"
         media_block = (
             "Порядок медиа:\n" + "\n".join(_media_preview_label(item, index) for index, item in enumerate(media_urls, start=1)) + "\n"
             if media_urls
@@ -4185,6 +4184,8 @@ class NewsAdminBot:
                 f"Материал: {source_material[:220]}\n" if source_material else "",
                 f"Фокус темы: {_manual_theme_note(theme)}\n" if theme else "",
                 f"Футер: {_manual_footer_mode_label(kind)}\n",
+                f"Статус футера: {footer_state}\n",
+                f"Причина: {footer_reason[:180]}\n" if footer_reason else "",
                 f"Текст футера: {footer[:180]}\n" if footer else "",
                 "\n",
                 f"{preview}\n\n",
@@ -4193,10 +4194,12 @@ class NewsAdminBot:
         )
 
     def _compose_create_text(self, draft: dict[str, Any]) -> str:
+        self._ensure_create_draft_footer(draft)
         return compose_manual_post_html(
             str(draft.get("title") or ""),
             str(draft.get("text") or ""),
             str(draft.get("kind") or ""),
+            footer_text=str(draft.get("footer_text") or ""),
         )
 
     def _create_post_payload(
@@ -4412,6 +4415,122 @@ class NewsAdminBot:
             raise RuntimeError("LLM вернул пустой ответ")
         return content
 
+    @staticmethod
+    def _extract_json_payload(payload: str) -> dict[str, Any]:
+        text = (payload or "").strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if len(lines) >= 3:
+                text = "\n".join(lines[1:-1]).strip()
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            left = text.find("{")
+            right = text.rfind("}")
+            if left == -1 or right == -1 or right <= left:
+                raise
+            data = json.loads(text[left : right + 1])
+        if not isinstance(data, dict):
+            raise ValueError("LLM payload must be a JSON object")
+        return data
+
+    @staticmethod
+    def _manual_footer_signature(draft: dict[str, Any]) -> str:
+        payload = "|".join(
+            [
+                str(draft.get("mode") or ""),
+                str(draft.get("kind") or ""),
+                str(draft.get("theme") or ""),
+                str(draft.get("title") or ""),
+                _strip_html_markup(str(draft.get("text") or "")),
+                str(draft.get("source_url") or ""),
+            ]
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _generate_manual_footer_with_llm(self, draft: dict[str, Any]) -> tuple[str, str]:
+        title = str(draft.get("title") or "Без заголовка").strip()
+        text = _strip_html_markup(str(draft.get("text") or "")).strip()
+        kind = str(draft.get("kind") or "")
+        theme = str(draft.get("theme") or "")
+        if len(text) < 80:
+            return "", "Недостаточно контекста для осмысленного CTA."
+
+        client = self._get_openai_client()
+        if self._use_max_tokens_param:
+            completion_kwargs: dict[str, Any] = {"max_tokens": 260}
+        else:
+            completion_kwargs = {"max_completion_tokens": 260}
+
+        helper_label = self._helper_bot_label()
+        helper_url = self._helper_bot_url()
+        response = client.chat.completions.create(
+            model=settings.news_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты редактор Telegram-канала Legal AI PRO.\n"
+                        "Нужно решить, нужен ли футер «Следующий шаг» для ручного поста.\n"
+                        "Добавляй футер только если пост реально стыкуется с услугами:\n"
+                        "автоматизация юридической функции, внедрение Legal AI, legal ops, privacy/compliance/governance,\n"
+                        "аудит и настройка AI-процессов, выбор и внедрение инструментов для юркоманд.\n"
+                        "Если стыковки нет — футер не добавляем.\n"
+                        "Если футер нужен, верни 1-2 коротких предложения, без навязчивой рекламы.\n"
+                        "Не пиши заголовок «Следующий шаг».\n"
+                        "Верни строго JSON:\n"
+                        '{"include_footer": true/false, "footer_text": "...", "fit_reason": "..."}'
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Тип: {_manual_post_kind_label(kind)}\n"
+                        f"Тематика: {_manual_theme_label(theme)}\n"
+                        f"Заголовок: {title}\n\n"
+                        f"Текст поста:\n{text[:3200]}\n\n"
+                        f"Контакт для CTA: {helper_label} ({helper_url})"
+                    ),
+                },
+            ],
+            temperature=0.25,
+            **completion_kwargs,
+        )
+        payload = self._extract_json_payload(response.choices[0].message.content or "")
+        include_footer = bool(payload.get("include_footer"))
+        fit_reason = str(payload.get("fit_reason") or "").strip()
+        if not include_footer:
+            return "", fit_reason or "Пост не стыкуется с услугами."
+        footer_text = self._ensure_footer_has_helper_contact(str(payload.get("footer_text") or ""))
+        if not footer_text:
+            return "", fit_reason or "LLM не предложил корректный футер."
+        return footer_text, fit_reason
+
+    def _ensure_create_draft_footer(self, draft: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
+        signature = self._manual_footer_signature(draft)
+        if (
+            not force
+            and str(draft.get("footer_signature") or "") == signature
+            and "footer_text" in draft
+        ):
+            return draft
+        try:
+            footer_text, fit_reason = self._generate_manual_footer_with_llm(draft)
+        except Exception as exc:
+            logger.warning(
+                "manual_footer_generation_failed",
+                extra={
+                    "kind": str(draft.get("kind") or ""),
+                    "theme": str(draft.get("theme") or ""),
+                    "error": str(exc),
+                },
+            )
+            footer_text, fit_reason = "", "Не удалось сформировать футер автоматически."
+        draft["footer_text"] = footer_text
+        draft["footer_fit_reason"] = fit_reason
+        draft["footer_signature"] = signature
+        return draft
+
     def _fallback_footer_text(self, post: dict[str, Any]) -> str:
         format_type = str(post.get("format_type") or "")
         manual_kind = _manual_post_kind_from_format_type(format_type)
@@ -4467,6 +4586,11 @@ class NewsAdminBot:
         username = settings.news_helper_bot_username.strip().lstrip("@")
         return username or "legal_ai_helper_new_bot"
 
+    @staticmethod
+    def _helper_bot_label() -> str:
+        label = (settings.news_helper_bot_label or "").strip()
+        return label or "Ассистент Legal AI Pro"
+
     @classmethod
     def _helper_bot_mention(cls) -> str:
         return f"@{cls._helper_bot_username()}"
@@ -4483,17 +4607,29 @@ class NewsAdminBot:
         mention = cls._helper_bot_mention().lower()
         url = cls._helper_bot_url().lower()
         short_url = f"t.me/{cls._helper_bot_username().lower()}"
-        return mention in normalized or url in normalized or short_url in normalized
+        label = cls._helper_bot_label().lower()
+        return mention in normalized or url in normalized or short_url in normalized or label in normalized
 
     @classmethod
     def _ensure_footer_has_helper_contact(cls, footer_text: str) -> str:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
+        helper_label = cls._helper_bot_label()
+        helper_username = cls._helper_bot_username()
+        helper_mention = cls._helper_bot_mention()
+        helper_url = cls._helper_bot_url()
+        helper_short_url = f"t.me/{helper_username}"
         if not content:
-            return f"Если тема для вас актуальна, напишите в {cls._helper_bot_mention()}."
-        content = content.replace("@legal_ai_helper_new_bot", cls._helper_bot_mention())
+            return f"Если тема для вас актуальна, напишите в {helper_label}."
+        content = re.sub(r"@legal_ai_helper_new_bot", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        content = content.replace(helper_mention, helper_label)
+        content = content.replace(helper_url, helper_label)
+        content = content.replace(helper_short_url, helper_label)
         if cls._footer_has_helper_contact(content):
             return content
-        suffix = f"Напишите в {cls._helper_bot_mention()}."
+        suffix = f"Напишите в {helper_label}."
         if content.endswith((".", "!", "?", "…")):
             return f"{content} {suffix}"
         return f"{content}. {suffix}"
@@ -4520,7 +4656,7 @@ class NewsAdminBot:
         rubric = str(post.get("rubric") or "").strip()
         pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{text}")
         variant_hint = _FOOTER_VARIANT_HINTS[self._footer_variant_index(post)]
-        helper_mention = self._helper_bot_mention()
+        helper_label = self._helper_bot_label()
         helper_url = self._helper_bot_url()
 
         if self._use_max_tokens_param:
@@ -4539,7 +4675,7 @@ class NewsAdminBot:
                         "Footer должен быть коротким, деловым, ненавязчивым и логично продолжать именно этот материал. "
                         "Смысл footer: показать, что мы можем помочь внедрить похожую автоматизацию или AI-сценарий в юридической функции клиента. "
                         "Footer должен мягко подводить к заявке на автоматизацию, а не звучать как реклама ради рекламы. "
-                        f"Обязательно веди в лид-бот {helper_mention} ({helper_url}). "
+                        f"Обязательно веди в лид-бот {helper_label} ({helper_url}). "
                         "Если пост про инструменты, внедрение, legal ops или практический кейс, предложи спокойный следующий шаг по внедрению. "
                         "Если пост нейтральный или регуляторный, footer должен оставаться мягким, но все равно связывать тему с практикой внедрения и возможностью написать в бота. "
                         "Избегай однообразного старта каждого footer. Не повторяй из поста в пост одну и ту же формулу. "
@@ -4558,7 +4694,7 @@ class NewsAdminBot:
                         f"Пожелание по формулировке: {variant_hint}\n\n"
                         f"Текст поста:\n{text}\n\n"
                         "Сформируй только footer. "
-                        f"Он должен логично вытекать из смысла поста и аккуратно предлагать написать в {helper_mention}, "
+                        f"Он должен логично вытекать из смысла поста и аккуратно предлагать написать в {helper_label}, "
                         "если читатель хочет внедрить похожую автоматизацию или AI-сценарий."
                     ),
                 },
@@ -4581,13 +4717,41 @@ class NewsAdminBot:
         if not footer_text:
             return normalize_post_text(text)
 
+        helper_username = cls._helper_bot_username()
+        helper_mention = cls._helper_bot_mention()
+        helper_label = cls._helper_bot_label()
         footer_html = html.escape(footer_text)
-        mention = html.escape(cls._helper_bot_mention())
         bot_url = html.escape(cls._helper_bot_url(), quote=True)
-        if mention in footer_html:
-            footer_html = footer_html.replace(mention, f'<a href="{bot_url}">{mention}</a>')
-        else:
-            footer_html = f'{footer_html} <a href="{bot_url}">{mention}</a>'
+        label_escaped = html.escape(helper_label)
+        footer_html = re.sub(
+            rf"@{re.escape(helper_username)}",
+            helper_label,
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = re.sub(
+            rf"https?://t\\.me/{re.escape(helper_username)}",
+            helper_label,
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = re.sub(
+            rf"t\\.me/{re.escape(helper_username)}",
+            helper_label,
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = footer_html.replace(html.escape(helper_mention), label_escaped)
+        footer_html = re.sub(r"\s+", " ", footer_html).strip()
+        footer_html = footer_html.rstrip(" ,;")
+        link_html = f'<a href="{bot_url}">{label_escaped}</a>'
+        if label_escaped in footer_html:
+            footer_html = footer_html.replace(label_escaped, link_html)
+        elif link_html not in footer_html:
+            if footer_html.endswith((".", "!", "?", "…")):
+                footer_html = f"{footer_html} {link_html}"
+            else:
+                footer_html = f"{footer_html}. {link_html}" if footer_html else link_html
 
         footer_block = f"<b>Следующий шаг</b>\n{footer_html}"
         source_index = text.find("<b>Источник</b>")

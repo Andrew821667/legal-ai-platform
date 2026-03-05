@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     news_telegram_ingest_evening_options: str = "15:30,16:00,16:30,17:30,18:30"
     lead_bot_username: str = "LegalAI_Popov_Andrew"
     news_helper_bot_username: str = "legal_ai_helper_new_bot"
+    news_helper_bot_label: str = "Ассистент Legal AI Pro"
     tz_name: str = "Europe/Moscow"
     openai_api_key: str = ""
     openai_base_url: str = ""

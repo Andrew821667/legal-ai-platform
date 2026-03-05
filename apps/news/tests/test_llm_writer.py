@@ -2,8 +2,28 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from news.llm_writer import LLMNewsWriter
+from news.llm_writer import LLMNewsWriter, compose_manual_post_html
 from news.pipeline import ArticleCandidate
+
+
+class _FakeCompletions:
+    def __init__(self, content: str) -> None:
+        self._content = content
+
+    def create(self, **_: object) -> object:
+        message = type("Message", (), {"content": self._content})()
+        choice = type("Choice", (), {"message": message})()
+        return type("Response", (), {"choices": [choice]})()
+
+
+class _FakeChat:
+    def __init__(self, content: str) -> None:
+        self.completions = _FakeCompletions(content)
+
+
+class _FakeClient:
+    def __init__(self, content: str) -> None:
+        self.chat = _FakeChat(content)
 
 
 def test_looks_complete_prose_accepts_finished_text() -> None:
@@ -321,3 +341,70 @@ def test_generic_legal_commentary_detection() -> None:
     assert not LLMNewsWriter._looks_generic_legal_commentary(
         "Юристу стоит проверить SLA, vendor lock-in, privacy-контур и распределение ответственности."
     )
+
+
+def test_semantic_footer_html_adds_clickable_assistant_link() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _FakeClient(
+        '{"include_footer": true, "footer_text": "Эту практику можно применить у вас в юрфункции. Напишите в Ассистент Legal AI Pro.", "fit_reason": "case fit"}'
+    )
+    writer.model = "deepseek-chat"
+    writer._use_max_tokens_param = True
+
+    footer_html = writer._semantic_footer_html(
+        title="Кейс автоматизации intake",
+        rubric="legal_ops",
+        pillar="implementation",
+        format_type="daily",
+        cta_type="soft",
+        lead="Короткий лид",
+        what_happened="Описание фактов",
+        business_effect="Описание эффекта",
+        legal_risks="Описание ограничений",
+        conclusion="Итог",
+    )
+
+    assert '<a href="https://t.me/legal_ai_helper_new_bot">Ассистент Legal AI Pro</a>' in footer_html
+
+
+def test_semantic_footer_html_skips_when_not_fit() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _FakeClient('{"include_footer": false, "footer_text": "", "fit_reason": "no service match"}')
+    writer.model = "deepseek-chat"
+    writer._use_max_tokens_param = True
+
+    footer_html = writer._semantic_footer_html(
+        title="Нейтральная новость",
+        rubric="market",
+        pillar="market",
+        format_type="daily",
+        cta_type="soft",
+        lead="Короткий лид",
+        what_happened="Описание фактов",
+        business_effect="Описание эффекта",
+        legal_risks="Описание ограничений",
+        conclusion="Итог",
+    )
+
+    assert footer_html == ""
+
+
+def test_compose_manual_post_html_uses_explicit_footer_text() -> None:
+    post_html = compose_manual_post_html(
+        "Тест",
+        "Тело поста",
+        "promo_offer",
+        footer_text="Ненавязчивый следующий шаг.",
+    )
+    assert "<b>Следующий шаг</b>" in post_html
+    assert "Ненавязчивый следующий шаг." in post_html
+
+
+def test_compose_manual_post_html_skips_footer_when_explicitly_empty() -> None:
+    post_html = compose_manual_post_html(
+        "Тест",
+        "Тело поста",
+        "promo_offer",
+        footer_text="",
+    )
+    assert "<b>Следующий шаг</b>" not in post_html

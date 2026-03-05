@@ -174,6 +174,29 @@ _CHANNEL_STYLE_HINTS = {
     "longread": "Редакционный тон: экспертный воскресный разбор. Допустим мягкий следующий шаг, но без навязчивой продажи.",
     "humor": "Редакционный тон: профессиональная ирония без клоунады. CTA не нужен.",
 }
+_FOOTER_DECISION_SYSTEM_PROMPT = """
+Ты редактор Telegram-канала Legal AI PRO.
+
+Твоя задача: решить, нужен ли footer «Следующий шаг» для конкретного поста.
+
+Логика:
+1) Footer добавляем только если тема поста реально стыкуется с нашими услугами:
+   - автоматизация юридической функции (интейк, договорная работа, типовые процессы);
+   - внедрение Legal AI, legal ops, workflow/knowledge automation;
+   - privacy, compliance, governance и юридические риски AI-внедрения;
+   - аудит/настройка AI-процессов и выбор инструментов для юркоманд.
+2) Если пост не дает внятного моста к этим услугам (шум, абстрактная новость без прикладного угла) — footer не добавляем.
+3) Если footer нужен, пиши 1-2 коротких предложения, ненавязчиво и по смыслу материала.
+4) Не пиши заголовок «Следующий шаг».
+5) Не используй markdown.
+6) Не выдумывай факты.
+7) Верни строго JSON:
+{
+  "include_footer": true/false,
+  "footer_text": "текст или пусто",
+  "fit_reason": "коротко почему"
+}
+""".strip()
 _DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
 _DEFAULT_RUBRIC_BY_PILLAR = {
     "regulation": "regulation",
@@ -442,13 +465,53 @@ class LLMNewsWriter:
             raise
 
     @staticmethod
-    def _bot_link() -> str:
-        if settings.news_helper_bot_url:
-            username = settings.news_helper_bot_username.strip()
-            link_text = html.escape(f"@{username.lstrip('@')}")
-            safe_url = html.escape(settings.news_helper_bot_url, quote=True)
-            return f'<a href="{safe_url}">{link_text}</a>'
-        return "@legal_ai_helper_new_bot"
+    def _helper_bot_username() -> str:
+        username = settings.news_helper_bot_username.strip().lstrip("@")
+        return username or "legal_ai_helper_new_bot"
+
+    @staticmethod
+    def _helper_bot_label() -> str:
+        label = (settings.news_helper_bot_label or "").strip()
+        return label or "Ассистент Legal AI Pro"
+
+    @classmethod
+    def _helper_bot_url(cls) -> str:
+        return settings.news_helper_bot_url or f"https://t.me/{cls._helper_bot_username()}"
+
+    @classmethod
+    def _bot_link(cls) -> str:
+        link_text = html.escape(cls._helper_bot_label())
+        safe_url = html.escape(cls._helper_bot_url(), quote=True)
+        return f'<a href="{safe_url}">{link_text}</a>'
+
+    @classmethod
+    def _finalize_footer_html(cls, footer_text: str) -> str:
+        content = re.sub(r"\s+", " ", (footer_text or "").strip())
+        if not content:
+            return ""
+        content = re.sub(r"^\s*(?:следующий шаг|footer)\s*:?\s*", "", content, flags=re.IGNORECASE).strip()
+        if not content:
+            return ""
+
+        helper_label = cls._helper_bot_label()
+        helper_username = cls._helper_bot_username()
+        content = re.sub(r"@legal_ai_helper_new_bot", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+
+        footer_html = html.escape(content)
+        label_escaped = html.escape(helper_label)
+        link_html = cls._bot_link()
+        if label_escaped in footer_html:
+            footer_html = footer_html.replace(label_escaped, link_html)
+        elif link_html not in footer_html:
+            suffix = f"Напишите в {link_html}."
+            if footer_html.endswith((".", "!", "?", "…")):
+                footer_html = f"{footer_html} {suffix}"
+            else:
+                footer_html = f"{footer_html}. {suffix}" if footer_html else suffix
+        return re.sub(r"\s+", " ", footer_html).strip()
 
     @classmethod
     def _style_hint(cls, format_type: str) -> str:
@@ -473,6 +536,82 @@ class LLMNewsWriter:
         if mode == "none":
             return ""
         return cls._cta_text(cta_type, pillar)
+
+    def _semantic_footer_html(
+        self,
+        *,
+        title: str,
+        rubric: str,
+        pillar: str,
+        format_type: str,
+        cta_type: str,
+        lead: str,
+        what_happened: str,
+        business_effect: str,
+        legal_risks: str,
+        conclusion: str,
+    ) -> str:
+        if not hasattr(self, "client"):
+            fallback = self._auto_footer_text(format_type, cta_type, pillar)
+            return self._finalize_footer_html(fallback) if fallback else ""
+
+        post_context = "\n".join(
+            part for part in (
+                f"Заголовок: {title}",
+                f"Формат: {format_type}",
+                f"Рубрика: {rubric or '—'}",
+                f"Корзина: {pillar}",
+                f"Lead: {lead or '—'}",
+                f"Что произошло: {what_happened or '—'}",
+                f"Почему важно: {business_effect or '—'}",
+                f"Правовой/практический блок: {legal_risks or '—'}",
+                f"Вывод: {conclusion or '—'}",
+            ) if part
+        )
+        completion_kwargs: dict[str, Any]
+        if self._use_max_tokens_param:
+            completion_kwargs = {"max_tokens": 260}
+        else:
+            completion_kwargs = {"max_completion_tokens": 260}
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": _FOOTER_DECISION_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Оцени пост и реши, нужен ли footer по нашим услугам.\n\n"
+                            f"{post_context}\n\n"
+                            f"Контакт для CTA: {self._helper_bot_label()} ({self._helper_bot_url()})"
+                        ),
+                    },
+                ],
+                temperature=0.25,
+                **completion_kwargs,
+            )
+            payload = self._extract_json(response.choices[0].message.content or "")
+            include_footer = bool(payload.get("include_footer"))
+            if not include_footer:
+                logger.info(
+                    "llm_footer_skipped_as_not_fit",
+                    extra={
+                        "title": title[:80],
+                        "rubric": rubric[:80],
+                        "format_type": format_type,
+                        "reason": str(payload.get("fit_reason") or "")[:180],
+                    },
+                )
+                return ""
+            footer_text = self._sanitize_generated_field(payload.get("footer_text") or "")
+            return self._finalize_footer_html(footer_text)
+        except Exception as exc:
+            logger.warning(
+                "llm_footer_generation_failed",
+                extra={"title": title[:80], "rubric": rubric[:80], "format_type": format_type, "error": str(exc)},
+            )
+            return ""
 
     @staticmethod
     def _source_block(article_url: str, format_type: str) -> str:
@@ -1042,7 +1181,18 @@ class LLMNewsWriter:
             prefer_sentence=True,
         )
         escaped_conclusion = html.escape(conclusion)
-        cta_line = self._auto_footer_text(format_type, cta_type, pillar)
+        cta_line = self._semantic_footer_html(
+            title=title,
+            rubric=rubric,
+            pillar=pillar,
+            format_type=format_type,
+            cta_type=cta_type,
+            lead=lead,
+            what_happened=what_happened,
+            business_effect=business_effect,
+            legal_risks=legal_risks,
+            conclusion=conclusion,
+        )
         source_block = self._source_block(article_url, format_type)
         hashtags_line = " ".join(html.escape(tag) for tag in hashtags[:4])
         next_step_block = f"<b>Следующий шаг</b>\n{cta_line}\n\n" if cta_line else ""
@@ -1439,7 +1589,7 @@ def build_manual_footer(post_kind: str) -> str:
     return template.format(bot_link=LLMNewsWriter._bot_link())
 
 
-def compose_manual_post_html(title: str, body: str, post_kind: str) -> str:
+def compose_manual_post_html(title: str, body: str, post_kind: str, *, footer_text: str | None = None) -> str:
     normalized_title = html.escape((title or "").strip() or "Без заголовка")
     raw_body = (body or "").strip()
     body_lines = [line.strip() for line in raw_body.splitlines()]
@@ -1454,7 +1604,7 @@ def compose_manual_post_html(title: str, body: str, post_kind: str) -> str:
         else:
             formatted_lines.append(escaped)
     body_html = "\n".join(formatted_lines).strip()
-    footer = build_manual_footer(post_kind)
+    footer = (footer_text or "").strip() if footer_text is not None else build_manual_footer(post_kind)
     parts = [f"<b>{normalized_title}</b>"]
     if body_html:
         parts.append(body_html)
