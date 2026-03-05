@@ -243,6 +243,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
       READER_BOT_TOKEN: ${READER_BOT_TOKEN}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
+      NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
       CORE_API_URL: http://core-api:8000
       API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}

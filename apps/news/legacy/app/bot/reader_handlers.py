@@ -9,6 +9,7 @@ Handles user interactions:
 """
 
 import re
+from html import escape
 from typing import Optional
 from uuid import UUID
 from aiogram import Router, F
@@ -45,6 +46,7 @@ from app.services.reader_service import (
 )
 from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
+from app.config import settings
 
 
 router = Router()
@@ -118,6 +120,10 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
         keyboard.append([
             InlineKeyboardButton(text="📖 Читать полностью", callback_data=f"view:{publication_id}")
         ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="💡 Идея внедрения", callback_data=f"idea:{publication_id}")
+    ])
 
     # Feedback buttons
     keyboard.append([
@@ -822,6 +828,95 @@ async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
     )
 
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("idea:"))
+async def generate_automation_idea_callback(callback: CallbackQuery, db: AsyncSession):
+    """Generate practical automation idea based on selected article."""
+    article_id = callback.data.split(":")[1]
+    user_id = callback.from_user.id
+
+    try:
+        article_uuid = UUID(article_id)
+    except ValueError:
+        await callback.answer("❌ Некорректный ID статьи", show_alert=True)
+        return
+
+    result = await db.execute(
+        select(ReaderPublication).where(ReaderPublication.id == article_uuid)
+    )
+    article = result.scalar_one_or_none()
+    if not article or not article.draft:
+        await callback.answer("❌ Статья не найдена", show_alert=True)
+        return
+
+    await callback.answer("⏳ Формирую идею внедрения...")
+
+    try:
+        from app.modules.llm_provider import get_llm_provider
+
+        llm = get_llm_provider(settings.default_llm_provider)
+        llm_text = await llm.generate_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты продуктовый консультант по Legal AI. "
+                        "На основе новости предложи практическую идею внедрения для юрфункции. "
+                        "Ответ только на русском, компактно, без воды. "
+                        "Структура строго из трех блоков:\n"
+                        "1) Где применить\n"
+                        "2) Быстрый пилот (2 недели)\n"
+                        "3) Риски и правовой контроль\n"
+                        "Максимум 900 символов."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Заголовок: {article.draft.title}\n\n"
+                        f"Текст:\n{article.draft.content[:3500]}"
+                    ),
+                },
+            ],
+            max_tokens=420,
+            temperature=0.45,
+            operation="reader_idea_generation",
+            db=db,
+        )
+    except Exception:
+        logger.exception("reader_idea_generation_failed", user_id=user_id, article_id=str(article_uuid))
+        await callback.message.answer(
+            "Не удалось сформировать идею автоматически. Попробуйте позже."
+        )
+        return
+
+    helper_username = (settings.news_helper_bot_username or "").strip().lstrip("@")
+    helper_line = ""
+    if helper_username:
+        helper_line = (
+            f"\n\nЕсли хотите разобрать внедрение под ваш кейс, "
+            f"напишите в <a href=\"https://t.me/{helper_username}\">Ассистент Legal AI PRO</a>."
+        )
+
+    await callback.message.answer(
+        f"💡 <b>Идея внедрения по материалу:</b>\n"
+        f"<b>{escape(article.draft.title[:120])}</b>\n\n"
+        f"{escape(llm_text)}"
+        f"{helper_line}",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+    await push_reader_feedback(
+        publication_id=article_id,
+        user_id=user_id,
+        source="reaction",
+        signal_key="reader.idea.requested",
+        signal_value=1,
+        text="Reader requested automation idea",
+        payload={"event": "idea_requested"},
+    )
 
 
 # ==================== /settings ====================

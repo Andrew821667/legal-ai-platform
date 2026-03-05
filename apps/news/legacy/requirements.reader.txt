@@ -6,3 +6,5 @@ pydantic-settings==2.1.0
 sqlalchemy[asyncio]==2.0.25
 structlog==24.1.0
 requests==2.32.3
+httpx==0.26.0
+openai==1.10.0
