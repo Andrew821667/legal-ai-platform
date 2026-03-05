@@ -121,6 +121,77 @@ def test_quality_gate_rejects_weekly_with_few_points() -> None:
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "weak_weekly_points:4"
 
 
+def test_quality_gate_rejects_weekly_with_escaped_markup() -> None:
+    text = (
+        "<b>Обзор недели</b>\n\n"
+        "<b>Ключевые сигналы недели</b>\n"
+        "1. Первый сигнал — &lt;b&gt;дублированный фрагмент&lt;/b&gt;.\n"
+        "2. Второй сигнал.\n"
+        "3. Третий сигнал.\n"
+        "4. Четвертый сигнал.\n"
+        "5. Пятый сигнал.\n"
+        "6. Шестой сигнал.\n"
+        "7. Седьмой сигнал.\n"
+        "8. Восьмой сигнал.\n\n"
+        "<b>Что это значит для юрфункции</b>\nДлинный аналитический блок про governance, SLA, vendor due diligence и контроль качества output для стабильного внедрения Legal AI.\n\n"
+        "<b>На что смотреть юристам</b>\nДлинный аналитический блок про права на данные, трансграничную передачу, audit trails и распределение ответственности в договорной конструкции.\n\n"
+        "<b>Что проверить у себя</b>\n"
+        "• Проверить критерии качества.\n"
+        "• Обновить contractual safeguards.\n"
+        "• Назначить owner за контроль output.\n"
+        "• Проверить privacy и security-контур.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+    )
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "escaped_markup"
+
+
+def test_derive_weekly_points_sanitizes_duplicates_and_markup() -> None:
+    data = {
+        "weekly_points": [
+            "1. Юрист как оператор кнопки — &lt;b&gt;Юрист как оператор кнопки&lt;/b&gt; Вопрос роли юриста.",
+            "2. Юрист как оператор кнопки — Вопрос роли юриста.",
+            "3. LIGA360 запустила Contractum для автоматизации договорной работы.",
+            "Сигналы недели для итогового обзора: 10. 2.",
+        ],
+        "what_happened": "",
+        "business_effect": "",
+        "legal_risks": "",
+    }
+    points = LLMNewsWriter._derive_weekly_points(data)
+    assert len(points) == 2
+    assert "Юрист как оператор кнопки." in points[0]
+    assert all("&lt;" not in point and "<b>" not in point for point in points)
+
+
+def test_sanitize_weekly_point_rejects_truncated_tail() -> None:
+    assert (
+        LLMNewsWriter._sanitize_weekly_point(
+            "LIGA360 запустила систему Contractum для автоматизации договорной работы. В системе появился новый модуль для."
+        )
+        == ""
+    )
+
+
+def test_fallback_weekly_post_passes_quality_gate_for_dirty_summary() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    article = ArticleCandidate(
+        source_url="internal://weekly-review",
+        article_url="internal://weekly-review/2026-W10",
+        title="Обзор недели по Legal AI и автоматизации юрфункции (W10)",
+        summary=(
+            "Сигналы недели для итогового обзора:\n"
+            "1. Юрист как оператор кнопки — &lt;b&gt;Юрист как оператор кнопки&lt;/b&gt; Обсуждение роли юриста.\n"
+            "2. LIGA360 запустила Contractum для автоматизации договорной работы.\n"
+            "3. 10. 2.\n"
+        ),
+        published_at=datetime.now(timezone.utc),
+    )
+    result = writer._fallback_post(article, format_type="weekly_review", cta_type="soft", pillar="implementation")
+    assert len(result["text"]) >= 2800
+    assert "&lt;" not in result["text"]
+    assert LLMNewsWriter._quality_gate_failure_reason(result["text"], "weekly_review") is None
+
+
 def test_quality_gate_failure_reason_for_short_daily() -> None:
     text = "<b>Короткий пост</b>\n\n<b>Что произошло</b>\nМало текста.\n\n<b>Почему это важно</b>\nМало.\n\n<b>Юридический контур</b>\nЕще мало.\n\n<b>Источник</b>: ссылка"
     reason = LLMNewsWriter._quality_gate_failure_reason(text, "daily")

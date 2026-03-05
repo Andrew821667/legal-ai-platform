@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     telegram_channels: str = ""
     telegram_fetch_limit: int = 50
     telegram_fetch_enabled: bool = True
+    news_telegram_cache_path: str = "data/news_telegram_cache.json"
+    news_telegram_cache_max_age_minutes: int = 720
+    news_telegram_inline_fallback: bool = True
+    news_telegram_ingest_morning_slot: str = "07:30"
+    news_telegram_ingest_evening_slot: str = "16:30"
+    news_telegram_ingest_morning_options: str = "06:30,07:00,07:30,08:30,09:30"
+    news_telegram_ingest_evening_options: str = "15:30,16:00,16:30,17:30,18:30"
     lead_bot_username: str = "LegalAI_Popov_Andrew"
     news_helper_bot_username: str = "legal_ai_helper_new_bot"
     tz_name: str = "Europe/Moscow"
@@ -140,6 +147,14 @@ class Settings(BaseSettings):
     @property
     def news_review_retention_options_list(self) -> list[int]:
         return [int(item.strip()) for item in self.news_review_retention_options.split(",") if item.strip()]
+
+    @property
+    def news_telegram_ingest_morning_options_list(self) -> list[str]:
+        return [item.strip() for item in self.news_telegram_ingest_morning_options.split(",") if item.strip()]
+
+    @property
+    def news_telegram_ingest_evening_options_list(self) -> list[str]:
+        return [item.strip() for item in self.news_telegram_ingest_evening_options.split(",") if item.strip()]
 
     @property
     def news_daily_evening_options_list(self) -> list[str]:

@@ -91,7 +91,17 @@ _MANUAL_QUEUE_FILTERS = ("due", "all")
 _AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
 _REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
 _BATCH_PUBLISH_MODES = ("page", "top3", "top5")
-_INTERVAL_SETTING_KINDS = ("generate_morning", "generate_evening", "publish", "limit", "retention", "broad_ai")
+_INTERVAL_SETTING_KINDS = (
+    "generate_morning",
+    "generate_evening",
+    "publish",
+    "limit",
+    "retention",
+    "broad_ai",
+    "telegram_morning",
+    "telegram_evening",
+    "telegram_limit",
+)
 _MAIN_MENU_WORKSPACE = "🏠 Рабочий стол"
 _MAIN_MENU_CREATE = "➕ Создать"
 
@@ -207,6 +217,11 @@ _TELEGRAM_CHANNEL_GROUPS = {
     "googleai": "ai",
     "openai_ru": "ai",
     "ai_machinelearning_big_data": "ai",
+}
+_WORKER_LABELS = {
+    "news-generate": "🧠 Генератор драфтов",
+    "news-telegram-ingest": "📡 Telegram-парсер",
+    "news-publish": "📤 Публикатор канала",
 }
 _MANUAL_POST_TYPES = {
     "promo_offer": {
@@ -1079,9 +1094,18 @@ def _format_workers_status(payload: dict[str, Any]) -> str:
     for row in workers[:20]:
         worker_id = str(row.get("worker_id") or "unknown")
         active = bool(row.get("active"))
+        info = row.get("info") or {}
         mark = "🟢" if active else "⚪"
+        display_name = _WORKER_LABELS.get(worker_id, worker_id)
         last_seen = str(row.get("last_seen_at") or "n/a")
-        lines.append(f"{mark} {worker_id}")
+        lines.append(f"{mark} {display_name}")
+        if display_name != worker_id:
+            lines.append(f"   id: {worker_id}")
+        slot_times = info.get("slot_times")
+        if isinstance(slot_times, list):
+            slots = ", ".join(str(item) for item in slot_times if str(item).strip())
+            if slots:
+                lines.append(f"   слоты: {slots}")
         lines.append(f"   last_seen: {last_seen}")
 
     return "\n".join(lines)
@@ -1105,6 +1129,7 @@ def _worker_list_text(payload: dict[str, Any]) -> str:
 
 def _format_worker_activity(payload: dict[str, Any]) -> str:
     worker_id = str(payload.get("worker_id") or "unknown")
+    display_name = _WORKER_LABELS.get(worker_id, worker_id)
     active = bool(payload.get("active"))
     last_seen = str(payload.get("last_seen_at") or "n/a")
     hours = int(payload.get("window_hours") or 24)
@@ -1113,12 +1138,25 @@ def _format_worker_activity(payload: dict[str, Any]) -> str:
     entries = payload.get("entries") or []
 
     lines = [
-        f"Воркер: {worker_id}",
+        f"Воркер: {display_name}",
+        f"ID: {worker_id}",
         f"Статус: {'🟢 активен' if active else '⚪ неактивен'}",
         f"Последний heartbeat: {last_seen}",
         "",
         f"Запуски за {hours} ч: {len(startup_events)}",
     ]
+    schedule_lines: list[str] = []
+    for row in entries:
+        details = row.get("details") or {}
+        slot_times = details.get("slot_times")
+        if not isinstance(slot_times, list):
+            continue
+        normalized = ", ".join(str(item) for item in slot_times if str(item).strip())
+        if normalized:
+            schedule_lines.append(normalized)
+    if schedule_lines:
+        lines.append(f"Слоты: {schedule_lines[0]}")
+        lines.append("")
 
     if startup_events:
         for row in startup_events[:10]:
@@ -1146,7 +1184,18 @@ def _format_worker_activity(payload: dict[str, Any]) -> str:
             detail_line = ""
             if isinstance(details, dict):
                 chunks: list[str] = []
-                for key in ("slot", "job_id", "result_code", "error", "publish_interval", "limit"):
+                for key in (
+                    "slot",
+                    "job_id",
+                    "result_code",
+                    "error",
+                    "publish_interval",
+                    "limit",
+                    "channels",
+                    "fetch_limit",
+                    "count",
+                    "slot_times",
+                ):
                     value = details.get(key)
                     if value in (None, "", []):
                         continue
@@ -1521,6 +1570,9 @@ class NewsAdminBot:
     def _publish_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
         return self._controls_lookup(force_refresh=force_refresh).get("news.publish.enabled", {})
 
+    def _telegram_ingest_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        return self._controls_lookup(force_refresh=force_refresh).get("news.telegram_ingest.enabled", {})
+
     def _configured_generate_interval(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -1543,6 +1595,24 @@ class NewsAdminBot:
         if isinstance(value, int) and value > 0:
             return value
         return settings.news_publish_interval_seconds
+
+    def _configured_telegram_ingest_times(self, *, force_refresh: bool = False) -> tuple[str, str]:
+        row = self._telegram_ingest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        morning = str(config.get("morning_time") or settings.news_telegram_ingest_morning_slot).strip()
+        evening = str(config.get("evening_time") or settings.news_telegram_ingest_evening_slot).strip()
+        return (
+            morning or settings.news_telegram_ingest_morning_slot,
+            evening or settings.news_telegram_ingest_evening_slot,
+        )
+
+    def _configured_telegram_fetch_limit(self, *, force_refresh: bool = False) -> int:
+        row = self._telegram_ingest_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = config.get("fetch_limit")
+        if isinstance(value, int) and value > 0:
+            return max(10, min(value, 200))
+        return max(10, min(settings.telegram_fetch_limit, 200))
 
     def _configured_generate_limit(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
@@ -1608,12 +1678,23 @@ class NewsAdminBot:
         generate_morning = str(generate_config.get("morning_time") or settings.news_generate_morning_slot).strip() or settings.news_generate_morning_slot
         generate_evening = str(generate_config.get("evening_time") or settings.news_generate_evening_slot).strip() or settings.news_generate_evening_slot
         publish_interval = publish_config.get("interval_seconds") if isinstance(publish_config.get("interval_seconds"), int) else settings.news_publish_interval_seconds
+        ingest_row = {str(row.get("key") or ""): row for row in controls}.get("news.telegram_ingest.enabled", {})
+        ingest_config = ingest_row.get("config") or {}
+        ingest_morning = str(ingest_config.get("morning_time") or settings.news_telegram_ingest_morning_slot).strip() or settings.news_telegram_ingest_morning_slot
+        ingest_evening = str(ingest_config.get("evening_time") or settings.news_telegram_ingest_evening_slot).strip() or settings.news_telegram_ingest_evening_slot
+        ingest_fetch_limit = (
+            ingest_config.get("fetch_limit")
+            if isinstance(ingest_config.get("fetch_limit"), int)
+            else settings.telegram_fetch_limit
+        )
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
         broad_ai_limit = generate_config.get("broad_ai_limit") if isinstance(generate_config.get("broad_ai_limit"), int) else 1
         retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
         enabled_themes = self._enabled_generation_theme_keys()
         autopilot_enabled = control_map.get("news.generate.enabled", True) and control_map.get(
             "news.publish.enabled", True
+        ) and control_map.get(
+            "news.telegram_ingest.enabled", True
         )
         feedback_collect = control_map.get("news.feedback.collect.enabled", True)
         feedback_guard = control_map.get("news.feedback.guard.enabled", True)
@@ -1623,6 +1704,7 @@ class NewsAdminBot:
             "Автоматизация news",
             "",
             f"Автопилот контента: {'🟢 включен' if autopilot_enabled else '🔴 выключен'}",
+            f"Telegram-парсер: {ingest_morning} и {ingest_evening}; лимит канала {ingest_fetch_limit}",
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
             f"Хранение драфтов На проверке: {retention_days} дн.",
@@ -1809,7 +1891,8 @@ class NewsAdminBot:
             active = bool(row.get("active"))
             mark = "🟢" if active else "⚪"
             token = _worker_callback_token(worker_id)
-            worker_buttons.append(_inline_button(f"{mark} {worker_id}"[:32], callback_data=f"wrk:{token}"))
+            display_name = _WORKER_LABELS.get(worker_id, worker_id)
+            worker_buttons.append(_inline_button(f"{mark} {display_name}"[:32], callback_data=f"wrk:{token}"))
         rows = self._two_column_rows(worker_buttons)
         rows.append([_inline_button("🔄 Обновить список", callback_data="workers")])
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
@@ -2340,6 +2423,8 @@ class NewsAdminBot:
         source_count = len(resolve_source_urls(settings, enabled_overrides=self._source_enabled_map()))
         schedule = self._schedule_config()
         generate_morning, generate_evening = self._configured_generate_times()
+        telegram_morning, telegram_evening = self._configured_telegram_ingest_times()
+        telegram_fetch_limit = self._configured_telegram_fetch_limit()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
         broad_ai_limit = self._configured_broad_ai_limit()
@@ -2348,9 +2433,12 @@ class NewsAdminBot:
         telegram_channel_count = len(self._telegram_channel_enabled_map())
         return (
             "Ручная генерация\n\n"
+            f"Telegram-парсер: {'🟢' if controls.get('news.telegram_ingest.enabled', True) else '🔴'}\n"
             f"Автогенерация: {'🟢' if controls.get('news.generate.enabled', True) else '🔴'}\n"
             f"Автопубликация: {'🟢' if controls.get('news.publish.enabled', True) else '🔴'}\n"
             f"Feedback guard: {'🟢' if controls.get('news.feedback.guard.enabled', True) else '🔴'}\n\n"
+            f"Слоты Telegram-парсера: {telegram_morning} и {telegram_evening}\n"
+            f"Лимит Telegram-парсера: {telegram_fetch_limit} сообщений/канал\n"
             f"Слоты автогенерации: {generate_morning} и {generate_evening}\n"
             f"Интервал автопубликации: {_humanize_interval(publish_interval)}\n"
             f"Лимит генерации за цикл: {generate_limit}\n"
@@ -2490,7 +2578,11 @@ class NewsAdminBot:
 
     def _automation_keyboard(self, controls: list[dict[str, Any]]) -> InlineKeyboardMarkup:
         control_map = {str(row.get("key") or ""): bool(row.get("enabled", True)) for row in controls}
-        full_automation_enabled = control_map.get("news.generate.enabled", True) and control_map.get("news.publish.enabled", True)
+        full_automation_enabled = (
+            control_map.get("news.generate.enabled", True)
+            and control_map.get("news.telegram_ingest.enabled", True)
+            and control_map.get("news.publish.enabled", True)
+        )
         rows: list[list[InlineKeyboardButton]] = [
             [
                 _inline_button(
@@ -2745,13 +2837,15 @@ class NewsAdminBot:
         counts, next_publish = await self._queue_snapshot()
         control_map = {str(row.get("key") or ""): bool(row.get("enabled", True)) for row in controls}
         generate_morning, generate_evening = self._configured_generate_times()
+        telegram_morning, telegram_evening = self._configured_telegram_ingest_times()
         publish_interval = self._configured_publish_interval()
         generate_limit = self._configured_generate_limit()
         retention_days = self._configured_review_retention_days()
         lines = [
             "Рабочий стол модератора Legal AI PRO",
             "",
-            f"Автопилот: {'🟢' if control_map.get('news.generate.enabled', True) and control_map.get('news.publish.enabled', True) else '🔴'}",
+            f"Автопилот: {'🟢' if control_map.get('news.generate.enabled', True) and control_map.get('news.telegram_ingest.enabled', True) and control_map.get('news.publish.enabled', True) else '🔴'}",
+            f"Telegram-парсер: {telegram_morning} и {telegram_evening}",
             f"Автогенерация: {generate_morning} и {generate_evening}; лимит {generate_limit}",
             f"Автопубликация: {_humanize_interval(publish_interval)}",
             f"Хранение На проверке: {retention_days} дн.",
@@ -3312,12 +3406,15 @@ class NewsAdminBot:
 
     def _interval_settings_text(self) -> str:
         generate_morning, generate_evening = self._configured_generate_times(force_refresh=True)
+        telegram_morning, telegram_evening = self._configured_telegram_ingest_times(force_refresh=True)
+        telegram_fetch_limit = self._configured_telegram_fetch_limit(force_refresh=True)
         publish_interval = self._configured_publish_interval(force_refresh=True)
         generate_limit = self._configured_generate_limit(force_refresh=True)
         retention_days = self._configured_review_retention_days(force_refresh=True)
         broad_ai_limit = self._configured_broad_ai_limit(force_refresh=True)
         return (
             "Ритм автоматической генерации и публикации\n\n"
+            f"• Telegram-парсер: {telegram_morning} и {telegram_evening} (до {telegram_fetch_limit} сообщений/канал)\n"
             f"• Автогенерация: {generate_morning} и {generate_evening}\n"
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
             f"• Лимит генерации за цикл: {generate_limit}\n\n"
@@ -3329,6 +3426,9 @@ class NewsAdminBot:
     def _interval_settings_keyboard(self) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = self._two_column_rows(
             [
+                _inline_button("Парсер: утро", callback_data="int:view:telegram_morning"),
+                _inline_button("Парсер: вечер", callback_data="int:view:telegram_evening"),
+                _inline_button("Парсер: лимит", callback_data="int:view:telegram_limit"),
                 _inline_button("Утренний слот", callback_data="int:view:generate_morning"),
                 _inline_button("Вечерний слот", callback_data="int:view:generate_evening"),
                 _inline_button("Публикация", callback_data="int:view:publish"),
@@ -3349,6 +3449,18 @@ class NewsAdminBot:
             current = self._configured_generate_times(force_refresh=True)[1]
             options = settings.news_generate_evening_options_list
             label = "Вечерний слот автогенерации"
+        elif kind == "telegram_morning":
+            current = self._configured_telegram_ingest_times(force_refresh=True)[0]
+            options = settings.news_telegram_ingest_morning_options_list
+            label = "Утренний слот Telegram-парсера"
+        elif kind == "telegram_evening":
+            current = self._configured_telegram_ingest_times(force_refresh=True)[1]
+            options = settings.news_telegram_ingest_evening_options_list
+            label = "Вечерний слот Telegram-парсера"
+        elif kind == "telegram_limit":
+            current = self._configured_telegram_fetch_limit(force_refresh=True)
+            options = [30, 50, 80, 100, 150]
+            label = "Лимит сообщений Telegram-парсера"
         elif kind == "publish":
             current = self._configured_publish_interval(force_refresh=True)
             options = settings.news_publish_interval_options_list
@@ -3384,6 +3496,12 @@ class NewsAdminBot:
             options = settings.news_generate_morning_options_list
         elif kind == "generate_evening":
             options = settings.news_generate_evening_options_list
+        elif kind == "telegram_morning":
+            options = settings.news_telegram_ingest_morning_options_list
+        elif kind == "telegram_evening":
+            options = settings.news_telegram_ingest_evening_options_list
+        elif kind == "telegram_limit":
+            options = [30, 50, 80, 100, 150]
         elif kind == "publish":
             options = settings.news_publish_interval_options_list
         elif kind == "retention":
@@ -5708,6 +5826,31 @@ class NewsAdminBot:
                     }
                     response = self.admin_client.update_automation_control("news.publish.enabled", payload)
                     response.raise_for_status()
+                elif kind in {"telegram_morning", "telegram_evening", "telegram_limit"}:
+                    row = self._telegram_ingest_control_row(force_refresh=True)
+                    config = dict(row.get("config") or {})
+                    if kind == "telegram_morning":
+                        value = f"{raw_value[:2]}:{raw_value[2:]}"
+                        config["morning_time"] = value
+                    elif kind == "telegram_evening":
+                        value = f"{raw_value[:2]}:{raw_value[2:]}"
+                        config["evening_time"] = value
+                    else:
+                        value = int(raw_value)
+                        config["fetch_limit"] = max(10, min(value, 200))
+                    payload = {
+                        "scope": "news",
+                        "title": row.get("title") or "Telegram парсер (news.telegram_ingest)",
+                        "description": row.get("description")
+                        or "Отдельный Telethon-парсер Telegram-каналов.",
+                        "enabled": bool(row.get("enabled", True)),
+                        "config": config,
+                    }
+                    response = self.admin_client.update_automation_control(
+                        "news.telegram_ingest.enabled",
+                        payload,
+                    )
+                    response.raise_for_status()
                 else:
                     row = self._generate_control_row(force_refresh=True)
                     config = dict(row.get("config") or {})
@@ -6030,11 +6173,34 @@ class NewsAdminBot:
                 }
                 self.admin_client.update_automation_control("news.publish.enabled", publish_payload).raise_for_status()
 
+                ingest_row = self._telegram_ingest_control_row(force_refresh=True)
+                ingest_config = dict(ingest_row.get("config") or {})
+                ingest_config.update(
+                    {
+                        "morning_time": settings.news_telegram_ingest_morning_slot,
+                        "evening_time": settings.news_telegram_ingest_evening_slot,
+                        "fetch_limit": settings.telegram_fetch_limit,
+                    }
+                )
+                ingest_payload = {
+                    "scope": "news",
+                    "title": ingest_row.get("title") or "Telegram парсер (news.telegram_ingest)",
+                    "description": ingest_row.get("description")
+                    or "Отдельный Telethon-парсер Telegram-каналов.",
+                    "enabled": True,
+                    "config": ingest_config,
+                }
+                self.admin_client.update_automation_control(
+                    "news.telegram_ingest.enabled",
+                    ingest_payload,
+                ).raise_for_status()
+
                 self._invalidate_controls_cache()
                 controls = self._load_controls(force_refresh=True)
                 await self._safe_edit_message_text(
                     query,
                     "Применен пресет автопилота:\n"
+                    f"• telegram-парсер: {settings.news_telegram_ingest_morning_slot} и {settings.news_telegram_ingest_evening_slot}\n"
                     f"• генерация: {settings.news_generate_morning_slot} и {settings.news_generate_evening_slot}\n"
                     "• лимит: 5\n"
                     "• хранение review: 3 дня\n"
@@ -6047,7 +6213,7 @@ class NewsAdminBot:
 
             if data.startswith("fa:"):
                 enabled = data.split(":", maxsplit=1)[1] == "1"
-                for key in ("news.generate.enabled", "news.publish.enabled"):
+                for key in ("news.generate.enabled", "news.telegram_ingest.enabled", "news.publish.enabled"):
                     row = self._controls_lookup(force_refresh=True).get(key, {})
                     payload = {
                         "scope": "news",

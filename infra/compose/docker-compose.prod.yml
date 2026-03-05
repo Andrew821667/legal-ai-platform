@@ -128,14 +128,47 @@ services:
     environment:
       CORE_API_URL: http://core-api:8000
       API_KEY_NEWS: ${API_KEY_NEWS}
+      TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
+      NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.generate_loop
     depends_on:
       core-api:
         condition: service_healthy
+    volumes:
+      - ../../data:/app/data
     mem_limit: 384m
     memswap_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-telegram-ingest:
+    build:
+      context: ../..
+      dockerfile: apps/news/Dockerfile
+    container_name: legal-ai-news-telegram-ingest
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: http://core-api:8000
+      API_KEY_NEWS: ${API_KEY_NEWS}
+      TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
+      NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      uv run --package news python -m news.telegram_ingest_loop
+    depends_on:
+      core-api:
+        condition: service_healthy
+    volumes:
+      - ../../data:/app/data
+    mem_limit: 320m
+    memswap_limit: 320m
     restart: unless-stopped
     logging:
       driver: json-file

@@ -119,7 +119,7 @@ _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
     "deep": {"what": 700, "effect": 540, "risks": 520, "step": 120, "steps": 4, "hashtags": 4},
     "digest": {"what": 900, "effect": 420, "risks": 360, "step": 95, "steps": 4, "hashtags": 4},
     "daily": {"what": 520, "effect": 360, "risks": 320, "step": 95, "steps": 3, "hashtags": 3},
-    "weekly_review": {"what": 1500, "effect": 520, "risks": 420, "step": 100, "steps": 4, "hashtags": 4},
+    "weekly_review": {"what": 1500, "effect": 520, "risks": 420, "step": 160, "steps": 4, "hashtags": 4},
     "longread": {"what": 1000, "effect": 650, "risks": 540, "step": 110, "steps": 4, "hashtags": 4},
     "humor": {"what": 420, "effect": 280, "risks": 220, "step": 90, "steps": 3, "hashtags": 3},
 }
@@ -185,6 +185,7 @@ _DEFAULT_RUBRIC_BY_PILLAR = {
 _INCOMPLETE_TRAILING_WORDS = (
     "и",
     "или",
+    "не",
     "но",
     "а",
     "что",
@@ -299,6 +300,11 @@ _FALLBACK_SUMMARY_META_PREFIXES = (
     "сделай ",
     "тема лонгрида",
     "опирайся ",
+)
+_WEEKLY_META_PREFIXES = (
+    "сигналы недели",
+    "ключевые сигналы недели",
+    "обзор недели по legal ai",
 )
 _RUBRIC_LEGAL_TEMPLATE_HINTS = {
     "privacy": (
@@ -488,35 +494,138 @@ class LLMNewsWriter:
         return [part.strip() for part in parts if part.strip()]
 
     @classmethod
+    def _sanitize_generated_field(cls, value: Any) -> str:
+        raw = html.unescape(str(value or ""))
+        raw = re.sub(r"<[^>]+>", " ", raw)
+        lines = [re.sub(r"\s+", " ", line).strip() for line in raw.splitlines() if line.strip()]
+        cleaned: list[str] = []
+        for line in lines:
+            lowered = line.lower()
+            if any(marker in lowered for marker in _PROMPT_LEAK_MARKERS):
+                continue
+            if any(lowered.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
+                continue
+            cleaned.append(line)
+        return re.sub(r"\s+", " ", " ".join(cleaned)).strip()
+
+    @staticmethod
+    def _normalize_signature(text: str) -> str:
+        return re.sub(r"[^0-9a-zа-я]+", " ", text.lower()).strip()
+
+    @classmethod
+    def _dedupe_weekly_points(cls, points: list[str]) -> list[str]:
+        deduped: list[str] = []
+        signatures: list[str] = []
+        for point in points:
+            signature = cls._normalize_signature(point)
+            if not signature:
+                continue
+            duplicate = any(
+                signature == known
+                or signature in known
+                or known in signature
+                for known in signatures
+            )
+            if duplicate:
+                continue
+            deduped.append(point)
+            signatures.append(signature)
+        return deduped
+
+    @classmethod
+    def _sanitize_weekly_point(cls, value: Any) -> str:
+        point = cls._sanitize_generated_field(value)
+        if not point:
+            return ""
+        point = re.sub(r"^\d+[.)]\s*", "", point)
+        point = re.sub(r"^[•\-–—]\s*", "", point)
+        lowered = point.lower()
+        if any(lowered.startswith(prefix) for prefix in _WEEKLY_META_PREFIXES):
+            point = re.sub(r"^[^:]+:\s*", "", point)
+            lowered = point.lower()
+        if any(lowered.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
+            return ""
+        if " — " in point:
+            left, right = point.split(" — ", 1)
+            left = left.strip(" -—:;,.")
+            right = right.strip(" -—:;,.")
+            if right.lower().startswith(left.lower()):
+                right = right[len(left):].strip(" -—:;,.")
+            point = f"{left}. {right}" if right else left
+        point = re.sub(r"\s+", " ", point).strip(" -—:;,.")
+        if not point or re.fullmatch(r"\d+[.)]?", point):
+            return ""
+        point = cls._shorten(point, 260, prefer_sentence=True) or cls._shorten(point, 260)
+        point = point.strip()
+        if len(point) < 24:
+            return ""
+        lowered_point = point.lower()
+        if any(lowered_point.startswith(prefix) for prefix in _WEEKLY_META_PREFIXES):
+            return ""
+        last_word = re.sub(r"[^\wа-яА-Я-]+$", "", lowered_point.split()[-1]) if lowered_point.split() else ""
+        if last_word in _INCOMPLETE_TRAILING_WORDS:
+            return ""
+        if len(point.split()) < 7:
+            return ""
+        if not point.endswith((".", "!", "?", "…")) and len(point.split()) >= 7:
+            point = f"{point}."
+        return point
+
+    @classmethod
+    def _weekly_point_headline(cls, point: str) -> str:
+        sentences = cls._sentence_list(point)
+        if not sentences:
+            return ""
+        headline = sentences[0].strip()
+        if len(headline.split()) < 4:
+            return ""
+        if not headline.endswith((".", "!", "?", "…")):
+            headline = f"{headline}."
+        return headline
+
+    @classmethod
     def _derive_weekly_points(cls, data: dict[str, Any]) -> list[str]:
         raw_points = data.get("weekly_points")
         points: list[str] = []
         if isinstance(raw_points, list):
             for item in raw_points:
-                cleaned = cls._shorten(str(item), 220)
+                cleaned = cls._sanitize_weekly_point(item)
+                cleaned = cls._weekly_point_headline(cleaned) if cleaned else ""
                 if cleaned:
                     points.append(cleaned)
-        if len(points) >= 5:
+        points = cls._dedupe_weekly_points(points)
+        if len(points) >= 8:
             return points[:10]
         joined = " ".join(
             part for part in (
-                str(data.get("what_happened") or ""),
-                str(data.get("business_effect") or ""),
-                str(data.get("legal_risks") or ""),
+                cls._sanitize_generated_field(data.get("what_happened") or ""),
+                cls._sanitize_generated_field(data.get("business_effect") or ""),
+                cls._sanitize_generated_field(data.get("legal_risks") or ""),
             )
             if part
         )
         derived = cls._sentence_list(joined)
-        return [cls._shorten(item, 220) for item in derived[:10] if item]
+        for item in derived:
+            cleaned = cls._sanitize_weekly_point(item)
+            cleaned = cls._weekly_point_headline(cleaned) if cleaned else ""
+            if cleaned:
+                points.append(cleaned)
+            if len(points) >= 10:
+                break
+        return cls._dedupe_weekly_points(points)[:10]
 
     @staticmethod
     def _sanitize_summary_for_fallback(summary: str) -> str:
-        lines = [line.strip() for line in str(summary or "").splitlines() if line.strip()]
+        raw = html.unescape(str(summary or ""))
+        raw = re.sub(r"<[^>]+>", " ", raw)
+        lines = [re.sub(r"\s+", " ", line).strip() for line in raw.splitlines() if line.strip()]
         cleaned: list[str] = []
         for line in lines:
             lowered = line.lower()
             meta_probe = re.sub(r"^\d+[.)]\s*", "", lowered)
             if any(meta_probe.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
+                continue
+            if any(marker in lowered for marker in _PROMPT_LEAK_MARKERS):
                 continue
             cleaned.append(line)
         return "\n".join(cleaned).strip()
@@ -529,23 +638,22 @@ class LLMNewsWriter:
             match = re.match(r"^\d+[.)]\s*(.+)$", line)
             if not match:
                 continue
-            payload = re.sub(r"\s+", " ", match.group(1)).strip()
-            lowered_payload = payload.lower()
-            if any(lowered_payload.startswith(prefix) for prefix in _FALLBACK_SUMMARY_META_PREFIXES):
-                continue
-            payload = cls._shorten(payload, 320, prefer_sentence=True) or cls._shorten(payload, 320)
+            payload = cls._sanitize_weekly_point(match.group(1))
+            payload = cls._weekly_point_headline(payload) if payload else ""
             if payload:
                 points.append(payload)
+        points = cls._dedupe_weekly_points(points)
         if len(points) >= 8:
             return points[:10]
         sentences = cls._sentence_list(cls._sanitize_summary_for_fallback(summary))
         for sentence in sentences:
-            candidate = cls._shorten(sentence, 300, prefer_sentence=True) or cls._shorten(sentence, 300)
+            candidate = cls._sanitize_weekly_point(sentence)
+            candidate = cls._weekly_point_headline(candidate) if candidate else ""
             if candidate and candidate not in points:
                 points.append(candidate)
             if len(points) >= 10:
                 break
-        return points[:10]
+        return cls._dedupe_weekly_points(points)[:10]
 
     @staticmethod
     def _looks_complete_prose(text: str) -> bool:
@@ -869,18 +977,36 @@ class LLMNewsWriter:
         pillar: str,
     ) -> tuple[str, str, str]:
         limits = _FORMAT_FIELD_LIMITS.get(format_type, _FORMAT_FIELD_LIMITS["standard"])
-        title = self._shorten_title(data.get("title") or fallback_title, 110)
+        title = self._shorten_title(self._sanitize_generated_field(data.get("title") or fallback_title), 110)
         default_rubric = _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")
-        rubric = self._shorten(data.get("rubric") or default_rubric, 100)
-        what_happened = self._shorten(data.get("what_happened") or "", limits["what"], prefer_sentence=True)
-        business_effect = self._shorten(data.get("business_effect") or "", limits["effect"], prefer_sentence=True)
-        legal_risks = self._shorten(data.get("legal_risks") or "", limits["risks"], prefer_sentence=True)
+        rubric = self._shorten(self._sanitize_generated_field(data.get("rubric") or default_rubric), 100)
+        what_happened = self._shorten(
+            self._sanitize_generated_field(data.get("what_happened") or ""),
+            limits["what"],
+            prefer_sentence=True,
+        )
+        business_effect = self._shorten(
+            self._sanitize_generated_field(data.get("business_effect") or ""),
+            limits["effect"],
+            prefer_sentence=True,
+        )
+        legal_risks = self._shorten(
+            self._sanitize_generated_field(data.get("legal_risks") or ""),
+            limits["risks"],
+            prefer_sentence=True,
+        )
         next_steps_raw = data.get("next_steps") or ""
         hashtags_value = data.get("hashtags")
 
         steps: list[str] = []
         for part in str(next_steps_raw).split(";"):
-            cleaned = self._shorten(part, limits["step"])
+            cleaned_part = self._sanitize_generated_field(part)
+            cleaned = self._shorten(cleaned_part, limits["step"], prefer_sentence=True) or self._shorten(
+                cleaned_part,
+                limits["step"],
+            )
+            if cleaned and not cleaned.endswith((".", "!", "?", "…")) and len(cleaned.split()) >= 6:
+                cleaned = f"{cleaned}."
             if cleaned:
                 steps.append(cleaned)
         steps = steps[: limits["steps"]]
@@ -908,9 +1034,13 @@ class LLMNewsWriter:
         )
         escaped_steps = [html.escape(item) for item in steps]
         steps_block = "\n".join(f"• {item}" for item in escaped_steps) if escaped_steps else "• Проверить применимость кейса к текущим процессам."
-        lead = self._shorten(data.get("lead") or "", 260, prefer_sentence=True)
+        lead = self._shorten(self._sanitize_generated_field(data.get("lead") or ""), 260, prefer_sentence=True)
         escaped_lead = html.escape(lead)
-        conclusion = self._shorten(data.get("conclusion") or "", 320, prefer_sentence=True)
+        conclusion = self._shorten(
+            self._sanitize_generated_field(data.get("conclusion") or ""),
+            320,
+            prefer_sentence=True,
+        )
         escaped_conclusion = html.escape(conclusion)
         cta_line = self._auto_footer_text(format_type, cta_type, pillar)
         source_block = self._source_block(article_url, format_type)
@@ -998,6 +1128,8 @@ class LLMNewsWriter:
         for marker in _PROMPT_LEAK_MARKERS:
             if marker in plain_lower:
                 return f"prompt_leak:{marker}"
+        if "&lt;" in normalized or "&gt;" in normalized:
+            return "escaped_markup"
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
@@ -1021,9 +1153,18 @@ class LLMNewsWriter:
             if len(third_block) < 120:
                 return f"weak_daily_third_block:{len(third_block)}"
         if format_type == "weekly_review":
-            points_count = len(re.findall(r"(?m)^\s*\d+\.\s", normalized))
+            raw_points = re.findall(r"(?m)^\s*\d+\.\s*(.+)$", normalized)
+            points_count = len(raw_points)
             if points_count < 8:
                 return f"weak_weekly_points:{points_count}"
+            cleaned_points = [
+                point for point in (LLMNewsWriter._sanitize_weekly_point(item) for item in raw_points)
+                if point
+            ]
+            if len(cleaned_points) < 8:
+                return f"weak_weekly_points_clean:{len(cleaned_points)}"
+            if len(LLMNewsWriter._dedupe_weekly_points(cleaned_points)) < 8:
+                return "weak_weekly_points_duplicates"
         if not LLMNewsWriter._has_specificity_signal(normalized):
             return "not_specific_enough"
         if len(normalized) >= 3980:
@@ -1054,7 +1195,9 @@ class LLMNewsWriter:
             "3) Никаких обрывов на полуслове, незавершенных фраз, незакрытых тегов.\n"
             "4) Не добавляй новые факты сверх исходного текста.\n"
             "5) Каждый смысловой блок должен заканчиваться законченной фразой.\n"
-            "6) Верни только исправленный HTML, без пояснений.\n\n"
+            "6) Для weekly_review оставь 8-10 пунктов без дублей и без служебных фраз.\n"
+            "7) Не оставляй в тексте HTML-эскейпы (&lt; и &gt;).\n"
+            "8) Верни только исправленный HTML, без пояснений.\n\n"
             f"Формат: {format_type}\n"
             f"Заголовок: {title}\n"
             f"URL: {article_url}\n\n"
@@ -1100,16 +1243,19 @@ class LLMNewsWriter:
         }
         if format_type == "weekly_review":
             weekly_points = self._extract_internal_weekly_points(summary_raw)
-            if len(weekly_points) < 8:
-                weekly_points.extend(
-                    [
-                        "Команды все чаще считают KPI не по количеству AI-фич, а по скорости прохождения юридического цикла, качеству исходящих документов и снижению операционных ошибок на повторяющихся задачах.",
-                        "Выбор AI-вендора смещается в сторону прозрачности процессов, управляемости данных, стабильности SLA и готовности поставщика подтверждать контроль качества output в критичных сценариях.",
-                        "Роль юриста усиливается в точках контроля качества output, настройки правил эскалации и принятия финального решения там, где цена ошибки для бизнеса выше среднего.",
-                        "Внедрение переходит из режима «тест инструмента» в режим «операционная система юрфункции», где важны регламенты, метрики, ответственность и предсказуемость результата.",
-                        "Рынок показывает, что без связки legal ops, privacy, governance и контрактного контура даже сильный AI-инструмент не дает стабильного эффекта в продакшене.",
-                    ]
-                )
+            weekly_points.extend(
+                [
+                    "Команды все чаще считают KPI не по количеству AI-фич, а по скорости прохождения юридического цикла, качеству исходящих документов и снижению операционных ошибок на повторяющихся задачах.",
+                    "Выбор AI-вендора смещается в сторону прозрачности процессов, управляемости данных, стабильности SLA и готовности поставщика подтверждать контроль качества output в критичных сценариях.",
+                    "Роль юриста усиливается в точках контроля качества output, настройки правил эскалации и принятия финального решения там, где цена ошибки для бизнеса выше среднего.",
+                    "Внедрение переходит из режима «тест инструмента» в режим «операционная система юрфункции», где важны регламенты, метрики, ответственность и предсказуемость результата.",
+                    "Рынок показывает, что без связки legal ops, privacy, governance и контрактного контура даже сильный AI-инструмент не дает стабильного эффекта в продакшене.",
+                    "Команды, которые заранее фиксируют human-in-the-loop и регламенты проверки output, быстрее масштабируют Legal AI без роста операционных и правовых инцидентов.",
+                    "Бизнес-клиенты ожидают от юрфункции не экспериментов с инструментами, а стабильного SLA по срокам договорной и претензионной работы с прозрачной ответственностью.",
+                    "Пилоты с четкими метриками, owner-ролями и аудитом качества показывают лучший эффект, чем внедрения без формализованного governance-контура.",
+                ]
+            )
+            weekly_points = self._dedupe_weekly_points(weekly_points)
             base.update(
                 {
                     "lead": (
@@ -1154,6 +1300,19 @@ class LLMNewsWriter:
             cta_type=cta_type,
             pillar=pillar,
         )
+        if format_type == "weekly_review" and len(text) < _FORMAT_MIN_CHARS["weekly_review"]:
+            booster_block = (
+                "<b>Фокус следующей недели</b>\n"
+                "Приоритетом становится не количество AI-инструментов, а управляемость процесса: "
+                "кто владеет качеством output, как устроена эскалация спорных кейсов, где фиксируются отклонения и "
+                "как команда доказывает воспроизводимость результата при росте нагрузки. "
+                "Именно эта дисциплина отделяет устойчивые внедрения от красивых, но краткоживущих пилотов."
+            )
+            marker = "\n\n<b>Источник</b>"
+            if marker in text:
+                text = text.replace(marker, f"\n\n{booster_block}{marker}", 1)
+            else:
+                text = normalize_post_text(f"{text}\n\n{booster_block}")
         return {"title": title, "text": text, "rubric": rubric}
 
     def generate_post(
@@ -1252,6 +1411,14 @@ class LLMNewsWriter:
                     },
                 )
                 if not self._allow_quality_fallback(format_type):
+                    if format_type == "weekly_review":
+                        fallback_weekly = self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+                        if self._passes_quality_gate(fallback_weekly.get("text", ""), format_type):
+                            logger.info(
+                                "llm_weekly_replaced_with_fallback",
+                                extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
+                            )
+                            return fallback_weekly
                     logger.info(
                         "llm_post_discarded_after_quality_gate",
                         extra={"title": title[:80], "rubric": rubric, "format_type": format_type},

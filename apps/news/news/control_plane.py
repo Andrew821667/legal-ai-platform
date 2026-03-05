@@ -35,6 +35,12 @@ def _generate_config(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return config if isinstance(config, dict) else {}
 
 
+def _telegram_ingest_config(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    row = controls_map(rows).get("news.telegram_ingest.enabled") or {}
+    config = row.get("config") or {}
+    return config if isinstance(config, dict) else {}
+
+
 def generate_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
     config = _generate_config(rows)
     morning = str(config.get("morning_time") or settings.news_generate_morning_slot).strip()
@@ -52,6 +58,37 @@ def review_retention_days(rows: list[dict[str, Any]]) -> int:
     if isinstance(value, int) and value > 0:
         return value
     return settings.news_review_retention_days
+
+
+def telegram_ingest_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
+    config = _telegram_ingest_config(rows)
+    morning = str(config.get("morning_time") or settings.news_telegram_ingest_morning_slot).strip()
+    evening = str(config.get("evening_time") or settings.news_telegram_ingest_evening_slot).strip()
+    result: list[str] = []
+    for item in (morning, evening):
+        if item and item not in result:
+            result.append(item)
+    return result or [settings.news_telegram_ingest_morning_slot, settings.news_telegram_ingest_evening_slot]
+
+
+def telegram_ingest_fetch_limit(rows: list[dict[str, Any]]) -> int:
+    config = _telegram_ingest_config(rows)
+    value = config.get("fetch_limit")
+    if isinstance(value, int) and value > 0:
+        return max(10, min(value, 200))
+    return max(10, min(settings.telegram_fetch_limit, 200))
+
+
+def enabled_telegram_channels(rows: list[dict[str, Any]]) -> list[str]:
+    controls = enabled_map(rows)
+    result: list[str] = []
+    for channel in settings.telegram_channels_list:
+        slug = channel.strip().lstrip("@").lower()
+        if not slug:
+            continue
+        if controls.get(f"news.telegram_channel.{slug}.enabled", True):
+            result.append(channel)
+    return result
 
 
 def publish_interval_seconds(rows: list[dict[str, Any]]) -> int:

@@ -31,7 +31,7 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 ```bash
 make prod
 ```
-Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-publish`,
+Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-telegram-ingest`, `news-publish`,
 `news-admin-bot`, `news-reader-bot`, `web`, `caddy`.
 3. Применить миграции и создать первый admin-key:
 ```bash
@@ -77,7 +77,7 @@ docker compose -f infra/compose/docker-compose.prod.yml logs --tail=50 lead-bot
 - `JobQueue is not available`
 
 Критичное правило для `web` и `news`:
-- `web`, `news-generate`, `news-publish`, `news-admin-bot`, `news-reader-bot` в production compose собираются из текущего checkout на сервере;
+- `web`, `news-generate`, `news-telegram-ingest`, `news-publish`, `news-admin-bot`, `news-reader-bot` в production compose собираются из текущего checkout на сервере;
 - поэтому после `git pull` нужен именно `docker compose up -d --build ...`, а не только `docker compose pull`;
 - если ограничиться только `pull`, код этих сервисов на VPS не обновится.
 
@@ -105,12 +105,12 @@ docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps lead-bot
 ```
 6. Затем пересобрать и поднять news-сервисы:
 ```bash
-docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps news-generate news-publish news-admin-bot news-reader-bot
+docker compose -f infra/compose/docker-compose.prod.yml up -d --build --no-deps news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot
 docker compose -f infra/compose/docker-compose.prod.yml up -d --no-deps caddy
 ```
 7. Проверить логи:
 ```bash
-docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api web lead-bot news-generate news-publish news-admin-bot news-reader-bot caddy
+docker compose -f infra/compose/docker-compose.prod.yml logs --tail=100 core-api web lead-bot news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot caddy
 ```
 
 Что проверить после migration `users/leads`:
@@ -145,8 +145,9 @@ cd apps/lead-bot/legacy
 - `PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS` — допустимый лаг scheduler без warning/misfire.
 
 ## Ночные и периодические задачи (cron)
-News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
-по интервалам `NEWS_GENERATE_INTERVAL_SECONDS` и `NEWS_PUBLISH_INTERVAL_SECONDS`.
+News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`) запускается в compose в постоянных loop-процессах:
+- `news-telegram-ingest` и `news-generate` реально выполняют работу только в слотах из control-plane;
+- `news-publish` опрашивает очередь по интервалу `NEWS_PUBLISH_INTERVAL_SECONDS`.
 Чтобы не было пакетных публикаций при накопившихся due-постах, ограничивайте клейм:
 `NEWS_PUBLISH_CLAIM_LIMIT=1` (или через `news.publish.enabled.config.claim_limit`).
 
@@ -187,6 +188,13 @@ TELEGRAM_CHANNEL_USERNAME=@legal_ai_pro
 NEWS_DISCUSSION_CHAT_ID=-100...
 # или NEWS_DISCUSSION_CHAT_USERNAME=...
 ```
+
+Важно для Telegram parser worker:
+- парсер запускается отдельным сервисом `news-telegram-ingest` и отправляет heartbeat как `news-telegram-ingest`;
+- его слоты задаются отдельно от генератора через control key `news.telegram_ingest.enabled` (`morning_time`, `evening_time`, `fetch_limit`);
+- в Docker рекомендуется хранить Telethon-сессию и кэш в общем `/app/data`:
+  - `TELEGRAM_SESSION_NAME_DOCKER=/app/data/telegram_bot`
+  - `NEWS_TELEGRAM_CACHE_PATH=/app/data/news_telegram_cache.json`
 
 Кастомные иконки кнопок Telegram:
 - Bot API поддерживает `icon_custom_emoji_id` для `KeyboardButton` и `InlineKeyboardButton`, но для показа нужны реальные document ID кастомных emoji;

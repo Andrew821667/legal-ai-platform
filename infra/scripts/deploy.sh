@@ -33,6 +33,7 @@ $COMPOSE up -d --no-deps core-api
 $COMPOSE up -d --no-deps lead-bot || true
 $COMPOSE up -d --build --no-deps web || true
 $COMPOSE up -d --build --no-deps news-generate || true
+$COMPOSE up -d --build --no-deps news-telegram-ingest || true
 $COMPOSE up -d --build --no-deps news-publish || true
 $COMPOSE up -d --build --no-deps news-admin-bot || true
 $COMPOSE up -d --build --no-deps news-reader-bot || true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import logging
 import re
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+from news.control_plane import enabled_telegram_channels
 from news.core_client import CoreClient
 from news.feedback import render_negative_feedback_context, select_negative_feedback_examples
 from news.llm_writer import LLMNewsWriter
@@ -40,7 +42,7 @@ from news.source_catalog import (
     telegram_channel_priority_map,
 )
 from news.strategy import build_publish_plan
-from news.telegram_ingest import fetch_telegram_articles
+from news.telegram_ingest import fetch_telegram_articles, load_telegram_articles_cache, save_telegram_articles_cache
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -109,17 +111,6 @@ def _source_enabled_map(controls: dict[str, bool]) -> dict[str, bool]:
         key: controls.get(f"news.source.{key}.enabled", True)
         for key in catalog
     }
-
-
-def _enabled_telegram_channels(controls: dict[str, bool]) -> list[str]:
-    result: list[str] = []
-    for channel in settings.telegram_channels_list:
-        slug = channel.strip().lstrip("@").lower()
-        if not slug:
-            continue
-        if controls.get(f"news.telegram_channel.{slug}.enabled", True):
-            result.append(channel)
-    return result
 
 
 def _enabled_generation_themes(control_rows: list[dict[str, Any]]) -> set[str]:
@@ -242,10 +233,33 @@ def _collect_history(
 
 
 def _normalize_snippet(text: str, limit: int = 260) -> str:
-    normalized = re.sub(r"\s+", " ", (text or "").strip())
+    raw = html.unescape(str(text or ""))
+    raw = re.sub(r"<[^>]+>", " ", raw)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in raw.splitlines() if line.strip()]
+    filtered: list[str] = []
+    for line in lines:
+        lowered = line.lower()
+        if lowered.startswith("источник"):
+            continue
+        if lowered.startswith("#"):
+            continue
+        if lowered == "следующий шаг":
+            continue
+        if "напишите в @legal_ai_helper_new_bot" in lowered:
+            continue
+        filtered.append(line)
+    normalized = re.sub(r"\s+", " ", " ".join(filtered)).strip()
+    if not normalized:
+        return ""
     if len(normalized) <= limit:
         return normalized
-    return normalized[:limit].rsplit(" ", maxsplit=1)[0] + "..."
+    sentence_positions = [match.end() for match in re.finditer(r"[.!?…](?:[\"'»”)]*)", normalized[: limit + 1])]
+    if sentence_positions and sentence_positions[-1] >= max(int(limit * 0.65), limit - 100):
+        return normalized[: sentence_positions[-1]].strip()
+    cutoff = normalized.rfind(" ", 0, limit + 1)
+    if cutoff <= 0:
+        return normalized[:limit].rstrip(" ,;:-") + "..."
+    return normalized[:cutoff].rstrip(" ,;:-") + "..."
 
 
 def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[str, Any]]) -> ArticleCandidate | None:
@@ -387,11 +401,27 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     )
 
     articles = fetch_rss_articles(source_urls)
-    enabled_channels = _enabled_telegram_channels(controls)
-    telegram_articles = fetch_telegram_articles(enabled_channels)
+    enabled_channels = enabled_telegram_channels(control_rows)
+    telegram_ingest_enabled = _is_enabled(controls, "news.telegram_ingest.enabled", True)
+    telegram_articles: list[ArticleCandidate] = []
+    telegram_articles_from_cache = False
+    if telegram_ingest_enabled and enabled_channels:
+        telegram_articles = load_telegram_articles_cache(
+            channels=enabled_channels,
+            max_age_minutes=settings.news_telegram_cache_max_age_minutes,
+        )
+        telegram_articles_from_cache = bool(telegram_articles)
+        if not telegram_articles and settings.news_telegram_inline_fallback:
+            telegram_articles = fetch_telegram_articles(enabled_channels)
+            if telegram_articles:
+                save_telegram_articles_cache(telegram_articles, channels=enabled_channels)
+                logger.info("telegram_cache_refreshed_inline", extra={"count": len(telegram_articles)})
     if telegram_articles:
         articles.extend(telegram_articles)
-        logger.info("telegram_articles_appended", extra={"count": len(telegram_articles)})
+        logger.info(
+            "telegram_articles_appended",
+            extra={"count": len(telegram_articles), "from_cache": telegram_articles_from_cache},
+        )
         source_priorities.update(telegram_channel_priority_map(settings, enabled_channels))
         source_buckets.update(telegram_channel_bucket_map(enabled_channels))
     articles = [
@@ -414,7 +444,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         target_pillar_shares=default_pillar_targets(),
     )
 
-    if not selected_articles and digest_candidate is None:
+    if not selected_articles:
         return GenerationRunResult(
             previews=[],
             fetched=len(articles),

@@ -36,6 +36,21 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "key": "news.telegram_ingest.enabled",
+        "scope": Scope.news,
+        "title": "Telegram парсер (news.telegram_ingest)",
+        "description": "Отдельный Telethon-парсер Telegram-каналов. Запускается в своих слотах и складывает материалы в кэш для генератора.",
+        "enabled": True,
+        "config": {
+            "morning_time": "07:30",
+            "evening_time": "16:30",
+            "morning_options": ["06:30", "07:00", "07:30", "08:30", "09:30"],
+            "evening_options": ["15:30", "16:00", "16:30", "17:30", "18:30"],
+            "fetch_limit": 50,
+            "fetch_limit_options": [30, 50, 80, 100, 150],
+        },
+    },
+    {
         "key": "news.publish.enabled",
         "scope": Scope.news,
         "title": "Публикация в Telegram (news.publish)",
