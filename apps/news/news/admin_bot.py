@@ -2113,8 +2113,9 @@ class NewsAdminBot:
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             status_badge = _status_badge(str(row.get("status") or ""))
             publish_at = str(row.get("publish_at") or "")
-            lines.append(f"{idx}. {status_badge} {title[:80]}")
-            lines.append(f"   ⏰ {publish_at}")
+            publication_kind = self._publication_kind(row)
+            lines.append(f"{idx}. {status_badge} {publication_kind_badge(publication_kind)} {title[:80]}")
+            lines.append(f"   ⏰ {publish_at} | {publication_kind_label(publication_kind)}")
         return "\n".join(lines)
 
     def _source_posts_keyboard(self, source_key: str, total: int, rows: list[dict[str, Any]], offset: int) -> InlineKeyboardMarkup:
@@ -2123,7 +2124,15 @@ class NewsAdminBot:
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             status = str(row.get("status") or "scheduled")
-            buttons.append([InlineKeyboardButton(f"{idx}. {_status_badge(status)} {title[:45]}", callback_data=f"pv:{post_id}:src_{source_key}:{offset}")])
+            publication_kind = self._publication_kind(row)
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{idx}. {_status_badge(status)} {publication_kind_badge(publication_kind)} {title[:40]}",
+                        callback_data=f"pv:{post_id}:src_{source_key}:{offset}",
+                    )
+                ]
+            )
 
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
@@ -2294,8 +2303,9 @@ class NewsAdminBot:
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             rubric = _rubric_label(str(row.get("rubric") or ""))
             status_badge = _status_badge(str(row.get("status") or ""))
-            lines.append(f"{idx}. {status_badge} {title[:82]}")
-            lines.append(f"   Рубрика: {rubric}")
+            publication_kind = self._publication_kind(row)
+            lines.append(f"{idx}. {status_badge} {publication_kind_badge(publication_kind)} {title[:82]}")
+            lines.append(f"   Рубрика: {rubric} | {publication_kind_label(publication_kind)}")
         return "\n".join(lines)
 
     def _theme_posts_keyboard(self, pillar: str, total: int, rows: list[dict[str, Any]], offset: int) -> InlineKeyboardMarkup:
@@ -2304,7 +2314,15 @@ class NewsAdminBot:
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             status = str(row.get("status") or "scheduled")
-            buttons.append([InlineKeyboardButton(f"{idx}. {_status_badge(status)} {title[:45]}", callback_data=f"pv:{post_id}:th_{pillar}:{offset}")])
+            publication_kind = self._publication_kind(row)
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{idx}. {_status_badge(status)} {publication_kind_badge(publication_kind)} {title[:40]}",
+                        callback_data=f"pv:{post_id}:th_{pillar}:{offset}",
+                    )
+                ]
+            )
 
         nav: list[InlineKeyboardButton] = []
         prev_offset = max(0, offset - _POSTS_PAGE_SIZE)
@@ -3453,8 +3471,9 @@ class NewsAdminBot:
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             publish_at = str(row.get("publish_at") or "")
             status_badge = _status_badge(str(row.get("status") or status))
-            lines.append(f"{idx}. {status_badge} {title[:86]}")
-            lines.append(f"   ⏰ {publish_at}")
+            publication_kind = self._publication_kind(row)
+            lines.append(f"{idx}. {status_badge} {publication_kind_badge(publication_kind)} {title[:86]}")
+            lines.append(f"   ⏰ {publish_at} | {publication_kind_label(publication_kind)}")
         return "\n".join(lines)
 
     def _review_posts_text(
@@ -3536,10 +3555,13 @@ class NewsAdminBot:
             publish_at = str(row.get("publish_at") or "")
             publish_at_utc = self._publish_at_utc(row)
             due_mark = "⚡" if publish_at_utc and publish_at_utc <= now_utc else "🕒"
+            publication_kind = self._publication_kind(row)
             pillar = self._row_pillar(row)
             format_label = _post_format_display_label(row)
-            lines.append(f"{idx}. {due_mark} {title[:84]}")
-            lines.append(f"   ⏰ {publish_at} | 🧭 {_pillar_label(pillar)} | {format_label}")
+            lines.append(f"{idx}. {due_mark} {publication_kind_badge(publication_kind)} {title[:84]}")
+            lines.append(
+                f"   ⏰ {publish_at} | {publication_kind_label(publication_kind)} | 🧭 {_pillar_label(pillar)} | {format_label}"
+            )
         return "\n".join(lines)
 
     def _posts_keyboard(self, total: int, rows: list[dict[str, Any]], offset: int, status: str) -> InlineKeyboardMarkup:
@@ -3548,7 +3570,15 @@ class NewsAdminBot:
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             status_badge = _status_badge(str(row.get("status") or status))
-            buttons.append([InlineKeyboardButton(f"{idx}. {status_badge} {title[:45]}", callback_data=f"pv:{post_id}:{status}:{offset}")])
+            publication_kind = self._publication_kind(row)
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{idx}. {status_badge} {publication_kind_badge(publication_kind)} {title[:40]}",
+                        callback_data=f"pv:{post_id}:{status}:{offset}",
+                    )
+                ]
+            )
 
         if rows and status == "draft":
             buttons.append([InlineKeyboardButton("🟡 На проверку (все на странице)", callback_data=f"ba:review:{status}:{offset}")])
@@ -3693,7 +3723,15 @@ class NewsAdminBot:
         for idx, row in enumerate(rows, start=offset + 1):
             post_id = str(row.get("id"))
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
-            buttons.append([InlineKeyboardButton(f"{idx}. {title[:45]}", callback_data=f"pv:{post_id}:{context}:{offset}")])
+            publication_kind = self._publication_kind(row)
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{idx}. {publication_kind_badge(publication_kind)} {title[:40]}",
+                        callback_data=f"pv:{post_id}:{context}:{offset}",
+                    )
+                ]
+            )
 
         if rows:
             if queue_filter == "due":
