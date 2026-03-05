@@ -302,6 +302,31 @@ def test_review_origin_helpers() -> None:
     assert _review_origin("manual_checklist") == "manual"
     assert _review_origin("operator_ai_digest") == "ai"
     assert _review_origin_badge("manual_checklist") == "✍️"
+
+
+def test_workspace_keyboard_contains_system_section() -> None:
+    bot = NewsAdminBot()
+    markup = bot._workspace_keyboard({})
+    payload = markup.to_dict()
+    rows = payload.get("inline_keyboard") or []
+    callbacks = [btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")]
+    assert "sec:system" in callbacks
+    assert "automation" not in callbacks
+
+
+def test_system_keyboard_exposes_service_actions() -> None:
+    bot = NewsAdminBot()
+    markup = bot._system_keyboard()
+    payload = markup.to_dict()
+    rows = payload.get("inline_keyboard") or []
+    callbacks = {btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")}
+    assert {"status", "workers", "automation", "resetstale", "sec:help", "refresh"} <= callbacks
+
+
+def test_help_text_has_reduced_fallback_commands() -> None:
+    bot = NewsAdminBot()
+    text = bot._help_text()
+    assert "/start, /admin, /newpost, /generate_now, /calendar, /help" in text
     assert _review_origin_badge("daily") == "🤖"
 
 

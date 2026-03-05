@@ -157,6 +157,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "gt:",
     "fa:",
     "gen:",
+    "preset:",
     "all:",
     "set:",
 )
@@ -1642,11 +1643,11 @@ class NewsAdminBot:
                 ],
                 [
                     _inline_button("⚙️ Генерация", callback_data="sec:generate"),
-                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:0"),
+                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
                 ],
                 [
                     _inline_button("🗓 Календарь", callback_data="cal:summary"),
-                    _inline_button("🤖 Автоматизация", callback_data="automation"),
+                    _inline_button("🛠 Система", callback_data="sec:system"),
                 ],
                 [_inline_button("🔄 Обновить рабочий стол", callback_data="refresh")],
             ]
@@ -1673,9 +1674,12 @@ class NewsAdminBot:
                         callback_data="pl:failed:0",
                         style=_BUTTON_STYLE_DANGER,
                     ),
-                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:0"),
+                    _inline_button("🚀 Ручная очередь", callback_data="mq:due:all:0"),
                 ],
-                [_inline_button("🏠 Рабочий стол", callback_data="refresh")],
+                [
+                    _inline_button("🛠 Система", callback_data="sec:system"),
+                    _inline_button("🏠 Рабочий стол", callback_data="refresh"),
+                ],
             ]
         )
 
@@ -1688,6 +1692,52 @@ class NewsAdminBot:
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n\n"
             f"Следующая публикация: {next_publish}"
+        )
+
+    def _system_text(self, counts: dict[str, int], next_publish: str) -> str:
+        return (
+            "Система и сервисные функции\n\n"
+            "Этот раздел собран для операций, которые раньше были доступны только через slash-команды.\n\n"
+            f"📝 Черновики: {counts.get('draft', -1)}\n"
+            f"🟡 На проверке: {counts.get('review', -1)}\n"
+            f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+            f"📤 Опубликованные: {counts.get('posted', -1)}\n"
+            f"❌ Ошибки: {counts.get('failed', -1)}\n"
+            f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
+            f"Следующая публикация: {next_publish}\n\n"
+            "Отсюда доступны: статус API, статус воркеров, глобальная автоматизация, принудительный reset stale и справка."
+        )
+
+    def _system_keyboard(self) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [
+                    _inline_button("📊 Статус API", callback_data="status"),
+                    _inline_button("👷 Воркеры", callback_data="workers"),
+                ],
+                [
+                    _inline_button("🤖 Автоматизация", callback_data="automation"),
+                    _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
+                ],
+                [
+                    _inline_button("❓ Помощь", callback_data="sec:help"),
+                    _inline_button("🏠 Рабочий стол", callback_data="refresh"),
+                ],
+            ]
+        )
+
+    def _help_text(self) -> str:
+        return (
+            "Рабочий стол модератора:\n"
+            "🏠 Рабочий стол — единый вход в календарь, очереди, источники, тематики и автоматизацию\n"
+            "➕ Создать — ручной редактор: тип поста, медиа, материал/транскриб, драфт\n"
+            "⏱ Автоочередь — scheduled-посты с фильтрами по виду и теме\n"
+            "🗓 Календарь — недельный/месячный обзор и работа с конкретным днем\n"
+            "📰 Источники / 🧭 Тематики — контроль discovery-слоя и генерации\n"
+            "🤖 Автоматизация — тумблеры, интервалы, слоты и лимиты\n"
+            "🛠 Система — статус API, воркеры, reset stale, сервисные функции\n\n"
+            "Fallback-команды:\n"
+            "/start, /admin, /newpost, /generate_now, /calendar, /help"
         )
 
     def _sources_text(self) -> str:
@@ -2299,6 +2349,9 @@ class NewsAdminBot:
                 ),
             ],
             [
+                _inline_button("🧰 Пресет 2х/день (5,3д)", callback_data="preset:twice_daily"),
+            ],
+            [
                 _inline_button("🗓 Сетка публикаций", callback_data="sch:menu"),
                 _inline_button("📚 Темы лонгридов", callback_data="lt:menu"),
             ],
@@ -2755,7 +2808,7 @@ class NewsAdminBot:
             day_key = now_local.isoformat()
             buttons.append([InlineKeyboardButton("📅 Открыть расписание на сегодня", callback_data=f"cal:day:{day_key}")])
             if overdue_count:
-                buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:0")])
+                buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:all:0")])
             buttons.append(
                 [
                     InlineKeyboardButton("🕒 Время слотов", callback_data="sch:menu"),
@@ -2786,7 +2839,7 @@ class NewsAdminBot:
         if row_buffer:
             buttons.append(row_buffer)
         if overdue_count:
-            buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:0")])
+            buttons.append([InlineKeyboardButton(f"⚠️ Просрочено ({overdue_count})", callback_data="mq:due:all:0")])
         buttons.append(
             [
                 InlineKeyboardButton("🕒 Время слотов", callback_data="sch:menu"),
@@ -4423,11 +4476,9 @@ class NewsAdminBot:
         await app.bot.set_my_commands(
             [
                 BotCommand("start", "Открыть рабочий стол"),
+                BotCommand("admin", "Рабочий стол"),
                 BotCommand("newpost", "Создать пост"),
-                BotCommand("autoqueue", "Автоочередь публикаций"),
                 BotCommand("calendar", "Календарь публикаций"),
-                BotCommand("sources", "Источники новостей"),
-                BotCommand("themes", "Тематики контента"),
                 BotCommand("generate_now", "Принудительная генерация"),
                 BotCommand("help", "Помощь"),
             ]
@@ -4602,16 +4653,7 @@ class NewsAdminBot:
         if not await self._ensure_admin(update):
             return
         await update.effective_message.reply_text(
-            "Рабочий стол модератора:\n"
-            "🏠 Рабочий стол — единый вход в календарь, очереди, источники, тематики и автоматизацию\n"
-            "➕ Создать — ручной редактор: тип поста, медиа, материал/транскриб, драфт\n"
-            "⏱ Автоочередь — будущие scheduled-посты с датой, временем и фильтром по виду публикации\n"
-            "🗓 Календарь — редакционная сетка, интервалы автогенерации и автопубликации\n"
-            "📰 Источники / 🧭 Тематики — контроль discovery-слоя канала\n"
-            "🤖 Автоматизация — тумблеры автогенерации, публикации и feedback\n"
-            "🚀 Очередь / 👷 Воркеры / 📊 Сводка — внутри рабочих экранов\n\n"
-            "Fallback-команды:\n"
-            "/start, /admin, /sources, /themes, /newpost, /generate_now, /autoqueue, /calendar, /status, /posts, /queue, /workers, /cancel_edit, /help",
+            self._help_text(),
             reply_markup=_main_menu_markup(),
         )
 
@@ -5259,6 +5301,23 @@ class NewsAdminBot:
                 )
                 return
 
+            if data == "sec:system":
+                counts, next_publish = await self._queue_snapshot()
+                await self._safe_edit_message_text(
+                    query,
+                    self._system_text(counts, next_publish),
+                    reply_markup=self._system_keyboard(),
+                )
+                return
+
+            if data == "sec:help":
+                await self._safe_edit_message_text(
+                    query,
+                    self._help_text(),
+                    reply_markup=self._system_keyboard(),
+                )
+                return
+
             if data == "sec:autoqueue":
                 total, rows, overdue = self._load_auto_queue("all", 0, "all")
                 await self._safe_edit_message_text(
@@ -5712,6 +5771,54 @@ class NewsAdminBot:
                 await self._safe_edit_message_text(
                     query,
                     self._controls_text(controls),
+                    reply_markup=self._automation_keyboard(controls),
+                )
+                return
+
+            if data == "preset:twice_daily":
+                generate_row = self._generate_control_row(force_refresh=True)
+                generate_config = dict(generate_row.get("config") or {})
+                generate_config.update(
+                    {
+                        "morning_time": settings.news_generate_morning_slot,
+                        "evening_time": settings.news_generate_evening_slot,
+                        "generate_limit": 5,
+                        "retention_days": 3,
+                        "broad_ai_limit": 1,
+                    }
+                )
+                generate_payload = {
+                    "scope": "news",
+                    "title": generate_row.get("title") or "Генерация контента (news.generate)",
+                    "description": generate_row.get("description") or "Автогенерация драфтов из источников по двум слотам в сутки.",
+                    "enabled": True,
+                    "config": generate_config,
+                }
+                self.admin_client.update_automation_control("news.generate.enabled", generate_payload).raise_for_status()
+
+                publish_row = self._publish_control_row(force_refresh=True)
+                publish_config = dict(publish_row.get("config") or {})
+                publish_config["interval_seconds"] = int(settings.news_publish_interval_seconds)
+                publish_payload = {
+                    "scope": "news",
+                    "title": publish_row.get("title") or "Публикация в Telegram (news.publish)",
+                    "description": publish_row.get("description") or "Автопаблишер scheduled_posts в Telegram-канал.",
+                    "enabled": True,
+                    "config": publish_config,
+                }
+                self.admin_client.update_automation_control("news.publish.enabled", publish_payload).raise_for_status()
+
+                self._invalidate_controls_cache()
+                controls = self._load_controls(force_refresh=True)
+                await self._safe_edit_message_text(
+                    query,
+                    "Применен пресет автопилота:\n"
+                    f"• генерация: {settings.news_generate_morning_slot} и {settings.news_generate_evening_slot}\n"
+                    "• лимит: 5\n"
+                    "• хранение review: 3 дня\n"
+                    "• broad-ai лимит: 1\n"
+                    f"• интервал автопубликации: {_humanize_interval(settings.news_publish_interval_seconds)}\n\n"
+                    + self._controls_text(controls),
                     reply_markup=self._automation_keyboard(controls),
                 )
                 return
