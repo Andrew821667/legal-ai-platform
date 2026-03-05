@@ -290,6 +290,17 @@ services:
         condition: service_healthy
       core-api:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, os, sys, urllib.request; key=os.getenv('API_KEY_NEWS') or ''; req=urllib.request.Request('http://core-api:8000/api/v1/workers/status', headers={'X-API-Key': key} if key else {}); data=json.loads(urllib.request.urlopen(req, timeout=8).read().decode()); rows=[row for row in data.get('workers', []) if row.get('worker_id') == 'news-reader-digest']; ok=bool(rows and rows[0].get('active')); sys.exit(0 if ok else 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     mem_limit: 320m
     memswap_limit: 320m
     restart: unless-stopped

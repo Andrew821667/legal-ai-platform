@@ -209,6 +209,10 @@ Reader digest worker:
 ```bash
 curl -s "$CORE_API_URL/api/v1/workers/news-reader-digest/activity?hours=24&limit=20" -H "X-API-Key: $API_KEY_ADMIN"
 ```
+- быстрый smoke-check контура:
+```bash
+CORE_API_URL=http://localhost:8000 API_KEY_ADMIN=... infra/scripts/smoke_reader_digest.sh
+```
 
 Кастомные иконки кнопок Telegram:
 - Bot API поддерживает `icon_custom_emoji_id` для `KeyboardButton` и `InlineKeyboardButton`, но для показа нужны реальные document ID кастомных emoji;
