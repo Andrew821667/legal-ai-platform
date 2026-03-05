@@ -137,6 +137,11 @@ class Settings(BaseSettings):
 
     # Reader Bot (для читателей канала)
     reader_bot_token: str = Field(default="")
+    reader_bot_username: str = Field(default="legal_ai_news_reader_bot")
+
+    # Core API bridge (единый контур данных/feedback)
+    core_api_url: str = Field(default="http://core-api:8000")
+    api_key_news: str = Field(default="")
 
     # Telegram Client API (для сбора новостей из каналов)
     telegram_api_id: int = Field(default=0)

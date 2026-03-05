@@ -5,3 +5,4 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 sqlalchemy[asyncio]==2.0.25
 structlog==24.1.0
+requests==2.32.3

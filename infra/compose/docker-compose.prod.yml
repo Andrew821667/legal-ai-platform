@@ -242,6 +242,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-legalai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
       READER_BOT_TOKEN: ${READER_BOT_TOKEN}
+      READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
+      CORE_API_URL: http://core-api:8000
+      API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_bot"]
     depends_on:

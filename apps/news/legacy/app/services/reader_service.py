@@ -331,6 +331,24 @@ async def get_recent_publications(limit: int, db: AsyncSession) -> List[ReaderPu
     return result.scalars().all()
 
 
+async def get_publication_by_id(publication_id: str | UUID, db: AsyncSession) -> Optional[ReaderPublication]:
+    """Get a posted publication by UUID."""
+    try:
+        publication_uuid = publication_id if isinstance(publication_id, UUID) else UUID(str(publication_id))
+    except ValueError:
+        return None
+
+    result = await db.execute(
+        select(ReaderPublication).where(
+            and_(
+                ReaderPublication.id == publication_uuid,
+                cast(ReaderPublication.status, String) == "posted",
+            )
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 # ==================== Search ====================
 
 async def search_publications(

@@ -8,6 +8,7 @@ Handles user interactions:
 - Save/unsave articles
 """
 
+import re
 from typing import Optional
 from uuid import UUID
 from aiogram import Router, F
@@ -39,9 +40,11 @@ from app.services.reader_service import (
     create_lead_profile,
     update_lead_profile,
     increment_questions_asked,
-    calculate_lead_score
+    calculate_lead_score,
+    get_publication_by_id,
 )
 from app.models.reader_publications import ReaderPublication
+from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
 
 
 router = Router()
@@ -136,6 +139,45 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
 async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
     """Handle /start command - onboarding for new users."""
     user_id = message.from_user.id
+    deep_link_post_id = _extract_start_post_id(message.text)
+
+    if deep_link_post_id:
+        profile = await get_user_profile(user_id, db)
+        if not profile:
+            profile = await create_user_profile(
+                user_id=user_id,
+                username=message.from_user.username,
+                full_name=message.from_user.full_name,
+                db=db,
+            )
+
+        article = await get_publication_by_id(deep_link_post_id, db)
+        if article:
+            await update_last_active(user_id, db)
+            deep_link_label = reader_post_deeplink(article.id)
+            source_line = f"\n🔗 Ссылка на пост в ридере: {deep_link_label}" if deep_link_label else ""
+            await message.answer(
+                "Открыли пост из канала.\n\n"
+                + format_article_message(article)
+                + source_line,
+                parse_mode="HTML",
+                reply_markup=get_article_keyboard(str(article.id)),
+            )
+            await message.answer(
+                "Команды ридера:\n"
+                "/today - персональная лента\n"
+                "/search - поиск по архиву\n"
+                "/saved - сохраненные\n"
+                "/settings - профиль"
+            )
+            return
+
+        await message.answer(
+            "Пост по ссылке не найден. Возможно, он был удален.\n\n"
+            "Откройте /today или /search, чтобы продолжить."
+        )
+        return
+
     profile = await get_user_profile(user_id, db)
 
     if profile:
@@ -630,6 +672,15 @@ async def process_feedback(callback: CallbackQuery, db: AsyncSession):
         return
 
     if is_useful:
+        await push_reader_feedback(
+            publication_id=article_id,
+            user_id=user_id,
+            source="comment",
+            signal_key="reader.useful",
+            signal_value=1,
+            text="Reader marked post as useful",
+            payload={"feedback_action": "like"},
+        )
         await callback.answer("✅ Спасибо за отзыв!")
     else:
         # Ask for reason
@@ -665,6 +716,23 @@ async def save_feedback_type(callback: CallbackQuery, db: AsyncSession):
     except ValueError:
         await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
         return
+
+    reason_map = {
+        "too_complex": "Слишком сложно",
+        "not_relevant": "Не по моей теме",
+        "outdated": "Устаревшая информация",
+        "shallow": "Слишком поверхностно",
+    }
+    reason_text = reason_map.get(feedback_type, feedback_type)
+    await push_reader_feedback(
+        publication_id=article_id,
+        user_id=user_id,
+        source="comment",
+        signal_key=f"reader.not_useful.{feedback_type}",
+        signal_value=-1,
+        text=f"Reader negative feedback: {reason_text}",
+        payload={"feedback_type": feedback_type},
+    )
 
     await callback.message.delete()
     await callback.answer("✅ Спасибо! Учтем в рекомендациях")
@@ -1176,3 +1244,19 @@ async def fallback_text_message(message: Message, db: AsyncSession):
             parse_mode="HTML",
             reply_markup=get_article_keyboard(str(article.id)),
         )
+# ==================== Deep-Link Helpers ====================
+
+_START_POST_PAYLOAD_RE = re.compile(r"^(?:post_|p_)?(?P<post_id>[0-9a-fA-F-]{36})$")
+
+
+def _extract_start_post_id(text: str | None) -> str | None:
+    parts = (text or "").strip().split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    payload = parts[1].strip()
+    if not payload:
+        return None
+    match = _START_POST_PAYLOAD_RE.match(payload)
+    if not match:
+        return None
+    return match.group("post_id")
