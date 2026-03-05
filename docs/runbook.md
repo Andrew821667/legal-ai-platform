@@ -137,6 +137,13 @@ cd apps/lead-bot/legacy
 ```
 5. Перезапустить локальный `lead-bot` только после успешных миграций `core-api`.
 
+Тонкая настройка отложенных уведомлений `lead-bot` (pending leads):
+- `PENDING_LEADS_CHECK_INTERVAL_SECONDS` — частота фоновой проверки;
+- `PENDING_LEADS_IDLE_MINUTES` — сколько минут тишины считать “лид готов к уведомлению”;
+- `PENDING_LEADS_JOB_MAX_BATCH` — максимум лидов за один проход;
+- `PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS` — таймаут отправки одного уведомления;
+- `PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS` — допустимый лаг scheduler без warning/misfire.
+
 ## Ночные и периодические задачи (cron)
 News-пайплайн (`news-generate`, `news-publish`) теперь запускается в compose в цикле
 по интервалам `NEWS_GENERATE_INTERVAL_SECONDS` и `NEWS_PUBLISH_INTERVAL_SECONDS`.

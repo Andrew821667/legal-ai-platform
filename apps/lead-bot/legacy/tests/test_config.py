@@ -33,6 +33,10 @@ def test_bot_behavior():
     """Проверка настроек поведения бота"""
     assert config.MAX_HISTORY_MESSAGES > 0, "MAX_HISTORY_MESSAGES должен быть положительным"
     assert config.RESPONSE_DELAY >= 0, "RESPONSE_DELAY не может быть отрицательным"
+    assert config.PENDING_LEADS_CHECK_INTERVAL_SECONDS >= 15, "Интервал pending leads должен быть >= 15 сек"
+    assert config.PENDING_LEADS_IDLE_MINUTES >= 1, "Idle timeout pending leads должен быть >= 1 мин"
+    assert config.PENDING_LEADS_JOB_MAX_BATCH >= 1, "Batch pending leads должен быть >= 1"
+    assert config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS >= 2.0, "Timeout notify pending leads должен быть >= 2 сек"
 
 
 def test_log_level():

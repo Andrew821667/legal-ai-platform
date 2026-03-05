@@ -68,13 +68,36 @@ class Config:
         self.BUSINESS_NEW_SESSION_TIMEOUT_MINUTES: int = int(
             os.getenv('BUSINESS_NEW_SESSION_TIMEOUT_MINUTES', '180')
         )
+        self.PENDING_LEADS_CHECK_INTERVAL_SECONDS: int = max(
+            15,
+            int(os.getenv('PENDING_LEADS_CHECK_INTERVAL_SECONDS', '60')),
+        )
+        self.PENDING_LEADS_IDLE_MINUTES: int = max(
+            1,
+            int(os.getenv('PENDING_LEADS_IDLE_MINUTES', '5')),
+        )
+        self.PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS: int = max(
+            10,
+            int(os.getenv('PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS', '90')),
+        )
+        self.PENDING_LEADS_JOB_MAX_BATCH: int = max(
+            1,
+            int(os.getenv('PENDING_LEADS_JOB_MAX_BATCH', '20')),
+        )
+        self.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS: float = max(
+            2.0,
+            float(os.getenv('PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS', '10')),
+        )
 
         # Настройки базы данных
         self.DB_PATH: str = os.getenv('DB_PATH') or os.getenv('DATABASE_PATH', 'data/bot.db')
         self.DATABASE_PATH: str = self.DB_PATH
 
         # Настройки логирования
-        self.LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
+        log_level_raw = os.getenv('LOG_LEVEL', 'INFO').strip().upper()
+        self.LOG_LEVEL: str = (
+            log_level_raw if log_level_raw in {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'} else 'INFO'
+        )
         self.LOG_FILE: str = os.getenv('LOG_FILE', 'logs/bot.log')
 
         # Куда отправлять уведомления по лидам (если не задано — админу).
@@ -136,7 +159,7 @@ class Config:
             raise ValueError(f"Отсутствуют обязательные поля: {', '.join(missing_fields)}")
 
         # Проверка формата токенов
-        if not self.TELEGRAM_BOT_TOKEN.startswith(('bot', '123456:ABC-')):
+        if ":" not in self.TELEGRAM_BOT_TOKEN:
             raise ValueError("Неверный формат TELEGRAM_BOT_TOKEN")
 
         if not self.OPENAI_API_KEY.startswith(('sk-', 'sk-proj-')):

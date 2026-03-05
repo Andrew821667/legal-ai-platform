@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import fcntl
 import logging
@@ -87,7 +88,7 @@ if log_dir:
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
     handlers=[
         logging.FileHandler(config.LOG_FILE),
         logging.StreamHandler(sys.stdout),
@@ -319,25 +320,43 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     Проверка лидов, где диалог затих, и отправка уведомлений админу.
     """
     try:
-        ready_leads = database.db.get_leads_ready_for_notification(idle_minutes=5)
+        ready_leads = database.db.get_leads_ready_for_notification(
+            idle_minutes=config.PENDING_LEADS_IDLE_MINUTES
+        )
         if not ready_leads:
             return
 
-        logger.info("Pending leads ready for notification: %s", len(ready_leads))
-        for lead in ready_leads:
+        batch = ready_leads[: config.PENDING_LEADS_JOB_MAX_BATCH]
+        logger.info(
+            "Pending leads ready for notification: %s (processing batch=%s, idle_minutes=%s)",
+            len(ready_leads),
+            len(batch),
+            config.PENDING_LEADS_IDLE_MINUTES,
+        )
+        for lead in batch:
             lead_id = lead.get("id")
             user_id = lead.get("user_id")
             if not lead_id or not user_id:
                 continue
 
             user_data = database.db.get_user_by_id(user_id) or {"id": user_id, "telegram_id": None}
-            await notify_admin_new_lead(
-                context=context,
-                lead_id=lead_id,
-                lead_data=lead,
-                user_data=user_data,
-                is_update=False,
-            )
+            try:
+                await asyncio.wait_for(
+                    notify_admin_new_lead(
+                        context=context,
+                        lead_id=lead_id,
+                        lead_data=lead,
+                        user_data=user_data,
+                        is_update=False,
+                    ),
+                    timeout=config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Timeout while notifying pending lead %s (user_id=%s)",
+                    lead_id,
+                    user_id,
+                )
 
     except Exception as error:
         logger.error("Error in pending leads job: %s", error, exc_info=True)
@@ -412,11 +431,24 @@ def build_application() -> Application:
     application.add_error_handler(error_handler)
 
     if application.job_queue is not None:
+        first_run_delay = min(30, max(1, config.PENDING_LEADS_CHECK_INTERVAL_SECONDS // 2))
         application.job_queue.run_repeating(
             check_pending_leads_job,
-            interval=60,
-            first=30,
+            interval=config.PENDING_LEADS_CHECK_INTERVAL_SECONDS,
+            first=first_run_delay,
             name="pending_leads_notifier",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": config.PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS,
+            },
+        )
+        logger.info(
+            "Pending leads notifier enabled: interval=%ss idle=%sm batch=%s timeout=%.1fs",
+            config.PENDING_LEADS_CHECK_INTERVAL_SECONDS,
+            config.PENDING_LEADS_IDLE_MINUTES,
+            config.PENDING_LEADS_JOB_MAX_BATCH,
+            config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS,
         )
     else:
         logger.warning("JobQueue is not available, pending lead notifications disabled")
@@ -432,7 +464,12 @@ def main() -> None:
         app.run_polling(
             timeout=30,
             bootstrap_retries=5,
-            allowed_updates=Update.ALL_TYPES,
+            allowed_updates=[
+                "message",
+                "callback_query",
+                "business_connection",
+                "business_message",
+            ],
         )
     except RuntimeError as lock_error:
         logger.error("%s", lock_error)

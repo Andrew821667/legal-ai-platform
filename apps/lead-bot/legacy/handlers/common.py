@@ -22,11 +22,32 @@ import prompts
 from handlers.constants import *
 
 logger = logging.getLogger(__name__)
+_LAST_TRANSIENT_POLLING_ERROR_LOG_TS = 0.0
+
+
+def _is_transient_polling_error(update: Update | None, error: Exception | None) -> bool:
+    """
+    Ошибки polling без user-update не должны засорять логи traceback'ами.
+    """
+    if update is not None:
+        return False
+    return isinstance(error, (NetworkError, TimedOut, RetryAfter))
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Глобальный обработчик ошибок"""
     error = context.error
+
+    global _LAST_TRANSIENT_POLLING_ERROR_LOG_TS
+    if _is_transient_polling_error(update, error):
+        now = time.time()
+        if now - _LAST_TRANSIENT_POLLING_ERROR_LOG_TS >= 30:
+            logger.warning("Transient polling error: %s", error)
+            _LAST_TRANSIENT_POLLING_ERROR_LOG_TS = now
+        else:
+            logger.debug("Transient polling error (suppressed): %s", error)
+        return
+
     logger.error(
         "Update %s caused error %s",
         update,
@@ -70,5 +91,4 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except (BadRequest, NetworkError, TimedOut) as notify_error:
         logger.warning("Failed to notify user from error handler: %s", notify_error)
-
 
