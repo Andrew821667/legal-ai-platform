@@ -147,6 +147,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "sch:",
     "int:",
     "sec:",
+    "thm:",
     "aq:",
     "srd:",
     "srt:",
@@ -2171,28 +2172,68 @@ class NewsAdminBot:
     def _themes_text(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> str:
         generation_counts = generation_counts or self._generation_theme_stats()
         enabled_generation_themes = self._enabled_generation_theme_keys()
+        active_longread_topics = self._longread_topics_active()
+        total_archive = sum(max(0, int(value)) for value in counts.values())
+        return (
+            "Тематики контента\n\n"
+            "Раздел теперь разделен на 3 отдельных блока:\n"
+            "1) 🗞 Ежедневные/регулярные посты (темы автогенерации)\n"
+            "2) 📚 Воскресные лонгриды (отдельный пул тем)\n"
+            "3) 🗂 Архивные корзины (уже созданные посты)\n\n"
+            f"Активно ежедневных тем: {len(enabled_generation_themes)}/{len(generation_counts)}\n"
+            f"Активно тем лонгридов: {len(active_longread_topics)}/{len(_LONGREAD_TOPIC_LIBRARY)}\n"
+            f"Постов в архивных корзинах: {total_archive}\n\n"
+            "Выберите нужный блок кнопками ниже."
+        )
+
+    def _themes_keyboard(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
+        _ = counts, generation_counts
+        rows: list[list[InlineKeyboardButton]] = [
+            [
+                _inline_button("🗞 Ежедневные темы", callback_data="thm:daily"),
+                _inline_button("📚 Лонгриды", callback_data="lt:menu"),
+            ],
+            [_inline_button("🗂 Архивные корзины", callback_data="thm:archive")],
+        ]
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+        return InlineKeyboardMarkup(rows)
+
+    def _themes_daily_text(self, generation_counts: dict[str, int] | None = None) -> str:
+        generation_counts = generation_counts or self._generation_theme_stats()
+        enabled_generation_themes = self._enabled_generation_theme_keys()
         lines = [
-            "Тематики публикаций",
+            "Ежедневные/регулярные темы автогенерации",
             "",
-            "Раздел 1. Темы, которые участвуют в автогенерации новых драфтов.",
-            "Раздел 2. Исторические корзины уже созданных и опубликованных постов.",
+            "Эти тумблеры влияют на генерацию ежедневных постов, обзоров недели и юмора.",
+            "Воскресный лонгрид настраивается отдельно в разделе «Лонгриды».",
             "",
-            "1) Генерационные темы:",
         ]
         for theme_key in generation_theme_keys():
             mark = "✅" if theme_key in enabled_generation_themes else "☐"
             lines.append(
-                f"• {mark} {generation_theme_label(theme_key)}: {generation_counts.get(theme_key, 0)} пост(ов)"
+                f"• {mark} {generation_theme_label(theme_key)} — {generation_counts.get(theme_key, 0)}"
             )
-            lines.append(f"   {generation_theme_note(theme_key)}")
-        lines.extend(
-            [
-                "",
-                "2) Исторические корзины канала:",
-                "Нажмите на корзину ниже, чтобы открыть список постов по теме.",
-                "",
-            ]
-        )
+            lines.append(f"  {generation_theme_note(theme_key)}")
+        return "\n".join(lines)
+
+    def _themes_daily_keyboard(self, generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
+        generation_counts = generation_counts or self._generation_theme_stats()
+        enabled_generation_themes = self._enabled_generation_theme_keys()
+        rows: list[list[InlineKeyboardButton]] = []
+        for theme_key in generation_theme_keys():
+            rows.append(
+                [
+                    _inline_button(
+                        f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})"[:56],
+                        callback_data=f"gt:{theme_key}",
+                    )
+                ]
+            )
+        rows.append([_inline_button("📚 Открыть темы лонгридов", callback_data="lt:menu")])
+        rows.extend(self._submenu_nav_rows(back_callback="sec:themes", back_label="🔙 К блокам тематик"))
+        return InlineKeyboardMarkup(rows)
+
+    def _themes_archive_text(self, counts: dict[str, int]) -> str:
         target_share = {
             "regulation": "30%",
             "case": "20%",
@@ -2200,36 +2241,30 @@ class NewsAdminBot:
             "tools": "15%",
             "market": "5%",
         }
+        lines = [
+            "Архивные корзины публикаций",
+            "",
+            "Здесь только уже созданные посты (на проверке / готовые / опубликованные / ошибки).",
+            "Нажмите на корзину, чтобы открыть список постов по тематике.",
+            "",
+        ]
         for pillar, label in _PILLAR_LABELS.items():
             rubric_labels = ", ".join(_rubric_label(item) for item in _PILLAR_RUBRICS.get(pillar, ()))
             lines.append(
                 f"• {_pillar_badge(pillar)} {label}: {counts.get(pillar, 0)} пост(ов), целевая доля {target_share.get(pillar, 'n/a')}"
             )
             if rubric_labels:
-                lines.append(f"   Рубрики: {rubric_labels}")
+                lines.append(f"  Рубрики: {rubric_labels}")
         return "\n".join(lines)
 
-    def _themes_keyboard(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
-        generation_counts = generation_counts or self._generation_theme_stats()
-        enabled_generation_themes = self._enabled_generation_theme_keys()
-        generation_buttons: list[InlineKeyboardButton] = []
-        for theme_key in generation_theme_keys():
-            generation_buttons.append(
-                _inline_button(
-                    f"{'✅' if theme_key in enabled_generation_themes else '☐'} {generation_theme_label(theme_key)} ({generation_counts.get(theme_key, 0)})"[:40],
-                    callback_data=f"gt:{theme_key}",
-                )
-            )
-        rows.extend(self._two_column_rows(generation_buttons))
-        rows.append([_inline_button("📚 Темы воскресных лонгридов", callback_data="lt:menu")])
-        pillar_buttons: list[InlineKeyboardButton] = []
-        for pillar in _PILLAR_LABELS:
-            pillar_buttons.append(
+    def _themes_archive_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
+        rows: list[list[InlineKeyboardButton]] = self._two_column_rows(
+            [
                 _inline_button(f"{_pillar_display(pillar)} ({counts.get(pillar, 0)})"[:40], callback_data=f"th:{pillar}:0")
-            )
-        rows.extend(self._two_column_rows(pillar_buttons))
-        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+                for pillar in _PILLAR_LABELS
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:themes", back_label="🔙 К блокам тематик"))
         return InlineKeyboardMarkup(rows)
 
     def _load_theme_posts(self, pillar: str, offset: int, *, force_refresh: bool = False) -> tuple[int, list[dict[str, Any]]]:
@@ -5766,6 +5801,24 @@ class NewsAdminBot:
                 )
                 return
 
+            if data == "thm:daily":
+                generation_counts = self._generation_theme_stats()
+                await self._safe_edit_message_text(
+                    query,
+                    self._themes_daily_text(generation_counts),
+                    reply_markup=self._themes_daily_keyboard(generation_counts),
+                )
+                return
+
+            if data == "thm:archive":
+                counts = self._theme_stats()
+                await self._safe_edit_message_text(
+                    query,
+                    self._themes_archive_text(counts),
+                    reply_markup=self._themes_archive_keyboard(counts),
+                )
+                return
+
             if data.startswith("gt:"):
                 _, theme_key = data.split(":", maxsplit=1)
                 if theme_key not in GENERATION_THEME_DEFS:
@@ -5791,12 +5844,11 @@ class NewsAdminBot:
                 }
                 self.admin_client.update_automation_control("news.generate.enabled", payload).raise_for_status()
                 self._invalidate_controls_cache()
-                counts = self._theme_stats()
                 generation_counts = self._generation_theme_stats()
                 await self._safe_edit_message_text(
                     query,
-                    self._themes_text(counts, generation_counts),
-                    reply_markup=self._themes_keyboard(counts, generation_counts),
+                    self._themes_daily_text(generation_counts),
+                    reply_markup=self._themes_daily_keyboard(generation_counts),
                 )
                 return
 
