@@ -4418,7 +4418,7 @@ class NewsAdminBot:
         if manual_kind != "service_page":
             footer = build_manual_footer(manual_kind)
             if footer:
-                return footer
+                return self._ensure_footer_has_helper_contact(footer)
 
         title = str(post.get("title") or "")
         text = _strip_html_markup(str(post.get("text") or ""))
@@ -4460,7 +4460,43 @@ class NewsAdminBot:
                 "Такие кейсы уже можно превращать в рабочие AI-сценарии для юрфункции. Если хотите обсудить ваш процесс, напишите в @legal_ai_helper_new_bot.",
             ),
         )
-        return options[variant_index % len(options)]
+        return self._ensure_footer_has_helper_contact(options[variant_index % len(options)])
+
+    @staticmethod
+    def _helper_bot_username() -> str:
+        username = settings.news_helper_bot_username.strip().lstrip("@")
+        return username or "legal_ai_helper_new_bot"
+
+    @classmethod
+    def _helper_bot_mention(cls) -> str:
+        return f"@{cls._helper_bot_username()}"
+
+    @classmethod
+    def _helper_bot_url(cls) -> str:
+        if settings.news_helper_bot_url:
+            return settings.news_helper_bot_url
+        return f"https://t.me/{cls._helper_bot_username()}"
+
+    @classmethod
+    def _footer_has_helper_contact(cls, text: str) -> bool:
+        normalized = (text or "").lower()
+        mention = cls._helper_bot_mention().lower()
+        url = cls._helper_bot_url().lower()
+        short_url = f"t.me/{cls._helper_bot_username().lower()}"
+        return mention in normalized or url in normalized or short_url in normalized
+
+    @classmethod
+    def _ensure_footer_has_helper_contact(cls, footer_text: str) -> str:
+        content = re.sub(r"\s+", " ", (footer_text or "").strip())
+        if not content:
+            return f"Если тема для вас актуальна, напишите в {cls._helper_bot_mention()}."
+        content = content.replace("@legal_ai_helper_new_bot", cls._helper_bot_mention())
+        if cls._footer_has_helper_contact(content):
+            return content
+        suffix = f"Напишите в {cls._helper_bot_mention()}."
+        if content.endswith((".", "!", "?", "…")):
+            return f"{content} {suffix}"
+        return f"{content}. {suffix}"
 
     @staticmethod
     def _footer_variant_index(post: dict[str, Any]) -> int:
@@ -4484,6 +4520,8 @@ class NewsAdminBot:
         rubric = str(post.get("rubric") or "").strip()
         pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{text}")
         variant_hint = _FOOTER_VARIANT_HINTS[self._footer_variant_index(post)]
+        helper_mention = self._helper_bot_mention()
+        helper_url = self._helper_bot_url()
 
         if self._use_max_tokens_param:
             completion_kwargs: dict[str, Any] = {"max_tokens": 220}
@@ -4501,7 +4539,7 @@ class NewsAdminBot:
                         "Footer должен быть коротким, деловым, ненавязчивым и логично продолжать именно этот материал. "
                         "Смысл footer: показать, что мы можем помочь внедрить похожую автоматизацию или AI-сценарий в юридической функции клиента. "
                         "Footer должен мягко подводить к заявке на автоматизацию, а не звучать как реклама ради рекламы. "
-                        "Обязательно веди в лид-бот @legal_ai_helper_new_bot. "
+                        f"Обязательно веди в лид-бот {helper_mention} ({helper_url}). "
                         "Если пост про инструменты, внедрение, legal ops или практический кейс, предложи спокойный следующий шаг по внедрению. "
                         "Если пост нейтральный или регуляторный, footer должен оставаться мягким, но все равно связывать тему с практикой внедрения и возможностью написать в бота. "
                         "Избегай однообразного старта каждого footer. Не повторяй из поста в пост одну и ту же формулу. "
@@ -4520,7 +4558,7 @@ class NewsAdminBot:
                         f"Пожелание по формулировке: {variant_hint}\n\n"
                         f"Текст поста:\n{text}\n\n"
                         "Сформируй только footer. "
-                        "Он должен логично вытекать из смысла поста и аккуратно предлагать написать в @legal_ai_helper_new_bot, "
+                        f"Он должен логично вытекать из смысла поста и аккуратно предлагать написать в {helper_mention}, "
                         "если читатель хочет внедрить похожую автоматизацию или AI-сценарий."
                     ),
                 },
@@ -4531,17 +4569,27 @@ class NewsAdminBot:
         content = (response.choices[0].message.content or "").strip()
         content = re.sub(r"^\s*(?:следующий шаг|footer)\s*:?\s*", "", content, flags=re.IGNORECASE).strip()
         content = re.sub(r"\s+", " ", content).strip()
-        return content or self._fallback_footer_text(post)
+        if not content:
+            return self._fallback_footer_text(post)
+        return self._ensure_footer_has_helper_contact(content)
 
-    @staticmethod
-    def _apply_footer_to_post_text(original_text: str, footer_text: str) -> str:
+    @classmethod
+    def _apply_footer_to_post_text(cls, original_text: str, footer_text: str) -> str:
         text = (original_text or "").strip()
         text = _FOOTER_BLOCK_RE.sub("", text).strip()
-        footer_text = re.sub(r"\s+", " ", (footer_text or "").strip())
+        footer_text = cls._ensure_footer_has_helper_contact(footer_text)
         if not footer_text:
             return normalize_post_text(text)
 
-        footer_block = f"<b>Следующий шаг</b>\n{html.escape(footer_text)}"
+        footer_html = html.escape(footer_text)
+        mention = html.escape(cls._helper_bot_mention())
+        bot_url = html.escape(cls._helper_bot_url(), quote=True)
+        if mention in footer_html:
+            footer_html = footer_html.replace(mention, f'<a href="{bot_url}">{mention}</a>')
+        else:
+            footer_html = f'{footer_html} <a href="{bot_url}">{mention}</a>'
+
+        footer_block = f"<b>Следующий шаг</b>\n{footer_html}"
         source_index = text.find("<b>Источник</b>")
         if source_index != -1:
             updated = f"{text[:source_index].rstrip()}\n\n{footer_block}\n\n{text[source_index:].lstrip()}"

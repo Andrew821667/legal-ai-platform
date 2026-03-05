@@ -343,7 +343,18 @@ def test_apply_footer_to_post_text_inserts_before_source() -> None:
     )
     assert "<b>Следующий шаг</b>" in updated
     assert updated.index("<b>Следующий шаг</b>") < updated.index("<b>Источник</b>")
+    assert "<a href=\"https://t.me/legal_ai_helper_new_bot\">@legal_ai_helper_new_bot</a>" in updated
+
+
+def test_apply_footer_to_post_text_appends_helper_contact_when_missing() -> None:
+    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    updated = NewsAdminBot._apply_footer_to_post_text(
+        original,
+        "Можем помочь внедрить такой сценарий в юридическую функцию.",
+    )
+    assert "<b>Следующий шаг</b>" in updated
     assert "@legal_ai_helper_new_bot" in updated
+    assert "https://t.me/legal_ai_helper_new_bot" in updated
 
 
 def test_post_card_keyboard_has_add_footer_button() -> None:
