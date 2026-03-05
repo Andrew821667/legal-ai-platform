@@ -19,6 +19,13 @@ stop_event = threading.Event()
 in_progress = threading.Event()
 
 
+def _safe_heartbeat(client: CoreClient, worker_id: str, info: dict[str, Any]) -> None:
+    try:
+        client.heartbeat(worker_id, info).raise_for_status()
+    except Exception:
+        logger.exception("Heartbeat failed")
+
+
 def _handle_signal(signum: int, frame: Any) -> None:
     _ = frame
     logger.info("Signal received", extra={"signum": signum})
@@ -44,6 +51,15 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     client = CoreClient(settings.core_api_url, settings.api_key_worker)
+    _safe_heartbeat(
+        client,
+        settings.worker_id,
+        {
+            "action": "startup",
+            "mode": "poll",
+            "component": "contract_worker",
+        },
+    )
     backoff_values = [5, 10, 30, 60]
     backoff_index = 0
 
@@ -53,7 +69,7 @@ def main() -> int:
             break
 
         try:
-            client.heartbeat(settings.worker_id, {"mode": "poll"}).raise_for_status()
+            _safe_heartbeat(client, settings.worker_id, {"mode": "poll"})
         except Exception:
             logger.exception("Heartbeat failed")
 
@@ -70,6 +86,15 @@ def main() -> int:
             job = claim.json()
             backoff_index = 0
             in_progress.set()
+            _safe_heartbeat(
+                client,
+                settings.worker_id,
+                {
+                    "action": "job_claimed",
+                    "mode": "poll",
+                    "job_id": str(job.get("id") or ""),
+                },
+            )
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_process_job, job)
@@ -78,17 +103,46 @@ def main() -> int:
                 except concurrent.futures.TimeoutError:
                     client.mark_failed(job["id"], "execution timeout")
                     logger.error("Job timeout", extra={"job_id": job["id"]})
+                    _safe_heartbeat(
+                        client,
+                        settings.worker_id,
+                        {
+                            "action": "job_failed",
+                            "mode": "poll",
+                            "job_id": str(job.get("id") or ""),
+                            "error": "execution timeout",
+                        },
+                    )
                     in_progress.clear()
                     continue
 
             response = client.submit_result(job["id"], result_payload)
             response.raise_for_status()
             logger.info("Job completed", extra={"job_id": job["id"]})
+            _safe_heartbeat(
+                client,
+                settings.worker_id,
+                {
+                    "action": "job_completed",
+                    "mode": "poll",
+                    "job_id": str(job.get("id") or ""),
+                },
+            )
         except Exception as exc:
             logger.exception("Job processing failed")
             try:
                 if "job" in locals() and isinstance(job, dict) and job.get("id"):
                     client.mark_failed(job["id"], str(exc))
+                    _safe_heartbeat(
+                        client,
+                        settings.worker_id,
+                        {
+                            "action": "job_failed",
+                            "mode": "poll",
+                            "job_id": str(job.get("id") or ""),
+                            "error": str(exc)[:400],
+                        },
+                    )
             except Exception:
                 logger.exception("Failed to mark job failed")
         finally:

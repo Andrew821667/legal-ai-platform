@@ -375,6 +375,27 @@ class WorkerStatusResponse(BaseModel):
     workers: list[WorkerStatusItem]
 
 
+class WorkerActivityEntry(BaseModel):
+    occurred_at: datetime
+    action: str
+    details: dict[str, Any] | None = None
+
+
+class WorkerActionCount(BaseModel):
+    action: str
+    count: int
+
+
+class WorkerActivityResponse(BaseModel):
+    worker_id: str
+    active: bool
+    last_seen_at: datetime | None
+    window_hours: int
+    startup_events: list[datetime]
+    action_counts: list[WorkerActionCount]
+    entries: list[WorkerActivityEntry]
+
+
 class ApiKeyCreate(BaseModel):
     name: str
     scope: Scope

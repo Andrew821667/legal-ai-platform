@@ -13,6 +13,8 @@ from news.settings import settings
 
 setup_logging()
 logger = logging.getLogger(__name__)
+_WORKER_ID = "news-generate"
+_TICK_HEARTBEAT_SECONDS = 600
 
 
 def _cleanup_expired_review_posts(client: CoreClient, retention_days: int) -> int:
@@ -42,14 +44,30 @@ def _cleanup_expired_review_posts(client: CoreClient, retention_days: int) -> in
     return cleaned
 
 
+def _send_worker_heartbeat(client: CoreClient, info: dict[str, object]) -> None:
+    try:
+        client.worker_heartbeat(_WORKER_ID, info).raise_for_status()
+    except Exception as exc:
+        logger.warning("worker_heartbeat_failed", extra={"worker_id": _WORKER_ID, "error": str(exc)})
+
+
 def main() -> int:
     if not settings.api_key_news:
         logger.error("API_KEY_NEWS is required")
         return 1
 
     client = CoreClient(settings.core_api_url, settings.api_key_news)
+    _send_worker_heartbeat(
+        client,
+        {
+            "action": "startup",
+            "component": "generate_loop",
+            "tz": settings.tz_name,
+        },
+    )
     last_generation_slot_key = ""
     last_cleanup_date = ""
+    last_tick_heartbeat_at = 0.0
     while True:
         sleep_for = 30
         try:
@@ -70,13 +88,47 @@ def main() -> int:
                     if now_local.strftime("%H:%M") != slot:
                         continue
                     logger.info("generate_loop_slot_triggered", extra={"slot": slot, "limit": limit})
-                    run_generation(limit, dry_run=False)
+                    _send_worker_heartbeat(
+                        client,
+                        {
+                            "action": "generate_slot_start",
+                            "slot": slot,
+                            "limit": limit,
+                            "date": today_key,
+                        },
+                    )
+                    result_code = run_generation(limit, dry_run=False)
+                    _send_worker_heartbeat(
+                        client,
+                        {
+                            "action": "generate_slot_done",
+                            "slot": slot,
+                            "limit": limit,
+                            "result_code": result_code,
+                            "date": today_key,
+                        },
+                    )
                     last_generation_slot_key = slot_key
                     break
             else:
                 logger.info("generate_loop_disabled_by_control_plane")
+
+            now_ts = time.time()
+            heartbeat_info: dict[str, object] = {"mode": "poll", "limit": limit}
+            if now_ts - last_tick_heartbeat_at >= _TICK_HEARTBEAT_SECONDS:
+                heartbeat_info["action"] = "tick"
+                heartbeat_info["slot_times"] = generate_schedule_times(rows)
+                last_tick_heartbeat_at = now_ts
+            _send_worker_heartbeat(client, heartbeat_info)
         except Exception as exc:
             logger.exception("generate_loop_iteration_failed", extra={"error": str(exc)})
+            _send_worker_heartbeat(
+                client,
+                {
+                    "action": "iteration_error",
+                    "error": str(exc)[:400],
+                },
+            )
             sleep_for = 60
         time.sleep(max(15, sleep_for))
 

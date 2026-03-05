@@ -127,6 +127,22 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def workers_activity(self, worker_id: str, *, hours: int = 24, limit: int = 30) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/workers/{worker_id}/activity",
+            params={"hours": hours, "limit": limit},
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
+    def worker_heartbeat(self, worker_id: str, info: dict[str, Any] | None = None) -> requests.Response:
+        return requests.post(
+            f"{self.base_url}/api/v1/workers/heartbeat",
+            json={"worker_id": worker_id, "info": info or {}},
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def reset_stale_scheduled_posts(self, older_than_minutes: int = 30) -> requests.Response:
         return requests.post(
             f"{self.base_url}/api/v1/scheduled-posts/reset-stale?older_than_minutes={older_than_minutes}",

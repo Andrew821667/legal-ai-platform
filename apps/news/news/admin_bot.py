@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, unquote
 from zoneinfo import ZoneInfo
 
 from telegram import (
@@ -160,6 +161,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "preset:",
     "all:",
     "set:",
+    "wrk:",
 )
 _POSTS_CALLBACK_PREFIXES = (
     "mq:",
@@ -1084,6 +1086,79 @@ def _format_workers_status(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _worker_callback_token(worker_id: str) -> str:
+    return quote(worker_id, safe="")
+
+
+def _worker_id_from_callback_token(token: str) -> str:
+    return unquote(token or "").strip()
+
+
+def _worker_list_text(payload: dict[str, Any]) -> str:
+    workers = payload.get("workers") or []
+    lines = [_format_workers_status(payload), "", "Нажмите на воркер, чтобы открыть активность за последние 24 часа."]
+    if not workers:
+        lines.append("Когда сервисы начнут слать heartbeat, список и карточки заполнятся автоматически.")
+    return "\n".join(lines).strip()
+
+
+def _format_worker_activity(payload: dict[str, Any]) -> str:
+    worker_id = str(payload.get("worker_id") or "unknown")
+    active = bool(payload.get("active"))
+    last_seen = str(payload.get("last_seen_at") or "n/a")
+    hours = int(payload.get("window_hours") or 24)
+    startup_events = payload.get("startup_events") or []
+    action_counts = payload.get("action_counts") or []
+    entries = payload.get("entries") or []
+
+    lines = [
+        f"Воркер: {worker_id}",
+        f"Статус: {'🟢 активен' if active else '⚪ неактивен'}",
+        f"Последний heartbeat: {last_seen}",
+        "",
+        f"Запуски за {hours} ч: {len(startup_events)}",
+    ]
+
+    if startup_events:
+        for row in startup_events[:10]:
+            lines.append(f"• {row}")
+    else:
+        lines.append("• запусков не зафиксировано")
+
+    lines.append("")
+    lines.append("Что делал за период:")
+    if action_counts:
+        for row in action_counts[:10]:
+            action = str(row.get("action") or "action")
+            count = int(row.get("count") or 0)
+            lines.append(f"• {action}: {count}")
+    else:
+        lines.append("• действий не зафиксировано")
+
+    lines.append("")
+    lines.append("Последние события:")
+    if entries:
+        for row in entries[:12]:
+            occurred_at = str(row.get("occurred_at") or "")
+            action = str(row.get("action") or "action")
+            details = row.get("details") or {}
+            detail_line = ""
+            if isinstance(details, dict):
+                chunks: list[str] = []
+                for key in ("slot", "job_id", "result_code", "error", "publish_interval", "limit"):
+                    value = details.get(key)
+                    if value in (None, "", []):
+                        continue
+                    chunks.append(f"{key}={value}")
+                if chunks:
+                    detail_line = " (" + ", ".join(chunks) + ")"
+            lines.append(f"• {occurred_at} — {action}{detail_line}")
+    else:
+        lines.append("• событий пока нет")
+
+    return "\n".join(lines)
+
+
 def _button_api_kwargs(
     *,
     style: str | None = None,
@@ -1713,6 +1788,29 @@ class NewsAdminBot:
             [_inline_button("❓ Помощь", callback_data="sec:help")],
         ]
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+        return InlineKeyboardMarkup(rows)
+
+    def _workers_keyboard(self, payload: dict[str, Any]) -> InlineKeyboardMarkup:
+        workers = payload.get("workers") or []
+        rows: list[list[InlineKeyboardButton]] = []
+        for row in workers[:20]:
+            worker_id = str(row.get("worker_id") or "").strip()
+            if not worker_id:
+                continue
+            active = bool(row.get("active"))
+            mark = "🟢" if active else "⚪"
+            token = _worker_callback_token(worker_id)
+            rows.append([_inline_button(f"{mark} {worker_id}", callback_data=f"wrk:{token}")])
+        rows.append([_inline_button("🔄 Обновить список", callback_data="workers")])
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
+    def _worker_activity_keyboard(self, worker_id: str) -> InlineKeyboardMarkup:
+        token = _worker_callback_token(worker_id)
+        rows: list[list[InlineKeyboardButton]] = [
+            [_inline_button("🔄 Обновить карточку", callback_data=f"wrk:{token}")]
+        ]
+        rows.extend(self._submenu_nav_rows(back_callback="workers", back_label="🔙 К воркерам"))
         return InlineKeyboardMarkup(rows)
 
     def _help_text(self) -> str:
@@ -4639,9 +4737,10 @@ class NewsAdminBot:
         try:
             response = self.admin_client.workers_status()
             response.raise_for_status()
+            payload = response.json()
             await update.effective_message.reply_text(
-                _format_workers_status(response.json()),
-                reply_markup=_main_menu_markup(),
+                _worker_list_text(payload),
+                reply_markup=self._workers_keyboard(payload),
             )
         except Exception as exc:
             if _is_scope_error(exc):
@@ -5881,9 +5980,26 @@ class NewsAdminBot:
             if data == "workers":
                 response = self.admin_client.workers_status()
                 response.raise_for_status()
+                payload = response.json()
                 await self._safe_edit_message_text(
                     query,
-                    _format_workers_status(response.json()),
+                    _worker_list_text(payload),
+                    reply_markup=self._workers_keyboard(payload),
+                )
+                return
+
+            if data.startswith("wrk:"):
+                token = data.split(":", maxsplit=1)[1]
+                worker_id = _worker_id_from_callback_token(token)
+                if not worker_id:
+                    await query.answer("Некорректный worker_id", show_alert=True)
+                    return
+                response = self.admin_client.workers_activity(worker_id, hours=24, limit=30)
+                response.raise_for_status()
+                await self._safe_edit_message_text(
+                    query,
+                    _format_worker_activity(response.json()),
+                    reply_markup=self._worker_activity_keyboard(worker_id),
                 )
                 return
 

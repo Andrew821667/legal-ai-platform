@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
@@ -7,7 +9,7 @@ import core_api.main as main_module
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, Scope
+from core_api.models import ApiKey, Scope, WorkerHeartbeat
 from core_api.security import generate_api_key, hash_api_key
 
 
@@ -76,6 +78,44 @@ def test_workers_status_shape_for_admin() -> None:
         assert isinstance(body["any_active"], bool)
         assert isinstance(body["workers"], list)
     finally:
+        _delete_api_key(admin_name)
+
+
+def test_worker_activity_shape_for_admin() -> None:
+    client = TestClient(app)
+    admin_name = "pytest.ops.worker_activity"
+    admin_key = _create_api_key(Scope.admin, admin_name)
+    worker_id = "pytest-worker-activity"
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        db.add(WorkerHeartbeat(worker_id=worker_id, last_seen_at=now, info={"mode": "poll"}))
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        response = client.get(
+            f"/api/v1/workers/{worker_id}/activity",
+            headers={"X-API-Key": admin_key},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["worker_id"] == worker_id
+        assert isinstance(body["active"], bool)
+        assert "last_seen_at" in body
+        assert body["window_hours"] == 24
+        assert isinstance(body["startup_events"], list)
+        assert isinstance(body["action_counts"], list)
+        assert isinstance(body["entries"], list)
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(WorkerHeartbeat).where(WorkerHeartbeat.worker_id == worker_id))
+            db.commit()
+        finally:
+            db.close()
         _delete_api_key(admin_name)
 
 

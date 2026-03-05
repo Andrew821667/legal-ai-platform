@@ -383,6 +383,21 @@ class WorkerHeartbeat(Base):
     info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
+class WorkerActivity(Base):
+    __tablename__ = "worker_activity"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    worker_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index("ix_worker_activity_worker_time", "worker_id", "occurred_at"),
+        Index("ix_worker_activity_action_time", "action", "occurred_at"),
+    )
+
+
 class AutomationControl(Base):
     __tablename__ = "automation_controls"
 
