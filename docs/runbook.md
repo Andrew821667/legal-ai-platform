@@ -260,6 +260,12 @@ cd apps/news/legacy
 python -u -m app.reader_digest_loop
 ```
 
+E2E smoke `reader -> lead` (API-контур):
+```bash
+CORE_API_URL=http://localhost:8000 API_KEY_ADMIN=... E2E_TEST_USER_ID=321681061 \
+infra/scripts/e2e_reader_to_lead.sh
+```
+
 ## Control Plane автоматизаций
 Просмотр активных тумблеров:
 ```bash
