@@ -419,6 +419,78 @@ class ApiKeyCreateResponse(BaseModel):
     api_key: str
 
 
+class ReaderPreferencesPatch(BaseModel):
+    telegram_user_id: int
+    topics: list[str] | None = None
+    digest_frequency: str | None = None
+    expertise_level: str | None = None
+
+
+class ReaderPreferencesOut(BaseModel):
+    telegram_user_id: int
+    topics: list[str]
+    digest_frequency: str
+    expertise_level: str | None
+    updated_at: datetime
+
+
+class ReaderFeedItem(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    text: str
+    source_url: str | None
+    rubric: str | None
+    format_type: str | None
+    cta_type: str | None
+    publish_at: datetime
+    posted_at: datetime | None
+    feedback_snapshot: dict[str, Any] | None
+    is_saved: bool = False
+
+
+class ReaderSaveRequest(BaseModel):
+    telegram_user_id: int
+    post_id: uuid.UUID
+    saved: bool = True
+
+
+class ReaderSaveResponse(BaseModel):
+    post_id: uuid.UUID
+    saved: bool
+
+
+class ReaderFeedbackCreate(BaseModel):
+    telegram_user_id: int
+    post_id: uuid.UUID
+    signal_key: str | None = None
+    signal_value: int = 0
+    text: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReaderCtaClickCreate(BaseModel):
+    telegram_user_id: int
+    post_id: uuid.UUID | None = None
+    cta_type: str | None = None
+    context: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReaderLeadIntentCreate(BaseModel):
+    telegram_user_id: int
+    post_id: uuid.UUID | None = None
+    intent_type: str
+    message: str | None = None
+    contact: str | None = None
+    name: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReaderLeadIntentOut(BaseModel):
+    lead_id: uuid.UUID
+    created: bool
+
+
 class AutomationControlPatch(BaseModel):
     scope: Scope | None = None
     title: str | None = None

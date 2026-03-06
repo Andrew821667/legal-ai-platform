@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from news.control_plane import (
     generate_limit,
+    generate_slot_grace_minutes,
     generate_schedule_times,
     publish_claim_limit,
     review_retention_days,
     telegram_ingest_fetch_limit,
+    telegram_ingest_slot_grace_minutes,
     telegram_ingest_schedule_times,
 )
 
@@ -32,6 +34,7 @@ def test_generate_limit_and_retention_defaults() -> None:
     rows: list[dict[str, object]] = []
     assert generate_limit(rows) == 5
     assert review_retention_days(rows) == 3
+    assert generate_slot_grace_minutes(rows) == 35
 
 
 def test_generate_limit_and_retention_from_control_config() -> None:
@@ -41,11 +44,13 @@ def test_generate_limit_and_retention_from_control_config() -> None:
             "config": {
                 "generate_limit": 7,
                 "retention_days": 5,
+                "slot_grace_minutes": 44,
             },
         }
     ]
     assert generate_limit(rows) == 7
     assert review_retention_days(rows) == 5
+    assert generate_slot_grace_minutes(rows) == 44
 
 
 def test_publish_claim_limit_defaults_to_single_post() -> None:
@@ -68,6 +73,7 @@ def test_publish_claim_limit_from_control_config() -> None:
 def test_telegram_ingest_schedule_times_defaults() -> None:
     rows: list[dict[str, object]] = []
     assert telegram_ingest_schedule_times(rows) == ["07:30", "16:30"]
+    assert telegram_ingest_slot_grace_minutes(rows) == 30
 
 
 def test_telegram_ingest_schedule_times_from_control_config() -> None:
@@ -89,7 +95,9 @@ def test_telegram_ingest_fetch_limit_from_control_config() -> None:
             "key": "news.telegram_ingest.enabled",
             "config": {
                 "fetch_limit": 80,
+                "slot_grace_minutes": 26,
             },
         }
     ]
     assert telegram_ingest_fetch_limit(rows) == 80
+    assert telegram_ingest_slot_grace_minutes(rows) == 26

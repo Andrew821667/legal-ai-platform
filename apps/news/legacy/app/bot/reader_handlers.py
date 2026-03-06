@@ -14,7 +14,7 @@ from typing import Optional
 from uuid import UUID
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, ForceReply
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, ForceReply, User
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select
@@ -47,6 +47,7 @@ from app.services.reader_service import (
 )
 from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
+from app.services.core_reader_bridge import push_reader_cta_click, push_reader_lead_intent
 from app.config import settings
 
 
@@ -195,6 +196,81 @@ def _build_helper_link(payload: str | None = None) -> str:
     return f"https://t.me/{helper_username}"
 
 
+def _build_reader_nav_keyboard(
+    *,
+    profile_ready: bool,
+    lead_magnet_completed: bool = False,
+    include_home: bool = True,
+) -> InlineKeyboardMarkup:
+    """Global navigation keyboard for reader bot screens."""
+    if not profile_ready:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Настроить профиль", callback_data="rnav:start")],
+            ]
+        )
+
+    rows = [
+        [
+            InlineKeyboardButton(text="📰 Сегодня", callback_data="rnav:today"),
+            InlineKeyboardButton(text="📆 Неделя", callback_data="rnav:weekly"),
+        ],
+        [
+            InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
+            InlineKeyboardButton(text="🔖 Сохранённые", callback_data="rnav:saved"),
+        ],
+        [
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="rnav:settings"),
+            InlineKeyboardButton(
+                text="🎯 Персональный дайджест" if not lead_magnet_completed else "✅ Лид-магнит",
+                callback_data="rnav:lead_magnet",
+            ),
+        ],
+    ]
+    if include_home:
+        rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> None:
+    """Render home screen for already onboarded user."""
+    lead_profile = await get_lead_profile(user.id, db)
+    saved_articles = await _safe_get_saved_articles(user.id, db=db)
+    lead_magnet_text = (
+        "✅ Персональный дайджест уже активирован."
+        if lead_profile and lead_profile.lead_magnet_completed
+        else "🎯 Можно включить персональный дайджест за 2-3 шага."
+    )
+
+    await target.answer(
+        f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
+        "Выберите действие кнопками ниже.\n\n"
+        f"Сохранённых статей: <b>{len(saved_articles)}</b>\n"
+        f"{lead_magnet_text}",
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(
+            profile_ready=True,
+            lead_magnet_completed=bool(lead_profile and lead_profile.lead_magnet_completed),
+            include_home=False,
+        ),
+    )
+
+
+async def _show_search_prompt(target: Message) -> None:
+    """Ask user for search query with ForceReply + quick nav."""
+    await target.answer(
+        "🔍 <b>Поиск по архиву</b>\n\n"
+        "Введите поисковый запрос:\n"
+        "Например: <i>GDPR</i>, <i>искусственный интеллект</i>, <i>налоги</i>",
+        parse_mode="HTML",
+        reply_markup=ForceReply(input_field_placeholder="Введите тему для поиска..."),
+    )
+    await target.answer(
+        "Навигация:",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+    )
+
+
 def get_article_keyboard(publication_id: str, user_saved: bool = False, show_read_button: bool = True) -> InlineKeyboardMarkup:
     """Get keyboard for article with like/dislike/save buttons."""
     save_text = "❌ Удалить из сохранённых" if user_saved else "🔖 Сохранить"
@@ -224,24 +300,35 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
         InlineKeyboardButton(text=save_text, callback_data=save_action),
     ])
 
+    # Quick navigation row
+    keyboard.append([
+        InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
+        InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home"),
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 # ==================== /start - Onboarding ====================
 
-@router.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
-    """Handle /start command - onboarding for new users."""
-    user_id = message.from_user.id
-    deep_link_post_id = _extract_start_post_id(message.text)
+async def _handle_start(
+    target: Message,
+    user: User,
+    state: FSMContext,
+    db: AsyncSession,
+    raw_text: str | None = None,
+) -> None:
+    """Shared /start flow for command and navigation callbacks."""
+    user_id = user.id
+    deep_link_post_id = _extract_start_post_id(raw_text)
 
     if deep_link_post_id:
         profile = await get_user_profile(user_id, db)
         if not profile:
             profile = await create_user_profile(
                 user_id=user_id,
-                username=message.from_user.username,
-                full_name=message.from_user.full_name,
+                username=user.username,
+                full_name=user.full_name,
                 db=db,
             )
 
@@ -250,85 +337,109 @@ async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
             await update_last_active(user_id, db)
             deep_link_label = reader_post_deeplink(article.id)
             source_line = f"\n🔗 Ссылка на пост в ридере: {deep_link_label}" if deep_link_label else ""
-            await message.answer(
+            await target.answer(
                 "Открыли пост из канала.\n\n"
                 + format_article_message(article)
                 + source_line,
                 parse_mode="HTML",
                 reply_markup=get_article_keyboard(str(article.id)),
             )
-            await message.answer(
-                "Команды ридера:\n"
-                "/today - персональная лента\n"
-                "/weekly - недельный дайджест\n"
-                "/search - поиск по архиву\n"
-                "/saved - сохраненные\n"
-                "/settings - профиль"
+            await target.answer(
+                "Открыт материал из канала. Дальше можно продолжить через навигацию:",
+                reply_markup=_build_reader_nav_keyboard(profile_ready=True),
             )
             return
 
-        await message.answer(
+        await target.answer(
             "Пост по ссылке не найден. Возможно, он был удален.\n\n"
-            "Откройте /today или /search, чтобы продолжить."
+            "Откройте /today или /search, чтобы продолжить.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
     profile = await get_user_profile(user_id, db)
 
     if profile:
-        # Existing user - show main menu
-        lead_profile = await get_lead_profile(user_id, db)
-        saved_articles = await _safe_get_saved_articles(user_id, db=db)
-        lead_magnet_text = ""
-        if lead_profile and lead_profile.lead_magnet_completed:
-            lead_magnet_text = "✅ Лид-магнит выполнен"
-        else:
-            lead_magnet_text = "/lead_magnet - 🎯 Получить персональный дайджест"
-
-        await message.answer(
-            f"С возвращением, {message.from_user.first_name}! 👋\n\n"
-            f"Что хотите сделать?\n\n"
-            f"/today - Персональные новости за сегодня\n"
-            f"/weekly - Недельный дайджест\n"
-            f"/search - Поиск по архиву\n"
-            f"/saved - Сохранённые статьи ({len(saved_articles)})\n"
-            f"/settings - Настройки профиля\n"
-            f"{lead_magnet_text}"
-        )
+        await _show_home_screen(target, user, db)
     else:
-        # New user - start onboarding
-        await start_onboarding(message, state, db)
+        await start_onboarding(target, state, db)
+
+
+@router.message(Command("start"))
+async def cmd_start(message: Message, state: FSMContext, db: AsyncSession):
+    """Handle /start command - onboarding for new users."""
+    await _handle_start(message, message.from_user, state, db, raw_text=message.text)
+
+
+@router.callback_query(F.data.startswith("rnav:"))
+async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """Navigate across reader sections using inline buttons."""
+    action = (callback.data or "").split(":", 1)[1]
+    user_id = callback.from_user.id
+
+    if action == "start":
+        await state.clear()
+        await _handle_start(callback.message, callback.from_user, state, db, raw_text="/start")
+        await callback.answer()
+        return
+
+    profile = await get_user_profile(user_id, db)
+    if not profile:
+        await callback.answer("Сначала нужно настроить профиль", show_alert=True)
+        await _handle_start(callback.message, callback.from_user, state, db, raw_text="/start")
+        return
+
+    await state.clear()
+    if action == "home":
+        await _show_home_screen(callback.message, callback.from_user, db)
+    elif action == "today":
+        await _show_today(callback.message, user_id, db)
+    elif action == "weekly":
+        await _show_weekly(callback.message, user_id, db)
+    elif action == "search":
+        await _show_search(callback.message, user_id, None, db)
+    elif action == "saved":
+        await _show_saved(callback.message, user_id, db)
+    elif action == "settings":
+        await _show_settings(callback.message, user_id, db)
+    elif action == "lead_magnet":
+        await _open_lead_magnet(callback.message, user_id, state, db)
+    else:
+        await callback.answer("Неизвестный раздел", show_alert=True)
+        return
+
+    await callback.answer()
+
+
+async def _open_lead_magnet(target: Message, user_id: int, state: FSMContext, db: AsyncSession) -> None:
+    """Open lead-magnet section from command or navigation."""
+    profile = await get_user_profile(user_id, db)
+    if not profile:
+        await target.answer(
+            "❌ Сначала пройдите онбординг!\nИспользуйте /start для настройки профиля.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
+        )
+        return
+
+    lead_profile = await get_lead_profile(user_id, db)
+    if lead_profile and lead_profile.lead_magnet_completed:
+        await target.answer(
+            "✅ Вы уже прошли лид-магнит!\n\n"
+            "Теперь у вас есть доступ к персональным дайджестам и вопросам по LegalTech.",
+            reply_markup=_build_reader_nav_keyboard(
+                profile_ready=True,
+                lead_magnet_completed=True,
+            ),
+        )
+        return
+
+    await start_lead_magnet(target, state, db)
 
 
 @router.message(Command("lead_magnet"))
 async def cmd_lead_magnet(message: Message, state: FSMContext, db: AsyncSession):
     """Handle /lead_magnet command - start lead magnet flow."""
-    user_id = message.from_user.id
-
-    # Check if user completed onboarding
-    profile = await get_user_profile(user_id, db)
-    if not profile:
-        await message.answer(
-            "❌ Сначала пройдите онбординг!\n"
-            "Используйте /start для настройки профиля."
-        )
-        return
-
-    # Check if lead magnet already completed
-    lead_profile = await get_lead_profile(user_id, db)
-    if lead_profile and lead_profile.lead_magnet_completed:
-        await message.answer(
-            "✅ Вы уже прошли лид-магнит!\n\n"
-            "Теперь у вас есть доступ к:\n"
-            "• Персональным дайджестам новостей\n"
-            "• Возможности задавать вопросы по LegalTech\n"
-            "• Специальным предложениям\n\n"
-            "Используйте /today для получения новостей."
-        )
-        return
-
-    # Start lead magnet flow
-    await start_lead_magnet(message, state, db)
+    await _open_lead_magnet(message, message.from_user.id, state, db)
 
 
 @router.message(Command("ask_question"))
@@ -342,7 +453,8 @@ async def cmd_ask_question(message: Message, state: FSMContext, db: AsyncSession
         await message.answer(
             "❌ Сначала пройдите лид-магнит!\n\n"
             "Используйте /lead_magnet для получения персонального дайджеста "
-            "и возможности задавать вопросы."
+            "и возможности задавать вопросы.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
@@ -352,7 +464,8 @@ async def cmd_ask_question(message: Message, state: FSMContext, db: AsyncSession
             "📊 <b>Лимит вопросов исчерпан!</b>\n\n"
             "Вы уже задали 3 вопроса. Спасибо за участие!\n\n"
             "Продолжайте получать персональные дайджесты с /today",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
@@ -367,7 +480,8 @@ async def cmd_ask_question(message: Message, state: FSMContext, db: AsyncSession
         "• Автоматизация юридических процессов\n\n"
         "<i>Вопрос должен быть связан с LegalTech. "
         "Если вопрос не по теме, бот вежливо откажет в ответе.</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
 
     await state.set_state(LeadMagnetStates.ask_questions)
@@ -576,23 +690,21 @@ async def complete_onboarding(callback: CallbackQuery, state: FSMContext, db: As
         f"/today - Что интересного сегодня\n"
         f"/search - Поиск статей\n"
         f"/saved - Сохранённые статьи",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True, include_home=False),
     )
 
     await callback.answer("✅ Профиль настроен!")
 
 
-# ==================== /today - Personalized Feed ====================
-
-@router.message(Command("today"))
-async def cmd_today(message: Message, db: AsyncSession):
+async def _show_today(target: Message, user_id: int, db: AsyncSession) -> None:
     """Show personalized feed for today."""
-    user_id = message.from_user.id
     profile = await get_user_profile(user_id, db)
 
     if not profile:
-        await message.answer(
-            "Сначала завершите настройку профиля: /start"
+        await target.answer(
+            "Сначала завершите настройку профиля: /start",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
         )
         return
 
@@ -603,15 +715,16 @@ async def cmd_today(message: Message, db: AsyncSession):
     articles = await get_personalized_feed(user_id, limit=5, db=db)
 
     if not articles:
-        await message.answer(
+        await target.answer(
             "📭 Сегодня пока нет новых статей по вашим темам.\n\n"
             "Попробуйте:\n"
             "/search - Поиск по архиву\n"
-            "/saved - Ваши сохранённые статьи"
+            "/saved - Ваши сохранённые статьи",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
-    await message.answer(
+    await target.answer(
         f"📬 <b>Ваши персональные новости за сегодня:</b>\n\n"
         f"Найдено {len(articles)} статей по вашим темам.",
         parse_mode="HTML"
@@ -622,43 +735,52 @@ async def cmd_today(message: Message, db: AsyncSession):
         text = format_article_message(article, index=i)
         keyboard = get_article_keyboard(str(article.id))
 
-        await message.answer(
+        await target.answer(
             text,
             parse_mode="HTML",
             reply_markup=keyboard
         )
 
 
-@router.message(Command("weekly"))
-async def cmd_weekly(message: Message, db: AsyncSession):
+@router.message(Command("today"))
+async def cmd_today(message: Message, db: AsyncSession):
+    """Show personalized feed for today."""
+    await _show_today(message, message.from_user.id, db)
+
+
+async def _show_weekly(target: Message, user_id: int, db: AsyncSession) -> None:
     """Show weekly digest tailored to user interests."""
-    user_id = message.from_user.id
     profile = await get_user_profile(user_id, db)
 
     if not profile:
-        await message.answer("Сначала завершите настройку профиля: /start")
+        await target.answer(
+            "Сначала завершите настройку профиля: /start",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
+        )
         return
 
     await update_last_active(user_id, db)
     articles = await get_weekly_digest_candidates(user_id, limit=8, days=7, db=db)
 
     if not articles:
-        await message.answer(
+        await target.answer(
             "📭 За последнюю неделю пока нет новых релевантных материалов.\n\n"
-            "Попробуйте /today или /search."
+            "Попробуйте /today или /search.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
     digest_text = await _build_weekly_digest_text(articles, db)
-    await message.answer(
+    await target.answer(
         digest_text,
         parse_mode="HTML",
         disable_web_page_preview=True,
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
 
     # Show top cards after digest summary
     for i, article in enumerate(articles[:3], 1):
-        await message.answer(
+        await target.answer(
             format_article_message(article, index=i),
             parse_mode="HTML",
             reply_markup=get_article_keyboard(str(article.id)),
@@ -675,50 +797,56 @@ async def cmd_weekly(message: Message, db: AsyncSession):
     )
 
 
+@router.message(Command("weekly"))
+async def cmd_weekly(message: Message, db: AsyncSession):
+    """Show weekly digest tailored to user interests."""
+    await _show_weekly(message, message.from_user.id, db)
+
+
 # ==================== /search - Search ====================
+
+async def _show_search(target: Message, user_id: int, query: str | None, db: AsyncSession) -> None:
+    """Search publications or ask for a query."""
+    profile_ready = bool(await get_user_profile(user_id, db))
+    if not query:
+        if not profile_ready:
+            await target.answer(
+                "Сначала завершите настройку профиля: /start",
+                reply_markup=_build_reader_nav_keyboard(profile_ready=False),
+            )
+            return
+        await _show_search_prompt(target)
+        return
+
+    results = await search_publications(query, user_id=user_id, limit=10, db=db)
+    if not results:
+        await target.answer(
+            f"По запросу '<b>{escape(query)}</b>' ничего не найдено 😔\n\n"
+            "Попробуйте другой запрос или используйте /today",
+            parse_mode="HTML",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=profile_ready),
+        )
+        return
+
+    await target.answer(
+        f"🔍 Найдено <b>{len(results)}</b> статей по запросу '<b>{escape(query)}</b>':",
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=profile_ready),
+    )
+
+    for i, article in enumerate(results, 1):
+        await target.answer(
+            format_article_message(article, index=i),
+            parse_mode="HTML",
+            reply_markup=get_article_keyboard(str(article.id)),
+        )
+
 
 @router.message(Command("search"))
 async def cmd_search(message: Message, db: AsyncSession):
     """Search articles."""
     query = message.text.replace("/search", "").strip()
-
-    if not query:
-        await message.answer(
-            "🔍 <b>Поиск по архиву</b>\n\n"
-            "Введите поисковый запрос:\n"
-            "Например: <i>GDPR</i>, <i>искусственный интеллект</i>, <i>налоги</i>",
-            parse_mode="HTML",
-            reply_markup=ForceReply(input_field_placeholder="Введите тему для поиска...")
-        )
-        return
-
-    # Search
-    user_id = message.from_user.id
-    results = await search_publications(query, user_id=user_id, limit=10, db=db)
-
-    if not results:
-        await message.answer(
-            f"По запросу '<b>{query}</b>' ничего не найдено 😔\n\n"
-            "Попробуйте другой запрос или используйте /today",
-            parse_mode="HTML"
-        )
-        return
-
-    # Show results
-    await message.answer(
-        f"🔍 Найдено <b>{len(results)}</b> статей по запросу '<b>{query}</b>':",
-        parse_mode="HTML"
-    )
-
-    for i, article in enumerate(results, 1):
-        text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(str(article.id))
-
-        await message.answer(
-            text,
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
+    await _show_search(message, message.from_user.id, query, db)
 
 
 @router.message(F.reply_to_message, F.text)
@@ -732,63 +860,52 @@ async def handle_search_reply(message: Message, db: AsyncSession):
         query = message.text.strip()
         user_id = message.from_user.id
 
-        # Perform search
-        results = await search_publications(query, user_id=user_id, limit=10, db=db)
-
-        if not results:
-            await message.answer(
-                f"По запросу '<b>{query}</b>' ничего не найдено 😔\n\n"
-                "Попробуйте другой запрос или используйте /today",
-                parse_mode="HTML"
-            )
-            return
-
-        # Show results
-        await message.answer(
-            f"🔍 Найдено <b>{len(results)}</b> статей по запросу '<b>{query}</b>':",
-            parse_mode="HTML"
-        )
-
-        for i, article in enumerate(results, 1):
-            text = format_article_message(article, index=i)
-            keyboard = get_article_keyboard(str(article.id))
-
-            await message.answer(
-                text,
-                parse_mode="HTML",
-                reply_markup=keyboard
-            )
+        await _show_search(message, user_id, query, db)
 
 
 # ==================== /saved - Saved Articles ====================
 
-@router.message(Command("saved"))
-async def cmd_saved(message: Message, db: AsyncSession):
-    """Show saved articles."""
-    user_id = message.from_user.id
-    saved = await _safe_get_saved_articles(user_id, db=db, limit=20)
-
-    if not saved:
-        await message.answer(
-            "🔖 У вас пока нет сохранённых статей.\n\n"
-            "Используйте кнопку '🔖 Сохранить' под статьёй чтобы добавить в избранное."
+async def _show_saved(target: Message, user_id: int, db: AsyncSession) -> None:
+    """Show saved articles list."""
+    profile = await get_user_profile(user_id, db)
+    if not profile:
+        await target.answer(
+            "Сначала завершите настройку профиля: /start",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
         )
         return
 
-    await message.answer(
+    saved = await _safe_get_saved_articles(user_id, db=db, limit=20)
+
+    if not saved:
+        await target.answer(
+            "🔖 У вас пока нет сохранённых статей.\n\n"
+            "Используйте кнопку '🔖 Сохранить' под статьёй чтобы добавить в избранное.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+        )
+        return
+
+    await target.answer(
         f"🔖 <b>Ваши сохранённые статьи</b> ({len(saved)}):",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
 
     for i, article in enumerate(saved, 1):
         text = format_article_message(article, index=i)
         keyboard = get_article_keyboard(str(article.id), user_saved=True)
 
-        await message.answer(
+        await target.answer(
             text,
             parse_mode="HTML",
             reply_markup=keyboard
         )
+
+
+@router.message(Command("saved"))
+async def cmd_saved(message: Message, db: AsyncSession):
+    """Show saved articles."""
+    await _show_saved(message, message.from_user.id, db)
 
 
 # ==================== Feedback Callbacks ====================
@@ -1083,6 +1200,13 @@ async def start_article_question_flow(callback: CallbackQuery, state: FSMContext
         parse_mode="HTML",
         reply_markup=keyboard,
     )
+    await push_reader_cta_click(
+        user_id=callback.from_user.id,
+        publication_id=str(article.id),
+        cta_type="article_question",
+        context="reader_article_card",
+        payload={"screen": "article_q_start"},
+    )
     await callback.answer("Готово, жду ваш вопрос")
 
 
@@ -1091,7 +1215,10 @@ async def cancel_article_question_flow(callback: CallbackQuery, state: FSMContex
     """Cancel article question flow."""
     await state.clear()
     await callback.answer("Отменено")
-    await callback.message.answer("Окей, продолжаем. Откройте /today или /weekly.")
+    await callback.message.answer(
+        "Окей, продолжаем. Откройте /today или /weekly.",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+    )
 
 
 @router.message(StateFilter(ArticleConsultationStates.wait_question), F.text)
@@ -1182,20 +1309,29 @@ async def handle_article_question_text(message: Message, state: FSMContext, db: 
             text=user_question,
             payload={"article_title": article_title},
         )
+        await push_reader_lead_intent(
+            user_id=user_id,
+            publication_id=article_id,
+            intent_type="article_question",
+            message=user_question,
+            name=(message.from_user.full_name if message.from_user else None),
+            payload={"article_title": article_title},
+        )
 
     await state.clear()
 
 
 # ==================== /settings ====================
 
-@router.message(Command("settings"))
-async def cmd_settings(message: Message, db: AsyncSession):
+async def _show_settings(target: Message, user_id: int, db: AsyncSession) -> None:
     """Show user settings and stats."""
-    user_id = message.from_user.id
     profile = await get_user_profile(user_id, db)
 
     if not profile:
-        await message.answer("Сначала завершите настройку: /start")
+        await target.answer(
+            "Сначала завершите настройку: /start",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
+        )
         return
 
     # Get stats
@@ -1226,7 +1362,7 @@ async def cmd_settings(message: Message, db: AsyncSession):
         'never': 'Не получать'
     }
 
-    await message.answer(
+    await target.answer(
         f"⚙️ <b>Ваши настройки</b>\n\n"
         f"<b>Профиль:</b>\n"
         f"📋 Темы: {topics_text}\n"
@@ -1238,8 +1374,15 @@ async def cmd_settings(message: Message, db: AsyncSession):
         f"🔖 Сохранено: {stats.get('articles_saved', 0)}\n"
         f"👍 Понравилось: {stats.get('positive_feedback', 0)}\n\n"
         f"<i>Для изменения настроек используйте /start</i>",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
+
+
+@router.message(Command("settings"))
+async def cmd_settings(message: Message, db: AsyncSession):
+    """Show user settings and stats."""
+    await _show_settings(message, message.from_user.id, db)
 
 
 # ==================== Lead Magnet Callbacks ====================
@@ -1575,7 +1718,8 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if text.startswith("/"):
         await message.answer(
             "Неизвестная команда.\n\n"
-            "Доступно: /start, /today, /weekly, /search, /saved, /settings, /lead_magnet"
+            "Доступно: /start, /today, /weekly, /search, /saved, /settings, /lead_magnet",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
@@ -1584,7 +1728,8 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if not profile:
         await message.answer(
             "Сначала запустите /start, чтобы настроить профиль.\n"
-            "После этого смогу подобрать релевантные новости."
+            "После этого смогу подобрать релевантные новости.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=False),
         )
         return
 
@@ -1592,13 +1737,15 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if not results:
         await message.answer(
             "По этому запросу пока ничего не найдено.\n"
-            "Попробуйте /today или /search с другим запросом."
+            "Попробуйте /today или /search с другим запросом.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
 
     await message.answer(
         f"Найдено {len(results)} статей по запросу: <b>{text}</b>",
         parse_mode="HTML",
+        reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
     for i, article in enumerate(results, 1):
         await message.answer(

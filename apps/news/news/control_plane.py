@@ -52,6 +52,14 @@ def generate_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
     return result or [settings.news_generate_morning_slot, settings.news_generate_evening_slot]
 
 
+def generate_slot_grace_minutes(rows: list[dict[str, Any]]) -> int:
+    config = _generate_config(rows)
+    value = config.get("slot_grace_minutes")
+    if isinstance(value, int):
+        return max(5, min(value, 120))
+    return 35
+
+
 def review_retention_days(rows: list[dict[str, Any]]) -> int:
     config = _generate_config(rows)
     value = config.get("retention_days")
@@ -69,6 +77,14 @@ def telegram_ingest_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
         if item and item not in result:
             result.append(item)
     return result or [settings.news_telegram_ingest_morning_slot, settings.news_telegram_ingest_evening_slot]
+
+
+def telegram_ingest_slot_grace_minutes(rows: list[dict[str, Any]]) -> int:
+    config = _telegram_ingest_config(rows)
+    value = config.get("slot_grace_minutes")
+    if isinstance(value, int):
+        return max(5, min(value, 120))
+    return 30
 
 
 def telegram_ingest_fetch_limit(rows: list[dict[str, Any]]) -> int:

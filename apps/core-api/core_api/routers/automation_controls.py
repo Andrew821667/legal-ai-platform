@@ -27,6 +27,7 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
             "broad_ai_limit": 1,
             "morning_time": "08:00",
             "evening_time": "17:00",
+            "slot_grace_minutes": 35,
             "morning_options": ["07:00", "07:30", "08:00", "08:30", "09:00"],
             "evening_options": ["16:00", "16:30", "17:00", "17:30", "18:00"],
             "limit_options": [3, 5, 7, 10],
@@ -44,6 +45,7 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "config": {
             "morning_time": "07:30",
             "evening_time": "16:30",
+            "slot_grace_minutes": 30,
             "morning_options": ["06:30", "07:00", "07:30", "08:30", "09:30"],
             "evening_options": ["15:30", "16:00", "16:30", "17:30", "18:30"],
             "fetch_limit": 50,
@@ -156,6 +158,7 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "enabled": True,
         "config": {
             "slot_time": "12:15",
+            "slot_grace_minutes": 30,
             "slot_options": ["09:15", "10:15", "11:15", "12:15", "13:15", "14:15", "20:15"],
             "max_users_per_cycle": 30,
             "max_users_options": [10, 20, 30, 50, 100],

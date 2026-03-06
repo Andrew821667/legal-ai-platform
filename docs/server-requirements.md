@@ -6,6 +6,11 @@
 - 40 GB SSD
 - Swap: 2 GB (рекомендуется)
 
+Режим запуска для `2/4`:
+- always-on: `postgres`, `core-api`, `lead-bot`, `news-admin-bot`, `news-reader-bot`, `news-publish`, `caddy` (и `web` при необходимости);
+- slot-heavy: `news-telegram-ingest`, `news-generate`, `news-reader-digest`;
+- `contract-worker` на локальном ноутбуке (VPS хранит очередь и статусы).
+
 ## Оценка RAM
 | Сервис | RAM |
 |---|---|
@@ -25,5 +30,6 @@
 
 ## Ограничения
 - На VPS запрещены always-on локальные ML модели (`torch/transformers`).
-- Паблишер новостей работает только как cron-задача.
+- Паблишер новостей работает loop-сервисом, а не cron-задачей.
 - Медиафайлы не храним на VPS-диске: используем `tg://file_id` или внешние URL.
+- В слотных воркерах должен быть включен контроль наложения через `busy` heartbeat и `slot_grace_minutes`.

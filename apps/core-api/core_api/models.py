@@ -268,6 +268,41 @@ class ScheduledPost(Base):
     )
 
 
+class ReaderPreference(Base):
+    __tablename__ = "reader_preferences"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    topics: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default=sa_text("'[]'::jsonb"))
+    digest_frequency: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="never", server_default=sa_text("'never'")
+    )
+    expertise_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    __table_args__ = (
+        Index("ix_reader_preferences_telegram_user_id", "telegram_user_id", unique=True),
+    )
+
+
+class ReaderSavedPost(Base):
+    __tablename__ = "reader_saved_posts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("scheduled_posts.id"), nullable=False)
+
+    __table_args__ = (
+        Index("ix_reader_saved_posts_user_created", "telegram_user_id", "created_at"),
+        Index("ix_reader_saved_posts_post_id", "post_id"),
+        Index("ux_reader_saved_posts_user_post", "telegram_user_id", "post_id", unique=True),
+    )
+
+
 class PostFeedbackSignal(Base):
     __tablename__ = "post_feedback_signals"
 

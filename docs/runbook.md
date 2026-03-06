@@ -150,6 +150,8 @@ News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`, 
 - `news-telegram-ingest` и `news-generate` реально выполняют работу только в слотах из control-plane;
 - `news-publish` опрашивает очередь по интервалу `NEWS_PUBLISH_INTERVAL_SECONDS`.
 - `news-reader-digest` отправляет reader-дайджесты по слоту из `news.reader_digest.enabled.config.slot_time`.
+- slot-воркеры (`ingest`/`generate`/`reader-digest`) обмениваются heartbeat-полем `busy` и не запускают тяжелый цикл, пока соседний слот-воркер занят;
+- для защиты от дрейфа времени и кратковременных блокировок используется `slot_grace_minutes` в control-plane (`news.generate.enabled`, `news.telegram_ingest.enabled`, `news.reader_digest.enabled`).
 Чтобы не было пакетных публикаций при накопившихся due-постах, ограничивайте клейм:
 `NEWS_PUBLISH_CLAIM_LIMIT=1` (или через `news.publish.enabled.config.claim_limit`).
 
@@ -253,6 +255,10 @@ NEWS_READER_BUTTON_ICON_MAP=read_more=5309965701241379366,useful=531253642385163
 cd apps/news/legacy
 python -u -m app.reader_bot
 ```
+
+Важно для reader-bot sync с core-api:
+- для единого контура (`/api/v1/reader/preferences`, `/api/v1/reader/feed`, `/api/v1/reader/saved`, `/api/v1/reader/save`, `/api/v1/reader/lead-intent`) должны быть заданы `CORE_API_URL` и `API_KEY_NEWS`;
+- при недоступности core-api reader-bot уходит в fallback на локальные таблицы и продолжает отвечать, но кросс-бот аналитика и lead-intent в core-api не записываются.
 
 Запуск reader digest-воркера (локально):
 ```bash

@@ -14,6 +14,12 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.reader_models import UserProfile, LeadProfile, UserFeedback, UserInteraction, SavedArticle
 from app.models.reader_publications import ReaderPublication
+from app.services.core_reader_bridge import (
+    fetch_reader_feed,
+    fetch_reader_saved,
+    push_reader_preferences,
+    push_reader_save_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +96,13 @@ async def update_user_profile(
 
     await db.commit()
     await db.refresh(profile)
+    if topics is not None or digest_frequency is not None or expertise_level is not None:
+        await push_reader_preferences(
+            user_id=user_id,
+            topics=list(profile.topics or []),
+            digest_frequency=profile.digest_frequency,
+            expertise_level=profile.expertise_level,
+        )
     return profile
 
 
@@ -280,6 +293,15 @@ async def get_personalized_feed(
     Get personalized article feed based on user's topics.
     Returns recent publications matching user interests.
     """
+    core_feed = await fetch_reader_feed(user_id=user_id, limit=limit, days=14)
+    if core_feed is not None:
+        if not core_feed:
+            return []
+        core_ids = [str(item.get("id", "")).strip() for item in core_feed if str(item.get("id", "")).strip()]
+        publications = await _ordered_publications_by_ids(core_ids, db=db)
+        if publications:
+            return publications[:limit]
+
     profile = await get_user_profile(user_id, db)
     if not profile or not profile.topics:
         # No preferences - return most recent
@@ -414,6 +436,38 @@ async def get_publication_by_id(publication_id: str | UUID, db: AsyncSession) ->
     return result.scalar_one_or_none()
 
 
+async def _ordered_publications_by_ids(ids: list[str], db: AsyncSession) -> List[ReaderPublication]:
+    """Load posted publications by IDs and preserve requested order."""
+    if not ids:
+        return []
+
+    parsed_ids: list[UUID] = []
+    for raw_id in ids:
+        try:
+            parsed_ids.append(UUID(str(raw_id)))
+        except ValueError:
+            continue
+    if not parsed_ids:
+        return []
+
+    result = await db.execute(
+        select(ReaderPublication).where(
+            and_(
+                ReaderPublication.id.in_(parsed_ids),
+                cast(ReaderPublication.status, String) == "posted",
+            )
+        )
+    )
+    rows = result.scalars().all()
+    by_id = {str(row.id): row for row in rows}
+    ordered: list[ReaderPublication] = []
+    for item_id in parsed_ids:
+        row = by_id.get(str(item_id))
+        if row is not None:
+            ordered.append(row)
+    return ordered
+
+
 # ==================== Search ====================
 
 async def search_publications(
@@ -533,6 +587,11 @@ async def save_article(user_id: int, publication_id: str | UUID, db: AsyncSessio
     )
 
     if existing.scalar_one_or_none():
+        await push_reader_save_state(
+            user_id=user_id,
+            publication_id=str(publication_uuid),
+            saved=True,
+        )
         return  # Already saved
 
     saved = SavedArticle(
@@ -550,10 +609,20 @@ async def save_article(user_id: int, publication_id: str | UUID, db: AsyncSessio
     db.add(interaction)
 
     await db.commit()
+    await push_reader_save_state(
+        user_id=user_id,
+        publication_id=str(publication_uuid),
+        saved=True,
+    )
 
 
 async def get_saved_articles(user_id: int, limit: int = 20, db: AsyncSession = None) -> List[ReaderPublication]:
     """Get user's saved articles."""
+    core_saved = await fetch_reader_saved(user_id=user_id, limit=limit)
+    if core_saved is not None:
+        ids = [str(item.get("id", "")).strip() for item in core_saved if str(item.get("id", "")).strip()]
+        return await _ordered_publications_by_ids(ids, db=db)
+
     query = (
         select(ReaderPublication)
         .join(SavedArticle, cast(SavedArticle.publication_id, String) == cast(ReaderPublication.id, String))
@@ -587,6 +656,11 @@ async def unsave_article(user_id: int, publication_id: str | UUID, db: AsyncSess
     if saved:
         await db.delete(saved)
         await db.commit()
+    await push_reader_save_state(
+        user_id=user_id,
+        publication_id=str(publication_uuid),
+        saved=False,
+    )
 
 
 # ==================== Analytics ====================

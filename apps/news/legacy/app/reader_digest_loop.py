@@ -38,7 +38,9 @@ logger = logging.getLogger(__name__)
 _WORKER_ID = "news-reader-digest"
 _CONTROL_KEY = "news.reader_digest.enabled"
 _DEFAULT_SLOT_TIME = "12:15"
+_DEFAULT_SLOT_GRACE_MINUTES = 30
 _DEFAULT_MAX_USERS_PER_CYCLE = 30
+_BLOCKED_BY_WORKERS = ("news-generate", "news-telegram-ingest")
 _DIGEST_INTERVALS = {
     "daily": timedelta(hours=20),
     "twice_week": timedelta(hours=84),
@@ -65,6 +67,19 @@ def _normalize_slot_time(value: str) -> str:
     except ValueError:
         return _DEFAULT_SLOT_TIME
     return raw
+
+
+def _slot_is_due(slot: str, now_local: datetime, *, grace_minutes: int) -> bool:
+    try:
+        hour_str, minute_str = slot.split(":", 1)
+        hour = int(hour_str)
+        minute = int(minute_str)
+    except (ValueError, AttributeError):
+        return False
+    slot_dt = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now_local < slot_dt:
+        return False
+    return now_local <= slot_dt + timedelta(minutes=max(5, grace_minutes))
 
 
 def _digest_due(frequency: str, last_sent_at: datetime | None, now_utc: datetime) -> bool:
@@ -104,10 +119,45 @@ async def _send_worker_heartbeat(info: dict[str, object]) -> None:
         logger.warning("worker_heartbeat_failed", extra={"worker_id": _WORKER_ID, "error": str(exc)})
 
 
+def _blocking_workers_busy_sync(worker_ids: tuple[str, ...]) -> list[str]:
+    if not _core_api_enabled():
+        return []
+
+    response = requests.get(
+        f"{settings.core_api_url.rstrip('/')}/api/v1/workers/status",
+        headers={"X-API-Key": settings.api_key_news},
+        timeout=8,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    rows = payload.get("workers") or []
+
+    blocked: list[str] = []
+    for row in rows:
+        worker_id = str(row.get("worker_id") or "")
+        if worker_id not in worker_ids:
+            continue
+        if not bool(row.get("active")):
+            continue
+        info = row.get("info") or {}
+        if bool(info.get("busy")):
+            blocked.append(worker_id)
+    return blocked
+
+
+async def _blocking_workers_busy(worker_ids: tuple[str, ...]) -> list[str]:
+    try:
+        return await asyncio.to_thread(_blocking_workers_busy_sync, worker_ids)
+    except Exception as exc:
+        logger.warning("workers_status_unavailable", extra={"error": str(exc)})
+        return []
+
+
 def _load_control_sync() -> dict[str, object]:
     default: dict[str, object] = {
         "enabled": True,
         "slot_time": _DEFAULT_SLOT_TIME,
+        "slot_grace_minutes": _DEFAULT_SLOT_GRACE_MINUTES,
         "max_users_per_cycle": _DEFAULT_MAX_USERS_PER_CYCLE,
         "run_once_token": "",
     }
@@ -134,6 +184,10 @@ def _load_control_sync() -> dict[str, object]:
     return {
         "enabled": bool(row.get("enabled", True)),
         "slot_time": _normalize_slot_time(str(config.get("slot_time") or _DEFAULT_SLOT_TIME)),
+        "slot_grace_minutes": max(
+            5,
+            min(int(config.get("slot_grace_minutes") or _DEFAULT_SLOT_GRACE_MINUTES), 120),
+        ),
         "max_users_per_cycle": max(1, min(int(max_users), 500)),
         "run_once_token": str(config.get("run_once_token") or "").strip(),
     }
@@ -147,6 +201,7 @@ async def _load_control() -> dict[str, object]:
         return {
             "enabled": True,
             "slot_time": _DEFAULT_SLOT_TIME,
+            "slot_grace_minutes": _DEFAULT_SLOT_GRACE_MINUTES,
             "max_users_per_cycle": _DEFAULT_MAX_USERS_PER_CYCLE,
             "run_once_token": "",
         }
@@ -390,10 +445,12 @@ async def main() -> int:
             "action": "startup",
             "component": "reader_digest_loop",
             "tz": settings.tz,
+            "busy": False,
         }
     )
 
     last_slot_key = ""
+    last_blocked_slot_key = ""
     last_manual_run_token: str | None = None
     last_tick_heartbeat_at = 0.0
     timezone = ZoneInfo(settings.tz)
@@ -405,24 +462,41 @@ async def main() -> int:
                 control = await _load_control()
                 enabled = bool(control.get("enabled", True))
                 slot_time = _normalize_slot_time(str(control.get("slot_time") or _DEFAULT_SLOT_TIME))
+                slot_grace_minutes = max(5, min(int(control.get("slot_grace_minutes") or _DEFAULT_SLOT_GRACE_MINUTES), 120))
                 max_users = int(control.get("max_users_per_cycle") or _DEFAULT_MAX_USERS_PER_CYCLE)
                 manual_run_token = str(control.get("run_once_token") or "").strip()
                 now_local = datetime.now(timezone)
                 today_key = now_local.date().isoformat()
-                current_hhmm = now_local.strftime("%H:%M")
 
                 if last_manual_run_token is None:
                     last_manual_run_token = manual_run_token
 
-                if enabled and current_hhmm == slot_time:
+                if enabled and _slot_is_due(slot_time, now_local, grace_minutes=slot_grace_minutes):
                     slot_key = f"{today_key}:{slot_time}"
                     if slot_key != last_slot_key:
+                        blockers = await _blocking_workers_busy(_BLOCKED_BY_WORKERS)
+                        if blockers:
+                            if last_blocked_slot_key != slot_key:
+                                await _send_worker_heartbeat(
+                                    {
+                                        "action": "digest_slot_wait_busy",
+                                        "slot": slot_time,
+                                        "date": today_key,
+                                        "max_users": max_users,
+                                        "blockers": blockers,
+                                        "grace_minutes": slot_grace_minutes,
+                                        "busy": False,
+                                    }
+                                )
+                                last_blocked_slot_key = slot_key
+                            continue
                         await _send_worker_heartbeat(
                             {
                                 "action": "digest_slot_start",
                                 "slot": slot_time,
                                 "date": today_key,
                                 "max_users": max_users,
+                                "busy": True,
                             }
                         )
                         stats = await _run_digest_cycle(bot, max_users=max_users)
@@ -432,10 +506,12 @@ async def main() -> int:
                                 "slot": slot_time,
                                 "date": today_key,
                                 "max_users": max_users,
+                                "busy": False,
                                 **stats,
                             }
                         )
                         last_slot_key = slot_key
+                        last_blocked_slot_key = ""
 
                 if manual_run_token and manual_run_token != last_manual_run_token:
                     await _send_worker_heartbeat(
@@ -444,6 +520,7 @@ async def main() -> int:
                             "token": manual_run_token,
                             "enabled": enabled,
                             "max_users": max_users,
+                            "busy": True,
                         }
                     )
                     stats = await _run_digest_cycle(bot, max_users=max_users)
@@ -453,6 +530,7 @@ async def main() -> int:
                             "token": manual_run_token,
                             "enabled": enabled,
                             "max_users": max_users,
+                            "busy": False,
                             **stats,
                         }
                     )
@@ -463,8 +541,10 @@ async def main() -> int:
                     "mode": "poll",
                     "enabled": enabled,
                     "slot_time": slot_time,
+                    "slot_grace_minutes": slot_grace_minutes,
                     "max_users": max_users,
                     "manual_run_token": manual_run_token[-32:] if manual_run_token else "",
+                    "busy": False,
                 }
                 if now_ts - last_tick_heartbeat_at >= _TICK_HEARTBEAT_SECONDS:
                     heartbeat_info["action"] = "tick"
@@ -476,6 +556,7 @@ async def main() -> int:
                     {
                         "action": "iteration_error",
                         "error": str(exc)[:400],
+                        "busy": False,
                     }
                 )
                 sleep_for = 60

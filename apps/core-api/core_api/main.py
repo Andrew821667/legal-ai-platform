@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from core_api.alerts import send_telegram_alert
 from core_api.config import get_settings
 from core_api.logging_config import setup_logging
-from core_api.routers import admin, automation_controls, contract_jobs, events, health, leads, scheduled_posts, users, workers
+from core_api.routers import admin, automation_controls, contract_jobs, events, health, leads, reader, scheduled_posts, users, workers
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ app.include_router(leads.router)
 app.include_router(events.router)
 app.include_router(automation_controls.router)
 app.include_router(scheduled_posts.router)
+app.include_router(reader.router)
 app.include_router(contract_jobs.router)
 app.include_router(workers.router)
 app.include_router(admin.router)
