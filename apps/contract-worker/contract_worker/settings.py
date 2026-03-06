@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     api_key_worker: str = ""
     worker_id: str = socket.gethostname()
     job_timeout_seconds: int = 1200
+    job_touch_interval_seconds: int = 30
 
 
 settings = Settings()

@@ -305,6 +305,12 @@ class ContractJobPatch(BaseModel):
     last_error: str | None = None
 
 
+class ContractJobTouch(BaseModel):
+    worker_id: str | None = None
+    note: str | None = None
+    progress_pct: int | None = Field(default=None, ge=0, le=100)
+
+
 class ContractJobResult(BaseModel):
     result_summary: str | None = None
     result_json: dict[str, Any] | None = None

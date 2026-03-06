@@ -337,6 +337,10 @@ caffeinate -i uv run --package contract-worker python -m contract_worker.run
 ```
 3. Автозапуск через `launchd` (plist в `~/Library/LaunchAgents`).
 4. Логи: `/tmp/contract-worker.log`, `/tmp/contract-worker-err.log`.
+5. Рекомендованная настройка keepalive активной задачи:
+```bash
+JOB_TOUCH_INTERVAL_SECONDS=30
+```
 
 Быстрые API-проверки по контрактной очереди:
 ```bash

@@ -73,6 +73,18 @@ else
   exit 1
 fi
 
+TOUCH_MISSING_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+  "$API/contract-jobs/11111111-1111-1111-1111-111111111111/touch" \
+  -H "X-API-Key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"worker_id":"integration-smoke"}')
+if [ "$TOUCH_MISSING_CODE" = "404" ]; then
+  echo "✅ Contract jobs touch endpoint available"
+else
+  echo "❌ Contract jobs touch endpoint FAILED"
+  exit 1
+fi
+
 RETRY_DRY=$(curl -sf -X POST "$API/contract-jobs/retry-failed?dry_run=true&limit=10" \
   -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
 if [ "$RETRY_DRY" = "true" ]; then

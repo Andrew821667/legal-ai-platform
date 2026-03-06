@@ -98,9 +98,45 @@ def main() -> int:
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_process_job, job)
-                try:
-                    result_payload = future.result(timeout=settings.job_timeout_seconds)
-                except concurrent.futures.TimeoutError:
+                result_payload = None
+                start_monotonic = time.monotonic()
+                last_touch_monotonic = start_monotonic
+                timed_out = False
+                touch_interval = max(5, settings.job_touch_interval_seconds)
+                while True:
+                    elapsed = time.monotonic() - start_monotonic
+                    remaining = settings.job_timeout_seconds - elapsed
+                    if remaining <= 0:
+                        timed_out = True
+                        break
+                    try:
+                        result_payload = future.result(timeout=min(5.0, remaining))
+                        break
+                    except concurrent.futures.TimeoutError:
+                        now_monotonic = time.monotonic()
+                        if now_monotonic - last_touch_monotonic < touch_interval:
+                            continue
+                        last_touch_monotonic = now_monotonic
+                        try:
+                            touch = client.touch_job(
+                                str(job["id"]),
+                                settings.worker_id,
+                                note="processing",
+                            )
+                            touch.raise_for_status()
+                            _safe_heartbeat(
+                                client,
+                                settings.worker_id,
+                                {
+                                    "action": "job_touch",
+                                    "mode": "poll",
+                                    "job_id": str(job.get("id") or ""),
+                                },
+                            )
+                        except Exception:
+                            logger.exception("Job touch failed", extra={"job_id": job.get("id")})
+
+                if timed_out:
                     client.mark_failed(job["id"], "execution timeout")
                     logger.error("Job timeout", extra={"job_id": job["id"]})
                     _safe_heartbeat(
@@ -115,6 +151,7 @@ def main() -> int:
                     )
                     in_progress.clear()
                     continue
+                assert result_payload is not None
 
             response = client.submit_result(job["id"], result_payload)
             response.raise_for_status()

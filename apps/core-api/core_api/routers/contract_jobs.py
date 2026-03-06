@@ -30,6 +30,7 @@ from core_api.schemas import (
     ContractJobOut,
     ContractJobPatch,
     ContractJobResult,
+    ContractJobTouch,
     ContractJobSummaryOut,
 )
 
@@ -610,6 +611,37 @@ def requeue_contract_job(
             "increment_attempt": increment_attempt,
             "reason": reason,
         },
+    )
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/{job_id}/touch", response_model=ContractJobOut)
+def touch_contract_job(
+    job_id: uuid.UUID,
+    payload: ContractJobTouch,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJob:
+    job = db.get(ContractJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != ContractJobStatus.processing:
+        raise HTTPException(status_code=409, detail="Only processing jobs can be touched")
+    if payload.worker_id and job.worker_id and payload.worker_id != job.worker_id:
+        raise HTTPException(status_code=409, detail="worker_id does not match claimed worker")
+
+    job.updated_at = datetime.now(timezone.utc)
+    db.add(job)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="job.touch",
+        target_type="contract_job",
+        target_id=job.id,
+        details=payload.model_dump(exclude_none=True),
     )
     db.commit()
     db.refresh(job)

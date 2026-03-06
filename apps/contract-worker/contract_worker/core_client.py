@@ -35,6 +35,25 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def touch_job(
+        self,
+        job_id: str,
+        worker_id: str,
+        note: str | None = None,
+        progress_pct: int | None = None,
+    ) -> requests.Response:
+        payload: dict[str, Any] = {"worker_id": worker_id}
+        if note:
+            payload["note"] = note
+        if progress_pct is not None:
+            payload["progress_pct"] = progress_pct
+        return requests.post(
+            f"{self.base_url}/api/v1/contract-jobs/{job_id}/touch",
+            json=payload,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+
     def mark_failed(self, job_id: str, error_text: str) -> requests.Response:
         return requests.patch(
             f"{self.base_url}/api/v1/contract-jobs/{job_id}",

@@ -259,6 +259,102 @@ def test_claim_contract_job_skips_new_jobs_with_exhausted_attempts() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_touch_contract_job_updates_processing_timestamp_and_validates_worker() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.touch.contract"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    processing_id = None
+    new_id = None
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        processing_job = ContractJob(
+            status=ContractJobStatus.processing,
+            worker_id="worker-touch",
+            input_mode=InputMode.text_only,
+            document_text="processing touch",
+            attempts=0,
+            max_attempts=3,
+            created_at=now - timedelta(minutes=10),
+            updated_at=now - timedelta(minutes=5),
+        )
+        new_job = ContractJob(
+            status=ContractJobStatus.new,
+            input_mode=InputMode.text_only,
+            document_text="new cannot touch",
+            attempts=0,
+            max_attempts=3,
+            created_at=now - timedelta(minutes=10),
+            updated_at=now - timedelta(minutes=10),
+        )
+        db.add_all([processing_job, new_job])
+        db.commit()
+        db.refresh(processing_job)
+        db.refresh(new_job)
+        processing_id = processing_job.id
+        new_id = new_job.id
+        prev_updated_at = processing_job.updated_at
+    finally:
+        db.close()
+
+    try:
+        ok = client.post(
+            f"/api/v1/contract-jobs/{processing_id}/touch",
+            json={"worker_id": "worker-touch", "note": "still running", "progress_pct": 25},
+            headers={"X-API-Key": raw_key},
+        )
+        assert ok.status_code == 200
+        payload = ok.json()
+        assert payload["id"] == str(processing_id)
+        assert payload["status"] == ContractJobStatus.processing.value
+        assert datetime.fromisoformat(payload["updated_at"]) >= prev_updated_at
+
+        mismatch = client.post(
+            f"/api/v1/contract-jobs/{processing_id}/touch",
+            json={"worker_id": "other-worker"},
+            headers={"X-API-Key": raw_key},
+        )
+        assert mismatch.status_code == 409
+
+        not_processing = client.post(
+            f"/api/v1/contract-jobs/{new_id}/touch",
+            json={"worker_id": "worker-touch"},
+            headers={"X-API-Key": raw_key},
+        )
+        assert not_processing.status_code == 409
+
+        db = SessionLocal()
+        try:
+            audits = db.execute(
+                select(AuditLog).where(
+                    AuditLog.target_type == "contract_job",
+                    AuditLog.target_id == processing_id,
+                    AuditLog.action == "job.touch",
+                )
+            ).scalars().all()
+            assert len(audits) >= 1
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            if processing_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == processing_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == processing_id))
+            if new_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == new_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_reset_stale_contract_jobs_returns_to_new() -> None:
     client = TestClient(app)
     api_key_name = "pytest.admin.reset.contract"

@@ -40,6 +40,8 @@
   - `GET /api/v1/contract-jobs/summary`
   - `GET /api/v1/contract-jobs/ops-overview`
   - `GET /api/v1/contract-jobs/{job_id}/history`
+- Для keepalive активной обработки:
+  - `POST /api/v1/contract-jobs/{job_id}/touch`
 - Для единичного запуска обслуживания очереди:
   - `POST /api/v1/contract-jobs/maintenance?dry_run=true&retry_failed=true`
   - `POST /api/v1/contract-jobs/maintenance?dry_run=false&retry_failed=true`
