@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EXTERNAL_LINKS, ROUTES, leadBotDeepLink } from "@/lib/links";
 
 type NavItem = {
   name: string;
@@ -10,27 +11,27 @@ export default function Footer() {
   const navigation: Record<"company" | "services" | "resources", NavItem[]> = {
     company: [
       { name: "Главная", href: "/" },
-      { name: "Для юристов", href: "/for-lawyers" },
-      { name: "Для бизнеса", href: "/for-business" },
-      { name: "Contract_AI_System", href: "/contract-ai-system" },
-      { name: "О платформе", href: "/about" },
-      { name: "Контакты", href: "/about#contacts" },
+      { name: "Для юристов", href: ROUTES.forLawyers },
+      { name: "Для бизнеса", href: ROUTES.forBusiness },
+      { name: "Contract_AI_System", href: ROUTES.contractAI },
+      { name: "О платформе", href: ROUTES.about },
+      { name: "Контакты", href: `${ROUTES.about}#contacts` },
     ],
     services: [
-      { name: "Решения и услуги", href: "/solutions" },
+      { name: "Решения и услуги", href: ROUTES.solutions },
       { name: "Автоматизация юрфункции", href: "/solutions#automation" },
       { name: "Внедрение AI в legal ops", href: "/solutions#legal-ops" },
       { name: "Интеграции", href: "/solutions#integrations" },
-      { name: "Сценарии для бизнеса", href: "/for-business" },
-      { name: "Сценарии для юристов", href: "/for-lawyers" },
+      { name: "Сценарии для бизнеса", href: ROUTES.forBusiness },
+      { name: "Сценарии для юристов", href: ROUTES.forLawyers },
     ],
     resources: [
-      { name: "Контент / Кейсы", href: "/content-cases" },
+      { name: "Контент / Кейсы", href: ROUTES.contentCases },
       { name: "Практические разборы", href: "/content-cases#practical" },
       { name: "Проверить договор", href: "/contract-ai-system#demo" },
       {
         name: "Обсудить внедрение",
-        href: "https://t.me/legal_ai_helper_new_bot",
+        href: leadBotDeepLink("web_footer_consult"),
         external: true,
       },
     ],
@@ -84,7 +85,7 @@ export default function Footer() {
 
             <div className="flex gap-4">
               <a
-                href="https://t.me/legal_ai_helper_new_bot"
+                href={leadBotDeepLink("web_footer_social")}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white p-3 rounded-lg transition-all"
                 aria-label="Telegram Бот"
                 title="Telegram Бот"
@@ -169,7 +170,7 @@ export default function Footer() {
               <div>
                 <div className="text-white font-medium mb-1">Telegram бот</div>
                 <a
-                  href="https://t.me/legal_ai_helper_new_bot"
+                  href={leadBotDeepLink("web_footer_contacts")}
                   className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -183,7 +184,7 @@ export default function Footer() {
               <div>
                 <div className="text-white font-medium mb-1">Telegram канал</div>
                 <a
-                  href="https://t.me/legal_ai_pro"
+                  href={EXTERNAL_LINKS.channel}
                   className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
                   target="_blank"
                   rel="noopener noreferrer"

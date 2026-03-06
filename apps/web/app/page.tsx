@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ROUTES, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Платформа Legal AI PRO",
@@ -15,14 +16,14 @@ const audienceCards = [
     title: "Для юристов",
     description:
       "Ускоряем договорную и претензионную работу, снижаем рутину, стандартизируем контроль качества без потери юридической точности.",
-    href: "/for-lawyers",
+    href: ROUTES.forLawyers,
     cta: "Сценарии для юристов",
   },
   {
     title: "Для бизнеса",
     description:
       "Выстраиваем управляемую юридическую функцию: быстрее согласования, прозрачные SLA, контроль рисков и прогнозируемая нагрузка команды.",
-    href: "/for-business",
+    href: ROUTES.forBusiness,
     cta: "Сценарии для бизнеса",
   },
 ];
@@ -67,20 +68,20 @@ export default function Home() {
             внедряем Contract_AI_System и фиксируем бизнес-эффект на уровне KPI.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/contract-ai-system"
+              <Link
+              href={ROUTES.contractAI}
               className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
             >
               Попробовать Contract_AI_System
             </Link>
             <Link
-              href="/solutions"
+              href={ROUTES.solutions}
               className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               Посмотреть решения
             </Link>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_home_intro")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
@@ -155,13 +156,13 @@ export default function Home() {
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/content-cases"
+              href={ROUTES.contentCases}
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-100 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               Контент и кейсы
             </Link>
             <Link
-              href="/about"
+              href={ROUTES.about}
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-100 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               О платформе

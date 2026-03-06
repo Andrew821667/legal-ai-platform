@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ROUTES, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Contract_AI_System",
@@ -26,7 +27,7 @@ const valuePoints = [
 const taskTracks = [
   {
     title: "Что решаем для юристов",
-    href: "/for-lawyers",
+    href: ROUTES.forLawyers,
     items: [
       "Ускоряем первичный анализ договора",
       "Упорядочиваем согласование правок",
@@ -35,7 +36,7 @@ const taskTracks = [
   },
   {
     title: "Что решаем для бизнеса",
-    href: "/for-business",
+    href: ROUTES.forBusiness,
     items: [
       "Сокращаем цикл согласования сделки",
       "Делаем риски прозрачными для руководителей",
@@ -72,13 +73,13 @@ export default function ContractAISystemPage() {
           </p>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
             <Link
-              href="/content-cases"
+              href={ROUTES.contentCases}
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-slate-500 transition-colors text-center"
             >
               Узнать на кейсах
             </Link>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_contract_ai_check")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors text-center"
@@ -86,7 +87,7 @@ export default function ContractAISystemPage() {
               Проверить договор
             </a>
             <Link
-              href="/solutions"
+              href={ROUTES.solutions}
               className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors text-center"
             >
               Внедрить решение
@@ -165,7 +166,7 @@ export default function ContractAISystemPage() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_contract_ai_next_step")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
@@ -173,7 +174,7 @@ export default function ContractAISystemPage() {
               Передать кейс
             </a>
             <Link
-              href="/solutions"
+              href={ROUTES.solutions}
               className="rounded-lg border border-slate-600 px-5 py-3 font-semibold text-slate-100 hover:border-amber-300 hover:text-amber-200 transition-colors"
             >
               Посмотреть roadmap внедрения

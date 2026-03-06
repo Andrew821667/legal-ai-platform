@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ROUTES } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Для юристов",
@@ -71,13 +72,13 @@ export default function ForLawyersPage() {
           </ol>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/contract-ai-system"
+              href={ROUTES.contractAI}
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
             >
               Проверить договор
             </Link>
             <Link
-              href="/solutions"
+              href={ROUTES.solutions}
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               Все решения

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EXTERNAL_LINKS, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "О платформе",
@@ -48,7 +49,7 @@ export default function AboutPage() {
             <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
               <h3 className="font-semibold text-amber-300">Telegram</h3>
               <p className="mt-2 text-sm text-slate-300">
-                <a href="https://t.me/legal_ai_helper_new_bot" target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
+                <a href={leadBotDeepLink("web_about_contacts")} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
                   Ассистент Legal AI Pro
                 </a>
               </p>
@@ -56,7 +57,7 @@ export default function AboutPage() {
             <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
               <h3 className="font-semibold text-amber-300">Канал</h3>
               <p className="mt-2 text-sm text-slate-300">
-                <a href="https://t.me/legal_ai_pro" target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
+                <a href={EXTERNAL_LINKS.channel} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
                   @legal_ai_pro
                 </a>
               </p>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ROUTES, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Решения",
@@ -61,19 +62,19 @@ export default function SolutionsPage() {
           </p>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
             <Link
-              href="/content-cases"
+              href={ROUTES.contentCases}
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-slate-500 transition-colors text-center"
             >
               Узнать на кейсах
             </Link>
             <Link
-              href="/contract-ai-system"
+              href={ROUTES.contractAI}
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors text-center"
             >
               Проверить в продукте
             </Link>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_solutions_intro")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors text-center"
@@ -132,13 +133,13 @@ export default function SolutionsPage() {
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/contract-ai-system"
+              href={ROUTES.contractAI}
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
             >
               Перейти к Contract_AI_System
             </Link>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_solutions_discuss")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"

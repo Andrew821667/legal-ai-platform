@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ROUTES, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Для бизнеса",
@@ -72,13 +73,13 @@ export default function ForBusinessPage() {
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/contract-ai-system"
+              href={ROUTES.contractAI}
               className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
             >
               Посмотреть Contract_AI_System
             </Link>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink("web_for_business")}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
