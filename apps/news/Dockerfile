@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir uv
 
 COPY --link pyproject.toml /app/pyproject.toml
 COPY --link packages/shared /app/packages/shared
+COPY --link packages/prompts /app/packages/prompts
 COPY --link apps/news /app/apps/news
 
 RUN uv sync --package news
