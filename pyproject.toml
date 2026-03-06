@@ -11,7 +11,15 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["apps/*", "packages/*"]
+members = [
+    "apps/contract-ai",
+    "apps/contract-worker",
+    "apps/core-api",
+    "apps/lead-bot",
+    "apps/news",
+    "apps/web",
+    "packages/shared",
+]
 
 [tool.ruff]
 line-length = 100
