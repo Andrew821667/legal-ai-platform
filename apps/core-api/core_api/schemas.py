@@ -604,7 +604,7 @@ class ReaderMiniAppEventsSummaryOut(BaseModel):
 
 class ReaderMiniAppDeepLinkCreate(BaseModel):
     telegram_user_id: int
-    source: str = "reader_bot"
+    source: str = "reader.bot"
     screen: str | None = None
     action: str | None = None
     post_id: uuid.UUID | None = None

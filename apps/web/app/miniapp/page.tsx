@@ -6,6 +6,7 @@ import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
 const audienceHints = {
   lawyer: "Фокус на договорной и претензионной работе.",
@@ -84,24 +85,24 @@ export default function MiniAppHomePage() {
         <div className="mt-4 grid grid-cols-1 gap-2">
           <MiniTrackedLink
             href={ROUTES.miniAppContent}
-            action="miniapp_home_open_content"
-            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
+            action={MINIAPP_ACTIONS.openContent}
+            meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть контент
           </MiniTrackedLink>
           <MiniTrackedLink
             href={`${ROUTES.contractAI}#demo`}
-            action="miniapp_home_open_contract_ai"
-            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
+            action={MINIAPP_ACTIONS.openContractAI}
+            meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Проверить договор
           </MiniTrackedLink>
           <MiniTrackedLink
             href={ROUTES.miniAppSolutions}
-            action="miniapp_home_open_solutions"
-            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
+            action={MINIAPP_ACTIONS.openSolutions}
+            meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Сценарии внедрения
@@ -130,11 +131,11 @@ export default function MiniAppHomePage() {
         </p>
         <MiniTrackedLink
           href={recommendedHref}
-          action="miniapp_home_open_recommended_step"
+          action={MINIAPP_ACTIONS.openRecommendedStep}
           meta={{
-            eventType: "cta_click",
-            source: "miniapp_home",
-            screen: "/miniapp",
+            eventType: MINIAPP_EVENT_TYPES.ctaClick,
+            source: MINIAPP_EVENT_SOURCES.home,
+            screen: MINIAPP_SCREENS.home,
             payload: { section: state.recommendedSection, screen: state.recommendedScreen },
           }}
           className="mt-3 inline-flex rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"

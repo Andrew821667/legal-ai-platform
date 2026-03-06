@@ -214,7 +214,7 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         assert patched["audience"] == "lawyer"
         assert patched["interests"] == ["ai_law", "contracts"]
         assert patched["topics"] == ["ai_law", "contracts"]
-        assert patched["last_action"] == "miniapp_profile_saved"
+        assert patched["last_action"] == "profile.saved"
 
         event_response = client.post(
             "/api/v1/reader/miniapp/event",
@@ -232,6 +232,8 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         event_payload = event_response.json()
         assert event_payload["telegram_user_id"] == telegram_user_id
         assert event_payload["event_type"] == "action"
+        assert event_payload["source"] == "miniapp.app"
+        assert event_payload["action"] == "open.contract_ai"
 
         events_response = client.get(
             f"/api/v1/reader/miniapp/events?telegram_user_id={telegram_user_id}&limit=10",
@@ -247,7 +249,7 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
             headers={"X-API-Key": raw_key},
         )
         assert profile_after_event.status_code == 200
-        assert profile_after_event.json()["last_action"] == "miniapp_content_open_contract_ai"
+        assert profile_after_event.json()["last_action"] == "open.contract_ai"
 
         deeplink_response = client.post(
             "/api/v1/reader/miniapp/deeplink",
@@ -264,7 +266,8 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         assert deeplink["path"] == "/miniapp/content"
         assert f"tg={telegram_user_id}" in deeplink["url"]
         assert deeplink["query"]["screen"] == "content"
-        assert deeplink["query"]["act"] == "open_saved"
+        assert deeplink["query"]["src"] == "reader.bot"
+        assert deeplink["query"]["act"] == "open.saved"
 
         summary_response = client.get(
             "/api/v1/reader/miniapp/events/summary?hours=48&limit_users=5",
@@ -275,7 +278,7 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         assert summary["hours"] == 48
         assert summary["total_events"] >= 2
         assert summary["unique_users"] >= 1
-        assert any(item["label"] == "miniapp" for item in summary["top_sources"])
+        assert any(item["label"] == "miniapp.app" for item in summary["top_sources"])
         assert any(item["telegram_user_id"] == telegram_user_id for item in summary["top_users"])
         assert len(summary["recent_events"]) >= 2
     finally:
@@ -411,6 +414,10 @@ def test_reader_feedback_cta_and_lead_intent_flow() -> None:
                 db.execute(select(Event).where(Event.type == "reader.lead_intent")).scalars().all()
             )
             assert any(item.lead_id == lead.id for item in lead_events)
+            assert any((item.payload or {}).get("source") == "reader.bot" for item in lead_events)
+            cta_events = list(db.execute(select(Event).where(Event.type == "reader.cta_click")).scalars().all())
+            assert any((item.payload or {}).get("context") == "reader.post" for item in cta_events)
+            assert any((item.payload or {}).get("action") == "cta.consultation" for item in cta_events)
         finally:
             db.close()
     finally:

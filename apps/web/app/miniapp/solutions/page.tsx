@@ -4,25 +4,26 @@ import { ROUTES } from "@/lib/links";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
 const blocks = [
   {
     title: "Для юристов",
     description: "Договорная работа, претензионные контуры, шаблоны и контроль юридического качества.",
     href: ROUTES.forLawyers,
-    action: "miniapp_solutions_open_for_lawyers",
+    action: MINIAPP_ACTIONS.openSolutionsForLawyers,
   },
   {
     title: "Для бизнеса",
     description: "Скорость согласований, контроль рисков, управляемая загрузка юркоманды и SLA.",
     href: ROUTES.forBusiness,
-    action: "miniapp_solutions_open_for_business",
+    action: MINIAPP_ACTIONS.openSolutionsForBusiness,
   },
   {
     title: "Формат внедрения",
     description: "Пилот, этапное расширение и сопровождение с фокусом на измеримый результат.",
     href: ROUTES.solutions,
-    action: "miniapp_solutions_open_roadmap",
+    action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
 ];
 
@@ -41,7 +42,11 @@ export default function MiniAppSolutionsPage() {
           <MiniTrackedLink
             href={block.href}
             action={block.action}
-            meta={{ eventType: "solution_open", source: "miniapp_solutions", screen: "/miniapp/solutions" }}
+            meta={{
+              eventType: MINIAPP_EVENT_TYPES.solutionOpen,
+              source: MINIAPP_EVENT_SOURCES.solutions,
+              screen: MINIAPP_SCREENS.solutions,
+            }}
             className="mt-4 inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть маршрут

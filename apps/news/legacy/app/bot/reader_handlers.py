@@ -55,6 +55,12 @@ from app.services.core_reader_bridge import (
     push_reader_lead_intent,
     push_reader_save_state,
 )
+from app.services.reader_metrics import (
+    READER_CTA_TYPES,
+    READER_EVENT_ACTIONS,
+    READER_EVENT_SOURCES,
+    READER_INTENT_TYPES,
+)
 from app.config import settings
 
 
@@ -300,9 +306,9 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
 
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user.id,
-        source="reader_bot",
+        source=READER_EVENT_SOURCES["home"],
         screen=_guess_miniapp_screen(miniapp_last_action),
-        action="reader_home_continue_miniapp",
+        action=READER_EVENT_ACTIONS["open_miniapp_resume"],
         payload={"entry": "home_screen"},
     )
 
@@ -374,9 +380,9 @@ async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> Non
     """Show discovery section with clear steps."""
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
-        source="reader_discover",
+        source=READER_EVENT_SOURCES["discover"],
         screen="content",
-        action="reader_discover_open_miniapp",
+        action=READER_EVENT_ACTIONS["open_miniapp_content"],
         payload={"entry": "discover"},
     )
     rows: list[list[InlineKeyboardButton]] = [
@@ -413,9 +419,9 @@ async def _show_validate(target: Message, user_id: int) -> None:
     helper_link = _build_helper_link("reader_validate")
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
-        source="reader_validate",
+        source=READER_EVENT_SOURCES["validate"],
         screen="tools",
-        action="reader_validate_open_miniapp",
+        action=READER_EVENT_ACTIONS["open_miniapp_tools"],
         payload={"entry": "validate"},
     )
     rows: list[list[InlineKeyboardButton]] = []
@@ -449,9 +455,9 @@ async def _show_solutions(target: Message, user_id: int) -> None:
     helper_link = _build_helper_link("reader_solutions")
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
-        source="reader_solutions",
+        source=READER_EVENT_SOURCES["solutions"],
         screen="solutions",
-        action="reader_solutions_open_miniapp",
+        action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
         payload={"entry": "solutions"},
     )
     rows: list[list[InlineKeyboardButton]] = [
@@ -488,9 +494,9 @@ async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> 
     saved_articles = await _safe_get_saved_articles(user_id, db=db)
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
-        source="reader_profile",
+        source=READER_EVENT_SOURCES["profile"],
         screen="profile",
-        action="reader_profile_open_miniapp",
+        action=READER_EVENT_ACTIONS["open_miniapp_profile"],
         payload={"entry": "profile"},
     )
     lead_magnet_done = bool(lead_profile and lead_profile.lead_magnet_completed)
@@ -591,32 +597,32 @@ async def _open_reader_section(
             target,
             user_id,
             screen="content",
-            action="reader_start_open_miniapp_content",
-            source="reader_start",
+            action=READER_EVENT_ACTIONS["open_miniapp_content"],
+            source=READER_EVENT_SOURCES["start"],
         )
     elif section == "miniapp_tools":
         await _open_miniapp(
             target,
             user_id,
             screen="tools",
-            action="reader_start_open_miniapp_tools",
-            source="reader_start",
+            action=READER_EVENT_ACTIONS["open_miniapp_tools"],
+            source=READER_EVENT_SOURCES["start"],
         )
     elif section == "miniapp_solutions":
         await _open_miniapp(
             target,
             user_id,
             screen="solutions",
-            action="reader_start_open_miniapp_solutions",
-            source="reader_start",
+            action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
+            source=READER_EVENT_SOURCES["start"],
         )
     elif section == "miniapp_profile":
         await _open_miniapp(
             target,
             user_id,
             screen="profile",
-            action="reader_start_open_miniapp_profile",
-            source="reader_start",
+            action=READER_EVENT_ACTIONS["open_miniapp_profile"],
+            source=READER_EVENT_SOURCES["start"],
         )
     else:
         await target.answer(
@@ -753,40 +759,40 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
             callback.message,
             user_id,
             screen="home",
-            action="reader_nav_open_miniapp",
-            source="reader_nav",
+            action=READER_EVENT_ACTIONS["open_miniapp_home"],
+            source=READER_EVENT_SOURCES["nav"],
         )
     elif action == "miniapp_content":
         await _open_miniapp(
             callback.message,
             user_id,
             screen="content",
-            action="reader_nav_open_miniapp_content",
-            source="reader_discover",
+            action=READER_EVENT_ACTIONS["open_miniapp_content"],
+            source=READER_EVENT_SOURCES["discover"],
         )
     elif action == "miniapp_tools":
         await _open_miniapp(
             callback.message,
             user_id,
             screen="tools",
-            action="reader_nav_open_miniapp_tools",
-            source="reader_validate",
+            action=READER_EVENT_ACTIONS["open_miniapp_tools"],
+            source=READER_EVENT_SOURCES["validate"],
         )
     elif action == "miniapp_solutions":
         await _open_miniapp(
             callback.message,
             user_id,
             screen="solutions",
-            action="reader_nav_open_miniapp_solutions",
-            source="reader_solutions",
+            action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
+            source=READER_EVENT_SOURCES["solutions"],
         )
     elif action == "miniapp_profile":
         await _open_miniapp(
             callback.message,
             user_id,
             screen="profile",
-            action="reader_nav_open_miniapp_profile",
-            source="reader_profile",
+            action=READER_EVENT_ACTIONS["open_miniapp_profile"],
+            source=READER_EVENT_SOURCES["profile"],
         )
     elif action == "lead_magnet":
         await _open_lead_magnet(callback.message, user_id, state, db)
@@ -827,8 +833,8 @@ async def _open_miniapp(
     user_id: int,
     *,
     screen: str = "home",
-    action: str = "reader_open_miniapp",
-    source: str = "reader_bot",
+    action: str = READER_EVENT_ACTIONS["open_miniapp_home"],
+    source: str = READER_EVENT_SOURCES["bot"],
     post_id: str | None = None,
 ) -> None:
     """Open mini-app from reader bot with tracked deeplink."""
@@ -850,7 +856,7 @@ async def _open_miniapp(
     await push_reader_cta_click(
         user_id=user_id,
         publication_id=post_id,
-        cta_type="miniapp_open",
+        cta_type=READER_CTA_TYPES["miniapp_open"],
         context=source,
         payload={"screen": screen, "action": action, "post_id": post_id},
     )
@@ -882,8 +888,8 @@ async def cmd_miniapp(message: Message):
         message,
         message.from_user.id,
         screen="home",
-        action="reader_command_open_miniapp",
-        source="reader_command",
+        action=READER_EVENT_ACTIONS["open_miniapp_home"],
+        source=READER_EVENT_SOURCES["command"],
     )
 
 
@@ -901,8 +907,8 @@ async def open_miniapp_from_article(callback: CallbackQuery, db: AsyncSession):
         callback.message,
         callback.from_user.id,
         screen="content",
-        action="reader_article_open_miniapp",
-        source="reader_article",
+        action=READER_EVENT_ACTIONS["open_miniapp_content"],
+        source=READER_EVENT_SOURCES["article"],
         post_id=post_id,
     )
     await callback.answer()
@@ -1671,9 +1677,9 @@ async def start_article_question_flow(callback: CallbackQuery, state: FSMContext
     await push_reader_cta_click(
         user_id=callback.from_user.id,
         publication_id=str(article.id),
-        cta_type="article_question",
-        context="reader_article_card",
-        payload={"screen": "article_q_start"},
+        cta_type=READER_CTA_TYPES["article_question"],
+        context=READER_EVENT_SOURCES["article_card"],
+        payload={"screen": "article_q_start", "action": "cta.article_question"},
     )
     await callback.answer("Готово, жду ваш вопрос")
 
@@ -1780,10 +1786,14 @@ async def handle_article_question_text(message: Message, state: FSMContext, db: 
         await push_reader_lead_intent(
             user_id=user_id,
             publication_id=article_id,
-            intent_type="article_question",
+            intent_type=READER_INTENT_TYPES["article_question"],
             message=user_question,
             name=(message.from_user.full_name if message.from_user else None),
-            payload={"article_title": article_title},
+            payload={
+                "article_title": article_title,
+                "source": READER_EVENT_SOURCES["article_card"],
+                "action": "lead.article_question",
+            },
         )
 
     await state.clear()

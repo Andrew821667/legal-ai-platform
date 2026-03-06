@@ -3,6 +3,7 @@
 import { ROUTES } from "@/lib/links";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
 const AUDIENCE_LABELS = {
   lawyer: "Юрист",
@@ -30,8 +31,8 @@ export default function MiniAppTopBar() {
         </p>
         <MiniTrackedLink
           href={ROUTES.miniAppProfile}
-          action="miniapp_open_onboarding"
-          meta={{ eventType: "nav_click", source: "miniapp_topbar", screen: "/miniapp" }}
+          action={MINIAPP_ACTIONS.openOnboarding}
+          meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.topbar, screen: MINIAPP_SCREENS.home }}
           className="mt-3 inline-flex rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
         >
           Пройти настройку
@@ -51,8 +52,8 @@ export default function MiniAppTopBar() {
         </div>
         <MiniTrackedLink
           href={ROUTES.miniAppProfile}
-          action="miniapp_open_profile"
-          meta={{ eventType: "nav_click", source: "miniapp_topbar", screen: "/miniapp" }}
+          action={MINIAPP_ACTIONS.openProfile}
+          meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.topbar, screen: MINIAPP_SCREENS.home }}
           className="rounded-lg border border-emerald-400/40 px-3 py-2 text-xs font-semibold text-emerald-200 hover:border-emerald-300 transition-colors"
         >
           Изменить

@@ -262,6 +262,12 @@ curl -s "$CORE_API_URL/api/v1/workers/news-reader-digest/activity?hours=24&limit
 CORE_API_URL=http://localhost:8000 API_KEY_ADMIN=... infra/scripts/smoke_reader_digest.sh
 ```
 
+Единый словарь event-метрик (`web` + `mini-app` + `reader-bot`):
+- `source` хранится в dot-формате (`miniapp.home`, `miniapp.content`, `reader.nav`, `reader.article.card` и т.д.);
+- `action` хранится в каноническом словаре (`open.content`, `open.contract_ai`, `flow.discover`, `profile.saved`, `open.miniapp.*`);
+- `event_type` хранится в ограниченном наборе (`action`, `nav_click`, `cta_click`, `content_open`, `tool_open`, `solution_open`, `profile_saved`, `deeplink_open`, `deeplink_issued`);
+- `core-api` дополнительно нормализует legacy-значения (`miniapp_home`, `reader_nav_open_miniapp_content`, `open_saved` и т.п.), чтобы аналитика конверсии оставалась сквозной даже при старых клиентах.
+
 Кастомные иконки кнопок Telegram:
 - Bot API поддерживает `icon_custom_emoji_id` для `KeyboardButton` и `InlineKeyboardButton`, но для показа нужны реальные document ID кастомных emoji;
 - в проекте для этого предусмотрены env-переменные:

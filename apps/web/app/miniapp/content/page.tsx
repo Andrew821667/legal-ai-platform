@@ -5,8 +5,10 @@ import { ROUTES } from "@/lib/links";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
 type FeedItem = {
+  id: string;
   title: string;
   topic: string;
   href: string;
@@ -22,21 +24,25 @@ const topics = [
 
 const feed: FeedItem[] = [
   {
+    id: "contracts_cycle_control",
     title: "Как сократить цикл согласования договора без потери юридического контроля",
     topic: "AI в договорах",
     href: ROUTES.contentCases,
   },
   {
+    id: "tools_practical_legal",
     title: "Новые AI-инструменты: что реально применимо в юрдепартаменте",
     topic: "Общий AI",
     href: `${ROUTES.contentCases}#practical`,
   },
   {
+    id: "regulation_ai_law",
     title: "Регуляторные тренды AI law и их влияние на договорные оговорки",
     topic: "AI law",
     href: ROUTES.contentCases,
   },
   {
+    id: "legal_ops_overload",
     title: "Практика legal ops: где автоматизация снимает перегруз команды",
     topic: "Legal ops",
     href: `${ROUTES.contentCases}#practical`,
@@ -104,14 +110,14 @@ export default function MiniAppContentPage() {
         <div className="mt-3 space-y-3">
           {filteredFeed.map((item) => (
             <MiniTrackedLink
-              key={item.title}
+              key={item.id}
               href={item.href}
-              action={`miniapp_content_open:${item.title}`}
+              action={MINIAPP_ACTIONS.openContentItem}
               meta={{
-                eventType: "content_open",
-                source: "miniapp_content",
-                screen: "/miniapp/content",
-                payload: { topic: item.topic },
+                eventType: MINIAPP_EVENT_TYPES.contentOpen,
+                source: MINIAPP_EVENT_SOURCES.content,
+                screen: MINIAPP_SCREENS.content,
+                payload: { topic: item.topic, item_id: item.id },
               }}
               className="block rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >

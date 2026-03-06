@@ -3,6 +3,12 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
+import {
+  MINIAPP_EVENT_SOURCES,
+  MINIAPP_EVENT_TYPES,
+  defaultActionForScreen,
+  resolveMiniAppScreen,
+} from "@/lib/reader-events";
 
 export default function MiniAppDeepLinkSync() {
   const pathname = usePathname();
@@ -26,13 +32,13 @@ export default function MiniAppDeepLinkSync() {
     }
     handledRef.current = key;
 
-    const screen = (searchParams.get("screen") || "").trim() || pathname;
-    const source = (searchParams.get("src") || "").trim() || "miniapp";
-    const action = (searchParams.get("act") || "").trim() || `miniapp_open_${screen}`;
+    const screen = resolveMiniAppScreen((searchParams.get("screen") || "").trim() || pathname);
+    const source = (searchParams.get("src") || "").trim() || MINIAPP_EVENT_SOURCES.deeplink;
+    const action = (searchParams.get("act") || "").trim() || defaultActionForScreen(screen);
     const postId = (searchParams.get("post_id") || "").trim() || null;
 
     recordAction(action, {
-      eventType: "deeplink_open",
+      eventType: MINIAPP_EVENT_TYPES.deeplinkOpen,
       source,
       screen,
       payload: postId ? { post_id: postId } : {},

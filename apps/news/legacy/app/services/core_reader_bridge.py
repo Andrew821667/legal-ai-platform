@@ -312,7 +312,7 @@ async def push_reader_lead_intent(
 async def build_reader_miniapp_deeplink(
     *,
     user_id: int,
-    source: str = "reader_bot",
+    source: str = "reader.bot",
     screen: str | None = None,
     action: str | None = None,
     post_id: str | UUID | None = None,
@@ -334,7 +334,7 @@ async def build_reader_miniapp_deeplink(
 
     body: dict[str, Any] = {
         "telegram_user_id": int(user_id),
-        "source": (source or "reader_bot").strip() or "reader_bot",
+        "source": (source or "reader.bot").strip() or "reader.bot",
         "screen": (screen or "home").strip() or "home",
         "action": (action or "").strip() or None,
         "payload": payload or {},

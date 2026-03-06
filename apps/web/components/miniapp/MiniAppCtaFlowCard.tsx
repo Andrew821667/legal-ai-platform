@@ -2,6 +2,7 @@
 
 import { leadBotDeepLink, readerBotDeepLink, ROUTES } from "@/lib/links";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES } from "@/lib/reader-events";
 
 type MiniAppCtaFlowCardProps = {
   leadStart: string;
@@ -20,8 +21,13 @@ export default function MiniAppCtaFlowCard({
       <div className="mt-3 grid grid-cols-1 gap-2">
         <MiniTrackedLink
           href={readerBotDeepLink("discover")}
-          action="miniapp_flow_open_reader_discover"
-          meta={{ eventType: "cta_click", source: "miniapp_flow", screen: sourceScreen, payload: { cta: "discover" } }}
+          action={MINIAPP_ACTIONS.flowDiscover}
+          meta={{
+            eventType: MINIAPP_EVENT_TYPES.ctaClick,
+            source: MINIAPP_EVENT_SOURCES.flow,
+            screen: sourceScreen,
+            payload: { cta: "discover" },
+          }}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
@@ -31,8 +37,13 @@ export default function MiniAppCtaFlowCard({
 
         <MiniTrackedLink
           href={ROUTES.contractAI}
-          action="miniapp_flow_open_contract_ai"
-          meta={{ eventType: "cta_click", source: "miniapp_flow", screen: sourceScreen, payload: { cta: "validate" } }}
+          action={MINIAPP_ACTIONS.flowValidate}
+          meta={{
+            eventType: MINIAPP_EVENT_TYPES.ctaClick,
+            source: MINIAPP_EVENT_SOURCES.flow,
+            screen: sourceScreen,
+            payload: { cta: "validate" },
+          }}
           className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
         >
           🧪 Проверить в Contract_AI_System
@@ -40,8 +51,13 @@ export default function MiniAppCtaFlowCard({
 
         <MiniTrackedLink
           href={leadBotDeepLink(leadStart)}
-          action="miniapp_flow_open_lead_bot"
-          meta={{ eventType: "cta_click", source: "miniapp_flow", screen: sourceScreen, payload: { cta: "implement" } }}
+          action={MINIAPP_ACTIONS.flowImplement}
+          meta={{
+            eventType: MINIAPP_EVENT_TYPES.ctaClick,
+            source: MINIAPP_EVENT_SOURCES.flow,
+            screen: sourceScreen,
+            payload: { cta: "implement" },
+          }}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-medium text-sky-200 hover:border-sky-300 transition-colors"

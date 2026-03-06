@@ -1,6 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  MINIAPP_EVENT_SOURCES,
+  MINIAPP_EVENT_TYPES,
+  type MiniAppEventSource,
+  type MiniAppEventType,
+  type MiniAppScreen,
+} from "@/lib/reader-events";
 
 export type MiniAppAudience = "lawyer" | "business" | "mixed";
 
@@ -21,9 +28,9 @@ export type MiniAppState = {
 };
 
 export type MiniAppActionMeta = {
-  eventType?: string;
-  source?: string;
-  screen?: string;
+  eventType?: MiniAppEventType | string;
+  source?: MiniAppEventSource | string;
+  screen?: MiniAppScreen | string;
   payload?: Record<string, unknown>;
 };
 
@@ -181,8 +188,8 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_user_id: telegramUserId,
-            event_type: (meta?.eventType || "action").slice(0, 100),
-            source: meta?.source || "miniapp",
+            event_type: (meta?.eventType || MINIAPP_EVENT_TYPES.action).slice(0, 100),
+            source: meta?.source || MINIAPP_EVENT_SOURCES.app,
             screen: meta?.screen || null,
             action,
             payload: meta?.payload || {},

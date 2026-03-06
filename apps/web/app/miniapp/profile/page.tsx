@@ -6,6 +6,7 @@ import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { useMiniAppState, type MiniAppAudience } from "@/components/miniapp/MiniAppStateProvider";
+import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
 const interestOptions = [
   "AI в договорах",
@@ -66,10 +67,10 @@ export default function MiniAppProfilePage() {
       interests,
       goal,
     });
-    recordAction("miniapp_profile_saved", {
-      eventType: "profile_saved",
-      source: "miniapp_profile",
-      screen: "/miniapp/profile",
+    recordAction(MINIAPP_ACTIONS.profileSaved, {
+      eventType: MINIAPP_EVENT_TYPES.profileSaved,
+      source: MINIAPP_EVENT_SOURCES.profile,
+      screen: MINIAPP_SCREENS.profile,
       payload: { audience, interests_count: interests.length },
     });
     setSaved(true);
@@ -180,11 +181,11 @@ export default function MiniAppProfilePage() {
 
       <MiniTrackedLink
         href={leadBotDeepLink("web_miniapp_profile")}
-        action="miniapp_profile_open_assistant"
+        action={MINIAPP_ACTIONS.openAssistant}
         meta={{
-          eventType: "cta_click",
-          source: "miniapp_profile",
-          screen: "/miniapp/profile",
+          eventType: MINIAPP_EVENT_TYPES.ctaClick,
+          source: MINIAPP_EVENT_SOURCES.profile,
+          screen: MINIAPP_SCREENS.profile,
           payload: { cta: "lead_bot" },
         }}
         target="_blank"

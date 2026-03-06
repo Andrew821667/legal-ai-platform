@@ -29,6 +29,17 @@ from core_api.models import (
     Scope,
 )
 from core_api.post_feedback import apply_feedback_signal
+from core_api.reader_metrics import (
+    MINIAPP_SCREEN_KEY_TO_PATH,
+    normalize_cta_context,
+    normalize_cta_type,
+    normalize_intent_type,
+    normalize_miniapp_event_type,
+    normalize_reader_action,
+    normalize_reader_source,
+    normalize_screen_key,
+    normalize_screen_path,
+)
 from core_api.schemas import (
     MessageResponse,
     PostFeedbackOut,
@@ -65,14 +76,6 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
     "privacy": ["privacy", "персональн", "transborder", "cross-border", "data transfer"],
     "regulation": ["regulation", "регулирован", "закон", "надзор", "policy"],
     "ai_general": ["ai", "llm", "agent", "copilot", "foundation model"],
-}
-
-_MINIAPP_SCREEN_TO_PATH: dict[str, str] = {
-    "home": "/miniapp",
-    "content": "/miniapp/content",
-    "tools": "/miniapp/tools",
-    "solutions": "/miniapp/solutions",
-    "profile": "/miniapp/profile",
 }
 
 _SECTION_TO_SCREEN: dict[str, str] = {
@@ -289,7 +292,7 @@ def patch_reader_miniapp_profile(
     if payload.goal is not None:
         row.miniapp_goal = _trim_optional_text(payload.goal, max_len=4000)
     if payload.last_action is not None:
-        row.miniapp_last_action = _trim_optional_text(payload.last_action, max_len=255)
+        row.miniapp_last_action = _trim_optional_text(normalize_reader_action(payload.last_action), max_len=255)
     if payload.digest_frequency is not None:
         row.digest_frequency = _trim_optional_text(payload.digest_frequency, max_len=50) or "never"
     if payload.expertise_level is not None:
@@ -403,19 +406,24 @@ def create_reader_miniapp_event(
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> ReaderMiniAppEvent:
+    normalized_event_type = normalize_miniapp_event_type(payload.event_type)
+    normalized_source = normalize_reader_source(payload.source, default="miniapp.app")
+    normalized_screen = normalize_screen_path(payload.screen)
+    normalized_action = normalize_reader_action(payload.action)
+
     row = ReaderMiniAppEvent(
         telegram_user_id=payload.telegram_user_id,
-        event_type=payload.event_type.strip()[:100],
-        source=_trim_optional_text(payload.source, max_len=50) or "miniapp",
-        screen=_trim_optional_text(payload.screen, max_len=120),
-        action=_trim_optional_text(payload.action, max_len=120),
+        event_type=normalized_event_type,
+        source=normalized_source[:50],
+        screen=_trim_optional_text(normalized_screen, max_len=120),
+        action=_trim_optional_text(normalized_action, max_len=120),
         payload=payload.payload,
     )
     db.add(row)
 
-    if payload.update_last_action and payload.action:
+    if payload.update_last_action and normalized_action:
         pref = _get_or_create_pref(db, payload.telegram_user_id)
-        pref.miniapp_last_action = _trim_optional_text(payload.action, max_len=255)
+        pref.miniapp_last_action = _trim_optional_text(normalized_action, max_len=255)
         pref.updated_at = datetime.now(timezone.utc)
         db.add(pref)
 
@@ -431,8 +439,9 @@ def create_reader_miniapp_event(
         target_id=row.id,
         details={
             "telegram_user_id": payload.telegram_user_id,
-            "event_type": payload.event_type,
-            "source": payload.source or "miniapp",
+            "event_type": normalized_event_type,
+            "source": normalized_source,
+            "action": normalized_action,
         },
     )
     db.commit()
@@ -534,17 +543,18 @@ def build_reader_miniapp_deeplink(
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> ReaderMiniAppDeepLinkOut:
-    screen = _trim_optional_text(payload.screen, max_len=32) or "home"
-    path = _MINIAPP_SCREEN_TO_PATH.get(screen, _MINIAPP_SCREEN_TO_PATH["home"])
+    screen = normalize_screen_key(payload.screen)
+    path = MINIAPP_SCREEN_KEY_TO_PATH.get(screen, MINIAPP_SCREEN_KEY_TO_PATH["home"])
+    source = normalize_reader_source(payload.source, default="reader.bot")
+    action = normalize_reader_action(payload.action)
 
     query: dict[str, str] = {
         "tg": str(payload.telegram_user_id),
-        "src": _trim_optional_text(payload.source, max_len=64) or "reader_bot",
+        "src": source,
         "screen": screen,
     }
-    action = _trim_optional_text(payload.action, max_len=64)
     if action:
-        query["act"] = action
+        query["act"] = action[:64]
     if payload.post_id is not None:
         query["post_id"] = str(payload.post_id)
 
@@ -557,8 +567,8 @@ def build_reader_miniapp_deeplink(
     event = ReaderMiniAppEvent(
         telegram_user_id=payload.telegram_user_id,
         event_type="deeplink_issued",
-        source=query["src"],
-        screen=screen,
+        source=source,
+        screen=path,
         action=action,
         payload={"post_id": str(payload.post_id) if payload.post_id else None, **payload.payload},
     )
@@ -746,6 +756,20 @@ def reader_cta_click(
     db: Session = Depends(get_db),
 ) -> MessageResponse:
     _ = identity
+    normalized_cta_type = normalize_cta_type(payload.cta_type)
+    normalized_context = normalize_cta_context(payload.context)
+    raw_payload = payload.payload if isinstance(payload.payload, dict) else {}
+    payload_action = normalize_reader_action(raw_payload.get("action")) if raw_payload else None
+    fallback_action_map = {
+        "consultation": "cta.consultation",
+        "article_question": "cta.article_question",
+        "miniapp_open": "cta.miniapp_open",
+        "discover": "flow.discover",
+        "validate": "flow.validate",
+        "implement": "flow.implement",
+    }
+    normalized_action = payload_action or fallback_action_map.get(normalized_cta_type or "")
+
     db.add(
         Event(
             lead_id=None,
@@ -754,9 +778,11 @@ def reader_cta_click(
             payload={
                 "telegram_user_id": payload.telegram_user_id,
                 "post_id": str(payload.post_id) if payload.post_id else None,
-                "cta_type": payload.cta_type,
-                "context": payload.context,
-                "payload": payload.payload,
+                "cta_type": normalized_cta_type,
+                "context": normalized_context,
+                "source": normalized_context,
+                "action": normalized_action,
+                "payload": raw_payload,
             },
         )
     )
@@ -771,6 +797,11 @@ def reader_lead_intent(
     db: Session = Depends(get_db),
 ) -> ReaderLeadIntentOut:
     _ = identity
+    normalized_intent_type = normalize_intent_type(payload.intent_type)
+    raw_payload = payload.payload if isinstance(payload.payload, dict) else {}
+    normalized_source = normalize_reader_source(raw_payload.get("source"), default="reader.bot")
+    normalized_action = normalize_reader_action(raw_payload.get("action"))
+
     lead = db.execute(
         select(Lead)
         .where(Lead.telegram_user_id == payload.telegram_user_id)
@@ -788,7 +819,7 @@ def reader_lead_intent(
             contact=payload.contact,
             status=LeadStatus.new,
             cta_variant="reader_referral",
-            notes=f"[READER_REFERRAL] intent={payload.intent_type}",
+            notes=f"[READER_REFERRAL] intent={normalized_intent_type}",
             last_activity_at=now,
         )
         db.add(lead)
@@ -800,7 +831,7 @@ def reader_lead_intent(
             lead.contact = payload.contact
         if payload.name and not lead.name:
             lead.name = payload.name
-        note_suffix = f"\n[READER_REFERRAL] intent={payload.intent_type}"
+        note_suffix = f"\n[READER_REFERRAL] intent={normalized_intent_type}"
         current_notes = lead.notes or ""
         lead.notes = (current_notes + note_suffix)[-4000:]
         db.add(lead)
@@ -813,9 +844,11 @@ def reader_lead_intent(
             payload={
                 "telegram_user_id": payload.telegram_user_id,
                 "post_id": str(payload.post_id) if payload.post_id else None,
-                "intent_type": payload.intent_type,
+                "intent_type": normalized_intent_type,
+                "source": normalized_source,
+                "action": normalized_action,
                 "message": payload.message,
-                "payload": payload.payload,
+                "payload": raw_payload,
             },
         )
     )
@@ -831,7 +864,7 @@ def reader_lead_intent(
         details={
             "created": created,
             "telegram_user_id": payload.telegram_user_id,
-            "intent_type": payload.intent_type,
+            "intent_type": normalized_intent_type,
             "post_id": str(payload.post_id) if payload.post_id else None,
         },
     )
