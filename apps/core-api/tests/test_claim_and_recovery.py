@@ -10,6 +10,7 @@ from core_api.db import SessionLocal
 from core_api.main import app
 from core_api.models import (
     ApiKey,
+    ActorType,
     AuditLog,
     ContractJob,
     ContractJobStatus,
@@ -561,6 +562,99 @@ def test_contract_jobs_summary_returns_operational_counts() -> None:
         db = SessionLocal()
         try:
             db.execute(delete(ContractJob).where(ContractJob.id.in_(created_ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_contract_jobs_ops_overview_returns_samples_and_recent_events() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.contract.ops_overview"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    created_ids: list = []
+    audit_id = None
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = [
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="processing stale",
+                worker_id="worker-ops",
+                attempts=0,
+                max_attempts=3,
+                created_at=now - timedelta(hours=3),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed retryable",
+                attempts=1,
+                max_attempts=3,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+            ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new exhausted",
+                attempts=3,
+                max_attempts=3,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+        ]
+        db.add_all(rows)
+        db.commit()
+        for row in rows:
+            db.refresh(row)
+            created_ids.append(row.id)
+
+        audit = AuditLog(
+            actor_type=ActorType.api_key,
+            actor_id="pytest.ops",
+            action="job.ops.test",
+            target_type="contract_job",
+            target_id=rows[0].id,
+            details={"source": "test"},
+            created_at=now - timedelta(minutes=5),
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(audit)
+        audit_id = audit.id
+    finally:
+        db.close()
+
+    try:
+        response = client.get(
+            "/api/v1/contract-jobs/ops-overview?window_hours=24&stale_minutes=30&sample_limit=10&events_limit=20",
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["summary"]["processing_stale_count"] >= 1
+        assert payload["summary"]["failed_retryable_count"] >= 1
+        assert payload["summary"]["new_exhausted_count"] >= 1
+        assert len(payload["samples"]["stale_processing"]) >= 1
+        assert len(payload["samples"]["failed_retryable"]) >= 1
+        assert len(payload["samples"]["new_exhausted"]) >= 1
+
+        actions = [entry["action"] for entry in payload["recent_events"]]
+        assert "job.ops.test" in actions
+        action_counts = {entry["action"]: entry["count"] for entry in payload["action_counts"]}
+        assert action_counts.get("job.ops.test", 0) >= 1
+    finally:
+        db = SessionLocal()
+        try:
+            if audit_id is not None:
+                db.execute(delete(AuditLog).where(AuditLog.id == audit_id))
+            if created_ids:
+                db.execute(delete(ContractJob).where(ContractJob.id.in_(created_ids)))
             db.commit()
         finally:
             db.close()

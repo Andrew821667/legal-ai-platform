@@ -18,6 +18,11 @@ from core_api.schemas import (
     ContractJobBulkRetryOut,
     ContractJobCreate,
     ContractJobFinalizeExhaustedOut,
+    ContractJobOpsActionCount,
+    ContractJobOpsEventEntry,
+    ContractJobOpsOverviewOut,
+    ContractJobOpsSampleItem,
+    ContractJobOpsSamples,
     ContractJobHistoryEntry,
     ContractJobHistoryResponse,
     ContractJobOut,
@@ -71,95 +76,13 @@ def _apply_contract_job_filters(
     return stmt
 
 
-@router.post("", response_model=ContractJobOut)
-def create_contract_job(
-    payload: ContractJobCreate,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
-    db: Session = Depends(get_db),
-) -> ContractJob:
-    _ = identity
-    job = ContractJob(**payload.model_dump())
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    return job
-
-
-@router.get("", response_model=None)
-def list_contract_jobs(
-    status: ContractJobStatus | None = Query(default=None),
-    lead_id: uuid.UUID | None = Query(default=None),
-    worker_id: str | None = Query(default=None),
-    offset: int = Query(default=0, ge=0, le=100000),
-    limit: int = Query(default=20, ge=1, le=100),
-    order_by: Literal["priority", "created_at", "updated_at", "deadline_at"] = Query(default="priority"),
-    order_dir: Literal["asc", "desc"] = Query(default="asc"),
-    stale_processing_only: bool = Query(default=False),
-    stale_minutes: int = Query(default=30, ge=1, le=240),
-    failed_retryable_only: bool = Query(default=False),
-    new_retryable_only: bool = Query(default=False),
-    new_older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
-    count_only: bool = Query(default=False),
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
-    db: Session = Depends(get_db),
-) -> Any:
-    _ = identity
-    now = datetime.now(timezone.utc)
-    if count_only:
-        stmt = select(func.count()).select_from(ContractJob)
-        stmt = _apply_contract_job_filters(
-            stmt,
-            now=now,
-            status=status,
-            lead_id=lead_id,
-            worker_id=worker_id,
-            stale_processing_only=stale_processing_only,
-            stale_minutes=stale_minutes,
-            failed_retryable_only=failed_retryable_only,
-            new_retryable_only=new_retryable_only,
-            new_older_than_minutes=new_older_than_minutes,
-        )
-        count = db.execute(stmt).scalar_one()
-        return {"count": count}
-
-    stmt = select(ContractJob)
-    stmt = _apply_contract_job_filters(
-        stmt,
-        now=now,
-        status=status,
-        lead_id=lead_id,
-        worker_id=worker_id,
-        stale_processing_only=stale_processing_only,
-        stale_minutes=stale_minutes,
-        failed_retryable_only=failed_retryable_only,
-        new_retryable_only=new_retryable_only,
-        new_older_than_minutes=new_older_than_minutes,
-    )
-
-    order_expr_map = {
-        "priority": ContractJob.priority,
-        "created_at": ContractJob.created_at,
-        "updated_at": ContractJob.updated_at,
-        "deadline_at": ContractJob.deadline_at,
-    }
-    primary_col = order_expr_map[order_by]
-    primary_order = primary_col.asc() if order_dir == "asc" else primary_col.desc()
-    if order_by == "deadline_at":
-        primary_order = primary_order.nulls_last()
-
-    stmt = stmt.order_by(primary_order, ContractJob.priority.asc(), ContractJob.created_at.asc()).offset(offset).limit(limit)
-    return list(db.execute(stmt).scalars().all())
-
-
-@router.get("/summary", response_model=ContractJobSummaryOut)
-def contract_jobs_summary(
-    window_hours: int = Query(default=24, ge=1, le=168),
-    stale_minutes: int = Query(default=30, ge=1, le=240),
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
-    db: Session = Depends(get_db),
+def _build_contract_job_summary(
+    db: Session,
+    *,
+    now: datetime,
+    window_hours: int,
+    stale_minutes: int,
 ) -> ContractJobSummaryOut:
-    _ = identity
-    now = datetime.now(timezone.utc)
     stale_before = now - timedelta(minutes=stale_minutes)
     window_start = now - timedelta(hours=window_hours)
 
@@ -253,6 +176,209 @@ def contract_jobs_summary(
         done_last_hours_count=done_last_hours_count,
         window_hours=window_hours,
         stale_minutes=stale_minutes,
+    )
+
+
+@router.post("", response_model=ContractJobOut)
+def create_contract_job(
+    payload: ContractJobCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJob:
+    _ = identity
+    job = ContractJob(**payload.model_dump())
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.get("", response_model=None)
+def list_contract_jobs(
+    status: ContractJobStatus | None = Query(default=None),
+    lead_id: uuid.UUID | None = Query(default=None),
+    worker_id: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0, le=100000),
+    limit: int = Query(default=20, ge=1, le=100),
+    order_by: Literal["priority", "created_at", "updated_at", "deadline_at"] = Query(default="priority"),
+    order_dir: Literal["asc", "desc"] = Query(default="asc"),
+    stale_processing_only: bool = Query(default=False),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    failed_retryable_only: bool = Query(default=False),
+    new_retryable_only: bool = Query(default=False),
+    new_older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
+    count_only: bool = Query(default=False),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> Any:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    if count_only:
+        stmt = select(func.count()).select_from(ContractJob)
+        stmt = _apply_contract_job_filters(
+            stmt,
+            now=now,
+            status=status,
+            lead_id=lead_id,
+            worker_id=worker_id,
+            stale_processing_only=stale_processing_only,
+            stale_minutes=stale_minutes,
+            failed_retryable_only=failed_retryable_only,
+            new_retryable_only=new_retryable_only,
+            new_older_than_minutes=new_older_than_minutes,
+        )
+        count = db.execute(stmt).scalar_one()
+        return {"count": count}
+
+    stmt = select(ContractJob)
+    stmt = _apply_contract_job_filters(
+        stmt,
+        now=now,
+        status=status,
+        lead_id=lead_id,
+        worker_id=worker_id,
+        stale_processing_only=stale_processing_only,
+        stale_minutes=stale_minutes,
+        failed_retryable_only=failed_retryable_only,
+        new_retryable_only=new_retryable_only,
+        new_older_than_minutes=new_older_than_minutes,
+    )
+
+    order_expr_map = {
+        "priority": ContractJob.priority,
+        "created_at": ContractJob.created_at,
+        "updated_at": ContractJob.updated_at,
+        "deadline_at": ContractJob.deadline_at,
+    }
+    primary_col = order_expr_map[order_by]
+    primary_order = primary_col.asc() if order_dir == "asc" else primary_col.desc()
+    if order_by == "deadline_at":
+        primary_order = primary_order.nulls_last()
+
+    stmt = stmt.order_by(primary_order, ContractJob.priority.asc(), ContractJob.created_at.asc()).offset(offset).limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
+@router.get("/summary", response_model=ContractJobSummaryOut)
+def contract_jobs_summary(
+    window_hours: int = Query(default=24, ge=1, le=168),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobSummaryOut:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    return _build_contract_job_summary(
+        db,
+        now=now,
+        window_hours=window_hours,
+        stale_minutes=stale_minutes,
+    )
+
+
+@router.get("/ops-overview", response_model=ContractJobOpsOverviewOut)
+def contract_jobs_ops_overview(
+    window_hours: int = Query(default=24, ge=1, le=168),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    sample_limit: int = Query(default=10, ge=1, le=100),
+    events_limit: int = Query(default=30, ge=1, le=200),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobOpsOverviewOut:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    summary = _build_contract_job_summary(
+        db,
+        now=now,
+        window_hours=window_hours,
+        stale_minutes=stale_minutes,
+    )
+    stale_before = now - timedelta(minutes=stale_minutes)
+    window_start = now - timedelta(hours=window_hours)
+
+    stale_processing = list(
+        db.execute(
+            select(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.processing,
+                ContractJob.updated_at < stale_before,
+            )
+            .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+            .limit(sample_limit)
+        ).scalars().all()
+    )
+    failed_retryable = list(
+        db.execute(
+            select(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.failed,
+                ContractJob.attempts < ContractJob.max_attempts,
+            )
+            .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+            .limit(sample_limit)
+        ).scalars().all()
+    )
+    new_exhausted = list(
+        db.execute(
+            select(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.new,
+                ContractJob.attempts >= ContractJob.max_attempts,
+            )
+            .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+            .limit(sample_limit)
+        ).scalars().all()
+    )
+
+    action_count_rows = db.execute(
+        select(AuditLog.action, func.count())
+        .where(
+            AuditLog.target_type == "contract_job",
+            AuditLog.created_at >= window_start,
+        )
+        .group_by(AuditLog.action)
+        .order_by(func.count().desc(), AuditLog.action.asc())
+    ).all()
+    action_counts = [
+        ContractJobOpsActionCount(action=str(action), count=int(count))
+        for action, count in action_count_rows
+    ]
+
+    recent_rows = db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.target_type == "contract_job",
+            AuditLog.created_at >= window_start,
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(events_limit)
+    ).scalars().all()
+    recent_events = [
+        ContractJobOpsEventEntry(
+            created_at=row.created_at,
+            actor_type=row.actor_type.value,
+            actor_id=row.actor_id,
+            action=row.action,
+            target_id=row.target_id,
+            details=row.details,
+        )
+        for row in recent_rows
+    ]
+
+    return ContractJobOpsOverviewOut(
+        generated_at=now,
+        summary=summary,
+        action_counts=action_counts,
+        recent_events=recent_events,
+        samples=ContractJobOpsSamples(
+            stale_processing=[ContractJobOpsSampleItem.model_validate(item) for item in stale_processing],
+            failed_retryable=[ContractJobOpsSampleItem.model_validate(item) for item in failed_retryable],
+            new_exhausted=[ContractJobOpsSampleItem.model_validate(item) for item in new_exhausted],
+        ),
+        window_hours=window_hours,
+        stale_minutes=stale_minutes,
+        sample_limit=sample_limit,
+        events_limit=events_limit,
     )
 
 

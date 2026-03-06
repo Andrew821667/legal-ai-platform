@@ -38,6 +38,7 @@
   - SLA-фильтры: `stale_processing_only`, `stale_minutes`, `failed_retryable_only`, `new_retryable_only`, `new_older_than_minutes`
 - Для мониторинга очереди и диагностики задачи:
   - `GET /api/v1/contract-jobs/summary`
+  - `GET /api/v1/contract-jobs/ops-overview`
   - `GET /api/v1/contract-jobs/{job_id}/history`
 - Для безопасного массового ретрая:
   - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true`

@@ -343,6 +343,9 @@ caffeinate -i uv run --package contract-worker python -m contract_worker.run
 curl -s "$CORE_API_URL/api/v1/contract-jobs/summary?window_hours=24&stale_minutes=30" \
   -H "X-API-Key: $API_KEY_ADMIN"
 
+curl -s "$CORE_API_URL/api/v1/contract-jobs/ops-overview?window_hours=24&stale_minutes=30&sample_limit=10&events_limit=30" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
 curl -s "$CORE_API_URL/api/v1/contract-jobs/{job_id}/history?limit=20" \
   -H "X-API-Key: $API_KEY_ADMIN"
 

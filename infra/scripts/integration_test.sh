@@ -55,6 +55,15 @@ else
   exit 1
 fi
 
+OPS_OVERVIEW_OK=$(curl -sf -X GET "$API/contract-jobs/ops-overview?window_hours=24&stale_minutes=30&sample_limit=5&events_limit=10" \
+  -H "X-API-Key: $KEY" | jq -r 'if .summary.total >= 0 then "ok" else "fail" end')
+if [ "$OPS_OVERVIEW_OK" = "ok" ]; then
+  echo "✅ Contract jobs ops-overview available"
+else
+  echo "❌ Contract jobs ops-overview FAILED"
+  exit 1
+fi
+
 RETRY_DRY=$(curl -sf -X POST "$API/contract-jobs/retry-failed?dry_run=true&limit=10" \
   -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
 if [ "$RETRY_DRY" = "true" ]; then

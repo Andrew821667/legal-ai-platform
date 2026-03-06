@@ -384,6 +384,52 @@ class ContractJobFinalizeExhaustedOut(BaseModel):
     job_ids: list[uuid.UUID]
 
 
+class ContractJobOpsSampleItem(BaseModel):
+    id: uuid.UUID
+    status: ContractJobStatus
+    priority: int
+    attempts: int
+    max_attempts: int
+    worker_id: str | None
+    created_at: datetime
+    updated_at: datetime
+    last_error: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class ContractJobOpsSamples(BaseModel):
+    stale_processing: list[ContractJobOpsSampleItem]
+    failed_retryable: list[ContractJobOpsSampleItem]
+    new_exhausted: list[ContractJobOpsSampleItem]
+
+
+class ContractJobOpsActionCount(BaseModel):
+    action: str
+    count: int
+
+
+class ContractJobOpsEventEntry(BaseModel):
+    created_at: datetime
+    actor_type: str
+    actor_id: str
+    action: str
+    target_id: uuid.UUID | None
+    details: dict[str, Any] | None = None
+
+
+class ContractJobOpsOverviewOut(BaseModel):
+    generated_at: datetime
+    summary: ContractJobSummaryOut
+    action_counts: list[ContractJobOpsActionCount]
+    recent_events: list[ContractJobOpsEventEntry]
+    samples: ContractJobOpsSamples
+    window_hours: int
+    stale_minutes: int
+    sample_limit: int
+    events_limit: int
+
+
 class HeartbeatRequest(BaseModel):
     worker_id: str
     info: dict[str, Any] | None = None

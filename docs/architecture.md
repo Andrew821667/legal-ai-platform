@@ -45,6 +45,7 @@
 - `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
 - `GET /api/v1/contract-jobs/{job_id}` — получение статуса конкретной задачи (scope `bot|worker|admin`).
 - `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
+- `GET /api/v1/contract-jobs/ops-overview` — единый операционный обзор (summary + sample задач + последние audit-события).
 - `GET /api/v1/contract-jobs/{job_id}/history` — история действий по задаче из `audit_log`.
 - `GET /api/v1/contract-jobs` — списки задач с пагинацией/сортировкой и SLA-фильтрами.
 - `POST /api/v1/contract-jobs/{job_id}/requeue` — ручной возврат конкретной задачи в `new` (admin, с `force`).
