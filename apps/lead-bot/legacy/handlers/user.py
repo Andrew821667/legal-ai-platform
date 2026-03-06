@@ -199,11 +199,6 @@ async def process_pending_start_payload(
         post_id=match.group("post_id"),
     )
 
-# Import admin panel function (avoid at module level due to potential circular import)
-def get_show_admin_panel():
-    from handlers.admin import show_admin_panel
-    return show_admin_panel
-
 
 def _pdn_consent_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSENT_PDN_MENU)
@@ -1545,8 +1540,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Админ-панель (только для админа)
         if _button_text_equals(message_text, "⚙️ Админ-панель"):
             if user.id == config.ADMIN_TELEGRAM_ID:
-                show_admin_panel_func = get_show_admin_panel()
-                await show_admin_panel_func(update, context)
+                await utils.safe_reply_text(
+                    original_message,
+                    "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
+                    reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                    action="open_admin_panel_from_user_flow",
+                )
             else:
                 await original_message.reply_text("У вас нет доступа к этой функции")
             return
