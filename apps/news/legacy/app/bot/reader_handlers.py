@@ -49,6 +49,7 @@ from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
 from app.services.core_reader_bridge import (
     build_reader_miniapp_deeplink,
+    fetch_reader_miniapp_profile,
     push_reader_cta_click,
     push_reader_lead_intent,
     push_reader_save_state,
@@ -201,6 +202,28 @@ def _build_helper_link(payload: str | None = None) -> str:
     return f"https://t.me/{helper_username}"
 
 
+def _guess_miniapp_screen(last_action: str | None) -> str:
+    action = (last_action or "").strip().lower()
+    if "content" in action:
+        return "content"
+    if "tool" in action:
+        return "tools"
+    if "solution" in action:
+        return "solutions"
+    if "profile" in action or "onboarding" in action:
+        return "profile"
+    return "home"
+
+
+def _humanize_miniapp_action(last_action: str | None) -> str:
+    value = (last_action or "").strip()
+    if not value:
+        return "нет данных"
+    if len(value) > 60:
+        return value[:57] + "..."
+    return value
+
+
 def _build_reader_nav_keyboard(
     *,
     profile_ready: bool,
@@ -244,23 +267,60 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
     """Render home screen for already onboarded user."""
     lead_profile = await get_lead_profile(user.id, db)
     saved_articles = await _safe_get_saved_articles(user.id, db=db)
+    miniapp_profile = await fetch_reader_miniapp_profile(user_id=user.id)
+    miniapp_last_action = (
+        str((miniapp_profile or {}).get("last_action") or "").strip() if isinstance(miniapp_profile, dict) else ""
+    )
+    miniapp_onboarding_done = bool((miniapp_profile or {}).get("onboarding_done")) if miniapp_profile else False
+    miniapp_interests_count = 0
+    if isinstance(miniapp_profile, dict):
+        interests = miniapp_profile.get("interests")
+        if isinstance(interests, list):
+            miniapp_interests_count = len([item for item in interests if isinstance(item, str) and item.strip()])
+
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user.id,
+        source="reader_bot",
+        screen=_guess_miniapp_screen(miniapp_last_action),
+        action="reader_home_continue_miniapp",
+        payload={"entry": "home_screen"},
+    )
+
+    nav_markup = _build_reader_nav_keyboard(
+        profile_ready=True,
+        lead_magnet_completed=bool(lead_profile and lead_profile.lead_magnet_completed),
+        include_home=False,
+    )
+    if miniapp_url:
+        nav_markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🧩 Продолжить в Mini App", url=miniapp_url)],
+                *nav_markup.inline_keyboard,
+            ]
+        )
+
     lead_magnet_text = (
         "✅ Персональный дайджест уже активирован."
         if lead_profile and lead_profile.lead_magnet_completed
         else "🎯 Можно включить персональный дайджест за 2-3 шага."
+    )
+    miniapp_status = (
+        "🧩 Mini App: профиль настроен"
+        if miniapp_onboarding_done
+        else "🧩 Mini App: профиль не настроен"
+    )
+    miniapp_state = (
+        f"{miniapp_status} · интересов: {miniapp_interests_count} · последнее: {_humanize_miniapp_action(miniapp_last_action)}"
     )
 
     await target.answer(
         f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
         "Выберите действие кнопками ниже.\n\n"
         f"Сохранённых статей: <b>{len(saved_articles)}</b>\n"
-        f"{lead_magnet_text}",
+        f"{lead_magnet_text}\n"
+        f"{escape(miniapp_state)}",
         parse_mode="HTML",
-        reply_markup=_build_reader_nav_keyboard(
-            profile_ready=True,
-            lead_magnet_completed=bool(lead_profile and lead_profile.lead_magnet_completed),
-            include_home=False,
-        ),
+        reply_markup=nav_markup,
     )
 
 
@@ -311,6 +371,9 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
     # Quick navigation row
     keyboard.append([
         InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
+        InlineKeyboardButton(text="🧩 Mini App", callback_data=f"mini:{publication_id}"),
+    ])
+    keyboard.append([
         InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home"),
     ])
 
@@ -411,7 +474,13 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
     elif action == "settings":
         await _show_settings(callback.message, user_id, db)
     elif action == "miniapp":
-        await _open_miniapp(callback.message, user_id)
+        await _open_miniapp(
+            callback.message,
+            user_id,
+            screen="home",
+            action="reader_nav_open_miniapp",
+            source="reader_nav",
+        )
     elif action == "lead_magnet":
         await _open_lead_magnet(callback.message, user_id, state, db)
     else:
@@ -446,13 +515,23 @@ async def _open_lead_magnet(target: Message, user_id: int, state: FSMContext, db
     await start_lead_magnet(target, state, db)
 
 
-async def _open_miniapp(target: Message, user_id: int) -> None:
+async def _open_miniapp(
+    target: Message,
+    user_id: int,
+    *,
+    screen: str = "home",
+    action: str = "reader_open_miniapp",
+    source: str = "reader_bot",
+    post_id: str | None = None,
+) -> None:
     """Open mini-app from reader bot with tracked deeplink."""
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
-        source="reader_bot",
-        screen="home",
-        action="reader_open_miniapp",
+        source=source,
+        screen=screen,
+        action=action,
+        post_id=post_id,
+        payload={"entry": source},
     )
     if not miniapp_url:
         await target.answer(
@@ -463,9 +542,10 @@ async def _open_miniapp(target: Message, user_id: int) -> None:
 
     await push_reader_cta_click(
         user_id=user_id,
+        publication_id=post_id,
         cta_type="miniapp_open",
-        context="reader_nav",
-        payload={"screen": "home"},
+        context=source,
+        payload={"screen": screen, "action": action, "post_id": post_id},
     )
 
     await target.answer(
@@ -491,7 +571,34 @@ async def cmd_lead_magnet(message: Message, state: FSMContext, db: AsyncSession)
 @router.message(Command("miniapp"))
 async def cmd_miniapp(message: Message):
     """Open web mini-app."""
-    await _open_miniapp(message, message.from_user.id)
+    await _open_miniapp(
+        message,
+        message.from_user.id,
+        screen="home",
+        action="reader_command_open_miniapp",
+        source="reader_command",
+    )
+
+
+@router.callback_query(F.data.startswith("mini:"))
+async def open_miniapp_from_article(callback: CallbackQuery, db: AsyncSession):
+    """Open mini-app with article context."""
+    if callback.message is None:
+        await callback.answer("Откройте mini-app через меню", show_alert=True)
+        return
+    raw_post_id = (callback.data or "").split(":", 1)[1].strip()
+    post_id = raw_post_id if raw_post_id else None
+    if post_id:
+        _ = await get_publication_by_id(post_id, db)
+    await _open_miniapp(
+        callback.message,
+        callback.from_user.id,
+        screen="content",
+        action="reader_article_open_miniapp",
+        source="reader_article",
+        post_id=post_id,
+    )
+    await callback.answer()
 
 
 @router.message(Command("ask_question"))
