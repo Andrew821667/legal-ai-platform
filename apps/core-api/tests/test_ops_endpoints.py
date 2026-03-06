@@ -42,26 +42,14 @@ def _delete_api_key(name: str) -> None:
         db.close()
 
 
-def test_health_detailed_requires_admin_scope() -> None:
+def test_health_detailed_is_public_infra_endpoint() -> None:
     client = TestClient(app)
-    admin_name = "pytest.ops.admin"
-    news_name = "pytest.ops.news"
-    admin_key = _create_api_key(Scope.admin, admin_name)
-    news_key = _create_api_key(Scope.news, news_name)
-
-    try:
-        forbidden = client.get("/health/detailed", headers={"X-API-Key": news_key})
-        assert forbidden.status_code == 403
-
-        ok = client.get("/health/detailed", headers={"X-API-Key": admin_key})
-        assert ok.status_code == 200
-        body = ok.json()
-        assert set(body.keys()) == {"status", "db_ok", "disk_usage_pct", "memory_usage_pct", "uptime_seconds"}
-        assert isinstance(body["db_ok"], bool)
-        assert body["status"] in {"ok", "degraded"}
-    finally:
-        _delete_api_key(admin_name)
-        _delete_api_key(news_name)
+    ok = client.get("/health/detailed")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert set(body.keys()) == {"status", "db_ok", "disk_usage_pct", "memory_usage_pct", "uptime_seconds"}
+    assert isinstance(body["db_ok"], bool)
+    assert body["status"] in {"ok", "degraded"}
 
 
 def test_workers_status_shape_for_admin() -> None:

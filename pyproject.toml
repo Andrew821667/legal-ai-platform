@@ -18,6 +18,7 @@ members = [
     "apps/lead-bot",
     "apps/news",
     "apps/web",
+    "packages/prompts",
     "packages/shared",
 ]
 
