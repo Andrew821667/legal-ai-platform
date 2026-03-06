@@ -36,7 +36,8 @@ class Config:
 
     def __init__(self):
         # Telegram Bot Token
-        self.TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN')
+        # Поддерживаем старое имя LEAD_BOT_TOKEN для обратной совместимости deploy-окружений.
+        self.TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('LEAD_BOT_TOKEN')
         if not self.TELEGRAM_BOT_TOKEN:
             raise ValueError("TELEGRAM_BOT_TOKEN не установлен в переменных окружения")
 

@@ -100,10 +100,6 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: http://core-api:8000
-      API_KEY_BOT: ${API_KEY_BOT}
-      API_KEY_NEWS: ${API_KEY_NEWS}
-      API_KEY_ADMIN: ${API_KEY_ADMIN}
-      TELEGRAM_BOT_TOKEN: ${LEAD_BOT_TOKEN}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
       core-api:
@@ -129,7 +125,6 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
       TZ: ${TZ:-Europe/Moscow}
@@ -158,7 +153,6 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
       TZ: ${TZ:-Europe/Moscow}
@@ -187,7 +181,6 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.publish_loop
@@ -212,9 +205,6 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
-      NEWS_ADMIN_BOT_TOKEN: ${NEWS_ADMIN_BOT_TOKEN}
-      NEWS_ADMIN_IDS: ${NEWS_ADMIN_IDS}
       TZ: ${TZ:-Europe/Moscow}
     command: ["uv", "run", "python", "-m", "news.admin_bot"]
     depends_on:
@@ -243,11 +233,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-legalai}
       POSTGRES_USER: ${POSTGRES_USER:-legalai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
-      READER_BOT_TOKEN: ${READER_BOT_TOKEN}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_bot"]
     depends_on:
@@ -278,11 +266,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-legalai}
       POSTGRES_USER: ${POSTGRES_USER:-legalai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
-      READER_BOT_TOKEN: ${READER_BOT_TOKEN}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
       CORE_API_URL: http://core-api:8000
-      API_KEY_NEWS: ${API_KEY_NEWS}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_digest_loop"]
     depends_on:
