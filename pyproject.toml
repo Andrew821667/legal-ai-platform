@@ -37,5 +37,5 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]
-pythonpath = ["apps/core-api", "packages/shared"]
+pythonpath = ["apps/core-api", "apps/contract-worker", "packages/shared"]
 addopts = "-q"
