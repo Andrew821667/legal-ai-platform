@@ -46,6 +46,33 @@ JOB_COUNT=$(curl -sf -X GET "$API/contract-jobs?status=new&count_only=true" \
 
 echo "✅ Contract jobs endpoint available (new count: $JOB_COUNT)"
 
+SUMMARY_TOTAL=$(curl -sf -X GET "$API/contract-jobs/summary" \
+  -H "X-API-Key: $KEY" | jq -r '.total // -1')
+if [ "$SUMMARY_TOTAL" -ge 0 ]; then
+  echo "✅ Contract jobs summary available (total: $SUMMARY_TOTAL)"
+else
+  echo "❌ Contract jobs summary FAILED"
+  exit 1
+fi
+
+RETRY_DRY=$(curl -sf -X POST "$API/contract-jobs/retry-failed?dry_run=true&limit=10" \
+  -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
+if [ "$RETRY_DRY" = "true" ]; then
+  echo "✅ Contract jobs retry-failed dry-run works"
+else
+  echo "❌ Contract jobs retry-failed dry-run FAILED"
+  exit 1
+fi
+
+FINALIZE_DRY=$(curl -sf -X POST "$API/contract-jobs/finalize-exhausted-new?dry_run=true&limit=10" \
+  -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
+if [ "$FINALIZE_DRY" = "true" ]; then
+  echo "✅ Contract jobs finalize-exhausted-new dry-run works"
+else
+  echo "❌ Contract jobs finalize-exhausted-new dry-run FAILED"
+  exit 1
+fi
+
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$API/admin/api-keys" \
   -H "X-API-Key: ${API_KEY_BOT:-invalid}" || true)
 if [ "$HTTP_CODE" = "403" ] || [ "$HTTP_CODE" = "401" ]; then
