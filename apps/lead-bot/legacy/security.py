@@ -50,9 +50,20 @@ class SecurityManager:
 
         self.TOTAL_DAILY_BUDGET = 100000  # Общий дневной бюджет токенов для всех
         self.total_tokens_today = 0
-        self.budget_reset_time = datetime.now() + timedelta(days=1)
+        self._rate_limit_checks = 0
 
         logger.info("Security Manager initialized")
+
+    @staticmethod
+    def _today_key(now: datetime | None = None) -> str:
+        moment = now or datetime.now()
+        return moment.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _week_start_key(now: datetime | None = None) -> str:
+        moment = now or datetime.now()
+        week_start = moment - timedelta(days=moment.weekday())
+        return week_start.strftime("%Y-%m-%d")
 
     def check_rate_limit(self, user_id: int) -> tuple[bool, Optional[str]]:
         """
@@ -61,21 +72,32 @@ class SecurityManager:
         Returns:
             (allowed, reason) - True если разрешено, False + причина если заблокировано
         """
-        now = time.time()
-        user_messages = self.message_timestamps[user_id]
-
-        # Удаляем старые временные метки (старше 1 дня)
+        now = int(time.time())
         day_ago = now - 86400
-        while user_messages and user_messages[0] < day_ago:
-            user_messages.popleft()
 
-        # Проверяем лимиты
-        minute_ago = now - 60
-        hour_ago = now - 3600
+        try:
+            self._rate_limit_checks += 1
+            # Периодически чистим таблицу целиком, в остальных случаях — только текущего пользователя.
+            if self._rate_limit_checks % 200 == 0:
+                database.db.prune_security_message_events(day_ago)
+            else:
+                database.db.prune_security_message_events(day_ago, telegram_user_id=user_id)
 
-        messages_last_minute = sum(1 for ts in user_messages if ts > minute_ago)
-        messages_last_hour = sum(1 for ts in user_messages if ts > hour_ago)
-        messages_last_day = len(user_messages)
+            minute_ago = now - 60
+            hour_ago = now - 3600
+            messages_last_minute = database.db.count_security_message_events_since(user_id, minute_ago)
+            messages_last_hour = database.db.count_security_message_events_since(user_id, hour_ago)
+            messages_last_day = database.db.count_security_message_events_since(user_id, day_ago)
+        except Exception as db_error:
+            logger.warning("Rate-limit DB fallback to memory for user %s: %s", user_id, db_error)
+            user_messages = self.message_timestamps[user_id]
+            while user_messages and user_messages[0] < day_ago:
+                user_messages.popleft()
+            minute_ago = now - 60
+            hour_ago = now - 3600
+            messages_last_minute = sum(1 for ts in user_messages if ts > minute_ago)
+            messages_last_hour = sum(1 for ts in user_messages if ts > hour_ago)
+            messages_last_day = len(user_messages)
 
         if messages_last_minute >= self.RATE_LIMITS['messages_per_minute']:
             logger.warning(f"Rate limit exceeded for user {user_id}: {messages_last_minute} msgs/min")
@@ -90,7 +112,11 @@ class SecurityManager:
             return False, f"Превышен дневной лимит сообщений. Попробуйте завтра. (Лимит: {self.RATE_LIMITS['messages_per_day']} сообщений в день)"
 
         # Все проверки пройдены
-        user_messages.append(now)
+        try:
+            database.db.record_security_message_event(user_id, now)
+        except Exception as db_error:
+            logger.warning("Failed to persist rate-limit event for user %s: %s", user_id, db_error)
+            self.message_timestamps[user_id].append(now)
         return True, None
 
     def check_cooldown(self, user_id: int) -> tuple[bool, Optional[str]]:
@@ -119,24 +145,46 @@ class SecurityManager:
             return False, f"Сообщение слишком длинное! Максимум {self.MAX_MESSAGE_LENGTH} символов. (У вас: {len(message)})"
         return True, None
 
-    def check_token_limit(self, user_id: int) -> tuple[bool, Optional[str]]:
-        """Проверка лимита токенов для пользователя"""
-        # TODO: Реализовать отслеживание токенов из БД
-        # Пока возвращаем True
+    def check_token_limit(self, user_id: int, estimated_tokens: int = 1000) -> tuple[bool, Optional[str]]:
+        """Проверка дневного/недельного лимита токенов для пользователя."""
+        now = datetime.now()
+        day_key = self._today_key(now)
+        week_key = self._week_start_key(now)
+
+        try:
+            used_today = database.db.get_security_user_tokens(user_id, day_key)
+            used_week = database.db.get_security_user_tokens_since(user_id, week_key)
+        except Exception as db_error:
+            logger.warning("Token-limit DB fallback for user %s: %s", user_id, db_error)
+            used_today = self.token_usage[user_id]
+            used_week = self.token_usage[user_id]
+
+        if used_today + estimated_tokens > self.TOKEN_LIMITS['per_day']:
+            return (
+                False,
+                f"Превышен дневной лимит токенов. Попробуйте позже. (Лимит: {self.TOKEN_LIMITS['per_day']})",
+            )
+
+        if used_week + estimated_tokens > self.TOKEN_LIMITS['per_week']:
+            return (
+                False,
+                f"Превышен недельный лимит токенов. Попробуйте на следующей неделе. (Лимит: {self.TOKEN_LIMITS['per_week']})",
+            )
+
         return True, None
 
     def check_total_budget(self, estimated_tokens: int = 1000) -> tuple[bool, Optional[str]]:
         """Проверка общего дневного бюджета"""
-        now = datetime.now()
+        day_key = self._today_key()
+        try:
+            used_today = database.db.get_security_total_tokens(day_key)
+            self.total_tokens_today = used_today
+        except Exception as db_error:
+            logger.warning("Total budget DB fallback: %s", db_error)
+            used_today = self.total_tokens_today
 
-        # Сброс счетчика в полночь
-        if now > self.budget_reset_time:
-            self.total_tokens_today = 0
-            self.budget_reset_time = now + timedelta(days=1)
-            logger.info("Daily token budget reset")
-
-        if self.total_tokens_today + estimated_tokens > self.TOTAL_DAILY_BUDGET:
-            logger.error(f"Daily budget exceeded! Used: {self.total_tokens_today}, Budget: {self.TOTAL_DAILY_BUDGET}")
+        if used_today + estimated_tokens > self.TOTAL_DAILY_BUDGET:
+            logger.error(f"Daily budget exceeded! Used: {used_today}, Budget: {self.TOTAL_DAILY_BUDGET}")
             return False, "Извините, дневной лимит запросов исчерпан. Попробуйте завтра или свяжитесь с нашей командой напрямую."
 
         return True, None
@@ -149,9 +197,25 @@ class SecurityManager:
         """
         return len(text) // 4
 
-    def add_tokens_used(self, tokens: int):
-        """Добавить использованные токены к счетчику"""
-        self.total_tokens_today += tokens
+    def add_tokens_used(self, tokens: int, user_id: int | None = None):
+        """Добавить использованные токены к счетчикам (персистентно)."""
+        if tokens <= 0:
+            return
+
+        day_key = self._today_key()
+        target_user_id = int(user_id) if user_id is not None else 0
+
+        try:
+            database.db.add_security_tokens_used(target_user_id, day_key, int(tokens))
+            self.total_tokens_today = database.db.get_security_total_tokens(day_key)
+            if user_id is not None:
+                self.token_usage[int(user_id)] += int(tokens)
+        except Exception as db_error:
+            logger.warning("Failed to persist token usage, fallback to memory: %s", db_error)
+            self.total_tokens_today += int(tokens)
+            if user_id is not None:
+                self.token_usage[int(user_id)] += int(tokens)
+
         logger.debug(f"Tokens used today: {self.total_tokens_today}/{self.TOTAL_DAILY_BUDGET}")
 
     def is_blacklisted(self, user_id: int) -> tuple[bool, Optional[str]]:
@@ -237,8 +301,14 @@ class SecurityManager:
         if not is_allowed:
             return False, reason
 
-        # 6. Проверка общего бюджета
-        is_allowed, reason = self.check_total_budget()
+        # 6. Проверка персонального лимита токенов
+        estimated_tokens = max(250, self.estimate_tokens(message) * 3)
+        is_allowed, reason = self.check_token_limit(user_id, estimated_tokens=estimated_tokens)
+        if not is_allowed:
+            return False, reason
+
+        # 7. Проверка общего бюджета
+        is_allowed, reason = self.check_total_budget(estimated_tokens=estimated_tokens)
         if not is_allowed:
             return False, reason
 
@@ -252,13 +322,19 @@ class SecurityManager:
 
     def get_stats(self) -> Dict:
         """Получить статистику безопасности"""
+        total_tokens_today = self.total_tokens_today
+        try:
+            total_tokens_today = database.db.get_security_total_tokens(self._today_key())
+            self.total_tokens_today = total_tokens_today
+        except Exception as db_error:
+            logger.debug("Security stats DB fallback: %s", db_error)
         return {
             'blacklisted_users': len(self.blacklist),
             'suspicious_users': len(self.suspicious_users),
-            'total_tokens_today': self.total_tokens_today,
+            'total_tokens_today': total_tokens_today,
             'daily_budget': self.TOTAL_DAILY_BUDGET,
-            'budget_remaining': self.TOTAL_DAILY_BUDGET - self.total_tokens_today,
-            'budget_percentage': (self.total_tokens_today / self.TOTAL_DAILY_BUDGET * 100),
+            'budget_remaining': self.TOTAL_DAILY_BUDGET - total_tokens_today,
+            'budget_percentage': (total_tokens_today / self.TOTAL_DAILY_BUDGET * 100),
             'stats_start_time': self.stats_start_time,
         }
 

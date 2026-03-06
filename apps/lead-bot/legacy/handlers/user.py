@@ -1753,7 +1753,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         assistant_tokens = security.security_manager.estimate_tokens(full_response)
         system_tokens = security.security_manager.estimate_tokens(prompts.SYSTEM_PROMPT)
         total_tokens = user_tokens + assistant_tokens + system_tokens
-        security.security_manager.add_tokens_used(total_tokens)
+        security.security_manager.add_tokens_used(total_tokens, user_id=user.id)
         logger.debug(
             f"Tokens used: user={user_tokens}, assistant={assistant_tokens}, "
             f"system={system_tokens}, total={total_tokens}"

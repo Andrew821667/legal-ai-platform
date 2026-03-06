@@ -324,6 +324,43 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON analytics_events(created_at)")
 
+            # Таблица событий rate-limit (telegram_user_id + unix timestamp).
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_message_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_user_id INTEGER NOT NULL,
+                    ts_epoch INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_message_events_user_ts "
+                "ON security_message_events(telegram_user_id, ts_epoch)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_message_events_ts "
+                "ON security_message_events(ts_epoch)"
+            )
+
+            # Таблица дневного расхода токенов по пользователю.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_token_usage_daily (
+                    telegram_user_id INTEGER NOT NULL,
+                    date_key TEXT NOT NULL,
+                    tokens_used INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (telegram_user_id, date_key)
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_token_usage_daily_date "
+                "ON security_token_usage_daily(date_key)"
+            )
+
             # Миграция: добавляем notification_sent если его нет
             cursor.execute("PRAGMA table_info(leads)")
             columns = [column[1] for column in cursor.fetchall()]
@@ -460,6 +497,135 @@ class Database:
             logger.error(f"Error initializing database: {e}")
             conn.rollback()
             raise
+        finally:
+            conn.close()
+
+    # === SECURITY ===
+
+    def record_security_message_event(self, telegram_user_id: int, ts_epoch: int) -> None:
+        """Сохраняет событие входящего сообщения для персистентного rate-limit."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_message_events (telegram_user_id, ts_epoch)
+                VALUES (?, ?)
+                """,
+                (int(telegram_user_id), int(ts_epoch)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def prune_security_message_events(self, older_than_epoch: int, telegram_user_id: int | None = None) -> int:
+        """Удаляет устаревшие события rate-limit, возвращает число удаленных строк."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if telegram_user_id is None:
+                cursor.execute(
+                    "DELETE FROM security_message_events WHERE ts_epoch < ?",
+                    (int(older_than_epoch),),
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM security_message_events WHERE telegram_user_id = ? AND ts_epoch < ?",
+                    (int(telegram_user_id), int(older_than_epoch)),
+                )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def count_security_message_events_since(self, telegram_user_id: int, since_epoch: int) -> int:
+        """Считает число событий сообщений пользователя после указанного unix-time."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM security_message_events
+                WHERE telegram_user_id = ? AND ts_epoch > ?
+                """,
+                (int(telegram_user_id), int(since_epoch)),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def add_security_tokens_used(self, telegram_user_id: int, date_key: str, tokens: int) -> None:
+        """Инкрементирует дневной расход токенов пользователя."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_token_usage_daily (telegram_user_id, date_key, tokens_used, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_user_id, date_key) DO UPDATE SET
+                    tokens_used = security_token_usage_daily.tokens_used + excluded.tokens_used,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (int(telegram_user_id), str(date_key), int(tokens)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_security_user_tokens(self, telegram_user_id: int, date_key: str) -> int:
+        """Возвращает число токенов пользователя за конкретный день."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT tokens_used
+                FROM security_token_usage_daily
+                WHERE telegram_user_id = ? AND date_key = ?
+                """,
+                (int(telegram_user_id), str(date_key)),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def get_security_user_tokens_since(self, telegram_user_id: int, start_date_key: str) -> int:
+        """Возвращает суммарные токены пользователя с указанной даты (включительно)."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(tokens_used), 0)
+                FROM security_token_usage_daily
+                WHERE telegram_user_id = ? AND date_key >= ?
+                """,
+                (int(telegram_user_id), str(start_date_key)),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def get_security_total_tokens(self, date_key: str) -> int:
+        """Возвращает общий расход токенов по всем пользователям за день."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(tokens_used), 0)
+                FROM security_token_usage_daily
+                WHERE date_key = ?
+                """,
+                (str(date_key),),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
         finally:
             conn.close()
 

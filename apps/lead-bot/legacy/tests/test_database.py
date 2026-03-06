@@ -4,6 +4,7 @@
 import pytest
 import tempfile
 import os
+import time
 from database import Database
 
 
@@ -136,6 +137,36 @@ def test_get_recent_users_with_offset_and_count(test_db):
     assert len(second_page) == 1
     assert first_page[0]["telegram_id"] == 810003
     assert second_page[0]["telegram_id"] == 810001
+
+
+def test_security_message_events_count_and_prune(test_db):
+    now = int(time.time())
+    user_id = 555123
+
+    test_db.record_security_message_event(user_id, now - 70)
+    test_db.record_security_message_event(user_id, now - 20)
+    test_db.record_security_message_event(user_id, now - 5)
+
+    assert test_db.count_security_message_events_since(user_id, now - 60) == 2
+    assert test_db.count_security_message_events_since(user_id, now - 3600) == 3
+
+    deleted = test_db.prune_security_message_events(now - 30, telegram_user_id=user_id)
+    assert deleted == 1
+    assert test_db.count_security_message_events_since(user_id, now - 3600) == 2
+
+
+def test_security_token_usage_daily_aggregates(test_db):
+    user_id = 555124
+    day_key = "2026-03-06"
+    prev_day = "2026-03-05"
+
+    test_db.add_security_tokens_used(user_id, day_key, 1000)
+    test_db.add_security_tokens_used(user_id, day_key, 250)
+    test_db.add_security_tokens_used(user_id, prev_day, 700)
+
+    assert test_db.get_security_user_tokens(user_id, day_key) == 1250
+    assert test_db.get_security_user_tokens_since(user_id, prev_day) == 1950
+    assert test_db.get_security_total_tokens(day_key) == 1250
 
 
 def test_consent_flow_and_data_export(test_db):
