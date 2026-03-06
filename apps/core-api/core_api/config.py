@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     api_key_cache_ttl_seconds: int = 60
     health_worker_active_minutes: int = 10
     news_retry_failed_after_minutes: int = 15
+    db_pool_size: int = 8
+    db_max_overflow: int = 8
+    db_pool_timeout_seconds: int = 30
+    db_pool_recycle_seconds: int = 1800
 
 
 @lru_cache
