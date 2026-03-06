@@ -35,10 +35,19 @@
 - Для операторских списков поддерживаются фильтры:
   - `GET /api/v1/contract-jobs?status=...&lead_id=...&worker_id=...`
   - `offset`, `limit`, `order_by=priority|created_at|updated_at|deadline_at`, `order_dir=asc|desc`
-  - SLA-фильтры: `stale_processing_only`, `stale_minutes`, `failed_retryable_only`, `new_older_than_minutes`
+  - SLA-фильтры: `stale_processing_only`, `stale_minutes`, `failed_retryable_only`, `new_retryable_only`, `new_older_than_minutes`
 - Для мониторинга очереди и диагностики задачи:
   - `GET /api/v1/contract-jobs/summary`
   - `GET /api/v1/contract-jobs/{job_id}/history`
 - Для безопасного массового ретрая:
   - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true`
   - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&limit=100`
+- Для ручного восстановления конкретной задачи:
+  - `POST /api/v1/contract-jobs/{job_id}/requeue`
+  - `POST /api/v1/contract-jobs/{job_id}/requeue?force=true` (для terminal failed/done)
+
+Поведение очереди:
+- `claim` выбирает только `new` задачи с `attempts < max_attempts`.
+- `reset-stale` для `processing` задач:
+  - возвращает в `new`, пока лимит попыток не исчерпан;
+  - переводит в terminal `failed`, если `max_attempts` достигнут.

@@ -47,6 +47,7 @@
 - `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
 - `GET /api/v1/contract-jobs/{job_id}/history` — история действий по задаче из `audit_log`.
 - `GET /api/v1/contract-jobs` — списки задач с пагинацией/сортировкой и SLA-фильтрами.
+- `POST /api/v1/contract-jobs/{job_id}/requeue` — ручной возврат конкретной задачи в `new` (admin, с `force`).
 - `POST /api/v1/contract-jobs/retry-failed` — массовый безопасный перевод `failed -> new` (admin, с `dry_run`).
 - `POST /api/v1/contract-jobs/claim` — атомарный claim одной задачи worker'ом.
 - `POST /api/v1/scheduled-posts/claim?limit=10` — атомарный claim пачки постов паблишером.

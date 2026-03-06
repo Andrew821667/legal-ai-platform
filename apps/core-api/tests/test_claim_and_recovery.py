@@ -199,6 +199,65 @@ def test_claim_contract_job_updates_worker_and_status() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_claim_contract_job_skips_new_jobs_with_exhausted_attempts() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.claim.contract.exhausted"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    good_id = None
+    exhausted_id = None
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        exhausted = ContractJob(
+            status=ContractJobStatus.new,
+            priority=-1000000,
+            attempts=3,
+            max_attempts=3,
+            input_mode=InputMode.text_only,
+            document_text="exhausted",
+            created_at=now - timedelta(minutes=3),
+        )
+        good = ContractJob(
+            status=ContractJobStatus.new,
+            priority=-999999,
+            attempts=0,
+            max_attempts=3,
+            input_mode=InputMode.text_only,
+            document_text="good",
+            created_at=now - timedelta(minutes=2),
+        )
+        db.add_all([exhausted, good])
+        db.commit()
+        db.refresh(exhausted)
+        db.refresh(good)
+        exhausted_id = exhausted.id
+        good_id = good.id
+    finally:
+        db.close()
+
+    try:
+        response = client.post(
+            "/api/v1/contract-jobs/claim",
+            json={"worker_id": "pytest-worker-claim-exhausted"},
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["id"] == str(good_id)
+    finally:
+        db = SessionLocal()
+        try:
+            if exhausted_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == exhausted_id))
+            if good_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == good_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_reset_stale_contract_jobs_returns_to_new() -> None:
     client = TestClient(app)
     api_key_name = "pytest.admin.reset.contract"
@@ -244,6 +303,68 @@ def test_reset_stale_contract_jobs_returns_to_new() -> None:
         if stale_id is not None:
             db = SessionLocal()
             try:
+                db.execute(delete(ContractJob).where(ContractJob.id == stale_id))
+                db.commit()
+            finally:
+                db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_reset_stale_contract_jobs_moves_to_failed_when_attempts_exhausted() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.admin.reset.contract.terminal"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    stale_id = None
+
+    db = SessionLocal()
+    try:
+        stale_job = ContractJob(
+            status=ContractJobStatus.processing,
+            priority=0,
+            input_mode=InputMode.text_only,
+            document_text="stale-terminal",
+            worker_id="worker-B",
+            attempts=2,
+            max_attempts=3,
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        )
+        db.add(stale_job)
+        db.commit()
+        db.refresh(stale_job)
+        stale_id = stale_job.id
+    finally:
+        db.close()
+
+    try:
+        response = client.post(
+            "/api/v1/contract-jobs/reset-stale?older_than_minutes=30",
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["reset_count"] >= 1
+        assert payload["failed_terminal_count"] >= 1
+
+        db = SessionLocal()
+        try:
+            row = db.execute(select(ContractJob).where(ContractJob.id == stale_id)).scalar_one()
+            assert row.status == ContractJobStatus.failed
+            assert row.worker_id is None
+            assert row.attempts == 3
+            assert row.last_error is not None
+        finally:
+            db.close()
+    finally:
+        if stale_id is not None:
+            db = SessionLocal()
+            try:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == stale_id,
+                        AuditLog.action == "job.reset_stale",
+                    )
+                )
                 db.execute(delete(ContractJob).where(ContractJob.id == stale_id))
                 db.commit()
             finally:
@@ -363,6 +484,16 @@ def test_contract_jobs_summary_returns_operational_counts() -> None:
                 updated_at=now - timedelta(hours=2),
             ),
             ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new exhausted",
+                attempts=3,
+                max_attempts=3,
+                priority=0,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
                 status=ContractJobStatus.processing,
                 input_mode=InputMode.text_only,
                 document_text="processing stale",
@@ -416,6 +547,8 @@ def test_contract_jobs_summary_returns_operational_counts() -> None:
         assert response.status_code == 200
         payload = response.json()
         assert payload["by_status"]["new"] >= 1
+        assert payload["new_retryable_count"] >= 1
+        assert payload["new_exhausted_count"] >= 1
         assert payload["by_status"]["processing"] >= 1
         assert payload["by_status"]["failed"] >= 2
         assert payload["by_status"]["done"] >= 1
@@ -737,6 +870,112 @@ def test_retry_failed_contract_jobs_supports_dry_run_and_applies_retryable_only(
                     )
                 )
                 db.execute(delete(ContractJob).where(ContractJob.id == terminal_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_requeue_contract_job_requires_force_for_terminal_failed() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.admin.contract.requeue"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    terminal_id = None
+    processing_id = None
+
+    db = SessionLocal()
+    try:
+        terminal = ContractJob(
+            status=ContractJobStatus.failed,
+            input_mode=InputMode.text_only,
+            document_text="terminal",
+            attempts=3,
+            max_attempts=3,
+            worker_id="w-terminal",
+            last_error="terminal",
+            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        processing = ContractJob(
+            status=ContractJobStatus.processing,
+            input_mode=InputMode.text_only,
+            document_text="processing",
+            attempts=0,
+            max_attempts=3,
+            worker_id="w-processing",
+            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        db.add_all([terminal, processing])
+        db.commit()
+        db.refresh(terminal)
+        db.refresh(processing)
+        terminal_id = terminal.id
+        processing_id = processing.id
+    finally:
+        db.close()
+
+    try:
+        no_force = client.post(
+            f"/api/v1/contract-jobs/{terminal_id}/requeue",
+            headers={"X-API-Key": raw_key},
+        )
+        assert no_force.status_code == 409
+
+        forced = client.post(
+            f"/api/v1/contract-jobs/{terminal_id}/requeue?force=true",
+            headers={"X-API-Key": raw_key},
+        )
+        assert forced.status_code == 200
+        assert forced.json()["status"] == ContractJobStatus.new.value
+
+        requeue_processing = client.post(
+            f"/api/v1/contract-jobs/{processing_id}/requeue?reason=manual_requeue",
+            headers={"X-API-Key": raw_key},
+        )
+        assert requeue_processing.status_code == 200
+        payload = requeue_processing.json()
+        assert payload["status"] == ContractJobStatus.new.value
+        assert payload["worker_id"] is None
+        assert payload["attempts"] == 1
+        assert payload["last_error"] == "manual_requeue"
+
+        db = SessionLocal()
+        try:
+            terminal_row = db.execute(select(ContractJob).where(ContractJob.id == terminal_id)).scalar_one()
+            processing_row = db.execute(select(ContractJob).where(ContractJob.id == processing_id)).scalar_one()
+            assert terminal_row.status == ContractJobStatus.new
+            assert processing_row.status == ContractJobStatus.new
+
+            terminal_audit = db.execute(
+                select(AuditLog).where(
+                    AuditLog.target_type == "contract_job",
+                    AuditLog.target_id == terminal_id,
+                    AuditLog.action == "job.requeue",
+                )
+            ).scalars().all()
+            assert len(terminal_audit) >= 1
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            if terminal_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == terminal_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == terminal_id))
+            if processing_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == processing_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == processing_id))
             db.commit()
         finally:
             db.close()

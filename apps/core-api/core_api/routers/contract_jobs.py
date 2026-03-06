@@ -38,6 +38,7 @@ def _apply_contract_job_filters(
     stale_processing_only: bool,
     stale_minutes: int,
     failed_retryable_only: bool,
+    new_retryable_only: bool,
     new_older_than_minutes: int | None,
 ) -> Any:
     if status:
@@ -54,6 +55,11 @@ def _apply_contract_job_filters(
     if failed_retryable_only:
         stmt = stmt.where(
             ContractJob.status == ContractJobStatus.failed,
+            ContractJob.attempts < ContractJob.max_attempts,
+        )
+    if new_retryable_only:
+        stmt = stmt.where(
+            ContractJob.status == ContractJobStatus.new,
             ContractJob.attempts < ContractJob.max_attempts,
         )
     if new_older_than_minutes is not None:
@@ -90,6 +96,7 @@ def list_contract_jobs(
     stale_processing_only: bool = Query(default=False),
     stale_minutes: int = Query(default=30, ge=1, le=240),
     failed_retryable_only: bool = Query(default=False),
+    new_retryable_only: bool = Query(default=False),
     new_older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
     count_only: bool = Query(default=False),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
@@ -108,6 +115,7 @@ def list_contract_jobs(
             stale_processing_only=stale_processing_only,
             stale_minutes=stale_minutes,
             failed_retryable_only=failed_retryable_only,
+            new_retryable_only=new_retryable_only,
             new_older_than_minutes=new_older_than_minutes,
         )
         count = db.execute(stmt).scalar_one()
@@ -123,6 +131,7 @@ def list_contract_jobs(
         stale_processing_only=stale_processing_only,
         stale_minutes=stale_minutes,
         failed_retryable_only=failed_retryable_only,
+        new_retryable_only=new_retryable_only,
         new_older_than_minutes=new_older_than_minutes,
     )
 
@@ -209,10 +218,32 @@ def contract_jobs_summary(
             )
         ).scalar_one()
     )
+    new_retryable_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.new,
+                ContractJob.attempts < ContractJob.max_attempts,
+            )
+        ).scalar_one()
+    )
+    new_exhausted_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.new,
+                ContractJob.attempts >= ContractJob.max_attempts,
+            )
+        ).scalar_one()
+    )
 
     return ContractJobSummaryOut(
         total=total,
         by_status=by_status,
+        new_retryable_count=new_retryable_count,
+        new_exhausted_count=new_exhausted_count,
         processing_stale_count=processing_stale_count,
         failed_retryable_count=failed_retryable_count,
         failed_terminal_count=failed_terminal_count,
@@ -222,6 +253,55 @@ def contract_jobs_summary(
         window_hours=window_hours,
         stale_minutes=stale_minutes,
     )
+
+
+@router.post("/{job_id}/requeue", response_model=ContractJobOut)
+def requeue_contract_job(
+    job_id: uuid.UUID,
+    force: bool = Query(default=False),
+    increment_attempt: bool = Query(default=True),
+    reason: str | None = Query(default=None, min_length=1, max_length=500),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJob:
+    job = db.get(ContractJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    prev_status = job.status
+    if not force:
+        if prev_status == ContractJobStatus.done:
+            raise HTTPException(status_code=409, detail="Done job cannot be requeued without force")
+        if prev_status == ContractJobStatus.failed and job.attempts >= job.max_attempts:
+            raise HTTPException(status_code=409, detail="Terminal failed job requires force=true")
+        if prev_status == ContractJobStatus.processing and job.attempts >= job.max_attempts:
+            raise HTTPException(status_code=409, detail="Processing job exhausted max_attempts; use force=true")
+
+    if increment_attempt and prev_status == ContractJobStatus.processing and job.attempts < job.max_attempts:
+        job.attempts += 1
+
+    job.status = ContractJobStatus.new
+    job.worker_id = None
+    job.last_error = reason or None
+    job.updated_at = datetime.now(timezone.utc)
+    db.add(job)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="job.requeue",
+        target_type="contract_job",
+        target_id=job.id,
+        details={
+            "previous_status": prev_status.value,
+            "force": force,
+            "increment_attempt": increment_attempt,
+            "reason": reason,
+        },
+    )
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 @router.post("/retry-failed", response_model=ContractJobBulkRetryOut)
@@ -347,7 +427,10 @@ def claim_contract_job(
     worker_id = payload.worker_id or socket.gethostname()
     stmt = (
         select(ContractJob)
-        .where(ContractJob.status == ContractJobStatus.new)
+        .where(
+            ContractJob.status == ContractJobStatus.new,
+            ContractJob.attempts < ContractJob.max_attempts,
+        )
         .order_by(ContractJob.priority.asc(), ContractJob.created_at.asc())
         .with_for_update(skip_locked=True)
         .limit(1)
@@ -448,22 +531,47 @@ def reset_stale_jobs(
 ) -> dict[str, int]:
     _ = identity
     threshold = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+    now = datetime.now(timezone.utc)
     stale_rows = db.execute(
         select(ContractJob).where(
             ContractJob.status == ContractJobStatus.processing,
             ContractJob.updated_at < threshold,
-            ContractJob.attempts < ContractJob.max_attempts,
         )
     ).scalars().all()
 
     reset_count = 0
+    requeued_count = 0
+    failed_terminal_count = 0
     for job in stale_rows:
-        job.status = ContractJobStatus.new
+        job.attempts = min(job.max_attempts, job.attempts + 1)
         job.worker_id = None
-        job.attempts += 1
-        job.updated_at = datetime.now(timezone.utc)
+        if job.attempts >= job.max_attempts:
+            job.status = ContractJobStatus.failed
+            job.last_error = "stale processing reset (max attempts reached)"
+            failed_terminal_count += 1
+        else:
+            job.status = ContractJobStatus.new
+            job.last_error = "stale processing reset"
+            requeued_count += 1
+        job.updated_at = now
         db.add(job)
+        write_audit(
+            db,
+            actor_type=ActorType.api_key,
+            actor_id=identity.name,
+            action="job.reset_stale",
+            target_type="contract_job",
+            target_id=job.id,
+            details={
+                "older_than_minutes": older_than_minutes,
+                "result_status": job.status.value,
+            },
+        )
         reset_count += 1
 
     db.commit()
-    return {"reset_count": reset_count}
+    return {
+        "reset_count": reset_count,
+        "requeued_count": requeued_count,
+        "failed_terminal_count": failed_terminal_count,
+    }

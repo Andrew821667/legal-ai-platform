@@ -341,6 +341,8 @@ class ClaimRequest(BaseModel):
 class ContractJobSummaryOut(BaseModel):
     total: int
     by_status: dict[str, int]
+    new_retryable_count: int
+    new_exhausted_count: int
     processing_stale_count: int
     failed_retryable_count: int
     failed_terminal_count: int
