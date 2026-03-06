@@ -249,6 +249,7 @@ _WORKER_LABELS = {
     "news-publish": "📤 Публикатор канала",
     "news-reader-digest": "📬 Reader-дайджест",
 }
+_CRITICAL_WORKER_IDS = ("news-telegram-ingest", "news-generate", "news-publish")
 _MANUAL_POST_TYPES = {
     "promo_offer": {
         "label": "Рекламный",
@@ -2033,6 +2034,7 @@ class NewsAdminBot:
         rows = self._two_column_rows(
             [
                 _inline_button("📊 Статус API", callback_data="status"),
+                _inline_button("🚨 Оперконтроль", callback_data="sec:ops"),
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
@@ -2041,6 +2043,131 @@ class NewsAdminBot:
             ]
         )
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
+        return InlineKeyboardMarkup(rows)
+
+    async def _ops_summary_text(self) -> str:
+        counts, next_publish = await self._queue_snapshot()
+        overdue = self._overdue_scheduled_count()
+        stale_publishing = self._publishing_stale_count(stale_minutes=30)
+
+        worker_lines: list[str] = []
+        issues: list[str] = []
+        now_utc = datetime.now(timezone.utc)
+        try:
+            status_response = await asyncio.to_thread(self.admin_client.workers_status)
+            status_response.raise_for_status()
+            worker_rows = status_response.json().get("workers") or []
+            worker_map = {str(item.get("worker_id") or ""): item for item in worker_rows}
+
+            for worker_id in _CRITICAL_WORKER_IDS:
+                label = _WORKER_LABELS.get(worker_id, worker_id)
+                row = worker_map.get(worker_id)
+                if row is None:
+                    worker_lines.append(f"⚪ {label}: heartbeat не найден")
+                    issues.append(f"worker_missing:{worker_id}")
+                    continue
+                active = bool(row.get("active"))
+                last_seen = str(row.get("last_seen_at") or "n/a")
+                mark = "🟢" if active else "🔴"
+                if not active:
+                    issues.append(f"worker_inactive:{worker_id}")
+                worker_lines.append(f"{mark} {label}: {'активен' if active else 'неактивен'} (last_seen: {last_seen})")
+
+            for worker_id in _CRITICAL_WORKER_IDS:
+                try:
+                    activity_response = await asyncio.to_thread(
+                        self.admin_client.workers_activity,
+                        worker_id,
+                        24,
+                        50,
+                    )
+                    activity_response.raise_for_status()
+                    payload = activity_response.json()
+                except Exception as exc:
+                    worker_lines.append(f"⚠️ {_WORKER_LABELS.get(worker_id, worker_id)}: не удалось прочитать события 24ч ({exc})")
+                    issues.append(f"worker_activity_unavailable:{worker_id}")
+                    continue
+
+                entries = payload.get("entries") or []
+                error_entries = []
+                for entry in entries:
+                    action = str(entry.get("action") or "").lower()
+                    details = entry.get("details") or {}
+                    error_text = str(details.get("error") or "").strip()
+                    if "error" in action or "failed" in action or error_text:
+                        error_entries.append((entry, error_text))
+                if not error_entries:
+                    continue
+                latest_entry, latest_error = error_entries[0]
+                occurred_raw = str(latest_entry.get("occurred_at") or "")
+                occurred_at = self._parse_iso_datetime(occurred_raw) or now_utc
+                age_minutes = max(0, int((now_utc - occurred_at).total_seconds() // 60))
+                last_error_value = latest_error or str(latest_entry.get("action") or "iteration_error")
+                worker_lines.append(
+                    f"⚠️ {_WORKER_LABELS.get(worker_id, worker_id)}: ошибок за 24ч {len(error_entries)}, "
+                    f"последняя {age_minutes} мин назад ({last_error_value[:140]})"
+                )
+                if age_minutes <= 180:
+                    issues.append(f"worker_recent_error:{worker_id}")
+        except Exception as exc:
+            worker_lines.append(f"⚠️ Статус воркеров временно недоступен: {exc}")
+            issues.append("workers_status_unavailable")
+
+        failed_posts = int(counts.get("failed", 0)) if int(counts.get("failed", 0)) > 0 else 0
+        if failed_posts > 0:
+            issues.append("failed_posts")
+        if overdue > 0:
+            issues.append("overdue_posts")
+        if stale_publishing > 0:
+            issues.append("stale_publishing")
+
+        health_mark = "🟢"
+        if issues:
+            health_mark = "🟠"
+        if overdue > 0 or stale_publishing > 0 or any(item.startswith("worker_inactive") for item in issues):
+            health_mark = "🔴"
+
+        lines = [
+            "Операционный контроль контент-контура",
+            "",
+            _screen_guide(
+                "Быстрая диагностика проблем генерации и публикации.",
+                [
+                    "Если есть красные индикаторы, сначала проверьте «Воркеры», затем используйте «Сброс stale».",
+                    "После восстановления снова откройте этот экран и убедитесь, что индикаторы стали зелеными.",
+                ],
+            ),
+            "",
+            f"Состояние контура: {health_mark}",
+            f"Следующая публикация: {next_publish}",
+            "",
+            "Ключевые индикаторы:",
+            f"• Просроченные scheduled: {overdue}",
+            f"• Зависшие publishing (>30м): {stale_publishing}",
+            f"• Ошибки в ленте (посл.100): {failed_posts}",
+            f"• На проверке: {counts.get('review', -1)}",
+            "",
+            "Критичные воркеры:",
+        ]
+        lines.extend(worker_lines or ["• нет данных"])
+        lines.append("")
+        if issues:
+            lines.append(f"Найдены риски: {len(issues)}")
+            lines.append("Рекомендуется: проверить воркеры -> сбросить stale -> повторно открыть экран.")
+        else:
+            lines.append("Критичных рисков не обнаружено.")
+        return "\n".join(lines)
+
+    def _ops_summary_keyboard(self) -> InlineKeyboardMarkup:
+        rows = self._two_column_rows(
+            [
+                _inline_button("🔄 Обновить", callback_data="sec:ops"),
+                _inline_button("👷 Воркеры", callback_data="workers"),
+                _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
+                _inline_button("🗓 Календарь", callback_data="cal:summary"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
         return InlineKeyboardMarkup(rows)
 
     def _reader_summary_keyboard(self, days: int = 7) -> InlineKeyboardMarkup:
@@ -3411,6 +3538,24 @@ class NewsAdminBot:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
 
+    @staticmethod
+    def _parse_iso_datetime(raw_value: object) -> datetime | None:
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, datetime):
+            parsed = raw_value
+        else:
+            text = str(raw_value).strip()
+            if not text:
+                return None
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
     def _ready_status_payload(self, row: dict[str, Any]) -> dict[str, Any]:
         publish_at = self._publish_at_utc(row)
         if publish_at is None or publish_at <= datetime.now(timezone.utc):
@@ -3472,6 +3617,21 @@ class NewsAdminBot:
         rows = self._list_posts_rows(status="scheduled", newest_first=False, limit=100)
         now_utc = datetime.now(timezone.utc)
         return sum(1 for row in rows if (publish_at := self._publish_at_utc(row)) and publish_at < now_utc)
+
+    def _publishing_stale_count(self, *, stale_minutes: int = 30) -> int:
+        rows = self._list_posts_rows(status="publishing", newest_first=False, limit=100)
+        now_utc = datetime.now(timezone.utc)
+        cutoff = now_utc - timedelta(minutes=max(5, stale_minutes))
+        stale = 0
+        for row in rows:
+            updated_at = self._parse_iso_datetime(row.get("updated_at"))
+            if updated_at is None:
+                updated_at = self._publish_at_utc(row)
+            if updated_at is None:
+                continue
+            if updated_at <= cutoff:
+                stale += 1
+        return stale
 
     def _calendar_summary_text(self, groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
         overdue_count = self._overdue_scheduled_count()
@@ -6604,6 +6764,14 @@ class NewsAdminBot:
                     query,
                     self._system_text(counts, next_publish),
                     reply_markup=self._system_keyboard(),
+                )
+                return
+
+            if data == "sec:ops":
+                await self._safe_edit_message_text(
+                    query,
+                    await self._ops_summary_text(),
+                    reply_markup=self._ops_summary_keyboard(),
                 )
                 return
 

@@ -168,10 +168,11 @@ def main() -> int:
                         },
                     )
                     result_code = run_generation(limit, dry_run=False)
+                    done_action = "generate_slot_done" if result_code == 0 else "generate_slot_failed"
                     _send_worker_heartbeat(
                         client,
                         {
-                            "action": "generate_slot_done",
+                            "action": done_action,
                             "slot": slot,
                             "limit": limit,
                             "result_code": result_code,
@@ -179,6 +180,11 @@ def main() -> int:
                             "busy": False,
                         },
                     )
+                    if result_code != 0:
+                        logger.warning(
+                            "generate_loop_slot_failed",
+                            extra={"slot": slot, "limit": limit, "date": today_key, "result_code": result_code},
+                        )
                     last_generation_slot_key = slot_key
                     last_blocked_slot_key = ""
                     break

@@ -672,6 +672,16 @@ def run_generation(limit: int, *, dry_run: bool = False) -> int:
         return 1
 
     if not result.previews:
+        if result.slots_planned > 0:
+            logger.warning(
+                "generation_no_previews_for_planned_slots",
+                extra={
+                    "slots_planned": result.slots_planned,
+                    "skipped_slots": result.skipped_slots,
+                    "duplicates": result.duplicates,
+                    "feedback_skipped": result.feedback_skipped,
+                },
+            )
         logger.info(
             "generation_completed",
             extra={
@@ -759,6 +769,17 @@ def run_generation(limit: int, *, dry_run: bool = False) -> int:
             "dry_run": dry_run,
         },
     )
+    if result.slots_planned > 0 and result.skipped_slots > 0:
+        logger.warning(
+            "generation_slots_partially_unfilled",
+            extra={
+                "slots_planned": result.slots_planned,
+                "created_or_previewed": len(result.previews),
+                "skipped_slots": result.skipped_slots,
+                "duplicates": result.duplicates,
+                "feedback_skipped": result.feedback_skipped,
+            },
+        )
     return 0 if failed == 0 else 1
 
 
