@@ -15,6 +15,7 @@ from database import Database
 from ai_brain import AIBrain
 from lead_qualifier import LeadQualifier
 from admin_interface import AdminInterface
+import utils
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,8 @@ class Handlers:
 
             # Проверяем, что это не сообщение от бота (дополнительная проверка)
             if user.id == context.bot.id:
-                logger.info(f"Пропускаем сообщение от бота в handle_message: {message.text[:50]}...")
+                preview = utils.mask_sensitive_data((message.text or "[non-text]")[:80])
+                logger.info("Пропускаем сообщение от бота в handle_message: %s...", preview)
                 return
 
             # Сохраняем пользователя

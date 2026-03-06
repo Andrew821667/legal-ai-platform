@@ -352,7 +352,8 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         user_id = message.from_user.id
         text = message.text or ""
         
-        logger.info(f"📨 Business message from {user_id}: {text}")
+        message_preview = utils.mask_sensitive_data((text or "[non-text]")[:120])
+        logger.info("📨 Business message from %s: %s", user_id, message_preview[:60])
         
         # Получаем пользователя
         user = database.db.create_or_update_user(

@@ -1208,7 +1208,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         message_text = original_message.text or ""
-        logger.info(f"Message from user {user.id}: {(message_text or '[non-text]')[:50]}")
+        message_preview = utils.mask_sensitive_data((message_text or "[non-text]")[:120])
+        logger.info("Message from user %s: %s", user.id, message_preview[:50])
 
         # Получаем или создаем пользователя
         user_data = database.db.get_user_by_telegram_id(user.id)
