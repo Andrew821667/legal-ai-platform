@@ -376,6 +376,14 @@ class ContractJobBulkRetryOut(BaseModel):
     job_ids: list[uuid.UUID]
 
 
+class ContractJobFinalizeExhaustedOut(BaseModel):
+    requested_limit: int
+    matched_count: int
+    finalized_count: int
+    dry_run: bool
+    job_ids: list[uuid.UUID]
+
+
 class HeartbeatRequest(BaseModel):
     worker_id: str
     info: dict[str, Any] | None = None

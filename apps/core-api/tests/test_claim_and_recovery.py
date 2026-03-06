@@ -980,3 +980,103 @@ def test_requeue_contract_job_requires_force_for_terminal_failed() -> None:
         finally:
             db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_finalize_exhausted_new_jobs_supports_dry_run_and_finalize() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.admin.contract.finalize_exhausted"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    exhausted_id = None
+    retryable_id = None
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        exhausted = ContractJob(
+            status=ContractJobStatus.new,
+            input_mode=InputMode.text_only,
+            document_text="exhausted new",
+            attempts=3,
+            max_attempts=3,
+            created_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(hours=2),
+        )
+        retryable = ContractJob(
+            status=ContractJobStatus.new,
+            input_mode=InputMode.text_only,
+            document_text="retryable new",
+            attempts=1,
+            max_attempts=3,
+            created_at=now - timedelta(hours=1),
+            updated_at=now - timedelta(hours=1),
+        )
+        db.add_all([exhausted, retryable])
+        db.commit()
+        db.refresh(exhausted)
+        db.refresh(retryable)
+        exhausted_id = exhausted.id
+        retryable_id = retryable.id
+    finally:
+        db.close()
+
+    try:
+        dry = client.post(
+            "/api/v1/contract-jobs/finalize-exhausted-new?dry_run=true&limit=50",
+            headers={"X-API-Key": raw_key},
+        )
+        assert dry.status_code == 200
+        dry_payload = dry.json()
+        assert dry_payload["matched_count"] >= 1
+        assert dry_payload["finalized_count"] == 0
+        assert str(exhausted_id) in dry_payload["job_ids"]
+
+        db = SessionLocal()
+        try:
+            exhausted_row = db.execute(select(ContractJob).where(ContractJob.id == exhausted_id)).scalar_one()
+            assert exhausted_row.status == ContractJobStatus.new
+        finally:
+            db.close()
+
+        finalize = client.post(
+            "/api/v1/contract-jobs/finalize-exhausted-new?limit=50",
+            headers={"X-API-Key": raw_key},
+        )
+        assert finalize.status_code == 200
+        payload = finalize.json()
+        assert payload["finalized_count"] >= 1
+        assert str(exhausted_id) in payload["job_ids"]
+        assert str(retryable_id) not in payload["job_ids"]
+
+        db = SessionLocal()
+        try:
+            exhausted_row = db.execute(select(ContractJob).where(ContractJob.id == exhausted_id)).scalar_one()
+            retryable_row = db.execute(select(ContractJob).where(ContractJob.id == retryable_id)).scalar_one()
+            assert exhausted_row.status == ContractJobStatus.failed
+            assert retryable_row.status == ContractJobStatus.new
+            audits = db.execute(
+                select(AuditLog).where(
+                    AuditLog.target_type == "contract_job",
+                    AuditLog.target_id == exhausted_id,
+                    AuditLog.action == "job.finalize_exhausted_new",
+                )
+            ).scalars().all()
+            assert len(audits) >= 1
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            if exhausted_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == exhausted_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == exhausted_id))
+            if retryable_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == retryable_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)

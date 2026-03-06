@@ -17,6 +17,7 @@ from core_api.schemas import (
     ClaimRequest,
     ContractJobBulkRetryOut,
     ContractJobCreate,
+    ContractJobFinalizeExhaustedOut,
     ContractJobHistoryEntry,
     ContractJobHistoryResponse,
     ContractJobOut,
@@ -367,6 +368,62 @@ def retry_failed_contract_jobs(
         retryable_only=retryable_only,
         dry_run=False,
         older_than_minutes=older_than_minutes,
+        job_ids=job_ids,
+    )
+
+
+@router.post("/finalize-exhausted-new", response_model=ContractJobFinalizeExhaustedOut)
+def finalize_exhausted_new_jobs(
+    limit: int = Query(default=200, ge=1, le=1000),
+    dry_run: bool = Query(default=False),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobFinalizeExhaustedOut:
+    now = datetime.now(timezone.utc)
+    rows = list(
+        db.execute(
+            select(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.new,
+                ContractJob.attempts >= ContractJob.max_attempts,
+            )
+            .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+            .with_for_update(skip_locked=True)
+            .limit(limit)
+        ).scalars().all()
+    )
+    job_ids = [row.id for row in rows]
+    if dry_run:
+        db.commit()
+        return ContractJobFinalizeExhaustedOut(
+            requested_limit=limit,
+            matched_count=len(rows),
+            finalized_count=0,
+            dry_run=True,
+            job_ids=job_ids,
+        )
+
+    for job in rows:
+        job.status = ContractJobStatus.failed
+        if not job.last_error:
+            job.last_error = "exhausted attempts finalized from new queue"
+        job.updated_at = now
+        db.add(job)
+        write_audit(
+            db,
+            actor_type=ActorType.api_key,
+            actor_id=identity.name,
+            action="job.finalize_exhausted_new",
+            target_type="contract_job",
+            target_id=job.id,
+        )
+
+    db.commit()
+    return ContractJobFinalizeExhaustedOut(
+        requested_limit=limit,
+        matched_count=len(rows),
+        finalized_count=len(rows),
+        dry_run=False,
         job_ids=job_ids,
     )
 

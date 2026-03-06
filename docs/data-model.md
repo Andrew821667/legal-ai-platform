@@ -42,6 +42,9 @@
 - Для безопасного массового ретрая:
   - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true`
   - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&limit=100`
+- Для очистки очереди от исчерпанных `new` задач:
+  - `POST /api/v1/contract-jobs/finalize-exhausted-new?dry_run=true`
+  - `POST /api/v1/contract-jobs/finalize-exhausted-new?limit=200`
 - Для ручного восстановления конкретной задачи:
   - `POST /api/v1/contract-jobs/{job_id}/requeue`
   - `POST /api/v1/contract-jobs/{job_id}/requeue?force=true` (для terminal failed/done)
@@ -51,3 +54,4 @@
 - `reset-stale` для `processing` задач:
   - возвращает в `new`, пока лимит попыток не исчерпан;
   - переводит в terminal `failed`, если `max_attempts` достигнут.
+- `finalize-exhausted-new` переводит зависшие `new` задачи с исчерпанными попытками в `failed`.

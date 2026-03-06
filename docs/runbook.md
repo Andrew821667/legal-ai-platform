@@ -364,6 +364,12 @@ curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/{job_id}/requeue?reason=manu
 
 curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/{job_id}/requeue?force=true&reason=force_requeue" \
   -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/finalize-exhausted-new?dry_run=true&limit=200" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/finalize-exhausted-new?limit=200" \
+  -H "X-API-Key: $API_KEY_ADMIN"
 ```
 
 Если MacBook оффлайн:
