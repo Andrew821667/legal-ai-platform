@@ -105,6 +105,7 @@
 Ручное восстановление:
 1. Проверить число попыток `attempts/max_attempts`.
 2. Диагностировать причину падений worker.
+3. Проверить алерт по порогу `CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD`.
 
 ## Накопились `new` задачи с исчерпанными попытками
 Симптомы:
@@ -121,6 +122,17 @@
    `POST /api/v1/contract-jobs/finalize-exhausted-new`.
 3. При необходимости вернуть конкретную задачу в `new` вручную:
    `POST /api/v1/contract-jobs/{job_id}/requeue?force=true`.
+
+## Накопились retryable `failed` задачи
+Симптомы:
+- в `summary` видно `failed_retryable_count > 0`;
+- срабатывает алерт по `CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD`.
+
+Ручное восстановление:
+1. Проверить dry-run:
+   `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true`.
+2. Применить retry:
+   `POST /api/v1/contract-jobs/retry-failed?retryable_only=true`.
 
 ## Переполнение диска
 Симптомы:

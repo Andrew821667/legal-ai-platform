@@ -12,6 +12,8 @@ REQUIRED_NEWS_WORKERS="${REQUIRED_NEWS_WORKERS:-news-generate,news-telegram-inge
 DRAFT_MAX_IDLE_HOURS="${DRAFT_MAX_IDLE_HOURS:-24}"
 DUE_POSTS_ALERT_THRESHOLD="${DUE_POSTS_ALERT_THRESHOLD:-0}"
 CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD="${CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD:-0}"
+CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD="${CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD:-0}"
+CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD="${CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD:-0}"
 
 api_get() {
   local url="$1"
@@ -85,6 +87,8 @@ fi
 CONTRACT_SUMMARY_JSON="$(api_get "${API_BASE}/api/v1/contract-jobs/summary")"
 PENDING_RETRYABLE="$(echo "${CONTRACT_SUMMARY_JSON}" | jq -r '.new_retryable_count // .by_status.new // 0')"
 PENDING_EXHAUSTED_NEW="$(echo "${CONTRACT_SUMMARY_JSON}" | jq -r '.new_exhausted_count // 0')"
+PROCESSING_STALE_COUNT="$(echo "${CONTRACT_SUMMARY_JSON}" | jq -r '.processing_stale_count // 0')"
+FAILED_RETRYABLE_COUNT="$(echo "${CONTRACT_SUMMARY_JSON}" | jq -r '.failed_retryable_count // 0')"
 ANY_ACTIVE="$(api_get "${API_BASE}/api/v1/workers/status" | jq -r '.any_active // false')"
 if [ "${PENDING_RETRYABLE}" -gt 0 ] && [ "${ANY_ACTIVE}" = "false" ]; then
   send_alert_once \
@@ -96,6 +100,18 @@ if [ "${PENDING_EXHAUSTED_NEW}" -gt "${CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD}" 
   send_alert_once \
     "contract_jobs_exhausted_new_detected" \
     "⚠️ Обнаружено ${PENDING_EXHAUSTED_NEW} contract-jobs в статусе new с исчерпанными попытками (порог: ${CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD})."
+fi
+
+if [ "${PROCESSING_STALE_COUNT}" -gt "${CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD}" ]; then
+  send_alert_once \
+    "contract_jobs_stale_processing_detected" \
+    "⚠️ Обнаружено ${PROCESSING_STALE_COUNT} stale contract-jobs в processing (порог: ${CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD})."
+fi
+
+if [ "${FAILED_RETRYABLE_COUNT}" -gt "${CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD}" ]; then
+  send_alert_once \
+    "contract_jobs_failed_retryable_detected" \
+    "⚠️ В очереди ${FAILED_RETRYABLE_COUNT} failed contract-jobs, доступных для retry (порог: ${CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD})."
 fi
 
 if [ "${SLA_ALERTS_ENABLED}" != "1" ]; then
