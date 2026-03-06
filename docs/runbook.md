@@ -336,6 +336,15 @@ caffeinate -i uv run --package contract-worker python -m contract_worker.run
 3. Автозапуск через `launchd` (plist в `~/Library/LaunchAgents`).
 4. Логи: `/tmp/contract-worker.log`, `/tmp/contract-worker-err.log`.
 
+Быстрые API-проверки по контрактной очереди:
+```bash
+curl -s "$CORE_API_URL/api/v1/contract-jobs/summary?window_hours=24&stale_minutes=30" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s "$CORE_API_URL/api/v1/contract-jobs/{job_id}/history?limit=20" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+```
+
 Если MacBook оффлайн:
 - Контрактные задачи остаются в `new`.
 - Healthcheck пришлёт alert при отсутствии heartbeat.

@@ -44,6 +44,8 @@
 - `GET /health/detailed` — расширенный health для инфраструктуры/мониторинга (public, вне version prefix).
 - `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
 - `GET /api/v1/contract-jobs/{job_id}` — получение статуса конкретной задачи (scope `bot|worker|admin`).
+- `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
+- `GET /api/v1/contract-jobs/{job_id}/history` — история действий по задаче из `audit_log`.
 - `POST /api/v1/contract-jobs/claim` — атомарный claim одной задачи worker'ом.
 - `POST /api/v1/scheduled-posts/claim?limit=10` — атомарный claim пачки постов паблишером.
 

@@ -338,6 +338,32 @@ class ClaimRequest(BaseModel):
     worker_id: str | None = None
 
 
+class ContractJobSummaryOut(BaseModel):
+    total: int
+    by_status: dict[str, int]
+    processing_stale_count: int
+    failed_retryable_count: int
+    failed_terminal_count: int
+    new_oldest_created_at: datetime | None
+    new_oldest_age_minutes: int | None
+    done_last_hours_count: int
+    window_hours: int
+    stale_minutes: int
+
+
+class ContractJobHistoryEntry(BaseModel):
+    created_at: datetime
+    actor_type: str
+    actor_id: str
+    action: str
+    details: dict[str, Any] | None = None
+
+
+class ContractJobHistoryResponse(BaseModel):
+    job_id: uuid.UUID
+    entries: list[ContractJobHistoryEntry]
+
+
 class HeartbeatRequest(BaseModel):
     worker_id: str
     info: dict[str, Any] | None = None

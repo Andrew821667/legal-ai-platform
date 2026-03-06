@@ -12,13 +12,16 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
-from core_api.models import ActorType, ContractJob, ContractJobStatus, Scope
+from core_api.models import ActorType, AuditLog, ContractJob, ContractJobStatus, Scope
 from core_api.schemas import (
     ClaimRequest,
     ContractJobCreate,
+    ContractJobHistoryEntry,
+    ContractJobHistoryResponse,
     ContractJobOut,
     ContractJobPatch,
     ContractJobResult,
+    ContractJobSummaryOut,
 )
 
 router = APIRouter(prefix="/api/v1/contract-jobs", tags=["contract-jobs"])
@@ -70,6 +73,89 @@ def list_contract_jobs(
     return list(db.execute(stmt).scalars().all())
 
 
+@router.get("/summary", response_model=ContractJobSummaryOut)
+def contract_jobs_summary(
+    window_hours: int = Query(default=24, ge=1, le=168),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobSummaryOut:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    stale_before = now - timedelta(minutes=stale_minutes)
+    window_start = now - timedelta(hours=window_hours)
+
+    total = int(db.execute(select(func.count()).select_from(ContractJob)).scalar_one())
+    status_rows = db.execute(select(ContractJob.status, func.count()).group_by(ContractJob.status)).all()
+    by_status = {status.value: 0 for status in ContractJobStatus}
+    for status, count in status_rows:
+        by_status[status.value] = int(count)
+
+    processing_stale_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.processing,
+                ContractJob.updated_at < stale_before,
+            )
+        ).scalar_one()
+    )
+    failed_retryable_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.failed,
+                ContractJob.attempts < ContractJob.max_attempts,
+            )
+        ).scalar_one()
+    )
+    failed_terminal_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.failed,
+                ContractJob.attempts >= ContractJob.max_attempts,
+            )
+        ).scalar_one()
+    )
+    oldest_new_created_at = db.execute(
+        select(func.min(ContractJob.created_at)).where(ContractJob.status == ContractJobStatus.new)
+    ).scalar_one()
+    oldest_new_age_minutes: int | None = None
+    if oldest_new_created_at is not None:
+        oldest_new_age_minutes = max(
+            int((now - oldest_new_created_at).total_seconds() // 60),
+            0,
+        )
+
+    done_last_hours_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ContractJob)
+            .where(
+                ContractJob.status == ContractJobStatus.done,
+                ContractJob.updated_at >= window_start,
+            )
+        ).scalar_one()
+    )
+
+    return ContractJobSummaryOut(
+        total=total,
+        by_status=by_status,
+        processing_stale_count=processing_stale_count,
+        failed_retryable_count=failed_retryable_count,
+        failed_terminal_count=failed_terminal_count,
+        new_oldest_created_at=oldest_new_created_at,
+        new_oldest_age_minutes=oldest_new_age_minutes,
+        done_last_hours_count=done_last_hours_count,
+        window_hours=window_hours,
+        stale_minutes=stale_minutes,
+    )
+
+
 @router.get("/{job_id}", response_model=ContractJobOut)
 def get_contract_job(
     job_id: uuid.UUID,
@@ -81,6 +167,40 @@ def get_contract_job(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.get("/{job_id}/history", response_model=ContractJobHistoryResponse)
+def get_contract_job_history(
+    job_id: uuid.UUID,
+    limit: int = Query(default=30, ge=1, le=200),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobHistoryResponse:
+    _ = identity
+    job = db.get(ContractJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    rows = db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.target_type == "contract_job",
+            AuditLog.target_id == job_id,
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    ).scalars().all()
+    entries = [
+        ContractJobHistoryEntry(
+            created_at=row.created_at,
+            actor_type=row.actor_type.value,
+            actor_id=row.actor_id,
+            action=row.action,
+            details=row.details,
+        )
+        for row in rows
+    ]
+    return ContractJobHistoryResponse(job_id=job_id, entries=entries)
 
 
 @router.post("/claim", response_model=ContractJobOut)

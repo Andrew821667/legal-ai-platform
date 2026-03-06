@@ -10,6 +10,7 @@ from core_api.db import SessionLocal
 from core_api.main import app
 from core_api.models import (
     ApiKey,
+    AuditLog,
     ContractJob,
     ContractJobStatus,
     InputMode,
@@ -341,3 +342,158 @@ def test_contract_jobs_support_get_by_id_and_filters() -> None:
             db.close()
         _delete_api_key_by_name(worker_key_name)
         _delete_api_key_by_name(bot_key_name)
+
+
+def test_contract_jobs_summary_returns_operational_counts() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.contract.summary"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    created_ids: list = []
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = [
+            ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new",
+                priority=0,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="processing stale",
+                worker_id="worker-summary",
+                priority=1,
+                created_at=now - timedelta(hours=3),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed retryable",
+                attempts=1,
+                max_attempts=3,
+                priority=2,
+                created_at=now - timedelta(hours=1),
+                updated_at=now - timedelta(minutes=40),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed terminal",
+                attempts=3,
+                max_attempts=3,
+                priority=3,
+                created_at=now - timedelta(hours=1),
+                updated_at=now - timedelta(minutes=20),
+            ),
+            ContractJob(
+                status=ContractJobStatus.done,
+                input_mode=InputMode.text_only,
+                document_text="done recent",
+                priority=4,
+                created_at=now - timedelta(hours=1),
+                updated_at=now - timedelta(minutes=10),
+            ),
+        ]
+        db.add_all(rows)
+        db.commit()
+        for row in rows:
+            db.refresh(row)
+            created_ids.append(row.id)
+    finally:
+        db.close()
+
+    try:
+        response = client.get(
+            "/api/v1/contract-jobs/summary?window_hours=24&stale_minutes=30",
+            headers={"X-API-Key": raw_key},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["by_status"]["new"] >= 1
+        assert payload["by_status"]["processing"] >= 1
+        assert payload["by_status"]["failed"] >= 2
+        assert payload["by_status"]["done"] >= 1
+        assert payload["processing_stale_count"] >= 1
+        assert payload["failed_retryable_count"] >= 1
+        assert payload["failed_terminal_count"] >= 1
+        assert payload["done_last_hours_count"] >= 1
+        assert payload["new_oldest_created_at"] is not None
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ContractJob).where(ContractJob.id.in_(created_ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_contract_job_history_returns_audit_entries() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.contract.history"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    job_id = None
+
+    db = SessionLocal()
+    try:
+        job = ContractJob(
+            status=ContractJobStatus.new,
+            input_mode=InputMode.text_only,
+            document_text="history",
+            priority=-1000000000,
+            created_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    try:
+        claim = client.post(
+            "/api/v1/contract-jobs/claim",
+            json={"worker_id": "worker-history"},
+            headers={"X-API-Key": raw_key},
+        )
+        assert claim.status_code == 200
+        assert claim.json()["id"] == str(job_id)
+
+        patch = client.patch(
+            f"/api/v1/contract-jobs/{job_id}",
+            json={"status": "failed", "last_error": "network"},
+            headers={"X-API-Key": raw_key},
+        )
+        assert patch.status_code == 200
+
+        history = client.get(
+            f"/api/v1/contract-jobs/{job_id}/history?limit=10",
+            headers={"X-API-Key": raw_key},
+        )
+        assert history.status_code == 200
+        payload = history.json()
+        assert payload["job_id"] == str(job_id)
+        actions = [entry["action"] for entry in payload["entries"]]
+        assert "job.claim" in actions
+        assert "job.update" in actions
+    finally:
+        db = SessionLocal()
+        try:
+            if job_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == job_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == job_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)

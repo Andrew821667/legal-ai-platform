@@ -34,3 +34,6 @@
   - `GET /api/v1/contract-jobs/{job_id}`
 - Для операторских списков поддерживаются фильтры:
   - `GET /api/v1/contract-jobs?status=...&lead_id=...&worker_id=...`
+- Для мониторинга очереди и диагностики задачи:
+  - `GET /api/v1/contract-jobs/summary`
+  - `GET /api/v1/contract-jobs/{job_id}/history`
