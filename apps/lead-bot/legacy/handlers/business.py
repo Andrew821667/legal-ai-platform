@@ -103,22 +103,7 @@ def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> N
 
 
 def _business_menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
-                InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
-            ],
-            [
-                InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
-                InlineKeyboardButton("📲 Контакт", callback_data="menu_leave_contact"),
-            ],
-            [
-                InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
-            ],
-            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
-        ]
-    )
+    return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
 def build_business_menu_markup() -> InlineKeyboardMarkup:
@@ -229,7 +214,7 @@ def _looks_like_new_topic_after_handoff(text: str) -> bool:
         return False
     if _extract_phone_candidate(normalized):
         return False
-    if normalized in {"/menu", "menu", "/меню", "меню", "/reset", "reset", "сброс"}:
+    if normalized in {"/menu", "menu", "/меню", "меню", "/reset", "reset", "сброс", "рабочий стол"}:
         return False
     return len(normalized) >= 3
 
@@ -403,7 +388,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         # Inline кнопки обрабатываются через callback_query
         
         # Обработка команды /menu для бизнес-чата
-        if text.strip().lower() in ['/menu', 'menu', '/меню', 'меню']:
+        if text.strip().lower() in ['/menu', 'menu', '/меню', 'меню', 'рабочий стол', '/desk', 'desk']:
             reply_markup = _business_menu_markup()
             
             await context.bot.send_message(

@@ -49,20 +49,7 @@ def _backup_and_truncate_log(log_file: str) -> str | None:
 
 
 def _services_inline_menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
-                InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
-            ],
-            [
-                InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
-                InlineKeyboardButton("📲 Контакт", callback_data="menu_leave_contact"),
-            ],
-            [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
-            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
-        ]
-    )
+    return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
 def _personal_mode_markup() -> InlineKeyboardMarkup:
@@ -101,6 +88,34 @@ def _business_phone_format_text() -> str:
         "• +7 999 123-45-67\n"
         "• 8 999 123-45-67\n"
         "• 89991234567"
+    )
+
+
+def _build_client_profile_text(user_row: dict, lead: dict | None, consent_state: dict) -> str:
+    lead = lead or {}
+    full_name = " ".join(
+        part
+        for part in (
+            (user_row.get("first_name") or "").strip(),
+            (user_row.get("last_name") or "").strip(),
+        )
+        if part
+    ) or "—"
+    username = user_row.get("username")
+    username_text = f"@{username}" if username else "не указан"
+    name_in_lead = lead.get("name") or full_name
+    consent_hint = content.consent_user_status_text(consent_state)
+    return (
+        "👤 Ваш профиль\n\n"
+        f"Имя профиля: {full_name}\n"
+        f"Username: {username_text}\n\n"
+        "Контактные данные:\n"
+        f"• Имя в заявке: {name_in_lead}\n"
+        f"• Email: {lead.get('email') or 'не указан'}\n"
+        f"• Телефон: {lead.get('phone') or 'не указан'}\n"
+        f"• Компания: {lead.get('company') or 'не указана'}\n\n"
+        f"{consent_hint}\n\n"
+        "Чтобы исправить ФИО или email, используйте кнопку «👤 Мой профиль» в нижнем меню."
     )
 
 
@@ -204,6 +219,72 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                         ADMIN_MENU if user and user.id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
                         resize_keyboard=True,
                     ),
+                )
+            return
+
+        if callback_data == "menu_dashboard":
+            response_text = content.WORKSPACE_TEXT
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=menu_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    response_text,
+                    reply_markup=menu_markup,
+                    action="menu_dashboard",
+                )
+            return
+
+        if callback_data == "menu_profile":
+            if not user_db_id:
+                await utils.safe_reply_text(
+                    query.message,
+                    "Не удалось определить профиль. Нажмите /start и повторите.",
+                    action="menu_profile_no_user",
+                )
+                return
+            snapshot = admin_interface.admin_interface.get_user_snapshot(user.id) if user else None
+            user_row = (snapshot or {}).get("user") or database.db.get_user_by_id(user_db_id) or {}
+            lead = (snapshot or {}).get("lead") or database.db.get_lead_by_user_id(user_db_id)
+            consent_state = (snapshot or {}).get("consent") or database.db.get_user_consent_state(user_db_id)
+            response_text = _build_client_profile_text(user_row, lead, consent_state)
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=menu_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    _clip_for_edit(response_text),
+                    reply_markup=menu_markup,
+                    action="menu_profile",
+                )
+            return
+
+        if callback_data == "menu_documents":
+            response_text = _documents_panel_text()
+            docs_markup = _documents_panel_markup()
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=docs_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    response_text,
+                    reply_markup=docs_markup,
+                    action="menu_documents",
                 )
             return
 

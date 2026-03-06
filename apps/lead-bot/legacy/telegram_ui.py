@@ -72,9 +72,12 @@ def _infer_icon_key(text: str | None) -> str | None:
         return None
     exact = {
         "меню услуг": "services",
+        "рабочий стол": "services",
         "консультация": "consultation",
         "контакт": "contact",
+        "оставить контакт": "contact",
         "мой профиль": "profile",
+        "профиль": "profile",
         "документы": "documents",
         "личное обращение": "personal",
         "админ-панель": "admin",

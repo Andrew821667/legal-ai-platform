@@ -6,17 +6,36 @@ from telegram_ui import reply_button as KeyboardButton
 
 # Меню кнопок
 MAIN_MENU = [
-    [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
+    [KeyboardButton("🧭 Рабочий стол"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
     [KeyboardButton("✉️ Личное обращение"), KeyboardButton("🔄 Начать заново")],
 ]
 
 # Админское меню (видно только админу)
 ADMIN_MENU = [
-    [KeyboardButton("📋 Меню услуг"), KeyboardButton("📞 Консультация")],
+    [KeyboardButton("🧭 Рабочий стол"), KeyboardButton("📞 Консультация")],
     [KeyboardButton("👤 Мой профиль"), KeyboardButton("📚 Документы")],
     [KeyboardButton("✉️ Личное обращение"), KeyboardButton("⚙️ Админ-панель")],
     [KeyboardButton("🔄 Начать заново")],
+]
+
+WORKSPACE_INLINE_MENU = [
+    [
+        InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
+        InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
+    ],
+    [
+        InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+        InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact"),
+    ],
+    [
+        InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+    ],
+    [
+        InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
+        InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
+    ],
 ]
 
 LEAD_MAGNET_MENU = [

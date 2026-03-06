@@ -231,20 +231,7 @@ def _consultation_contact_markup() -> ReplyKeyboardMarkup:
 
 
 def _services_inline_menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
-                InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
-            ],
-            [
-                InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
-                InlineKeyboardButton("📲 Контакт", callback_data="menu_leave_contact"),
-            ],
-            [InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request")],
-            [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")],
-        ]
-    )
+    return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
 def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
@@ -688,6 +675,7 @@ def _looks_like_new_topic_after_handoff(text: str) -> bool:
         "/menu", "menu", "/меню", "меню",
         "/reset", "reset", "сброс",
         "меню услуг", "консультация", "заказать консультацию",
+        "рабочий стол",
         "личное обращение", "мой профиль", "документы",
         "начать заново", "админ-панель",
     }:
@@ -995,7 +983,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /menu - показывает меню услуг"""
+    """Обработчик команды /menu - открывает рабочий стол."""
     try:
         reply_markup = _services_inline_menu_markup()
         
@@ -1372,7 +1360,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("New lead %s created from new topic after handoff for user %s", new_lead_id, user.id)
 
         # Обработка кнопок reply-меню
-        if _button_text_equals(message_text, "📋 Меню услуг") or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]:
+        if (
+            _button_text_equals(message_text, "🧭 Рабочий стол")
+            or _button_text_equals(message_text, "📋 Меню услуг")
+            or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]
+        ):
             await menu_command(update, context)
             return
 
