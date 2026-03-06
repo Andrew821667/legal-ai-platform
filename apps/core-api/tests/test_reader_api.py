@@ -265,6 +265,19 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         assert f"tg={telegram_user_id}" in deeplink["url"]
         assert deeplink["query"]["screen"] == "content"
         assert deeplink["query"]["act"] == "open_saved"
+
+        summary_response = client.get(
+            "/api/v1/reader/miniapp/events/summary?hours=48&limit_users=5",
+            headers={"X-API-Key": raw_key},
+        )
+        assert summary_response.status_code == 200
+        summary = summary_response.json()
+        assert summary["hours"] == 48
+        assert summary["total_events"] >= 2
+        assert summary["unique_users"] >= 1
+        assert any(item["label"] == "miniapp" for item in summary["top_sources"])
+        assert any(item["telegram_user_id"] == telegram_user_id for item in summary["top_users"])
+        assert len(summary["recent_events"]) >= 2
     finally:
         db = SessionLocal()
         try:

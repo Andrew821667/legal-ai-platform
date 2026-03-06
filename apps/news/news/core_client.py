@@ -172,3 +172,11 @@ class CoreClient:
             headers=self.headers,
             timeout=self.timeout,
         )
+
+    def reader_miniapp_events_summary(self, *, hours: int = 24, limit_users: int = 10) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/reader/miniapp/events/summary",
+            params={"hours": hours, "limit_users": limit_users},
+            headers=self.headers,
+            timeout=self.timeout,
+        )

@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
@@ -40,9 +40,12 @@ from core_api.schemas import (
     ReaderMiniAppDeepLinkCreate,
     ReaderMiniAppDeepLinkOut,
     ReaderMiniAppEventCreate,
+    ReaderMiniAppEventsSummaryOut,
     ReaderMiniAppEventOut,
     ReaderMiniAppProfileOut,
     ReaderMiniAppProfilePatch,
+    ReaderMiniAppTopMetric,
+    ReaderMiniAppTopUser,
     ReaderPreferencesOut,
     ReaderPreferencesPatch,
     ReaderSaveRequest,
@@ -332,6 +335,77 @@ def list_reader_miniapp_events(
             .order_by(ReaderMiniAppEvent.created_at.desc())
             .limit(limit)
         ).scalars().all()
+    )
+
+
+@router.get("/miniapp/events/summary", response_model=ReaderMiniAppEventsSummaryOut)
+def summarize_reader_miniapp_events(
+    hours: int = Query(default=24, ge=1, le=168),
+    limit_users: int = Query(default=10, ge=1, le=50),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderMiniAppEventsSummaryOut:
+    _ = identity
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    base_where = ReaderMiniAppEvent.created_at >= since
+
+    total_events = int(
+        db.execute(select(func.count()).select_from(ReaderMiniAppEvent).where(base_where)).scalar() or 0
+    )
+    unique_users = int(
+        db.execute(
+            select(func.count(func.distinct(ReaderMiniAppEvent.telegram_user_id))).where(base_where)
+        ).scalar()
+        or 0
+    )
+
+    def _top_metrics(column, *, limit: int = 8) -> list[ReaderMiniAppTopMetric]:
+        rows = db.execute(
+            select(column.label("label"), func.count().label("count"))
+            .where(base_where)
+            .where(column.is_not(None))
+            .group_by(column)
+            .order_by(func.count().desc(), column.asc())
+            .limit(limit)
+        ).all()
+        return [
+            ReaderMiniAppTopMetric(label=str(label), count=int(count or 0))
+            for label, count in rows
+            if str(label or "").strip()
+        ]
+
+    top_users_rows = db.execute(
+        select(ReaderMiniAppEvent.telegram_user_id, func.count().label("count"))
+        .where(base_where)
+        .group_by(ReaderMiniAppEvent.telegram_user_id)
+        .order_by(func.count().desc(), ReaderMiniAppEvent.telegram_user_id.asc())
+        .limit(limit_users)
+    ).all()
+    top_users = [
+        ReaderMiniAppTopUser(telegram_user_id=int(user_id), count=int(count or 0))
+        for user_id, count in top_users_rows
+    ]
+
+    recent_events = list(
+        db.execute(
+            select(ReaderMiniAppEvent)
+            .where(base_where)
+            .order_by(ReaderMiniAppEvent.created_at.desc())
+            .limit(20)
+        ).scalars().all()
+    )
+
+    return ReaderMiniAppEventsSummaryOut(
+        hours=hours,
+        total_events=total_events,
+        unique_users=unique_users,
+        top_sources=_top_metrics(ReaderMiniAppEvent.source),
+        top_event_types=_top_metrics(ReaderMiniAppEvent.event_type),
+        top_screens=_top_metrics(ReaderMiniAppEvent.screen),
+        top_actions=_top_metrics(ReaderMiniAppEvent.action),
+        top_users=top_users,
+        recent_events=recent_events,
     )
 
 

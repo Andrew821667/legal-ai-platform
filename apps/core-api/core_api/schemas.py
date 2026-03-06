@@ -580,6 +580,28 @@ class ReaderMiniAppEventOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReaderMiniAppTopMetric(BaseModel):
+    label: str
+    count: int
+
+
+class ReaderMiniAppTopUser(BaseModel):
+    telegram_user_id: int
+    count: int
+
+
+class ReaderMiniAppEventsSummaryOut(BaseModel):
+    hours: int
+    total_events: int
+    unique_users: int
+    top_sources: list[ReaderMiniAppTopMetric]
+    top_event_types: list[ReaderMiniAppTopMetric]
+    top_screens: list[ReaderMiniAppTopMetric]
+    top_actions: list[ReaderMiniAppTopMetric]
+    top_users: list[ReaderMiniAppTopUser]
+    recent_events: list[ReaderMiniAppEventOut]
+
+
 class ReaderMiniAppDeepLinkCreate(BaseModel):
     telegram_user_id: int
     source: str = "reader_bot"

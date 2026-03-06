@@ -98,6 +98,7 @@ def test_callback_route_matchers() -> None:
     assert _is_controls_callback("srcm:1")
     assert _is_controls_callback("uih:toggle")
     assert _is_controls_callback("rdg:menu")
+    assert _is_controls_callback("miniapp:summary:24")
     assert _is_posts_callback("pv:123:review:0")
     assert not _is_posts_callback("sec:sources")
     assert not _is_controls_callback("rv:all:0")
@@ -325,7 +326,7 @@ def test_system_keyboard_exposes_service_actions() -> None:
     payload = markup.to_dict()
     rows = payload.get("inline_keyboard") or []
     callbacks = {btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")}
-    assert {"status", "rdg:menu", "reader:funnel:7", "resetstale", "sec:help", "refresh"} <= callbacks
+    assert {"status", "rdg:menu", "reader:funnel:7", "miniapp:summary:24", "resetstale", "sec:help", "refresh"} <= callbacks
     assert "workers" not in callbacks
     assert "automation" not in callbacks
 

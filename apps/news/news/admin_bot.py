@@ -180,6 +180,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "rdg:",
     "sec:",
     "reader:",
+    "miniapp:",
     "thm:",
     "aq:",
     "srd:",
@@ -2038,6 +2039,7 @@ class NewsAdminBot:
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
+                _inline_button("🧩 Mini-App события", callback_data="miniapp:summary:24"),
                 _inline_button("❓ Помощь", callback_data="sec:help"),
                 _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
             ]
@@ -2350,6 +2352,100 @@ class NewsAdminBot:
 
         return "\n".join(lines)
 
+    def _reader_miniapp_text(self, hours: int = 24) -> str:
+        response = self.admin_client.reader_miniapp_events_summary(hours=hours, limit_users=10)
+        response.raise_for_status()
+        payload = response.json() or {}
+
+        total_events = int(payload.get("total_events") or 0)
+        unique_users = int(payload.get("unique_users") or 0)
+        top_sources = payload.get("top_sources") or []
+        top_event_types = payload.get("top_event_types") or []
+        top_screens = payload.get("top_screens") or []
+        top_actions = payload.get("top_actions") or []
+        top_users = payload.get("top_users") or []
+        recent_events = payload.get("recent_events") or []
+
+        def _top_lines(rows: list[dict[str, Any]], *, fallback: str = "• пока нет") -> list[str]:
+            result: list[str] = []
+            for row in rows[:5]:
+                label = str(row.get("label") or "").strip()
+                count = int(row.get("count") or 0)
+                if not label:
+                    continue
+                result.append(f"• {label[:42]}: {count}")
+            return result or [fallback]
+
+        def _recent_lines(rows: list[dict[str, Any]]) -> list[str]:
+            result: list[str] = []
+            for row in rows[:5]:
+                ts = str(row.get("created_at") or "")[:16].replace("T", " ")
+                user_id = int(row.get("telegram_user_id") or 0)
+                source = str(row.get("source") or "miniapp")
+                screen = str(row.get("screen") or "n/a")
+                action = str(row.get("action") or "n/a")
+                result.append(f"• {ts} | u{user_id} | {source} | {screen[:28]} | {action[:28]}")
+            return result or ["• пока нет"]
+
+        lines = [
+            f"Mini-App мониторинг за {hours}ч",
+            "",
+            _screen_guide(
+                "Сводка использования mini-app и переходов из reader-бота.",
+                [
+                    "Следите за динамикой событий и количеством уникальных пользователей.",
+                    "Проверяйте, какие экраны и действия самые частые.",
+                    "Используйте данные для корректировки маршрута reader -> mini-app -> лид.",
+                ],
+            ),
+            "",
+            f"Всего событий: {total_events}",
+            f"Уникальных пользователей: {unique_users}",
+            "",
+            "Топ источников:",
+            *_top_lines(top_sources),
+            "",
+            "Топ типов событий:",
+            *_top_lines(top_event_types),
+            "",
+            "Топ экранов:",
+            *_top_lines(top_screens),
+            "",
+            "Топ действий:",
+            *_top_lines(top_actions),
+            "",
+            "Топ пользователей:",
+        ]
+
+        if top_users:
+            for row in top_users[:5]:
+                lines.append(f"• u{int(row.get('telegram_user_id') or 0)}: {int(row.get('count') or 0)}")
+        else:
+            lines.append("• пока нет")
+
+        lines.append("")
+        lines.append("Последние события:")
+        lines.extend(_recent_lines(recent_events))
+        return "\n".join(lines)
+
+    def _reader_miniapp_keyboard(self, hours: int = 24) -> InlineKeyboardMarkup:
+        def _period_button(value: int, label: str) -> InlineKeyboardButton:
+            prefix = "• " if value == hours else ""
+            return _inline_button(f"{prefix}{label}", callback_data=f"miniapp:summary:{value}")
+
+        rows = self._two_column_rows(
+            [
+                _period_button(6, "6ч"),
+                _period_button(24, "24ч"),
+                _period_button(72, "72ч"),
+                _inline_button("🔄 Обновить", callback_data=f"miniapp:summary:{hours}"),
+                _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
+                _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
     def _workers_keyboard(self, payload: dict[str, Any]) -> InlineKeyboardMarkup:
         workers = payload.get("workers") or []
         worker_buttons: list[InlineKeyboardButton] = []
@@ -2385,7 +2481,7 @@ class NewsAdminBot:
             "📰 Источники / 🧭 Тематики — контроль discovery-слоя и генерации\n"
             "🤖 Автоматизация — тумблеры, интервалы, слоты и лимиты\n"
             "👷 Воркеры — состояние и запуски за 24 часа\n"
-            "🛠 Сервис — статус API, Reader-метрики, reset stale и справка\n\n"
+            "🛠 Сервис — статус API, Reader-метрики, mini-app мониторинг, reset stale и справка\n\n"
             "Команды (опционально):\n"
             "/start, /newpost, /generate_now, /calendar, /help"
         )
@@ -6780,6 +6876,23 @@ class NewsAdminBot:
                     query,
                     self._reader_digest_text(force_refresh=True),
                     reply_markup=self._reader_digest_keyboard(force_refresh=True),
+                )
+                return
+
+            if data.startswith("miniapp:summary"):
+                parts = data.split(":", maxsplit=2)
+                hours = 24
+                if len(parts) >= 3:
+                    try:
+                        candidate = int(parts[2])
+                        if 1 <= candidate <= 168:
+                            hours = candidate
+                    except ValueError:
+                        hours = 24
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_miniapp_text(hours=hours),
+                    reply_markup=self._reader_miniapp_keyboard(hours=hours),
                 )
                 return
 
