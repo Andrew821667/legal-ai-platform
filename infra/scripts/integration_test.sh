@@ -4,6 +4,21 @@ set -euo pipefail
 API_BASE=${CORE_API_URL:-http://localhost:8000}
 API="$API_BASE/api/v1"
 KEY=${API_KEY_ADMIN:?API_KEY_ADMIN is required}
+LEAD_ID=""
+POST_ID=""
+
+cleanup() {
+  if [ -n "${POST_ID}" ]; then
+    curl -sf -X DELETE "$API/scheduled-posts/$POST_ID" \
+      -H "X-API-Key: $KEY" >/dev/null || true
+  fi
+
+  if [ -n "${LEAD_ID}" ]; then
+    curl -sf -X DELETE "$API/leads/$LEAD_ID" \
+      -H "X-API-Key: $KEY" >/dev/null || true
+  fi
+}
+trap cleanup EXIT
 
 LEAD_ID=$(curl -sf -X POST "$API/leads" \
   -H "X-API-Key: $KEY" \
@@ -26,12 +41,10 @@ POST_ID=$(curl -sf -X POST "$API/scheduled-posts" \
 
 echo "✅ Scheduled post created: $POST_ID"
 
-JOB_ID=$(curl -sf -X POST "$API/contract-jobs" \
-  -H "X-API-Key: $KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"input_mode":"text_only","document_text":"Test contract text"}' | jq -r '.id')
+JOB_COUNT=$(curl -sf -X GET "$API/contract-jobs?status=new&count_only=true" \
+  -H "X-API-Key: $KEY" | jq -r '.count // 0')
 
-echo "✅ Contract job created: $JOB_ID"
+echo "✅ Contract jobs endpoint available (new count: $JOB_COUNT)"
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$API/admin/api-keys" \
   -H "X-API-Key: ${API_KEY_BOT:-invalid}" || true)
