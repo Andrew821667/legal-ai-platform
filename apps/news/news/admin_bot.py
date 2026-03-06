@@ -119,6 +119,7 @@ _QUEUE_CACHE_TTL_SECONDS = 15
 _DERIVED_CACHE_TTL_SECONDS = 20
 _CALENDAR_CACHE_TTL_SECONDS = 20
 _SOURCES_PAGE_SIZE = 12
+_UI_HINTS_ENABLED = True
 
 _PILLAR_LABELS = {
     "regulation": "AI в праве и регулирование",
@@ -190,6 +191,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "fa:",
     "gen:",
     "preset:",
+    "uih:",
     "all:",
     "set:",
     "wrk:",
@@ -1137,6 +1139,8 @@ def _worker_id_from_callback_token(token: str) -> str:
 
 
 def _screen_guide(what: str, actions: list[str]) -> str:
+    if not _UI_HINTS_ENABLED:
+        return ""
     lines = [f"ℹ️ Что это: {what}", "🛠 Как управлять:"]
     lines.extend(f"{index}. {item}" for index, item in enumerate(actions, start=1))
     return "\n".join(lines)
@@ -1911,10 +1915,12 @@ class NewsAdminBot:
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
+            f"Подсказки интерфейса: {'вкл' if _UI_HINTS_ENABLED else 'выкл'}\n"
             f"Следующая публикация: {next_publish}"
         )
 
     def _workspace_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
+        hints_label = f"💡 Подсказки: {'вкл' if _UI_HINTS_ENABLED else 'выкл'}"
         section_buttons = [
             _inline_button("📂 Рабочие списки", callback_data="sec:worklists"),
             _inline_button("🗓 Календарь", callback_data="cal:summary"),
@@ -1925,6 +1931,7 @@ class NewsAdminBot:
             _inline_button("🤖 Автоматизация", callback_data="sec:automation"),
             _inline_button("👷 Воркеры", callback_data="sec:workers"),
             _inline_button("🛠 Сервис", callback_data="sec:system"),
+            _inline_button(hints_label, callback_data="uih:toggle"),
             _inline_button("🔄 Обновить", callback_data="refresh"),
         ]
         rows: list[list[InlineKeyboardButton]] = [
@@ -4625,7 +4632,9 @@ class NewsAdminBot:
             rows.append([InlineKeyboardButton("🟡 На проверку", callback_data=f"rr:{post_id}:{status}:{offset}")])
         if status in ("review", "failed"):
             rows.append([InlineKeyboardButton("✅ В готовые", callback_data=f"pr:{post_id}:{status}:{offset}")])
-        if _is_auto_queue_context(status):
+        if status == "review":
+            rows.append([InlineKeyboardButton("🔙 К проверке", callback_data=f"rv:all:all:all:{offset}")])
+        elif _is_auto_queue_context(status):
             queue_filter, theme_filter = _auto_queue_filters_from_context(status)
             rows.append([InlineKeyboardButton("🔙 К автоочереди", callback_data=f"aq:{queue_filter}:{theme_filter}:{offset}")])
         elif _is_calendar_context(status):
@@ -6485,6 +6494,7 @@ class NewsAdminBot:
         _ = context
         if not await self._ensure_admin(update):
             return
+        global _UI_HINTS_ENABLED
         query = update.callback_query
         await query.answer()
         data = query.data or ""
@@ -6505,6 +6515,17 @@ class NewsAdminBot:
                 await self._safe_edit_message_text(
                     query,
                     self._workspace_text(counts, next_publish),
+                    reply_markup=self._workspace_keyboard(counts),
+                )
+                return
+
+            if data == "uih:toggle":
+                _UI_HINTS_ENABLED = not _UI_HINTS_ENABLED
+                counts, next_publish = await self._queue_snapshot()
+                state = "включены" if _UI_HINTS_ENABLED else "выключены"
+                await self._safe_edit_message_text(
+                    query,
+                    f"Подсказки интерфейса {state}.\n\n" + self._workspace_text(counts, next_publish),
                     reply_markup=self._workspace_keyboard(counts),
                 )
                 return

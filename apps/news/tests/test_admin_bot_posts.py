@@ -96,6 +96,7 @@ def test_callback_route_matchers() -> None:
     assert _is_controls_callback("refresh")
     assert _is_controls_callback("sec:sources")
     assert _is_controls_callback("srcm:1")
+    assert _is_controls_callback("uih:toggle")
     assert _is_controls_callback("rdg:menu")
     assert _is_posts_callback("pv:123:review:0")
     assert not _is_posts_callback("sec:sources")
@@ -315,6 +316,7 @@ def test_workspace_keyboard_contains_system_section() -> None:
     assert "sec:system" in callbacks
     assert "sec:automation" in callbacks
     assert "sec:workers" in callbacks
+    assert "uih:toggle" in callbacks
 
 
 def test_system_keyboard_exposes_service_actions() -> None:
@@ -369,6 +371,8 @@ def test_post_card_keyboard_has_add_footer_button() -> None:
     payload = markup.to_dict()
     labels = [button["text"] for row in payload["inline_keyboard"] for button in row]
     assert "🧩 Добавить футер" in labels
+    callbacks = [button.get("callback_data") for row in payload["inline_keyboard"] for button in row]
+    assert "rv:all:all:all:0" in callbacks
 
 
 def test_post_card_text_compact_sections() -> None:
