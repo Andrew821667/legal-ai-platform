@@ -30,3 +30,7 @@
   - `POST /api/v1/scheduled-posts/claim`
   - `POST /api/v1/contract-jobs/claim`
 - Пустая очередь: `204 No Content`.
+- Для polling статуса контракта используется:
+  - `GET /api/v1/contract-jobs/{job_id}`
+- Для операторских списков поддерживаются фильтры:
+  - `GET /api/v1/contract-jobs?status=...&lead_id=...&worker_id=...`

@@ -13,6 +13,8 @@ from core_api.models import (
     ContractJob,
     ContractJobStatus,
     InputMode,
+    Lead,
+    LeadSource,
     ScheduledPost,
     ScheduledPostStatus,
     Scope,
@@ -246,3 +248,96 @@ def test_reset_stale_contract_jobs_returns_to_new() -> None:
             finally:
                 db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_contract_jobs_support_get_by_id_and_filters() -> None:
+    client = TestClient(app)
+    worker_key_name = "pytest.worker.contract.filters"
+    bot_key_name = "pytest.bot.contract.get"
+    raw_worker_key = _create_api_key(Scope.worker, worker_key_name)
+    raw_bot_key = _create_api_key(Scope.bot, bot_key_name)
+
+    lead_a_id = None
+    lead_b_id = None
+    job_a_id = None
+    job_b_id = None
+
+    db = SessionLocal()
+    try:
+        lead_a = Lead(source=LeadSource.telegram_bot, name="Lead A")
+        lead_b = Lead(source=LeadSource.telegram_bot, name="Lead B")
+        db.add_all([lead_a, lead_b])
+        db.commit()
+        db.refresh(lead_a)
+        db.refresh(lead_b)
+        lead_a_id = lead_a.id
+        lead_b_id = lead_b.id
+
+        job_a = ContractJob(
+            lead_id=lead_a.id,
+            worker_id="worker-a",
+            status=ContractJobStatus.processing,
+            input_mode=InputMode.text_only,
+            document_text="job-a",
+        )
+        job_b = ContractJob(
+            lead_id=lead_b.id,
+            worker_id="worker-b",
+            status=ContractJobStatus.new,
+            input_mode=InputMode.text_only,
+            document_text="job-b",
+        )
+        db.add_all([job_a, job_b])
+        db.commit()
+        db.refresh(job_a)
+        db.refresh(job_b)
+        job_a_id = job_a.id
+        job_b_id = job_b.id
+    finally:
+        db.close()
+
+    try:
+        by_lead = client.get(
+            f"/api/v1/contract-jobs?lead_id={lead_a_id}",
+            headers={"X-API-Key": raw_worker_key},
+        )
+        assert by_lead.status_code == 200
+        assert len(by_lead.json()) == 1
+        assert by_lead.json()[0]["id"] == str(job_a_id)
+
+        by_worker = client.get(
+            "/api/v1/contract-jobs?worker_id=worker-b",
+            headers={"X-API-Key": raw_worker_key},
+        )
+        assert by_worker.status_code == 200
+        assert len(by_worker.json()) == 1
+        assert by_worker.json()[0]["id"] == str(job_b_id)
+
+        by_id = client.get(
+            f"/api/v1/contract-jobs/{job_a_id}",
+            headers={"X-API-Key": raw_bot_key},
+        )
+        assert by_id.status_code == 200
+        assert by_id.json()["id"] == str(job_a_id)
+
+        missing = client.get(
+            "/api/v1/contract-jobs/11111111-1111-1111-1111-111111111111",
+            headers={"X-API-Key": raw_bot_key},
+        )
+        assert missing.status_code == 404
+    finally:
+        db = SessionLocal()
+        try:
+            if job_a_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == job_a_id))
+            if job_b_id is not None:
+                db.execute(delete(ContractJob).where(ContractJob.id == job_b_id))
+            if lead_a_id is not None:
+                db.execute(delete(Lead).where(Lead.id == lead_a_id))
+            if lead_b_id is not None:
+                db.execute(delete(Lead).where(Lead.id == lead_b_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(worker_key_name)
+        _delete_api_key_by_name(bot_key_name)

@@ -41,6 +41,8 @@ def create_contract_job(
 @router.get("", response_model=None)
 def list_contract_jobs(
     status: ContractJobStatus | None = Query(default=None),
+    lead_id: uuid.UUID | None = Query(default=None),
+    worker_id: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     count_only: bool = Query(default=False),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
@@ -51,13 +53,34 @@ def list_contract_jobs(
         stmt = select(func.count()).select_from(ContractJob)
         if status:
             stmt = stmt.where(ContractJob.status == status)
+        if lead_id:
+            stmt = stmt.where(ContractJob.lead_id == lead_id)
+        if worker_id:
+            stmt = stmt.where(ContractJob.worker_id == worker_id)
         count = db.execute(stmt).scalar_one()
         return {"count": count}
 
     stmt = select(ContractJob).order_by(ContractJob.priority.asc(), ContractJob.created_at.asc()).limit(limit)
     if status:
         stmt = stmt.where(ContractJob.status == status)
+    if lead_id:
+        stmt = stmt.where(ContractJob.lead_id == lead_id)
+    if worker_id:
+        stmt = stmt.where(ContractJob.worker_id == worker_id)
     return list(db.execute(stmt).scalars().all())
+
+
+@router.get("/{job_id}", response_model=ContractJobOut)
+def get_contract_job(
+    job_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.worker, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJob:
+    _ = identity
+    job = db.get(ContractJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 @router.post("/claim", response_model=ContractJobOut)
