@@ -56,8 +56,16 @@ class Database:
 
     def get_connection(self) -> sqlite3.Connection:
         """Получение подключения к БД"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=20.0)
         conn.row_factory = sqlite3.Row  # Доступ к колонкам по имени
+        try:
+            # Уменьшаем lock-конфликты и удерживаем безопасные ограничения SQLite.
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA busy_timeout = 5000")
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA synchronous = NORMAL")
+        except Exception as pragma_error:
+            logger.debug("SQLite PRAGMA setup skipped: %s", pragma_error)
         return conn
 
     def _core_get_json(self, path: str, params: dict | None = None):
@@ -245,6 +253,10 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_timestamp ON conversations(user_id, timestamp)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_conversations_user_role_timestamp "
+                "ON conversations(user_id, role, timestamp)"
+            )
 
             # Таблица leads
             cursor.execute("""
@@ -439,6 +451,22 @@ class Database:
                 "ON leads(notification_sent, last_message_at)"
             )
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_core_lead_id ON leads(core_lead_id)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leads_status_created_at "
+                "ON leads(status, created_at DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leads_temperature_created_at "
+                "ON leads(temperature, created_at DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leads_service_category_created_at "
+                "ON leads(service_category, created_at DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_leads_notify_temp_last_message "
+                "ON leads(notification_sent, temperature, last_message_at)"
+            )
 
             cursor.execute("PRAGMA table_info(users)")
             user_columns = [column[1] for column in cursor.fetchall()]

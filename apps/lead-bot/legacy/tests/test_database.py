@@ -169,6 +169,61 @@ def test_security_token_usage_daily_aggregates(test_db):
     assert test_db.get_security_total_tokens(day_key) == 1250
 
 
+def test_security_blacklist_crud(test_db):
+    telegram_user_id = 991001
+
+    assert test_db.count_security_blacklist() == 0
+
+    test_db.add_security_blacklist(telegram_user_id, "spam")
+    entry = test_db.get_security_blacklist_entry(telegram_user_id)
+    assert entry is not None
+    assert entry["telegram_user_id"] == telegram_user_id
+    assert entry["reason"] == "spam"
+    assert test_db.count_security_blacklist() == 1
+
+    test_db.add_security_blacklist(telegram_user_id, "updated")
+    updated_entry = test_db.get_security_blacklist_entry(telegram_user_id)
+    assert updated_entry is not None
+    assert updated_entry["reason"] == "updated"
+
+    listed = test_db.list_security_blacklist(limit=10)
+    assert listed[0]["telegram_user_id"] == telegram_user_id
+
+    removed = test_db.remove_security_blacklist(telegram_user_id)
+    assert removed == 1
+    assert test_db.get_security_blacklist_entry(telegram_user_id) is None
+    assert test_db.count_security_blacklist() == 0
+
+
+def test_security_cooldown_suspicious_and_reset(test_db):
+    telegram_user_id = 991002
+    now = time.time()
+    day_key = "2026-03-06"
+
+    test_db.set_security_cooldown(telegram_user_id, now)
+    cooldown_ts = test_db.get_security_cooldown(telegram_user_id)
+    assert cooldown_ts is not None
+    assert abs(cooldown_ts - now) < 1.0
+
+    assert test_db.increment_security_suspicious(telegram_user_id) == 1
+    assert test_db.increment_security_suspicious(telegram_user_id) == 2
+    assert test_db.count_security_suspicious_users() == 1
+
+    test_db.record_security_message_event(telegram_user_id, int(now))
+    test_db.add_security_tokens_used(telegram_user_id, day_key, 123)
+    test_db.add_security_blacklist(telegram_user_id, "test")
+
+    test_db.reset_security_counters(clear_blacklist=False)
+    assert test_db.count_security_message_events_since(telegram_user_id, 0) == 0
+    assert test_db.get_security_user_tokens(telegram_user_id, day_key) == 0
+    assert test_db.get_security_cooldown(telegram_user_id) is None
+    assert test_db.count_security_suspicious_users() == 0
+    assert test_db.count_security_blacklist() == 1
+
+    test_db.reset_security_counters(clear_blacklist=True)
+    assert test_db.count_security_blacklist() == 0
+
+
 def test_consent_flow_and_data_export(test_db):
     """Проверка цикла согласия/экспорта/отзыва согласия."""
     user_id = test_db.create_or_update_user(
