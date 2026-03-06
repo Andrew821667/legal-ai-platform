@@ -746,15 +746,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # Приветственное сообщение
+        # Приветственное сообщение + рабочий стол
         welcome_message = content.build_welcome_message(user.first_name)
         reply_markup = _main_menu_markup(user.id)
+        workspace_markup = _services_inline_menu_markup()
 
         await utils.safe_reply_text(
             update.message,
             welcome_message,
             reply_markup=reply_markup,
             action="start_welcome",
+        )
+        await utils.safe_reply_text(
+            update.message,
+            content.WORKSPACE_TEXT,
+            reply_markup=workspace_markup,
+            action="start_workspace",
         )
 
         user_data = database.db.get_user_by_id(user_id)

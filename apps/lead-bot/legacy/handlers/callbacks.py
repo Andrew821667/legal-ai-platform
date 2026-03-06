@@ -736,6 +736,12 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=reply_markup,
             action="consent_welcome_after_yes",
         )
+        await utils.safe_reply_text(
+            query.message,
+            content.WORKSPACE_TEXT,
+            reply_markup=_services_inline_menu_markup(),
+            action="consent_workspace_after_yes",
+        )
         await process_pending_start_payload(
             message=query.message,
             context=context,
@@ -773,6 +779,12 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             welcome_message,
             reply_markup=reply_markup,
             action="consent_welcome_after_transborder",
+        )
+        await utils.safe_reply_text(
+            query.message,
+            content.WORKSPACE_TEXT,
+            reply_markup=_services_inline_menu_markup(),
+            action="consent_workspace_after_transborder",
         )
         await process_pending_start_payload(
             message=query.message,
