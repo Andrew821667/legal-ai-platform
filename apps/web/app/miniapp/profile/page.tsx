@@ -65,7 +65,12 @@ export default function MiniAppProfilePage() {
       interests,
       goal,
     });
-    recordAction("miniapp_profile_saved");
+    recordAction("miniapp_profile_saved", {
+      eventType: "profile_saved",
+      source: "miniapp_profile",
+      screen: "/miniapp/profile",
+      payload: { audience, interests_count: interests.length },
+    });
     setSaved(true);
   };
 
@@ -175,6 +180,12 @@ export default function MiniAppProfilePage() {
       <MiniTrackedLink
         href={leadBotDeepLink("web_miniapp_profile")}
         action="miniapp_profile_open_assistant"
+        meta={{
+          eventType: "cta_click",
+          source: "miniapp_profile",
+          screen: "/miniapp/profile",
+          payload: { cta: "lead_bot" },
+        }}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"

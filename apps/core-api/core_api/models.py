@@ -282,6 +282,15 @@ class ReaderPreference(Base):
         String(50), nullable=False, default="never", server_default=sa_text("'never'")
     )
     expertise_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    miniapp_onboarding_done: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    miniapp_audience: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    miniapp_interests: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=sa_text("'[]'::jsonb")
+    )
+    miniapp_goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    miniapp_last_action: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (
         Index("ix_reader_preferences_telegram_user_id", "telegram_user_id", unique=True),
@@ -300,6 +309,24 @@ class ReaderSavedPost(Base):
         Index("ix_reader_saved_posts_user_created", "telegram_user_id", "created_at"),
         Index("ix_reader_saved_posts_post_id", "post_id"),
         Index("ux_reader_saved_posts_user_post", "telegram_user_id", "post_id", unique=True),
+    )
+
+
+class ReaderMiniAppEvent(Base):
+    __tablename__ = "reader_miniapp_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="miniapp", server_default=sa_text("'miniapp'"))
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    screen: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    action: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb"))
+
+    __table_args__ = (
+        Index("ix_reader_miniapp_events_user_created", "telegram_user_id", "created_at"),
+        Index("ix_reader_miniapp_events_type_created", "event_type", "created_at"),
     )
 
 

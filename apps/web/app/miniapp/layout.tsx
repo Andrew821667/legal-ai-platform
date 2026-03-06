@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import MiniAppStateProvider from "@/components/miniapp/MiniAppStateProvider";
+import MiniAppDeepLinkSync from "@/components/miniapp/MiniAppDeepLinkSync";
 import MiniAppTopBar from "@/components/miniapp/MiniAppTopBar";
 import MiniAppNav from "@/components/miniapp/MiniAppNav";
 import { ROUTES } from "@/lib/links";
@@ -14,6 +16,9 @@ export default function MiniAppLayout({ children }: { children: React.ReactNode 
   return (
     <MiniAppStateProvider>
       <main className="min-h-screen bg-slate-950 text-slate-100">
+        <Suspense fallback={null}>
+          <MiniAppDeepLinkSync />
+        </Suspense>
         <div className="mx-auto w-full max-w-md px-4 pb-24 pt-6">
           <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
             <div className="flex items-center justify-between gap-3">

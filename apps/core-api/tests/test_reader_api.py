@@ -13,6 +13,7 @@ from core_api.models import (
     Event,
     Lead,
     PostFeedbackSignal,
+    ReaderMiniAppEvent,
     ReaderPreference,
     ReaderSavedPost,
     ScheduledPost,
@@ -172,6 +173,111 @@ def test_reader_preferences_feed_and_saved_flow() -> None:
             if post_ids:
                 db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id.in_(post_ids)))
                 db.execute(delete(ScheduledPost).where(ScheduledPost.id.in_(post_ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_reader_miniapp_profile_events_and_deeplink() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.reader.miniapp"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    telegram_user_id = 9_880_003
+
+    try:
+        get_response = client.get(
+            f"/api/v1/reader/miniapp/profile?telegram_user_id={telegram_user_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert get_response.status_code == 200
+        assert get_response.json()["telegram_user_id"] == telegram_user_id
+        assert get_response.json()["onboarding_done"] is False
+
+        patch_response = client.patch(
+            "/api/v1/reader/miniapp/profile",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "onboarding_done": True,
+                "audience": "lawyer",
+                "interests": ["ai_law", "contracts", "AI_LAW"],
+                "goal": "Сократить цикл проверки договоров",
+                "last_action": "miniapp_profile_saved",
+                "sync_reader_topics": True,
+                "digest_frequency": "weekly",
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert patch_response.status_code == 200
+        patched = patch_response.json()
+        assert patched["onboarding_done"] is True
+        assert patched["audience"] == "lawyer"
+        assert patched["interests"] == ["ai_law", "contracts"]
+        assert patched["topics"] == ["ai_law", "contracts"]
+        assert patched["last_action"] == "miniapp_profile_saved"
+
+        event_response = client.post(
+            "/api/v1/reader/miniapp/event",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "event_type": "action",
+                "source": "miniapp",
+                "screen": "/miniapp/content",
+                "action": "miniapp_content_open_contract_ai",
+                "payload": {"source": "test"},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert event_response.status_code == 200
+        event_payload = event_response.json()
+        assert event_payload["telegram_user_id"] == telegram_user_id
+        assert event_payload["event_type"] == "action"
+
+        events_response = client.get(
+            f"/api/v1/reader/miniapp/events?telegram_user_id={telegram_user_id}&limit=10",
+            headers={"X-API-Key": raw_key},
+        )
+        assert events_response.status_code == 200
+        events = events_response.json()
+        assert len(events) >= 1
+        assert events[0]["telegram_user_id"] == telegram_user_id
+
+        profile_after_event = client.get(
+            f"/api/v1/reader/miniapp/profile?telegram_user_id={telegram_user_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert profile_after_event.status_code == 200
+        assert profile_after_event.json()["last_action"] == "miniapp_content_open_contract_ai"
+
+        deeplink_response = client.post(
+            "/api/v1/reader/miniapp/deeplink",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "source": "reader_bot",
+                "screen": "content",
+                "action": "open_saved",
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert deeplink_response.status_code == 200
+        deeplink = deeplink_response.json()
+        assert deeplink["path"] == "/miniapp/content"
+        assert f"tg={telegram_user_id}" in deeplink["url"]
+        assert deeplink["query"]["screen"] == "content"
+        assert deeplink["query"]["act"] == "open_saved"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ReaderMiniAppEvent).where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id))
+            db.execute(delete(ReaderSavedPost).where(ReaderSavedPost.telegram_user_id == telegram_user_id))
+            db.execute(delete(ReaderPreference).where(ReaderPreference.telegram_user_id == telegram_user_id))
+            db.execute(
+                delete(Event).where(
+                    Event.type.in_(
+                        ["reader.miniapp.event", "reader.miniapp.deeplink", "reader.cta_click", "reader.lead_intent"]
+                    )
+                )
+            )
             db.commit()
         finally:
             db.close()

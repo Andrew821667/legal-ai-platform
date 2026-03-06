@@ -139,6 +139,7 @@ class Settings(BaseSettings):
     reader_bot_token: str = Field(default="")
     reader_bot_username: str = Field(default="legal_ai_news_reader_bot")
     news_helper_bot_username: str = Field(default="legal_ai_helper_new_bot")
+    reader_miniapp_base_url: str = Field(default="https://legalaipro.ru/miniapp")
 
     # Core API bridge (единый контур данных/feedback)
     core_api_url: str = Field(default="http://core-api:8000")

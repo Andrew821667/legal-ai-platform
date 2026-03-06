@@ -31,6 +31,7 @@ export default function MiniAppTopBar() {
         <MiniTrackedLink
           href={ROUTES.miniAppProfile}
           action="miniapp_open_onboarding"
+          meta={{ eventType: "nav_click", source: "miniapp_topbar", screen: "/miniapp" }}
           className="mt-3 inline-flex rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
         >
           Пройти настройку
@@ -51,6 +52,7 @@ export default function MiniAppTopBar() {
         <MiniTrackedLink
           href={ROUTES.miniAppProfile}
           action="miniapp_open_profile"
+          meta={{ eventType: "nav_click", source: "miniapp_topbar", screen: "/miniapp" }}
           className="rounded-lg border border-emerald-400/40 px-3 py-2 text-xs font-semibold text-emerald-200 hover:border-emerald-300 transition-colors"
         >
           Изменить

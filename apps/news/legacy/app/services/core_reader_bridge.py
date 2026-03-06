@@ -1,5 +1,5 @@
 """
-Core API bridge for reader bot personalization/saved flow.
+Core API bridge for reader-bot personalization, saved posts, CTA and mini-app links.
 """
 
 from __future__ import annotations
@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from uuid import UUID
 
 import requests
 
@@ -24,6 +25,10 @@ def _headers() -> dict[str, str]:
         "X-API-Key": settings.api_key_news,
         "Content-Type": "application/json",
     }
+
+
+def _core_url(path: str) -> str:
+    return f"{settings.core_api_url.rstrip('/')}{path}"
 
 
 async def push_reader_preferences(
@@ -46,7 +51,7 @@ async def push_reader_preferences(
 
     def _send() -> requests.Response:
         return requests.patch(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/preferences",
+            _core_url("/api/v1/reader/preferences"),
             json=payload,
             headers=_headers(),
             timeout=8,
@@ -70,7 +75,7 @@ async def fetch_reader_feed(*, user_id: int, limit: int = 5, days: int = 14) -> 
 
     def _send() -> requests.Response:
         return requests.get(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/feed",
+            _core_url("/api/v1/reader/feed"),
             params={"telegram_user_id": int(user_id), "limit": int(limit), "days": int(days)},
             headers={"X-API-Key": settings.api_key_news},
             timeout=8,
@@ -97,7 +102,7 @@ async def fetch_reader_saved(*, user_id: int, limit: int = 20) -> list[dict[str,
 
     def _send() -> requests.Response:
         return requests.get(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/saved",
+            _core_url("/api/v1/reader/saved"),
             params={"telegram_user_id": int(user_id), "limit": int(limit)},
             headers={"X-API-Key": settings.api_key_news},
             timeout=8,
@@ -122,6 +127,38 @@ async def push_reader_save_state(*, user_id: int, publication_id: str, saved: bo
     if not _enabled():
         return False
 
+    payload = {
+        "telegram_user_id": int(user_id),
+        "post_id": str(publication_id),
+        "saved": bool(saved),
+    }
+
+    def _send() -> requests.Response:
+        return requests.post(
+            _core_url("/api/v1/reader/save"),
+            json=payload,
+            headers=_headers(),
+            timeout=8,
+        )
+
+    try:
+        response = await asyncio.to_thread(_send)
+        if response.status_code == 404:
+            return False
+        response.raise_for_status()
+        return True
+    except Exception as exc:
+        logger.warning(
+            "reader_save_sync_failed",
+            extra={
+                "user_id": int(user_id),
+                "publication_id": str(publication_id),
+                "saved": bool(saved),
+                "error": str(exc),
+            },
+        )
+        return False
+
 
 async def push_reader_cta_click(
     *,
@@ -144,7 +181,7 @@ async def push_reader_cta_click(
 
     def _send() -> requests.Response:
         return requests.post(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/cta-click",
+            _core_url("/api/v1/reader/cta-click"),
             json=body,
             headers=_headers(),
             timeout=8,
@@ -192,7 +229,7 @@ async def push_reader_lead_intent(
 
     def _send() -> requests.Response:
         return requests.post(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/lead-intent",
+            _core_url("/api/v1/reader/lead-intent"),
             json=body,
             headers=_headers(),
             timeout=8,
@@ -217,29 +254,72 @@ async def push_reader_lead_intent(
         )
         return None
 
-    payload = {
+
+async def build_reader_miniapp_deeplink(
+    *,
+    user_id: int,
+    source: str = "reader_bot",
+    screen: str | None = None,
+    action: str | None = None,
+    post_id: str | UUID | None = None,
+    payload: dict[str, Any] | None = None,
+) -> str | None:
+    """
+    Build tracked mini-app deeplink through core-api.
+    Falls back to configured public URL when core-api is unavailable.
+    """
+    if not _enabled():
+        fallback_base = (settings.reader_miniapp_base_url or "").strip()
+        if not fallback_base:
+            return None
+        separator = "&" if "?" in fallback_base else "?"
+        fallback_screen = (screen or "home").strip() or "home"
+        return (
+            f"{fallback_base}{separator}tg={int(user_id)}&src={source}&screen={fallback_screen}"
+        )
+
+    body: dict[str, Any] = {
         "telegram_user_id": int(user_id),
-        "post_id": str(publication_id),
-        "saved": bool(saved),
+        "source": (source or "reader_bot").strip() or "reader_bot",
+        "screen": (screen or "home").strip() or "home",
+        "action": (action or "").strip() or None,
+        "payload": payload or {},
     }
+    if post_id is not None:
+        body["post_id"] = str(post_id)
 
     def _send() -> requests.Response:
         return requests.post(
-            f"{settings.core_api_url.rstrip('/')}/api/v1/reader/save",
-            json=payload,
+            _core_url("/api/v1/reader/miniapp/deeplink"),
+            json=body,
             headers=_headers(),
             timeout=8,
         )
 
     try:
         response = await asyncio.to_thread(_send)
-        if response.status_code == 404:
-            return False
         response.raise_for_status()
-        return True
+        data = response.json()
+        if isinstance(data, dict):
+            url = data.get("url")
+            if isinstance(url, str) and url.strip():
+                return url.strip()
     except Exception as exc:
         logger.warning(
-            "reader_save_sync_failed",
-            extra={"user_id": int(user_id), "publication_id": str(publication_id), "saved": bool(saved), "error": str(exc)},
+            "reader_miniapp_deeplink_build_failed",
+            extra={
+                "user_id": int(user_id),
+                "source": source,
+                "screen": screen,
+                "error": str(exc),
+            },
         )
-        return False
+
+    fallback_base = (settings.reader_miniapp_base_url or "").strip()
+    if not fallback_base:
+        return None
+    separator = "&" if "?" in fallback_base else "?"
+    fallback_screen = (screen or "home").strip() or "home"
+    return (
+        f"{fallback_base}{separator}tg={int(user_id)}&src={source}&screen={fallback_screen}"
+    )

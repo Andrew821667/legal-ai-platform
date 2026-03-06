@@ -75,6 +75,7 @@ async def main():
         commands = [
             BotCommand(command="start", description="🚀 Начать работу с ботом"),
             BotCommand(command="lead_magnet", description="🎯 Лид-магнит: дайджест за контакты"),
+            BotCommand(command="miniapp", description="🧩 Открыть mini-app"),
             BotCommand(command="ask_question", description="🤖 Задать вопрос по LegalTech"),
             BotCommand(command="today", description="📰 Персональные новости за сегодня"),
             BotCommand(command="weekly", description="📆 Недельный дайджест"),

@@ -40,6 +40,7 @@ export default function MiniAppSolutionsPage() {
           <MiniTrackedLink
             href={block.href}
             action={block.action}
+            meta={{ eventType: "solution_open", source: "miniapp_solutions", screen: "/miniapp/solutions" }}
             className="mt-4 inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть маршрут

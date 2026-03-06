@@ -106,6 +106,12 @@ export default function MiniAppContentPage() {
               key={item.title}
               href={item.href}
               action={`miniapp_content_open:${item.title}`}
+              meta={{
+                eventType: "content_open",
+                source: "miniapp_content",
+                screen: "/miniapp/content",
+                payload: { topic: item.topic },
+              }}
               className="block rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               <span className="block text-xs text-slate-500">{item.topic}</span>
@@ -124,6 +130,7 @@ export default function MiniAppContentPage() {
       <MiniTrackedLink
         href={ROUTES.contractAI}
         action="miniapp_content_open_contract_ai"
+        meta={{ eventType: "nav_click", source: "miniapp_content", screen: "/miniapp/content" }}
         className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
       >
         Перейти к проверке договора

@@ -532,6 +532,69 @@ class ReaderPreferencesOut(BaseModel):
     updated_at: datetime
 
 
+class ReaderMiniAppProfilePatch(BaseModel):
+    telegram_user_id: int
+    onboarding_done: bool | None = None
+    audience: str | None = None
+    interests: list[str] | None = None
+    goal: str | None = None
+    last_action: str | None = None
+    sync_reader_topics: bool = True
+    digest_frequency: str | None = None
+    expertise_level: str | None = None
+
+
+class ReaderMiniAppProfileOut(BaseModel):
+    telegram_user_id: int
+    onboarding_done: bool
+    audience: str
+    interests: list[str]
+    goal: str | None
+    last_action: str | None
+    topics: list[str]
+    digest_frequency: str
+    expertise_level: str | None
+    updated_at: datetime
+
+
+class ReaderMiniAppEventCreate(BaseModel):
+    telegram_user_id: int
+    event_type: str = Field(min_length=1, max_length=100)
+    source: str | None = None
+    screen: str | None = None
+    action: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    update_last_action: bool = True
+
+
+class ReaderMiniAppEventOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    telegram_user_id: int
+    event_type: str
+    source: str
+    screen: str | None
+    action: str | None
+    payload: dict[str, Any]
+
+    model_config = {"from_attributes": True}
+
+
+class ReaderMiniAppDeepLinkCreate(BaseModel):
+    telegram_user_id: int
+    source: str = "reader_bot"
+    screen: str | None = None
+    action: str | None = None
+    post_id: uuid.UUID | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReaderMiniAppDeepLinkOut(BaseModel):
+    path: str
+    url: str
+    query: dict[str, str]
+
+
 class ReaderFeedItem(BaseModel):
     id: uuid.UUID
     title: str | None

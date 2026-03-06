@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, delete, select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import (
     ActorType,
@@ -20,6 +22,7 @@ from core_api.models import (
     PostFeedbackSignal,
     PostFeedbackSource,
     ReaderPreference,
+    ReaderMiniAppEvent,
     ReaderSavedPost,
     ScheduledPost,
     ScheduledPostStatus,
@@ -34,6 +37,12 @@ from core_api.schemas import (
     ReaderFeedbackCreate,
     ReaderLeadIntentCreate,
     ReaderLeadIntentOut,
+    ReaderMiniAppDeepLinkCreate,
+    ReaderMiniAppDeepLinkOut,
+    ReaderMiniAppEventCreate,
+    ReaderMiniAppEventOut,
+    ReaderMiniAppProfileOut,
+    ReaderMiniAppProfilePatch,
     ReaderPreferencesOut,
     ReaderPreferencesPatch,
     ReaderSaveRequest,
@@ -52,6 +61,14 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
     "privacy": ["privacy", "персональн", "transborder", "cross-border", "data transfer"],
     "regulation": ["regulation", "регулирован", "закон", "надзор", "policy"],
     "ai_general": ["ai", "llm", "agent", "copilot", "foundation model"],
+}
+
+_MINIAPP_SCREEN_TO_PATH: dict[str, str] = {
+    "home": "/miniapp",
+    "content": "/miniapp/content",
+    "tools": "/miniapp/tools",
+    "solutions": "/miniapp/solutions",
+    "profile": "/miniapp/profile",
 }
 
 
@@ -73,6 +90,53 @@ def _pref_for_user(db: Session, telegram_user_id: int) -> ReaderPreference | Non
     return db.execute(
         select(ReaderPreference).where(ReaderPreference.telegram_user_id == telegram_user_id).limit(1)
     ).scalar_one_or_none()
+
+
+def _get_or_create_pref(db: Session, telegram_user_id: int) -> ReaderPreference:
+    row = _pref_for_user(db, telegram_user_id)
+    if row is not None:
+        return row
+
+    row = ReaderPreference(
+        telegram_user_id=telegram_user_id,
+        topics=[],
+        digest_frequency="never",
+        miniapp_interests=[],
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _normalize_audience(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"lawyer", "business", "mixed"}:
+        return normalized
+    return "mixed"
+
+
+def _trim_optional_text(value: str | None, *, max_len: int) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    return normalized[:max_len]
+
+
+def _miniapp_profile_out(row: ReaderPreference) -> ReaderMiniAppProfileOut:
+    return ReaderMiniAppProfileOut(
+        telegram_user_id=row.telegram_user_id,
+        onboarding_done=bool(row.miniapp_onboarding_done),
+        audience=_normalize_audience(row.miniapp_audience),
+        interests=_normalize_topics((row.miniapp_interests if isinstance(row.miniapp_interests, list) else []) or []),
+        goal=row.miniapp_goal,
+        last_action=row.miniapp_last_action,
+        topics=_normalize_topics((row.topics if isinstance(row.topics, list) else []) or []),
+        digest_frequency=str(row.digest_frequency or "never"),
+        expertise_level=row.expertise_level,
+        updated_at=row.updated_at,
+    )
 
 
 def _topic_score(post: ScheduledPost, topics: list[str]) -> int:
@@ -152,6 +216,172 @@ def patch_reader_preferences(
     )
     db.commit()
     return row
+
+
+@router.get("/miniapp/profile", response_model=ReaderMiniAppProfileOut)
+def get_reader_miniapp_profile(
+    telegram_user_id: int = Query(ge=1),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderMiniAppProfileOut:
+    _ = identity
+    row = _get_or_create_pref(db, telegram_user_id)
+    db.commit()
+    db.refresh(row)
+    return _miniapp_profile_out(row)
+
+
+@router.patch("/miniapp/profile", response_model=ReaderMiniAppProfileOut)
+def patch_reader_miniapp_profile(
+    payload: ReaderMiniAppProfilePatch,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderMiniAppProfileOut:
+    row = _get_or_create_pref(db, payload.telegram_user_id)
+
+    if payload.onboarding_done is not None:
+        row.miniapp_onboarding_done = bool(payload.onboarding_done)
+    if payload.audience is not None:
+        row.miniapp_audience = _normalize_audience(payload.audience)
+    if payload.interests is not None:
+        normalized_interests = _normalize_topics(payload.interests)
+        row.miniapp_interests = normalized_interests
+        if payload.sync_reader_topics:
+            row.topics = normalized_interests
+    if payload.goal is not None:
+        row.miniapp_goal = _trim_optional_text(payload.goal, max_len=4000)
+    if payload.last_action is not None:
+        row.miniapp_last_action = _trim_optional_text(payload.last_action, max_len=255)
+    if payload.digest_frequency is not None:
+        row.digest_frequency = _trim_optional_text(payload.digest_frequency, max_len=50) or "never"
+    if payload.expertise_level is not None:
+        row.expertise_level = _trim_optional_text(payload.expertise_level, max_len=50)
+
+    row.updated_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="reader.miniapp.profile.patch",
+        target_type="reader_preference",
+        target_id=row.id,
+        details={"telegram_user_id": row.telegram_user_id},
+    )
+    db.commit()
+    return _miniapp_profile_out(row)
+
+
+@router.post("/miniapp/event", response_model=ReaderMiniAppEventOut)
+def create_reader_miniapp_event(
+    payload: ReaderMiniAppEventCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderMiniAppEvent:
+    row = ReaderMiniAppEvent(
+        telegram_user_id=payload.telegram_user_id,
+        event_type=payload.event_type.strip()[:100],
+        source=_trim_optional_text(payload.source, max_len=50) or "miniapp",
+        screen=_trim_optional_text(payload.screen, max_len=120),
+        action=_trim_optional_text(payload.action, max_len=120),
+        payload=payload.payload,
+    )
+    db.add(row)
+
+    if payload.update_last_action and payload.action:
+        pref = _get_or_create_pref(db, payload.telegram_user_id)
+        pref.miniapp_last_action = _trim_optional_text(payload.action, max_len=255)
+        pref.updated_at = datetime.now(timezone.utc)
+        db.add(pref)
+
+    db.commit()
+    db.refresh(row)
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="reader.miniapp.event.create",
+        target_type="reader_miniapp_event",
+        target_id=row.id,
+        details={
+            "telegram_user_id": payload.telegram_user_id,
+            "event_type": payload.event_type,
+            "source": payload.source or "miniapp",
+        },
+    )
+    db.commit()
+    return row
+
+
+@router.get("/miniapp/events", response_model=list[ReaderMiniAppEventOut])
+def list_reader_miniapp_events(
+    telegram_user_id: int = Query(ge=1),
+    limit: int = Query(default=30, ge=1, le=200),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> list[ReaderMiniAppEvent]:
+    _ = identity
+    return list(
+        db.execute(
+            select(ReaderMiniAppEvent)
+            .where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id)
+            .order_by(ReaderMiniAppEvent.created_at.desc())
+            .limit(limit)
+        ).scalars().all()
+    )
+
+
+@router.post("/miniapp/deeplink", response_model=ReaderMiniAppDeepLinkOut)
+def build_reader_miniapp_deeplink(
+    payload: ReaderMiniAppDeepLinkCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderMiniAppDeepLinkOut:
+    screen = _trim_optional_text(payload.screen, max_len=32) or "home"
+    path = _MINIAPP_SCREEN_TO_PATH.get(screen, _MINIAPP_SCREEN_TO_PATH["home"])
+
+    query: dict[str, str] = {
+        "tg": str(payload.telegram_user_id),
+        "src": _trim_optional_text(payload.source, max_len=64) or "reader_bot",
+        "screen": screen,
+    }
+    action = _trim_optional_text(payload.action, max_len=64)
+    if action:
+        query["act"] = action
+    if payload.post_id is not None:
+        query["post_id"] = str(payload.post_id)
+
+    query_string = urlencode(query)
+    base_url = get_settings().miniapp_public_base_url.rstrip("/")
+    url = f"{base_url}{path}" if not query_string else f"{base_url}{path}?{query_string}"
+
+    event = ReaderMiniAppEvent(
+        telegram_user_id=payload.telegram_user_id,
+        event_type="deeplink_issued",
+        source=query["src"],
+        screen=screen,
+        action=action,
+        payload={"post_id": str(payload.post_id) if payload.post_id else None, **payload.payload},
+    )
+    db.add(event)
+    db.commit()
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="reader.miniapp.deeplink",
+        target_type="reader_miniapp_event",
+        target_id=event.id,
+        details={"telegram_user_id": payload.telegram_user_id, "screen": screen, "path": path},
+    )
+    db.commit()
+
+    return ReaderMiniAppDeepLinkOut(path=path, url=url, query=query)
 
 
 @router.get("/feed", response_model=list[ReaderFeedItem])
@@ -412,4 +642,3 @@ def reader_lead_intent(
     )
     db.commit()
     return ReaderLeadIntentOut(lead_id=lead.id, created=created)
-

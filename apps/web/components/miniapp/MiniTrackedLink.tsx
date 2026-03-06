@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
+import { MiniAppActionMeta, useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 
 type MiniTrackedLinkProps = {
   href: string;
@@ -10,13 +10,22 @@ type MiniTrackedLinkProps = {
   children: React.ReactNode;
   target?: string;
   rel?: string;
+  meta?: MiniAppActionMeta;
 };
 
-export default function MiniTrackedLink({ href, action, className, children, target, rel }: MiniTrackedLinkProps) {
+export default function MiniTrackedLink({
+  href,
+  action,
+  className,
+  children,
+  target,
+  rel,
+  meta,
+}: MiniTrackedLinkProps) {
   const { recordAction } = useMiniAppState();
 
   return (
-    <Link href={href} className={className} target={target} rel={rel} onClick={() => recordAction(action)}>
+    <Link href={href} className={className} target={target} rel={rel} onClick={() => recordAction(action, meta)}>
       {children}
     </Link>
   );

@@ -64,6 +64,7 @@ export default function MiniAppHomePage() {
           <MiniTrackedLink
             href={ROUTES.miniAppContent}
             action="miniapp_home_open_content"
+            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть контент
@@ -71,6 +72,7 @@ export default function MiniAppHomePage() {
           <MiniTrackedLink
             href={`${ROUTES.contractAI}#demo`}
             action="miniapp_home_open_contract_ai"
+            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Проверить договор
@@ -78,6 +80,7 @@ export default function MiniAppHomePage() {
           <MiniTrackedLink
             href={ROUTES.miniAppSolutions}
             action="miniapp_home_open_solutions"
+            meta={{ eventType: "nav_click", source: "miniapp_home", screen: "/miniapp" }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Сценарии внедрения

@@ -40,6 +40,7 @@ export default function MiniAppToolsPage() {
           <MiniTrackedLink
             href={tool.href}
             action={tool.action}
+            meta={{ eventType: "tool_open", source: "miniapp_tools", screen: "/miniapp/tools" }}
             className="mt-4 inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть

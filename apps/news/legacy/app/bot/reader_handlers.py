@@ -47,7 +47,12 @@ from app.services.reader_service import (
 )
 from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
-from app.services.core_reader_bridge import push_reader_cta_click, push_reader_lead_intent
+from app.services.core_reader_bridge import (
+    build_reader_miniapp_deeplink,
+    push_reader_cta_click,
+    push_reader_lead_intent,
+    push_reader_save_state,
+)
 from app.config import settings
 
 
@@ -221,6 +226,9 @@ def _build_reader_nav_keyboard(
         ],
         [
             InlineKeyboardButton(text="⚙️ Настройки", callback_data="rnav:settings"),
+            InlineKeyboardButton(text="🧩 Mini App", callback_data="rnav:miniapp"),
+        ],
+        [
             InlineKeyboardButton(
                 text="🎯 Персональный дайджест" if not lead_magnet_completed else "✅ Лид-магнит",
                 callback_data="rnav:lead_magnet",
@@ -402,6 +410,8 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
         await _show_saved(callback.message, user_id, db)
     elif action == "settings":
         await _show_settings(callback.message, user_id, db)
+    elif action == "miniapp":
+        await _open_miniapp(callback.message, user_id)
     elif action == "lead_magnet":
         await _open_lead_magnet(callback.message, user_id, state, db)
     else:
@@ -436,10 +446,52 @@ async def _open_lead_magnet(target: Message, user_id: int, state: FSMContext, db
     await start_lead_magnet(target, state, db)
 
 
+async def _open_miniapp(target: Message, user_id: int) -> None:
+    """Open mini-app from reader bot with tracked deeplink."""
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user_id,
+        source="reader_bot",
+        screen="home",
+        action="reader_open_miniapp",
+    )
+    if not miniapp_url:
+        await target.answer(
+            "🧩 Mini App временно недоступен. Попробуйте чуть позже.",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+        )
+        return
+
+    await push_reader_cta_click(
+        user_id=user_id,
+        cta_type="miniapp_open",
+        context="reader_nav",
+        payload={"screen": "home"},
+    )
+
+    await target.answer(
+        "🧩 <b>Открыть Mini App Legal AI PRO</b>\n\n"
+        "В mini-app доступен быстрый маршрут: контент -> инструменты -> внедрение.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🧩 Открыть Mini App", url=miniapp_url)],
+                [InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")],
+            ]
+        ),
+    )
+
+
 @router.message(Command("lead_magnet"))
 async def cmd_lead_magnet(message: Message, state: FSMContext, db: AsyncSession):
     """Handle /lead_magnet command - start lead magnet flow."""
     await _open_lead_magnet(message, message.from_user.id, state, db)
+
+
+@router.message(Command("miniapp"))
+async def cmd_miniapp(message: Message):
+    """Open web mini-app."""
+    await _open_miniapp(message, message.from_user.id)
 
 
 @router.message(Command("ask_question"))
@@ -1010,6 +1062,7 @@ async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
     except ValueError:
         await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
         return
+    await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=True)
 
     # Update keyboard
     keyboard = get_article_keyboard(str(article_id), user_saved=True)
@@ -1029,6 +1082,7 @@ async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     except ValueError:
         await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
         return
+    await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=False)
 
     # Update keyboard
     keyboard = get_article_keyboard(str(article_id), user_saved=False)
