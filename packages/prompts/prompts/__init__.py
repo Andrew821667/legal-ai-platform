@@ -1,1 +1,8 @@
 """Prompt package."""
+
+from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT
+
+__all__ = [
+    "NEWS_WRITER_SYSTEM_PROMPT",
+    "NEWS_FOOTER_DECISION_SYSTEM_PROMPT",
+]
