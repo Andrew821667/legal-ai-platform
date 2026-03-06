@@ -640,16 +640,20 @@ def _looks_like_ack_only(text: str) -> bool:
 
 
 def _looks_like_plain_greeting(text: str) -> bool:
-    normalized = (text or "").strip().lower()
-    return normalized in {
+    normalized = normalize_button_text(text).strip().lower()
+    if not normalized:
+        return False
+    compact = normalized.replace("!", "").replace(".", "").replace(",", "").strip()
+    greeting_prefixes = (
         "привет",
-        "здравствуйте",
+        "здравств",
         "добрый день",
         "добрый вечер",
         "доброе утро",
         "hello",
         "hi",
-    }
+    )
+    return any(compact.startswith(prefix) for prefix in greeting_prefixes)
 
 
 def _looks_like_return_to_bot(text: str) -> bool:
@@ -763,6 +767,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=workspace_markup,
             action="start_workspace",
         )
+        logger.info("Workspace sent on /start for user %s", user.id)
 
         user_data = database.db.get_user_by_id(user_id)
         if user_data:
@@ -1171,6 +1176,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # В новой сессии всегда сначала показываем стартовый UX
+        # (приветствие + рабочий стол), даже если пользователь сразу пишет вопрос.
+        history_preview = database.db.get_conversation_history(user_data["id"], limit=1)
+        if message_text and not history_preview:
+            await utils.safe_reply_text(
+                original_message,
+                content.build_welcome_message(user.first_name),
+                reply_markup=_main_menu_markup(user.id),
+                action="forced_welcome_new_session",
+            )
+            await utils.safe_reply_text(
+                original_message,
+                content.WORKSPACE_TEXT,
+                reply_markup=_services_inline_menu_markup(),
+                action="forced_workspace_new_session",
+            )
+            logger.info("Workspace sent on new session for user %s", user.id)
+            return
+
         # На самом первом входящем сообщении-приветствии всегда отдаем
         # фиксированное приветствие, а не LLM-генерацию.
         if message_text and _looks_like_plain_greeting(message_text):
@@ -1180,6 +1204,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=_main_menu_markup(user.id),
                 action="fixed_welcome_on_greeting",
             )
+            await utils.safe_reply_text(
+                original_message,
+                content.WORKSPACE_TEXT,
+                reply_markup=_services_inline_menu_markup(),
+                action="workspace_on_greeting",
+            )
+            logger.info("Workspace sent on greeting for user %s", user.id)
             return
 
         # В non-text ветке поддерживаем сценарий демо (документ + email).

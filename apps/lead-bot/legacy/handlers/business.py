@@ -183,16 +183,20 @@ def _looks_like_ack_only(text: str) -> bool:
 
 
 def _looks_like_plain_greeting(text: str) -> bool:
-    normalized = (text or "").strip().lower()
-    return normalized in {
+    normalized = normalize_button_text(text).strip().lower()
+    if not normalized:
+        return False
+    compact = normalized.replace("!", "").replace(".", "").replace(",", "").strip()
+    greeting_prefixes = (
         "привет",
-        "здравствуйте",
+        "здравств",
         "добрый день",
         "добрый вечер",
         "доброе утро",
         "hello",
         "hi",
-    }
+    )
+    return any(compact.startswith(prefix) for prefix in greeting_prefixes)
 
 
 def _looks_like_return_to_bot(text: str) -> bool:
@@ -382,6 +386,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=content.WORKSPACE_TEXT,
+                reply_markup=reply_markup,
+                business_connection_id=message.business_connection_id,
+            )
+            logger.info("[Business] Workspace sent on /start for user %s", user_id)
             return
         
         # Обработка кнопок меню для бизнес-чата (удалено - используем callback)
@@ -460,6 +471,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=content.WORKSPACE_TEXT,
+                reply_markup=_business_menu_markup(),
+                business_connection_id=message.business_connection_id,
+            )
+            logger.info("[Business] Workspace sent on forced new session for user %s", user_id)
             return
 
         # На первом сообщении-приветствии в business-режиме отдаем
@@ -471,6 +489,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
+            await context.bot.send_message(
+                chat_id=message.chat.id,
+                text=content.WORKSPACE_TEXT,
+                reply_markup=_business_menu_markup(),
+                business_connection_id=message.business_connection_id,
+            )
+            logger.info("[Business] Workspace sent on greeting for user %s", user_id)
             return
 
         lead = database.db.get_lead_by_user_id(user) if allow_lead_processing else None
