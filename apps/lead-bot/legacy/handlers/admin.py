@@ -354,12 +354,11 @@ async def revoke_user_consent_command(update: Update, context: ContextTypes.DEFA
             return
 
         telegram_id = int(args[0])
-        target_user = database.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
+        result = admin_interface.admin_interface.clear_user_data_by_telegram_id(telegram_id)
+        if result is None:
             await update.message.reply_text("Пользователь не найден")
             return
 
-        result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
         await update.message.reply_text(
             "✅ Согласия отозваны, данные очищены.\n\n"
             f"Изменено профилей: {result.get('users_updated', 0)}\n"

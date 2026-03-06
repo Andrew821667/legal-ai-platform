@@ -13,7 +13,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.models import ActorType, Event, Lead, Scope, User, UserRole
-from core_api.schemas import UserCreate, UserDataOperationOut, UserOut, UserPatch
+from core_api.schemas import UserCreate, UserDataOperationOut, UserOut, UserPatch, UsersCountOut
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -107,6 +107,27 @@ def list_users(
         User.created_at.desc(),
     ).offset(capped_offset).limit(capped_limit)
     return list(db.execute(query).scalars().all())
+
+
+@router.get("/count", response_model=UsersCountOut)
+def count_users(
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+    telegram_id: int | None = None,
+    without_consent: bool = False,
+    revoked_only: bool = False,
+) -> UsersCountOut:
+    _ = identity
+    query = select(func.count(User.id))
+    if telegram_id is not None:
+        query = query.where(User.telegram_id == telegram_id)
+    if without_consent:
+        query = query.where(User.consent_given.is_(False))
+    if revoked_only:
+        query = query.where(User.consent_revoked.is_(True))
+
+    total = int(db.execute(query).scalar() or 0)
+    return UsersCountOut(total=total)
 
 
 def _get_user_by_telegram_id(db: Session, telegram_id: int) -> User | None:

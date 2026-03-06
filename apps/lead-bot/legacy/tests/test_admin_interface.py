@@ -182,3 +182,37 @@ def test_get_user_by_telegram_id_prefers_core_fields(test_db, monkeypatch):
     assert user["first_name"] == "Core"
     assert bool(user["consent_given"]) is True
     assert bool(user["transborder_consent"]) is True
+
+
+def test_get_recent_users_and_total_prefers_core(test_db, monkeypatch):
+    interface = admin_interface.AdminInterface(test_db)
+
+    def _fake_core(path, params=None):
+        if path == "/api/v1/users" and params == {"limit": 2, "offset": 2}:
+            return [
+                {
+                    "telegram_id": 555700001,
+                    "username": "core_u1",
+                    "first_name": "Core",
+                    "last_name": "One",
+                },
+                {
+                    "telegram_id": 555700002,
+                    "username": "core_u2",
+                    "first_name": "Core",
+                    "last_name": "Two",
+                },
+            ]
+        if path == "/api/v1/users/count":
+            return {"total": 42}
+        return None
+
+    monkeypatch.setattr(interface, "_core_get_json", _fake_core)
+
+    users = interface.get_recent_users(limit=2, offset=2)
+    total = interface.get_total_users_count()
+
+    assert len(users) == 2
+    assert users[0]["telegram_id"] == 555700001
+    assert users[1]["username"] == "core_u2"
+    assert total == 42

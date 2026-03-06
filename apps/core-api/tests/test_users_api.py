@@ -85,6 +85,13 @@ def test_upsert_and_list_users() -> None:
             headers={"X-API-Key": raw_key},
         )
         assert without_consent.status_code == 200
+
+        counted = client.get(
+            "/api/v1/users/count?telegram_id=555001111",
+            headers={"X-API-Key": raw_key},
+        )
+        assert counted.status_code == 200
+        assert counted.json()["total"] >= 1
     finally:
         db = SessionLocal()
         try:

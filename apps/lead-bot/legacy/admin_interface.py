@@ -134,11 +134,19 @@ class AdminInterface:
             return local_user
         return core_user
 
-    def get_recent_users(self, limit: int = 20) -> list[dict]:
-        core_users = self._core_get_json("/api/v1/users", {"limit": limit})
+    def get_recent_users(self, limit: int = 20, offset: int = 0) -> list[dict]:
+        core_users = self._core_get_json("/api/v1/users", {"limit": limit, "offset": offset})
         if isinstance(core_users, list):
             return [self._map_core_user(row) for row in core_users]
-        return self.db.get_recent_users(limit=limit)
+        return self.db.get_recent_users(limit=limit, offset=offset)
+
+    def get_total_users_count(self) -> int:
+        core_total = self._core_get_json("/api/v1/users/count")
+        if isinstance(core_total, dict):
+            total = core_total.get("total")
+            if isinstance(total, int):
+                return max(0, total)
+        return int(self.db.count_users())
 
     def reset_user_dialog_by_telegram_id(self, telegram_id: int) -> bool:
         target_user = self.db.get_user_by_telegram_id(telegram_id)

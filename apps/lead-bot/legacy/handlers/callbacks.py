@@ -891,13 +891,12 @@ def _admin_user_delete_confirm_markup(telegram_id: int) -> InlineKeyboardMarkup:
 
 def _fetch_users_page(page: int = 1, per_page: int = 5) -> tuple[list[dict], int, int]:
     page = max(1, page)
-    users_all = admin_interface.admin_interface.get_recent_users(limit=500)
-    total = len(users_all)
+    total = admin_interface.admin_interface.get_total_users_count()
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page > total_pages:
         page = total_pages
     offset = (page - 1) * per_page
-    users = users_all[offset : offset + per_page]
+    users = admin_interface.admin_interface.get_recent_users(limit=per_page, offset=offset)
     return users, total, total_pages
 
 

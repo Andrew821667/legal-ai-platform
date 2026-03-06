@@ -1005,12 +1005,24 @@ async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("Сначала выполните /start.")
         return
 
-    result = database.db.revoke_user_consent_and_delete_data(user_data["id"])
-    await update.message.reply_text(
-        f"{content.CONSENT_REVOKED_TEXT}\n\n"
-        f"Изменено профилей: {result.get('users_updated', 0)}\n"
-        f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
-        f"Удалено сообщений диалога: {result.get('messages_deleted', 0)}"
+    result = admin_interface.admin_interface.clear_user_data_by_telegram_id(user.id)
+    if result is None:
+        await utils.safe_reply_text(
+            update.message,
+            "Не удалось обработать отзыв согласия. Попробуйте позже.",
+            action="revoke_consent_not_found",
+        )
+        return
+
+    await utils.safe_reply_text(
+        update.message,
+        (
+            f"{content.CONSENT_REVOKED_TEXT}\n\n"
+            f"Изменено профилей: {result.get('users_updated', 0)}\n"
+            f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
+            f"Удалено сообщений диалога: {result.get('messages_deleted', 0)}"
+        ),
+        action="revoke_consent_command",
     )
 
 

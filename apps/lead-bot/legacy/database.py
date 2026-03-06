@@ -672,7 +672,7 @@ class Database:
         finally:
             conn.close()
 
-    def get_recent_users(self, limit: int = 20) -> List[Dict]:
+    def get_recent_users(self, limit: int = 20, offset: int = 0) -> List[Dict]:
         """Получение последних активных пользователей."""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -682,12 +682,23 @@ class Database:
                 SELECT *
                 FROM users
                 ORDER BY COALESCE(last_interaction, created_at) DESC, id DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (limit,),
+                (max(1, int(limit)), max(0, int(offset))),
             )
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def count_users(self) -> int:
+        """Возвращает общее число пользователей в локальной БД."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM users")
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
         finally:
             conn.close()
 

@@ -123,6 +123,21 @@ def test_get_statistics(test_db):
     assert stats['total_messages'] >= 1, "Количество сообщений некорректно"
 
 
+def test_get_recent_users_with_offset_and_count(test_db):
+    test_db.create_or_update_user(telegram_id=810001, username="u1", first_name="U1")
+    test_db.create_or_update_user(telegram_id=810002, username="u2", first_name="U2")
+    test_db.create_or_update_user(telegram_id=810003, username="u3", first_name="U3")
+
+    first_page = test_db.get_recent_users(limit=2, offset=0)
+    second_page = test_db.get_recent_users(limit=2, offset=2)
+
+    assert test_db.count_users() == 3
+    assert len(first_page) == 2
+    assert len(second_page) == 1
+    assert first_page[0]["telegram_id"] == 810003
+    assert second_page[0]["telegram_id"] == 810001
+
+
 def test_consent_flow_and_data_export(test_db):
     """Проверка цикла согласия/экспорта/отзыва согласия."""
     user_id = test_db.create_or_update_user(

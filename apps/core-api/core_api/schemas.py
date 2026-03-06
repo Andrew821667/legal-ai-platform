@@ -83,6 +83,10 @@ class UserDataOperationOut(BaseModel):
     business_states_deleted: int = 0
 
 
+class UsersCountOut(BaseModel):
+    total: int
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     created_at: datetime
