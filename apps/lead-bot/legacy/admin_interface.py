@@ -280,7 +280,7 @@ class AdminInterface:
         ab_data = self.db.get_ab_cta_report(days)
         return {"funnel": funnel_data, "ab": ab_data, "days": days}
 
-    def format_leads_list(self, temperature=None, status=None, limit=20):
+    def format_leads_list(self, temperature=None, status=None, limit=20, offset=0):
         try:
             leads = None
             core_leads = self._core_get_json(
@@ -290,17 +290,22 @@ class AdminInterface:
                     "source_filter": "telegram_bot",
                     "temperature_filter": temperature,
                     "limit": limit,
+                    "offset": offset,
                 },
             )
             if isinstance(core_leads, list):
                 leads = [self._map_core_lead(row) for row in core_leads]
             if leads is None:
-                leads = self.db.get_all_leads(temperature, status, limit)
+                leads = self.db.get_all_leads(temperature, status, limit, offset=offset)
             if not leads:
                 return "📋 СПИСОК ЛИДОВ\n\nЛидов не найдено"
-            
-            message = f"📋 СПИСОК ЛИДОВ ({len(leads)})\n\n"
-            for i, lead in enumerate(leads, 1):
+
+            message = f"📋 СПИСОК ЛИДОВ ({len(leads)})\n"
+            if offset:
+                message += f"Позиция с #{offset + 1}\n"
+            message += "\n"
+
+            for i, lead in enumerate(leads, offset + 1):
                 # lead - это dict, получаем значения безопасно
                 name = lead.get('name', 'N/A') or lead.get('full_name', 'N/A')
                 company = lead.get('company', '')

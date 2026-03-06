@@ -314,6 +314,46 @@ def test_get_successful_conversations_returns_grouped_messages(test_db):
     ]
 
 
+def test_get_all_leads_supports_offset_pagination(test_db):
+    user_a = test_db.create_or_update_user(telegram_id=12001, username="l_a", first_name="A")
+    user_b = test_db.create_or_update_user(telegram_id=12002, username="l_b", first_name="B")
+    user_c = test_db.create_or_update_user(telegram_id=12003, username="l_c", first_name="C")
+
+    lead_a = test_db.create_or_update_lead(user_a, {"name": "Lead A", "temperature": "cold"})
+    lead_b = test_db.create_or_update_lead(user_b, {"name": "Lead B", "temperature": "warm"})
+    lead_c = test_db.create_or_update_lead(user_c, {"name": "Lead C", "temperature": "hot"})
+
+    page1 = test_db.get_all_leads(limit=2, offset=0)
+    page2 = test_db.get_all_leads(limit=2, offset=2)
+
+    assert [item["id"] for item in page1] == [lead_c, lead_b]
+    assert [item["id"] for item in page2] == [lead_a]
+
+
+def test_get_successful_conversations_supports_offset(test_db):
+    user_a = test_db.create_or_update_user(telegram_id=13001, username="rag_a", first_name="RagA")
+    user_b = test_db.create_or_update_user(telegram_id=13002, username="rag_b", first_name="RagB")
+    user_c = test_db.create_or_update_user(telegram_id=13003, username="rag_c", first_name="RagC")
+
+    test_db.create_or_update_lead(
+        user_a,
+        {"name": "Rag A", "temperature": "warm", "service_category": "contracts", "pain_point": "pain A"},
+    )
+    test_db.create_or_update_lead(
+        user_b,
+        {"name": "Rag B", "temperature": "warm", "service_category": "contracts", "pain_point": "pain B"},
+    )
+    test_db.create_or_update_lead(
+        user_c,
+        {"name": "Rag C", "temperature": "hot", "service_category": "contracts", "pain_point": "pain C"},
+    )
+
+    page1 = test_db.get_successful_conversations(limit=2, offset=0)
+    page2 = test_db.get_successful_conversations(limit=2, offset=2)
+
+    assert len(page1) == 2
+    assert len(page2) == 1
+
 def test_set_core_lead_id_persists_mapping(test_db):
     user_id = test_db.create_or_update_user(
         telegram_id=10003,

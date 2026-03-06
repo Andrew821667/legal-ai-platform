@@ -216,3 +216,20 @@ def test_get_recent_users_and_total_prefers_core(test_db, monkeypatch):
     assert users[0]["telegram_id"] == 555700001
     assert users[1]["username"] == "core_u2"
     assert total == 42
+
+
+def test_format_leads_list_supports_offset(test_db):
+    interface = admin_interface.AdminInterface(test_db)
+
+    user_a = test_db.create_or_update_user(telegram_id=555800001, username="l1", first_name="L1")
+    user_b = test_db.create_or_update_user(telegram_id=555800002, username="l2", first_name="L2")
+    user_c = test_db.create_or_update_user(telegram_id=555800003, username="l3", first_name="L3")
+    test_db.create_or_update_lead(user_a, {"name": "Lead 1", "temperature": "cold", "company": "A"})
+    test_db.create_or_update_lead(user_b, {"name": "Lead 2", "temperature": "warm", "company": "B"})
+    test_db.create_or_update_lead(user_c, {"name": "Lead 3", "temperature": "hot", "company": "C"})
+
+    text = interface.format_leads_list(limit=2, offset=1)
+
+    assert "Позиция с #2" in text
+    assert "2." in text
+    assert "3." in text

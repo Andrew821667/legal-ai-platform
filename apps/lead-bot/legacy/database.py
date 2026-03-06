@@ -2011,8 +2011,13 @@ class Database:
         finally:
             conn.close()
 
-    def get_all_leads(self, temperature: str = None, status: str = None,
-                      limit: int = 100) -> List[Dict]:
+    def get_all_leads(
+        self,
+        temperature: str = None,
+        status: str = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[Dict]:
         """Получение всех лидов с фильтрами"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -2029,8 +2034,9 @@ class Database:
                 query += " AND status = ?"
                 params.append(status)
 
-            query += " ORDER BY created_at DESC LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.append(max(1, int(limit)))
+            params.append(max(0, int(offset)))
 
             cursor.execute(query, params)
             rows = cursor.fetchall()
@@ -2104,7 +2110,7 @@ class Database:
     
     # === KNOWLEDGE BASE / RAG ===
     
-    def get_successful_conversations(self, limit: int = 50) -> List[Dict]:
+    def get_successful_conversations(self, limit: int = 50, offset: int = 0) -> List[Dict]:
         """
         Получение успешных диалогов (warm/hot лиды) для RAG
         
@@ -2127,8 +2133,8 @@ class Database:
                 WHERE l.temperature IN ('warm', 'hot')
                   AND (l.service_category IS NOT NULL OR l.pain_point IS NOT NULL)
                 ORDER BY l.created_at DESC
-                LIMIT ?
-            """, (limit,))
+                LIMIT ? OFFSET ?
+            """, (max(1, int(limit)), max(0, int(offset))))
             
             leads = [dict(row) for row in cursor.fetchall()]
             if not leads:
