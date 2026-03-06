@@ -67,6 +67,8 @@ def test_source_catalog_includes_extended_google_news_buckets() -> None:
     assert "google_news_ai_research_en" in catalog
     assert "google_news_ai_policy_global_en" in catalog
     assert "ai_news_global" in catalog
+    assert "venturebeat_ai" in catalog
+    assert "the_decoder_ai" in catalog
     assert "unite_ai" in catalog
     assert "marktechpost" in catalog
     assert "vedomosti_technology" in catalog
@@ -78,6 +80,15 @@ def test_source_catalog_marks_garant_unintegrated() -> None:
     settings = Settings(news_source_keys="garant", news_source_urls="")
     catalog = source_catalog(settings)
     assert catalog["garant"].integrated is False
+
+
+def test_resolve_source_urls_skips_unintegrated_catalog_sources() -> None:
+    settings = Settings(news_source_keys="unite_ai,venturebeat_ai", news_source_urls="")
+    catalog = source_catalog(settings)
+    assert catalog["unite_ai"].integrated is False
+    resolved = resolve_source_urls(settings)
+    assert "https://venturebeat.com/category/ai/feed/" in resolved
+    assert "https://www.unite.ai/feed/" not in resolved
 
 
 def test_source_priority_map_prefers_legal_sources() -> None:

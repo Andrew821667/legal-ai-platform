@@ -489,6 +489,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
 
         for _ in range(0, 80):
             synthetic_slot = False
+            fallback_attempted = False
             if publication_kind == "weekly_review":
                 article = _build_weekly_review_candidate(now_utc, posted_items)
                 synthetic_slot = True
@@ -572,6 +573,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 )
                 generated = None
                 if synthetic_slot:
+                    fallback_attempted = True
                     try:
                         generated = writer.fallback_post(
                             article,
@@ -598,8 +600,46 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                             },
                         )
             if generated is None:
-                logger.info("candidate_rejected_after_llm_review", extra={"source_url": article.article_url})
-                continue
+                if synthetic_slot and not fallback_attempted:
+                    fallback_attempted = True
+                    try:
+                        generated = writer.fallback_post(
+                            article,
+                            format_type=format_type,
+                            cta_type=cta_type,
+                            pillar=pillar,
+                        )
+                        logger.info(
+                            "synthetic_slot_fallback_applied_after_rejection",
+                            extra={
+                                "article_url": article.article_url,
+                                "format_type": format_type,
+                                "publication_kind": publication_kind,
+                            },
+                        )
+                    except Exception as fallback_exc:
+                        logger.warning(
+                            "synthetic_slot_fallback_failed_after_rejection",
+                            extra={
+                                "article_url": article.article_url,
+                                "format_type": format_type,
+                                "publication_kind": publication_kind,
+                                "error": str(fallback_exc)[:240],
+                            },
+                        )
+                if generated is None:
+                    if synthetic_slot:
+                        logger.info(
+                            "synthetic_slot_unfilled_after_rejection",
+                            extra={
+                                "source_url": article.article_url,
+                                "format_type": format_type,
+                                "publication_kind": publication_kind,
+                            },
+                        )
+                        break
+                    logger.info("candidate_rejected_after_llm_review", extra={"source_url": article.article_url})
+                    continue
 
             max_similarity = 0.0
             if history_texts:

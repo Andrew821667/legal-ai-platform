@@ -120,6 +120,20 @@ def test_quality_gate_rejects_prompt_leak_markers() -> None:
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "prompt_leak:стилистика канала"
 
 
+def test_quality_gate_rejects_format_instruction_leak() -> None:
+    text = (
+        "<b>Обзор недели</b>\n\n"
+        "<b>Ключевые сигналы недели</b>\n"
+        "1. Первый сигнал.\n2. Второй сигнал.\n3. Третий сигнал.\n4. Четвертый сигнал.\n"
+        "5. Пятый сигнал.\n6. Шестой сигнал.\n7. Седьмой сигнал.\n8. Восьмой сигнал.\n\n"
+        "<b>Что это значит для юрфункции</b>\nФормат weekly_review: 8-10 пунктов и плотная аналитика.\n\n"
+        "<b>На что смотреть юристам</b>\nПроверить контур ответственности поставщика.\n\n"
+        "<b>Что проверить у себя</b>\n• Обновить KPI.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI"
+    )
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "prompt_leak:формат weekly_review"
+
+
 def test_quality_gate_rejects_weekly_with_few_points() -> None:
     long_block = (
         "Юрфункция ускоряет цикл договорной проверки, пересматривает матрицу рисков, "

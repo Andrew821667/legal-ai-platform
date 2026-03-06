@@ -487,15 +487,36 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             priority=0.9,
             bucket="broad_ai",
         ),
+        "venturebeat_ai": SourceSpec(
+            key="venturebeat_ai",
+            name="VentureBeat AI",
+            kind="rss",
+            note="Стабильный международный поток по enterprise AI, продуктовым релизам и отраслевым трендам.",
+            url="https://venturebeat.com/category/ai/feed/",
+            domain="venturebeat.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "the_decoder_ai": SourceSpec(
+            key="the_decoder_ai",
+            name="The Decoder",
+            kind="rss",
+            note="Международные материалы по AI-моделям, AI-продуктам, политике и последствиям для бизнеса.",
+            url="https://the-decoder.com/feed/",
+            domain="the-decoder.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
         "unite_ai": SourceSpec(
             key="unite_ai",
             name="Unite.AI",
             kind="rss",
-            note="Международные материалы по AI-платформам, моделям, продуктам и внедрению в бизнес-процессы.",
+            note="Источник временно нестабилен (часто отдает HTML вместо RSS). Оставлен в каталоге, но по умолчанию не участвует в автосборе.",
             url="https://www.unite.ai/feed/",
             domain="unite.ai",
             priority=0.95,
             bucket="broad_ai",
+            integrated=False,
         ),
         "marktechpost": SourceSpec(
             key="marktechpost",
@@ -670,7 +691,8 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_ai_research_en",
         "google_news_ai_policy_global_en",
         "ai_news_global",
-        "unite_ai",
+        "venturebeat_ai",
+        "the_decoder_ai",
         "marktechpost",
         "pravo_ru",
         "habr_news",
@@ -690,6 +712,8 @@ def resolve_source_urls(settings: Any, enabled_overrides: dict[str, bool] | None
         if enabled_overrides is not None and not enabled_overrides.get(item, True):
             continue
         spec = catalog.get(item)
+        if spec is not None and not spec.integrated:
+            continue
         url = spec.url if spec else item
         if not url:
             continue
