@@ -650,9 +650,13 @@ def _schedule_typing_indicator(chat, user_telegram_id: int) -> None:
     async def _send_typing() -> None:
         try:
             await asyncio.wait_for(chat.send_action(action="typing"), timeout=1.5)
-            logger.info(f"Typing indicator sent for user {user_telegram_id}")
+            logger.info("Typing indicator sent for user %s", utils.mask_telegram_id(user_telegram_id))
         except (asyncio.TimeoutError, TelegramError, OSError) as error:
-            logger.debug(f"Typing indicator skipped for user {user_telegram_id}: {error}")
+            logger.debug(
+                "Typing indicator skipped for user %s: %s",
+                utils.mask_telegram_id(user_telegram_id),
+                error,
+            )
 
     asyncio.create_task(_send_typing())
 

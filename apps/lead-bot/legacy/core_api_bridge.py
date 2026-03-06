@@ -179,7 +179,11 @@ class CoreApiBridge:
         )
         core_id = (result or {}).get("id")
         if core_id:
-            logger.info("Legacy user %s mirrored to core-api as %s", user_data.get("telegram_id"), core_id)
+            logger.info(
+                "Legacy user %s mirrored to core-api as %s",
+                utils.mask_telegram_id(user_data.get("telegram_id")),
+                core_id,
+            )
         return core_id
 
     def track_event(

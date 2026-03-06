@@ -94,6 +94,20 @@ def mask_phone(phone: str | None) -> str:
     return mask_sensitive_data(phone)
 
 
+def mask_telegram_id(value: int | str | None) -> str:
+    """Маскирует Telegram ID для логов, сохраняя минимальный контекст."""
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    if len(raw) <= 4:
+        return "*" * len(raw)
+    if len(raw) <= 8:
+        return f"{raw[:1]}{'*' * (len(raw) - 3)}{raw[-2:]}"
+    return f"{raw[:2]}{'*' * (len(raw) - 4)}{raw[-2:]}"
+
+
 def mask_sensitive_mapping(data: dict | None) -> dict:
     """Возвращает копию словаря с замаскированными PII-полями."""
     if not data:

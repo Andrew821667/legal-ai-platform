@@ -12,6 +12,7 @@ import urllib.request
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 from config import Config
+import utils
 config = Config()
 
 logger = logging.getLogger(__name__)
@@ -1047,7 +1048,7 @@ class Database:
             cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
             user_id = cursor.fetchone()[0]
 
-            logger.info(f"User {telegram_id} created/updated with id {user_id}")
+            logger.info("User %s created/updated with id %s", utils.mask_telegram_id(telegram_id), user_id)
             self._sync_user_to_core(user_id)
             return user_id
 
