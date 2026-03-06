@@ -1509,6 +1509,17 @@ class LLMNewsWriter:
             logger.warning("llm_post_parse_failed", extra={"error": str(exc), "format_type": format_type})
             return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
 
+    def fallback_post(
+        self,
+        article: ArticleCandidate,
+        *,
+        format_type: str = "standard",
+        cta_type: str = "soft",
+        pillar: str = "implementation",
+    ) -> dict[str, str]:
+        """Public fallback wrapper for caller-side hardening in generation pipeline."""
+        return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+
 
 def build_manual_footer(post_kind: str) -> str:
     template = _MANUAL_FOOTER_LIBRARY.get(post_kind)

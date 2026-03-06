@@ -542,16 +542,61 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                     continue
 
             query_text = f"{article.title}\n{article.summary}"
-            rag_context = rag.find_context(query_text, history_limit=50, top_k=3)
+            try:
+                rag_context = rag.find_context(query_text, history_limit=50, top_k=3)
+            except Exception as exc:
+                logger.warning(
+                    "rag_context_failed_for_candidate",
+                    extra={"article_url": article.article_url, "format_type": format_type, "error": str(exc)[:220]},
+                )
+                rag_context = []
             pillar = pillar_for_article(article)
-            generated = writer.generate_post(
-                article,
-                rag_context,
-                format_type=format_type,
-                cta_type=cta_type,
-                pillar=pillar,
-                negative_feedback_context=negative_feedback_context,
-            )
+            try:
+                generated = writer.generate_post(
+                    article,
+                    rag_context,
+                    format_type=format_type,
+                    cta_type=cta_type,
+                    pillar=pillar,
+                    negative_feedback_context=negative_feedback_context,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "llm_generation_failed_for_candidate",
+                    extra={
+                        "article_url": article.article_url,
+                        "format_type": format_type,
+                        "publication_kind": publication_kind,
+                        "error": str(exc)[:240],
+                    },
+                )
+                generated = None
+                if synthetic_slot:
+                    try:
+                        generated = writer.fallback_post(
+                            article,
+                            format_type=format_type,
+                            cta_type=cta_type,
+                            pillar=pillar,
+                        )
+                        logger.info(
+                            "synthetic_slot_fallback_applied",
+                            extra={
+                                "article_url": article.article_url,
+                                "format_type": format_type,
+                                "publication_kind": publication_kind,
+                            },
+                        )
+                    except Exception as fallback_exc:
+                        logger.warning(
+                            "synthetic_slot_fallback_failed",
+                            extra={
+                                "article_url": article.article_url,
+                                "format_type": format_type,
+                                "publication_kind": publication_kind,
+                                "error": str(fallback_exc)[:240],
+                            },
+                        )
             if generated is None:
                 logger.info("candidate_rejected_after_llm_review", extra={"source_url": article.article_url})
                 continue
