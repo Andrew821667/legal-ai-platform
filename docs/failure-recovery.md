@@ -106,6 +106,22 @@
 1. Проверить число попыток `attempts/max_attempts`.
 2. Диагностировать причину падений worker.
 
+## Накопились `new` задачи с исчерпанными попытками
+Симптомы:
+- в `summary` видно `new_exhausted_count > 0`;
+- `claim` их не забирает (ожидаемое поведение).
+
+Авто-реакция:
+- `cron_finalize_exhausted_jobs.sh` переводит такие задачи в `failed`.
+
+Ручное восстановление:
+1. Проверить через dry-run:
+   `POST /api/v1/contract-jobs/finalize-exhausted-new?dry_run=true`.
+2. Применить финализацию:
+   `POST /api/v1/contract-jobs/finalize-exhausted-new`.
+3. При необходимости вернуть конкретную задачу в `new` вручную:
+   `POST /api/v1/contract-jobs/{job_id}/requeue?force=true`.
+
 ## Переполнение диска
 Симптомы:
 - `disk_monitor.sh` отправляет alert > 85%.
