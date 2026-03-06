@@ -11,6 +11,10 @@
 - slot-heavy: `news-telegram-ingest`, `news-generate`, `news-reader-digest`;
 - `contract-worker` на локальном ноутбуке (VPS хранит очередь и статусы).
 
+Критично для стабильности polling:
+- `lead-bot`, `news-admin-bot`, `news-reader-bot` должны использовать разные Telegram токены;
+- если у двух polling-процессов один токен, один из ботов будет «молчать» из-за конфликта `getUpdates`.
+
 ## Оценка RAM
 | Сервис | RAM |
 |---|---|

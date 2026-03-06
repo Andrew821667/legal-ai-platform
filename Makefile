@@ -1,4 +1,4 @@
-.PHONY: lint test dev prod deploy integration-test seed backup logs
+.PHONY: lint test dev prod deploy integration-test smoke-bots seed backup logs
 
 lint:
 	uv run ruff check apps/ packages/
@@ -22,6 +22,9 @@ deploy:
 
 integration-test:
 	./infra/scripts/integration_test.sh
+
+smoke-bots:
+	./infra/scripts/smoke_bots_stack.sh
 
 backup:
 	./infra/scripts/backup_postgres.sh

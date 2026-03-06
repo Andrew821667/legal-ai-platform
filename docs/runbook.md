@@ -26,6 +26,29 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 - `reader-bot` в таком запуске требует `READER_BOT_TOKEN` в корневом `.env`.
 - Для отправки feedback-сигналов ридера в `core-api` также обязательны `API_KEY_NEWS` (scope `news`/`admin`) и, желательно, `READER_BOT_USERNAME` (deeplink вида `/start post_<uuid>`).
 
+## Единый smoke для всех ботов (Docker)
+После обновлений по ботам запускайте единый smoke:
+```bash
+cd "/Users/andrew/Мои AI проекты/legal-ai-platform"
+make smoke-bots
+```
+
+Что делает скрипт `infra/scripts/smoke_bots_stack.sh`:
+- поднимает в compose все бот-сервисы и зависимости (`postgres`, `core-api`, `lead-bot`, `news-admin-bot`, `news-reader-bot`, `news-reader-digest`, `news-generate`, `news-telegram-ingest`, `news-publish`);
+- проверяет, что polling-боты не используют один и тот же токен (`lead/admin/reader`);
+- ждёт `core-api /health`, проверяет активность required worker'ов;
+- выполняет `integration_test.sh`, `smoke_reader_digest.sh` и `e2e_reader_to_lead.sh`;
+- проверяет логи на типовые критичные ошибки (`Unauthorized`, `Connection refused`, `NameResolutionError`, конфликт polling).
+
+Полезные флаги:
+```bash
+# не поднимать заново контейнеры, только проверки
+SMOKE_SKIP_UP=1 make smoke-bots
+
+# без полного e2e reader->lead
+SMOKE_RUN_E2E=0 make smoke-bots
+```
+
 ## Первый запуск на production
 1. Развернуть `.env`.
 2. Поднять сервисы:
