@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ROUTES, leadBotDeepLink } from "@/lib/links";
+import { ROUTES } from "@/lib/links";
+import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
   title: "Решения",
@@ -60,27 +60,12 @@ export default function SolutionsPage() {
             Выстраиваем дорожную карту от пилота к системной трансформации: объединяем продуктовые модули,
             процессные настройки и сопровождение команды.
           </p>
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Link
-              href={ROUTES.contentCases}
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-slate-500 transition-colors text-center"
-            >
-              Узнать на кейсах
-            </Link>
-            <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors text-center"
-            >
-              Проверить в продукте
-            </Link>
-            <a
-              href={leadBotDeepLink("web_solutions_intro")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors text-center"
-            >
-              Внедрить с командой
-            </a>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_solutions_intro"
+              miniAppHref={ROUTES.miniAppSolutions}
+              title="Единый маршрут решений: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>
@@ -131,21 +116,12 @@ export default function SolutionsPage() {
               </article>
             ))}
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
-            >
-              Перейти к Contract_AI_System
-            </Link>
-            <a
-              href={leadBotDeepLink("web_solutions_discuss")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
-            >
-              Обсудить проект
-            </a>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_solutions_discuss"
+              miniAppHref={ROUTES.miniAppSolutions}
+              title="Выбор следующего шага: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>

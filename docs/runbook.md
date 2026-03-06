@@ -294,6 +294,9 @@ python -u -m app.reader_bot
   - `READER_CONTRACT_AI_URL` (по умолчанию `https://legalaipro.ru/contract-ai-system`);
   - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);
   - `READER_FOR_BUSINESS_URL` (по умолчанию `https://legalaipro.ru/for-business`).
+- доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:
+  - `discover`, `validate`, `solutions`, `profile`, `search`;
+  - `miniapp_content`, `miniapp_tools`, `miniapp_solutions`, `miniapp_profile`.
 
 Запуск reader digest-воркера (локально):
 ```bash

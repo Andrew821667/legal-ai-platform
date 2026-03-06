@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ROUTES, leadBotDeepLink } from "@/lib/links";
+import { ROUTES } from "@/lib/links";
+import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
   title: "Для бизнеса",
@@ -71,21 +71,12 @@ export default function ForBusinessPage() {
               </article>
             ))}
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
-            >
-              Посмотреть Contract_AI_System
-            </Link>
-            <a
-              href={leadBotDeepLink("web_for_business")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
-            >
-              Обсудить внедрение
-            </a>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_for_business"
+              miniAppHref={ROUTES.miniAppSolutions}
+              title="Единый маршрут для бизнеса: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>

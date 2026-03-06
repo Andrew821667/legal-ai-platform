@@ -537,6 +537,81 @@ def get_article_keyboard(publication_id: str, user_saved: bool = False, show_rea
 
 # ==================== /start - Onboarding ====================
 
+async def _open_reader_section(
+    target: Message,
+    user_id: int,
+    db: AsyncSession,
+    section: str,
+) -> None:
+    """Open a reader section by start-payload key."""
+    if section == "discover":
+        await _show_discover(target, user_id, db)
+    elif section == "validate":
+        await _show_validate(target, user_id)
+    elif section == "solutions":
+        await _show_solutions(target, user_id)
+    elif section == "profile":
+        await _show_profile_hub(target, user_id, db)
+    elif section == "search":
+        await _show_search(target, user_id, None, db)
+    elif section == "miniapp_content":
+        await _open_miniapp(
+            target,
+            user_id,
+            screen="content",
+            action="reader_start_open_miniapp_content",
+            source="reader_start",
+        )
+    elif section == "miniapp_tools":
+        await _open_miniapp(
+            target,
+            user_id,
+            screen="tools",
+            action="reader_start_open_miniapp_tools",
+            source="reader_start",
+        )
+    elif section == "miniapp_solutions":
+        await _open_miniapp(
+            target,
+            user_id,
+            screen="solutions",
+            action="reader_start_open_miniapp_solutions",
+            source="reader_start",
+        )
+    elif section == "miniapp_profile":
+        await _open_miniapp(
+            target,
+            user_id,
+            screen="profile",
+            action="reader_start_open_miniapp_profile",
+            source="reader_start",
+        )
+    else:
+        await target.answer(
+            "Раздел из deep-link не найден. Откройте рабочий стол:",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+        )
+
+
+async def _open_start_section(
+    target: Message,
+    user: User,
+    state: FSMContext,
+    db: AsyncSession,
+    section: str,
+) -> None:
+    """Open section from /start payload. For new users, run onboarding first."""
+    profile = await get_user_profile(user.id, db)
+    if not profile:
+        await state.update_data(post_start_section=section)
+        await target.answer(
+            "Открою нужный раздел сразу после быстрой настройки профиля (1-2 шага)."
+        )
+        await start_onboarding(target, state, db)
+        return
+    await _open_reader_section(target, user.id, db, section)
+
+
 async def _handle_start(
     target: Message,
     user: User,
@@ -581,6 +656,11 @@ async def _handle_start(
             "Откройте раздел «Узнать» или «Поиск», чтобы продолжить.",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
+        return
+
+    start_section = _extract_start_section(raw_text)
+    if start_section:
+        await _open_start_section(target, user, state, db, start_section)
         return
 
     profile = await get_user_profile(user_id, db)
@@ -1001,6 +1081,7 @@ async def complete_onboarding(callback: CallbackQuery, state: FSMContext, db: As
     data = await state.get_data()
     topics = data.get('topics', [])
     expertise = data.get('expertise')
+    post_start_section = _extract_start_section(str(data.get("post_start_section") or ""))
 
     # Update profile
     await update_user_profile(
@@ -1047,6 +1128,9 @@ async def complete_onboarding(callback: CallbackQuery, state: FSMContext, db: As
     )
 
     await callback.answer("✅ Профиль настроен!")
+    if post_start_section:
+        await callback.message.answer("Открываю выбранный раздел...")
+        await _open_reader_section(callback.message, callback.from_user.id, db, post_start_section)
 
 
 async def _show_today(target: Message, user_id: int, db: AsyncSession) -> None:
@@ -2111,16 +2195,48 @@ async def fallback_text_message(message: Message, db: AsyncSession):
 # ==================== Deep-Link Helpers ====================
 
 _START_POST_PAYLOAD_RE = re.compile(r"^(?:post_|p_)?(?P<post_id>[0-9a-fA-F-]{36})$")
+_START_SECTION_PAYLOADS = {
+    "discover",
+    "validate",
+    "solutions",
+    "profile",
+    "search",
+    "miniapp_content",
+    "miniapp_tools",
+    "miniapp_solutions",
+    "miniapp_profile",
+}
+
+
+def _extract_start_payload(text: str | None) -> str | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    parts = raw.split(maxsplit=1)
+    if len(parts) < 2:
+        if raw.startswith("/start"):
+            return None
+        return raw
+    payload = parts[1].strip()
+    if not payload:
+        return None
+    return payload
 
 
 def _extract_start_post_id(text: str | None) -> str | None:
-    parts = (text or "").strip().split(maxsplit=1)
-    if len(parts) < 2:
-        return None
-    payload = parts[1].strip()
+    payload = _extract_start_payload(text)
     if not payload:
         return None
     match = _START_POST_PAYLOAD_RE.match(payload)
     if not match:
         return None
     return match.group("post_id")
+
+
+def _extract_start_section(text: str | None) -> str | None:
+    payload = (_extract_start_payload(text) or "").strip().lower()
+    if not payload:
+        return None
+    if payload in _START_SECTION_PAYLOADS:
+        return payload
+    return None

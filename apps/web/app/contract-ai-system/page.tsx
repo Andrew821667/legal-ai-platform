@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ROUTES, leadBotDeepLink } from "@/lib/links";
+import { ROUTES } from "@/lib/links";
+import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
   title: "Contract_AI_System",
@@ -71,27 +72,12 @@ export default function ContractAISystemPage() {
             Центральная точка входа в автоматизацию юридической функции: быстрый анализ договоров, выявление рисков,
             рекомендации по правкам и подготовка решений для согласования.
           </p>
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Link
-              href={ROUTES.contentCases}
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-slate-500 transition-colors text-center"
-            >
-              Узнать на кейсах
-            </Link>
-            <a
-              href={leadBotDeepLink("web_contract_ai_check")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors text-center"
-            >
-              Проверить договор
-            </a>
-            <Link
-              href={ROUTES.solutions}
-              className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors text-center"
-            >
-              Внедрить решение
-            </Link>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_contract_ai_header"
+              miniAppHref={ROUTES.miniAppTools}
+              title="Маршрут Contract_AI_System: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>
@@ -164,27 +150,12 @@ export default function ContractAISystemPage() {
             Если хотите разобрать ваш договорный процесс и проверить, где AI даст максимальный эффект, передайте кейс в
             Ассистент Legal AI Pro. Получите понятный формат пилота без лишней архитектурной сложности.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <a
-              href={leadBotDeepLink("web_contract_ai_next_step")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
-            >
-              Передать кейс
-            </a>
-            <Link
-              href={ROUTES.solutions}
-              className="rounded-lg border border-slate-600 px-5 py-3 font-semibold text-slate-100 hover:border-amber-300 hover:text-amber-200 transition-colors"
-            >
-              Посмотреть roadmap внедрения
-            </Link>
-            <Link
-              href={ROUTES.miniAppTools}
-              className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors"
-            >
-              Открыть mini-app
-            </Link>
+          <div className="mt-6">
+            <CtaFrameworkPanel
+              leadStart="web_contract_ai_next_step"
+              miniAppHref={ROUTES.miniAppTools}
+              title="Следующий шаг: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>
