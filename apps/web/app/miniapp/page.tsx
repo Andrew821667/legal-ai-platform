@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ROUTES } from "@/lib/links";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
+import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 
@@ -96,6 +97,12 @@ export default function MiniAppHomePage() {
             : "Пока нет действий — начните с контента или с проверки договора."}
         </p>
       </article>
+
+      <MiniAppCtaFlowCard
+        leadStart="web_miniapp_home"
+        sourceScreen="/miniapp"
+        title="Единый маршрут в mini-app: Узнать -> Проверить -> Внедрить"
+      />
     </section>
   );
 }

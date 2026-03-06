@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { EXTERNAL_LINKS, ROUTES, leadBotDeepLink } from "@/lib/links";
+import { ROUTES } from "@/lib/links";
+import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
   title: "Контент и кейсы",
@@ -52,27 +52,12 @@ export default function ContentCasesPage() {
             Разбираем автоматизацию юридической работы на живых примерах: от новостей и трендов до прикладных кейсов,
             которые можно адаптировать в вашей команде.
           </p>
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <a
-              href={EXTERNAL_LINKS.channel}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-slate-500 transition-colors text-center"
-            >
-              Читать контент
-            </a>
-            <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors text-center"
-            >
-              Проверить договор
-            </Link>
-            <Link
-              href={ROUTES.solutions}
-              className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors text-center"
-            >
-              Перейти к внедрению
-            </Link>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_cases_intro"
+              miniAppHref={ROUTES.miniAppContent}
+              title="Маршрут по кейсам: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>
@@ -99,27 +84,12 @@ export default function ContentCasesPage() {
               </article>
             ))}
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
-            >
-              Перейти к продукту
-            </Link>
-            <a
-              href={leadBotDeepLink("web_cases_discuss")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
-            >
-              Обсудить кейс
-            </a>
-            <Link
-              href={ROUTES.miniAppContent}
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
-            >
-              Открыть mini-app
-            </Link>
+          <div className="mt-8">
+            <CtaFrameworkPanel
+              leadStart="web_cases_discuss"
+              miniAppHref={ROUTES.miniAppContent}
+              title="Следующий шаг после кейса: Узнать -> Проверить -> Внедрить"
+            />
           </div>
         </div>
       </section>

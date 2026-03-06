@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { leadBotDeepLink } from "@/lib/links";
+import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { useMiniAppState, type MiniAppAudience } from "@/components/miniapp/MiniAppStateProvider";
@@ -192,6 +193,12 @@ export default function MiniAppProfilePage() {
       >
         Связаться с Ассистентом Legal AI Pro
       </MiniTrackedLink>
+
+      <MiniAppCtaFlowCard
+        leadStart="web_miniapp_profile"
+        sourceScreen="/miniapp/profile"
+        title="Персональный маршрут: Узнать -> Проверить -> Внедрить"
+      />
     </section>
   );
 }

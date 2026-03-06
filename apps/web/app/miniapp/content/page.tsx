@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ROUTES } from "@/lib/links";
+import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 
@@ -127,14 +128,11 @@ export default function MiniAppContentPage() {
         </div>
       </article>
 
-      <MiniTrackedLink
-        href={ROUTES.contractAI}
-        action="miniapp_content_open_contract_ai"
-        meta={{ eventType: "nav_click", source: "miniapp_content", screen: "/miniapp/content" }}
-        className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
-      >
-        Перейти к проверке договора
-      </MiniTrackedLink>
+      <MiniAppCtaFlowCard
+        leadStart="web_miniapp_content"
+        sourceScreen="/miniapp/content"
+        title="Следующий шаг по контенту: Узнать -> Проверить -> Внедрить"
+      />
     </section>
   );
 }

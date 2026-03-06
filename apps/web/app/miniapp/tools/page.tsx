@@ -1,6 +1,7 @@
 "use client";
 
 import { ROUTES } from "@/lib/links";
+import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 
@@ -47,6 +48,12 @@ export default function MiniAppToolsPage() {
           </MiniTrackedLink>
         </article>
       ))}
+
+      <MiniAppCtaFlowCard
+        leadStart="web_miniapp_tools"
+        sourceScreen="/miniapp/tools"
+        title="Маршрут инструментов: Узнать -> Проверить -> Внедрить"
+      />
     </section>
   );
 }
