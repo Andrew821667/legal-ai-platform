@@ -240,22 +240,16 @@ def _build_reader_nav_keyboard(
 
     rows = [
         [
-            InlineKeyboardButton(text="📰 Сегодня", callback_data="rnav:today"),
-            InlineKeyboardButton(text="📆 Неделя", callback_data="rnav:weekly"),
+            InlineKeyboardButton(text="🧠 Узнать", callback_data="rnav:discover"),
+            InlineKeyboardButton(text="🧪 Проверить", callback_data="rnav:validate"),
         ],
         [
+            InlineKeyboardButton(text="🧰 Решения", callback_data="rnav:solutions"),
             InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
-            InlineKeyboardButton(text="🔖 Сохранённые", callback_data="rnav:saved"),
         ],
         [
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="rnav:settings"),
+            InlineKeyboardButton(text="👤 Мое", callback_data="rnav:profile"),
             InlineKeyboardButton(text="🧩 Mini App", callback_data="rnav:miniapp"),
-        ],
-        [
-            InlineKeyboardButton(
-                text="🎯 Персональный дайджест" if not lead_magnet_completed else "✅ Лид-магнит",
-                callback_data="rnav:lead_magnet",
-            ),
         ],
     ]
     if include_home:
@@ -315,7 +309,12 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
 
     await target.answer(
         f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
-        "Выберите действие кнопками ниже.\n\n"
+        "Рабочий стол: выберите раздел кнопками ниже.\n\n"
+        "Главные маршруты:\n"
+        "• 🧠 Узнать — персональные новости и недельный дайджест\n"
+        "• 🧪 Проверить — быстрый вход в Contract AI System\n"
+        "• 🧰 Решения — сценарии внедрения для юристов и бизнеса\n"
+        "• 👤 Мое — сохраненное, настройки и персонализация\n\n"
         f"Сохранённых статей: <b>{len(saved_articles)}</b>\n"
         f"{lead_magnet_text}\n"
         f"{escape(miniapp_state)}",
@@ -336,6 +335,162 @@ async def _show_search_prompt(target: Message) -> None:
     await target.answer(
         "Навигация:",
         reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+    )
+
+
+async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> None:
+    """Show discovery section with clear steps."""
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user_id,
+        source="reader_discover",
+        screen="content",
+        action="reader_discover_open_miniapp",
+        payload={"entry": "discover"},
+    )
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="📰 Новости за сегодня", callback_data="rnav:today"),
+            InlineKeyboardButton(text="📆 Дайджест недели", callback_data="rnav:weekly"),
+        ],
+        [
+            InlineKeyboardButton(text="🔍 Поиск по теме", callback_data="rnav:search"),
+        ],
+    ]
+    if miniapp_url:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Контент", url=miniapp_url)])
+    else:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Контент", callback_data="rnav:miniapp_content")])
+    rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+
+    await target.answer(
+        "🧠 <b>Раздел «Узнать»</b>\n\n"
+        "Что это:\n"
+        "• персональные новости по вашим интересам;\n"
+        "• недельная выжимка ключевых событий.\n\n"
+        "Как использовать:\n"
+        "1. Откройте «Новости за сегодня» или «Дайджест недели».\n"
+        "2. Оцените материалы кнопками под карточками.\n"
+        "3. Перейдите в Mini App для продолжения работы.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+async def _show_validate(target: Message, user_id: int) -> None:
+    """Show contract validation section with direct CTA."""
+    helper_link = _build_helper_link("reader_validate")
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user_id,
+        source="reader_validate",
+        screen="tools",
+        action="reader_validate_open_miniapp",
+        payload={"entry": "validate"},
+    )
+    rows: list[list[InlineKeyboardButton]] = []
+    contract_url = (settings.reader_contract_ai_url or "").strip()
+    if contract_url:
+        rows.append([InlineKeyboardButton(text="🧪 Проверить договор", url=contract_url)])
+    if miniapp_url:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", url=miniapp_url)])
+    else:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", callback_data="rnav:miniapp_tools")])
+    if helper_link:
+        rows.append([InlineKeyboardButton(text="✉️ Обсудить внедрение", url=helper_link)])
+    rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+
+    await target.answer(
+        "🧪 <b>Раздел «Проверить»</b>\n\n"
+        "Что это:\n"
+        "• быстрый вход в Contract AI System;\n"
+        "• первичная проверка договора и подсветка рисков.\n\n"
+        "Как использовать:\n"
+        "1. Нажмите «Проверить договор».\n"
+        "2. Загрузите документ.\n"
+        "3. Получите вывод и определите следующий шаг.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+async def _show_solutions(target: Message, user_id: int) -> None:
+    """Show solutions section with audience split."""
+    helper_link = _build_helper_link("reader_solutions")
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user_id,
+        source="reader_solutions",
+        screen="solutions",
+        action="reader_solutions_open_miniapp",
+        payload={"entry": "solutions"},
+    )
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="⚖️ Для юристов", url=(settings.reader_for_lawyers_url or "").strip() or "https://legalaipro.ru/for-lawyers"),
+            InlineKeyboardButton(text="🏢 Для бизнеса", url=(settings.reader_for_business_url or "").strip() or "https://legalaipro.ru/for-business"),
+        ],
+    ]
+    if miniapp_url:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", url=miniapp_url)])
+    else:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", callback_data="rnav:miniapp_solutions")])
+    if helper_link:
+        rows.append([InlineKeyboardButton(text="✉️ Подобрать решение", url=helper_link)])
+    rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+
+    await target.answer(
+        "🧰 <b>Раздел «Решения»</b>\n\n"
+        "Что это:\n"
+        "• готовые сценарии автоматизации юридической функции;\n"
+        "• маршруты отдельно для юристов и бизнеса.\n\n"
+        "Как использовать:\n"
+        "1. Выберите свой контур: «Для юристов» или «Для бизнеса».\n"
+        "2. Посмотрите подходящие сценарии и кейсы.\n"
+        "3. Отправьте задачу через «Подобрать решение».",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> None:
+    """Show personal hub with clear navigation to saved/settings/lead magnet."""
+    lead_profile = await get_lead_profile(user_id, db)
+    saved_articles = await _safe_get_saved_articles(user_id, db=db)
+    miniapp_url = await build_reader_miniapp_deeplink(
+        user_id=user_id,
+        source="reader_profile",
+        screen="profile",
+        action="reader_profile_open_miniapp",
+        payload={"entry": "profile"},
+    )
+    lead_magnet_done = bool(lead_profile and lead_profile.lead_magnet_completed)
+    lead_magnet_text = "✅ Персональный дайджест активен" if lead_magnet_done else "🎯 Персональный дайджест не активирован"
+
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="🔖 Сохранённые", callback_data="rnav:saved"),
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="rnav:settings"),
+        ],
+        [
+            InlineKeyboardButton(
+                text="✅ Лид-магнит" if lead_magnet_done else "🎯 Включить дайджест",
+                callback_data="rnav:lead_magnet",
+            ),
+        ],
+    ]
+    if miniapp_url:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Мое", url=miniapp_url)])
+    else:
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Мое", callback_data="rnav:miniapp_profile")])
+    rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+
+    await target.answer(
+        "👤 <b>Раздел «Мое»</b>\n\n"
+        "Что здесь:\n"
+        "• ваши сохраненные материалы и настройки;\n"
+        "• персональный статус и маршруты продолжения.\n\n"
+        f"Сохранено статей: <b>{len(saved_articles)}</b>\n"
+        f"{lead_magnet_text}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
 
 
@@ -423,7 +578,7 @@ async def _handle_start(
 
         await target.answer(
             "Пост по ссылке не найден. Возможно, он был удален.\n\n"
-            "Откройте /today или /search, чтобы продолжить.",
+            "Откройте раздел «Узнать» или «Поиск», чтобы продолжить.",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
@@ -463,6 +618,14 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
     await state.clear()
     if action == "home":
         await _show_home_screen(callback.message, callback.from_user, db)
+    elif action == "discover":
+        await _show_discover(callback.message, user_id, db)
+    elif action == "validate":
+        await _show_validate(callback.message, user_id)
+    elif action == "solutions":
+        await _show_solutions(callback.message, user_id)
+    elif action == "profile":
+        await _show_profile_hub(callback.message, user_id, db)
     elif action == "today":
         await _show_today(callback.message, user_id, db)
     elif action == "weekly":
@@ -480,6 +643,38 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
             screen="home",
             action="reader_nav_open_miniapp",
             source="reader_nav",
+        )
+    elif action == "miniapp_content":
+        await _open_miniapp(
+            callback.message,
+            user_id,
+            screen="content",
+            action="reader_nav_open_miniapp_content",
+            source="reader_discover",
+        )
+    elif action == "miniapp_tools":
+        await _open_miniapp(
+            callback.message,
+            user_id,
+            screen="tools",
+            action="reader_nav_open_miniapp_tools",
+            source="reader_validate",
+        )
+    elif action == "miniapp_solutions":
+        await _open_miniapp(
+            callback.message,
+            user_id,
+            screen="solutions",
+            action="reader_nav_open_miniapp_solutions",
+            source="reader_solutions",
+        )
+    elif action == "miniapp_profile":
+        await _open_miniapp(
+            callback.message,
+            user_id,
+            screen="profile",
+            action="reader_nav_open_miniapp_profile",
+            source="reader_profile",
         )
     elif action == "lead_magnet":
         await _open_lead_magnet(callback.message, user_id, state, db)
@@ -622,7 +817,7 @@ async def cmd_ask_question(message: Message, state: FSMContext, db: AsyncSession
         await message.answer(
             "📊 <b>Лимит вопросов исчерпан!</b>\n\n"
             "Вы уже задали 3 вопроса. Спасибо за участие!\n\n"
-            "Продолжайте получать персональные дайджесты с /today",
+            "Продолжайте получать персональные дайджесты в разделе «Узнать».",
             parse_mode="HTML",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
@@ -845,10 +1040,8 @@ async def complete_onboarding(callback: CallbackQuery, state: FSMContext, db: As
         f"• Персональные рекомендации статей\n"
         f"• Дайджесты по вашим темам\n"
         f"• Доступ к поиску по архиву\n\n"
-        f"<b>Попробуйте:</b>\n"
-        f"/today - Что интересного сегодня\n"
-        f"/search - Поиск статей\n"
-        f"/saved - Сохранённые статьи",
+        f"Откройте нужный раздел кнопками ниже:\n"
+        f"🧠 Узнать / 🧪 Проверить / 🧰 Решения / 🔍 Поиск / 👤 Мое",
         parse_mode="HTML",
         reply_markup=_build_reader_nav_keyboard(profile_ready=True, include_home=False),
     )
@@ -876,9 +1069,7 @@ async def _show_today(target: Message, user_id: int, db: AsyncSession) -> None:
     if not articles:
         await target.answer(
             "📭 Сегодня пока нет новых статей по вашим темам.\n\n"
-            "Попробуйте:\n"
-            "/search - Поиск по архиву\n"
-            "/saved - Ваши сохранённые статьи",
+            "Попробуйте разделы «Поиск» или «Мое» для сохраненных материалов.",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
@@ -924,7 +1115,7 @@ async def _show_weekly(target: Message, user_id: int, db: AsyncSession) -> None:
     if not articles:
         await target.answer(
             "📭 За последнюю неделю пока нет новых релевантных материалов.\n\n"
-            "Попробуйте /today или /search.",
+            "Попробуйте разделы «Узнать» или «Поиск».",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return
@@ -981,7 +1172,7 @@ async def _show_search(target: Message, user_id: int, query: str | None, db: Asy
     if not results:
         await target.answer(
             f"По запросу '<b>{escape(query)}</b>' ничего не найдено 😔\n\n"
-            "Попробуйте другой запрос или используйте /today",
+            "Попробуйте другой запрос или раздел «Узнать».",
             parse_mode="HTML",
             reply_markup=_build_reader_nav_keyboard(profile_ready=profile_ready),
         )
@@ -1086,7 +1277,7 @@ async def process_feedback(callback: CallbackQuery, db: AsyncSession):
             db=db,
         )
     except ValueError:
-        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
 
     if is_useful:
@@ -1132,7 +1323,7 @@ async def save_feedback_type(callback: CallbackQuery, db: AsyncSession):
             db=db,
         )
     except ValueError:
-        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
 
     reason_map = {
@@ -1167,7 +1358,7 @@ async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
     try:
         await save_article(user_id, article_id, db)
     except ValueError:
-        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
     await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=True)
 
@@ -1187,7 +1378,7 @@ async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     try:
         await unsave_article(user_id, article_id, db)
     except ValueError:
-        await callback.answer("Статья устарела, откройте новую из /today", show_alert=True)
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
     await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=False)
 
@@ -1377,7 +1568,7 @@ async def cancel_article_question_flow(callback: CallbackQuery, state: FSMContex
     await state.clear()
     await callback.answer("Отменено")
     await callback.message.answer(
-        "Окей, продолжаем. Откройте /today или /weekly.",
+        "Окей, продолжаем. Откройте раздел «Узнать».",
         reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
 
@@ -1534,7 +1725,7 @@ async def _show_settings(target: Message, user_id: int, db: AsyncSession) -> Non
         f"💬 Дано отзывов: {stats.get('feedback_given', 0)}\n"
         f"🔖 Сохранено: {stats.get('articles_saved', 0)}\n"
         f"👍 Понравилось: {stats.get('positive_feedback', 0)}\n\n"
-        f"<i>Для изменения настроек используйте /start</i>",
+        f"<i>Для смены маршрута используйте кнопки «Мое» и «Рабочий стол».</i>",
         parse_mode="HTML",
         reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
@@ -1573,7 +1764,7 @@ async def handle_lead_magnet_start(callback: CallbackQuery, state: FSMContext, d
     elif action == "decline":
         await callback.message.edit_text(
             "👋 Понятно! Если передумаете, используйте /lead_magnet\n\n"
-            "А пока можете ознакомиться с последними новостями: /today"
+            "А пока можно перейти в раздел «Узнать» и посмотреть свежие материалы."
         )
 
     await callback.answer()
@@ -1810,7 +2001,7 @@ async def handle_question(message: Message, state: FSMContext, db: AsyncSession)
             "• ИИ в юриспруденции\n"
             "• LegalTech решениями\n"
             "• Автоматизацией юридических процессов\n\n"
-            "Попробуйте переформулировать вопрос или используйте /today для новостей.",
+            "Попробуйте переформулировать вопрос или откройте раздел «Узнать».",
             parse_mode="HTML"
         )
         return
@@ -1848,7 +2039,7 @@ async def handle_question(message: Message, state: FSMContext, db: AsyncSession)
         )
 
         if questions_left > 0:
-            response_text += "Задайте следующий вопрос или используйте /today для новостей."
+            response_text += "Задайте следующий вопрос или вернитесь в раздел «Узнать»."
         else:
             response_text += (
                 "🎉 Все вопросы использованы!\n"
@@ -1861,7 +2052,7 @@ async def handle_question(message: Message, state: FSMContext, db: AsyncSession)
         logger.error(f"Error generating AI response: {e}")
         await message.answer(
             "❌ Извините, произошла ошибка при обработке вопроса.\n"
-            "Попробуйте позже или используйте /today для новостей."
+            "Попробуйте позже или откройте раздел «Узнать»."
         )
 
     # Clear state
@@ -1875,17 +2066,20 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if not text:
         return
 
+    user_id = message.from_user.id
+    profile = await get_user_profile(user_id, db)
+
     # Unknown slash-command hint
     if text.startswith("/"):
+        extra_hint = "\nСначала запустите /start для настройки профиля." if not profile else ""
         await message.answer(
             "Неизвестная команда.\n\n"
-            "Доступно: /start, /today, /weekly, /search, /saved, /settings, /lead_magnet",
-            reply_markup=_build_reader_nav_keyboard(profile_ready=True),
+            "Используйте кнопку «/start» или навигацию на рабочем столе:\n"
+            f"🧠 Узнать / 🧪 Проверить / 🧰 Решения / 🔍 Поиск / 👤 Мое{extra_hint}",
+            reply_markup=_build_reader_nav_keyboard(profile_ready=bool(profile)),
         )
         return
 
-    user_id = message.from_user.id
-    profile = await get_user_profile(user_id, db)
     if not profile:
         await message.answer(
             "Сначала запустите /start, чтобы настроить профиль.\n"
@@ -1898,7 +2092,7 @@ async def fallback_text_message(message: Message, db: AsyncSession):
     if not results:
         await message.answer(
             "По этому запросу пока ничего не найдено.\n"
-            "Попробуйте /today или /search с другим запросом.",
+            "Попробуйте другой запрос или раздел «Узнать».",
             reply_markup=_build_reader_nav_keyboard(profile_ready=True),
         )
         return

@@ -290,6 +290,10 @@ python -u -m app.reader_bot
 Важно для reader-bot sync с core-api:
 - для единого контура (`/api/v1/reader/preferences`, `/api/v1/reader/feed`, `/api/v1/reader/saved`, `/api/v1/reader/save`, `/api/v1/reader/lead-intent`) должны быть заданы `CORE_API_URL` и `API_KEY_NEWS`;
 - при недоступности core-api reader-bot уходит в fallback на локальные таблицы и продолжает отвечать, но кросс-бот аналитика и lead-intent в core-api не записываются.
+- чтобы разделы `Проверить/Решения` открывали корректные маршруты, при необходимости задайте:
+  - `READER_CONTRACT_AI_URL` (по умолчанию `https://legalaipro.ru/contract-ai-system`);
+  - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);
+  - `READER_FOR_BUSINESS_URL` (по умолчанию `https://legalaipro.ru/for-business`).
 
 Запуск reader digest-воркера (локально):
 ```bash

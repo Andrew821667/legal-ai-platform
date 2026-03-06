@@ -73,15 +73,15 @@ async def main():
     try:
         # Set bot commands menu
         commands = [
-            BotCommand(command="start", description="🚀 Начать работу с ботом"),
-            BotCommand(command="lead_magnet", description="🎯 Лид-магнит: дайджест за контакты"),
-            BotCommand(command="miniapp", description="🧩 Открыть mini-app"),
-            BotCommand(command="ask_question", description="🤖 Задать вопрос по LegalTech"),
-            BotCommand(command="today", description="📰 Персональные новости за сегодня"),
-            BotCommand(command="weekly", description="📆 Недельный дайджест"),
+            BotCommand(command="start", description="🚀 Рабочий стол и разделы"),
+            BotCommand(command="today", description="🧠 Узнать: новости за сегодня"),
+            BotCommand(command="weekly", description="🧠 Узнать: дайджест недели"),
             BotCommand(command="search", description="🔍 Поиск по архиву"),
-            BotCommand(command="saved", description="🔖 Сохранённые статьи"),
-            BotCommand(command="settings", description="⚙️ Настройки профиля"),
+            BotCommand(command="saved", description="👤 Мое: сохранённые статьи"),
+            BotCommand(command="settings", description="👤 Мое: настройки профиля"),
+            BotCommand(command="miniapp", description="🧩 Открыть mini-app"),
+            BotCommand(command="lead_magnet", description="🎯 Включить персональный дайджест"),
+            BotCommand(command="ask_question", description="🤖 Вопрос по LegalTech"),
         ]
         await bot.set_my_commands(commands)
         logger.info("Bot commands menu set")
