@@ -497,3 +497,133 @@ def test_contract_job_history_returns_audit_entries() -> None:
         finally:
             db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_contract_jobs_pagination_sort_and_sla_filters() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.worker.contract.sla"
+    raw_key = _create_api_key(Scope.worker, api_key_name)
+    created_ids: list = []
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = [
+            ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new old",
+                priority=10,
+                created_at=now - timedelta(hours=3),
+                updated_at=now - timedelta(hours=3),
+            ),
+            ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new fresh",
+                priority=1,
+                created_at=now - timedelta(minutes=20),
+                updated_at=now - timedelta(minutes=20),
+            ),
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="processing stale",
+                worker_id="w1",
+                priority=2,
+                created_at=now - timedelta(hours=4),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="processing fresh",
+                worker_id="w2",
+                priority=3,
+                created_at=now - timedelta(hours=1),
+                updated_at=now - timedelta(minutes=5),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed retryable",
+                attempts=1,
+                max_attempts=3,
+                priority=4,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed terminal",
+                attempts=3,
+                max_attempts=3,
+                priority=5,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+        ]
+        db.add_all(rows)
+        db.commit()
+        for row in rows:
+            db.refresh(row)
+            created_ids.append(row.id)
+    finally:
+        db.close()
+
+    try:
+        stale_processing = client.get(
+            "/api/v1/contract-jobs?stale_processing_only=true&stale_minutes=30&limit=10",
+            headers={"X-API-Key": raw_key},
+        )
+        assert stale_processing.status_code == 200
+        stale_payload = stale_processing.json()
+        assert all(item["status"] == ContractJobStatus.processing.value for item in stale_payload)
+        assert any(item["worker_id"] == "w1" for item in stale_payload)
+        assert all(item["worker_id"] != "w2" for item in stale_payload)
+
+        retryable_failed = client.get(
+            "/api/v1/contract-jobs?failed_retryable_only=true&limit=10",
+            headers={"X-API-Key": raw_key},
+        )
+        assert retryable_failed.status_code == 200
+        retry_payload = retryable_failed.json()
+        assert len(retry_payload) >= 1
+        assert all(item["status"] == ContractJobStatus.failed.value for item in retry_payload)
+        assert all(item["attempts"] < item["max_attempts"] for item in retry_payload)
+
+        old_new = client.get(
+            "/api/v1/contract-jobs?new_older_than_minutes=60&limit=10",
+            headers={"X-API-Key": raw_key},
+        )
+        assert old_new.status_code == 200
+        old_new_payload = old_new.json()
+        assert len(old_new_payload) >= 1
+        assert all(item["status"] == ContractJobStatus.new.value for item in old_new_payload)
+
+        paged = client.get(
+            "/api/v1/contract-jobs?order_by=created_at&order_dir=desc&limit=2&offset=1",
+            headers={"X-API-Key": raw_key},
+        )
+        assert paged.status_code == 200
+        paged_payload = paged.json()
+        assert len(paged_payload) == 2
+        first_created = datetime.fromisoformat(paged_payload[0]["created_at"])
+        second_created = datetime.fromisoformat(paged_payload[1]["created_at"])
+        assert first_created >= second_created
+
+        count_old_new = client.get(
+            "/api/v1/contract-jobs?count_only=true&new_older_than_minutes=60",
+            headers={"X-API-Key": raw_key},
+        )
+        assert count_old_new.status_code == 200
+        assert count_old_new.json()["count"] >= 1
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ContractJob).where(ContractJob.id.in_(created_ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import socket
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
@@ -27,6 +27,42 @@ from core_api.schemas import (
 router = APIRouter(prefix="/api/v1/contract-jobs", tags=["contract-jobs"])
 
 
+def _apply_contract_job_filters(
+    stmt: Any,
+    *,
+    now: datetime,
+    status: ContractJobStatus | None,
+    lead_id: uuid.UUID | None,
+    worker_id: str | None,
+    stale_processing_only: bool,
+    stale_minutes: int,
+    failed_retryable_only: bool,
+    new_older_than_minutes: int | None,
+) -> Any:
+    if status:
+        stmt = stmt.where(ContractJob.status == status)
+    if lead_id:
+        stmt = stmt.where(ContractJob.lead_id == lead_id)
+    if worker_id:
+        stmt = stmt.where(ContractJob.worker_id == worker_id)
+    if stale_processing_only:
+        stmt = stmt.where(
+            ContractJob.status == ContractJobStatus.processing,
+            ContractJob.updated_at < (now - timedelta(minutes=stale_minutes)),
+        )
+    if failed_retryable_only:
+        stmt = stmt.where(
+            ContractJob.status == ContractJobStatus.failed,
+            ContractJob.attempts < ContractJob.max_attempts,
+        )
+    if new_older_than_minutes is not None:
+        stmt = stmt.where(
+            ContractJob.status == ContractJobStatus.new,
+            ContractJob.created_at < (now - timedelta(minutes=new_older_than_minutes)),
+        )
+    return stmt
+
+
 @router.post("", response_model=ContractJobOut)
 def create_contract_job(
     payload: ContractJobCreate,
@@ -46,30 +82,61 @@ def list_contract_jobs(
     status: ContractJobStatus | None = Query(default=None),
     lead_id: uuid.UUID | None = Query(default=None),
     worker_id: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0, le=100000),
     limit: int = Query(default=20, ge=1, le=100),
+    order_by: Literal["priority", "created_at", "updated_at", "deadline_at"] = Query(default="priority"),
+    order_dir: Literal["asc", "desc"] = Query(default="asc"),
+    stale_processing_only: bool = Query(default=False),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    failed_retryable_only: bool = Query(default=False),
+    new_older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
     count_only: bool = Query(default=False),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.worker, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> Any:
     _ = identity
+    now = datetime.now(timezone.utc)
     if count_only:
         stmt = select(func.count()).select_from(ContractJob)
-        if status:
-            stmt = stmt.where(ContractJob.status == status)
-        if lead_id:
-            stmt = stmt.where(ContractJob.lead_id == lead_id)
-        if worker_id:
-            stmt = stmt.where(ContractJob.worker_id == worker_id)
+        stmt = _apply_contract_job_filters(
+            stmt,
+            now=now,
+            status=status,
+            lead_id=lead_id,
+            worker_id=worker_id,
+            stale_processing_only=stale_processing_only,
+            stale_minutes=stale_minutes,
+            failed_retryable_only=failed_retryable_only,
+            new_older_than_minutes=new_older_than_minutes,
+        )
         count = db.execute(stmt).scalar_one()
         return {"count": count}
 
-    stmt = select(ContractJob).order_by(ContractJob.priority.asc(), ContractJob.created_at.asc()).limit(limit)
-    if status:
-        stmt = stmt.where(ContractJob.status == status)
-    if lead_id:
-        stmt = stmt.where(ContractJob.lead_id == lead_id)
-    if worker_id:
-        stmt = stmt.where(ContractJob.worker_id == worker_id)
+    stmt = select(ContractJob)
+    stmt = _apply_contract_job_filters(
+        stmt,
+        now=now,
+        status=status,
+        lead_id=lead_id,
+        worker_id=worker_id,
+        stale_processing_only=stale_processing_only,
+        stale_minutes=stale_minutes,
+        failed_retryable_only=failed_retryable_only,
+        new_older_than_minutes=new_older_than_minutes,
+    )
+
+    order_expr_map = {
+        "priority": ContractJob.priority,
+        "created_at": ContractJob.created_at,
+        "updated_at": ContractJob.updated_at,
+        "deadline_at": ContractJob.deadline_at,
+    }
+    primary_col = order_expr_map[order_by]
+    primary_order = primary_col.asc() if order_dir == "asc" else primary_col.desc()
+    if order_by == "deadline_at":
+        primary_order = primary_order.nulls_last()
+
+    stmt = stmt.order_by(primary_order, ContractJob.priority.asc(), ContractJob.created_at.asc()).offset(offset).limit(limit)
     return list(db.execute(stmt).scalars().all())
 
 

@@ -34,6 +34,8 @@
   - `GET /api/v1/contract-jobs/{job_id}`
 - Для операторских списков поддерживаются фильтры:
   - `GET /api/v1/contract-jobs?status=...&lead_id=...&worker_id=...`
+  - `offset`, `limit`, `order_by=priority|created_at|updated_at|deadline_at`, `order_dir=asc|desc`
+  - SLA-фильтры: `stale_processing_only`, `stale_minutes`, `failed_retryable_only`, `new_older_than_minutes`
 - Для мониторинга очереди и диагностики задачи:
   - `GET /api/v1/contract-jobs/summary`
   - `GET /api/v1/contract-jobs/{job_id}/history`

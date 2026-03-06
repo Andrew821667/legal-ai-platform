@@ -46,6 +46,7 @@
 - `GET /api/v1/contract-jobs/{job_id}` — получение статуса конкретной задачи (scope `bot|worker|admin`).
 - `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
 - `GET /api/v1/contract-jobs/{job_id}/history` — история действий по задаче из `audit_log`.
+- `GET /api/v1/contract-jobs` — списки задач с пагинацией/сортировкой и SLA-фильтрами.
 - `POST /api/v1/contract-jobs/claim` — атомарный claim одной задачи worker'ом.
 - `POST /api/v1/scheduled-posts/claim?limit=10` — атомарный claim пачки постов паблишером.
 

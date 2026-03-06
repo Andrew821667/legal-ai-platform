@@ -343,6 +343,12 @@ curl -s "$CORE_API_URL/api/v1/contract-jobs/summary?window_hours=24&stale_minute
 
 curl -s "$CORE_API_URL/api/v1/contract-jobs/{job_id}/history?limit=20" \
   -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s "$CORE_API_URL/api/v1/contract-jobs?stale_processing_only=true&stale_minutes=30&limit=50" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s "$CORE_API_URL/api/v1/contract-jobs?failed_retryable_only=true&order_by=updated_at&order_dir=asc&limit=50" \
+  -H "X-API-Key: $API_KEY_ADMIN"
 ```
 
 Если MacBook оффлайн:
