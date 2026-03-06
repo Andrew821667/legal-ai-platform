@@ -32,6 +32,7 @@ from core_api.post_feedback import apply_feedback_signal
 from core_api.schemas import (
     MessageResponse,
     PostFeedbackOut,
+    ReaderContinueStateOut,
     ReaderCtaClickCreate,
     ReaderFeedItem,
     ReaderFeedbackCreate,
@@ -72,6 +73,13 @@ _MINIAPP_SCREEN_TO_PATH: dict[str, str] = {
     "tools": "/miniapp/tools",
     "solutions": "/miniapp/solutions",
     "profile": "/miniapp/profile",
+}
+
+_SECTION_TO_SCREEN: dict[str, str] = {
+    "discover": "content",
+    "validate": "tools",
+    "solutions": "solutions",
+    "profile": "profile",
 }
 
 
@@ -140,6 +148,33 @@ def _miniapp_profile_out(row: ReaderPreference) -> ReaderMiniAppProfileOut:
         expertise_level=row.expertise_level,
         updated_at=row.updated_at,
     )
+
+
+def _recommended_section(
+    *,
+    pref: ReaderPreference,
+    saved_count: int,
+    lead_intents_30d: int,
+) -> tuple[str, str]:
+    if not bool(pref.miniapp_onboarding_done):
+        return ("profile", "Сначала настройте профиль, чтобы персонализация и маршруты работали точнее.")
+
+    if lead_intents_30d > 0:
+        return ("solutions", "Есть интерес к внедрению: логично перейти к решениям и следующему формату запуска.")
+
+    if saved_count <= 0:
+        return ("discover", "Нет сохраненных материалов: начните с релевантного контента и отметьте полезные публикации.")
+
+    last_action = (pref.miniapp_last_action or "").strip().lower()
+    focus_topics = set(_normalize_topics((pref.topics if isinstance(pref.topics, list) else []) or []))
+    if (
+        "contract" in last_action
+        or "договор" in last_action
+        or bool(focus_topics.intersection({"contracts", "ai_law", "compliance", "privacy", "regulation"}))
+    ):
+        return ("validate", "Контрактный/регуляторный фокус: проверьте следующий кейс через Contract_AI_System.")
+
+    return ("discover", "Продолжайте в контенте: это даст новые идеи перед следующим шагом внедрения.")
 
 
 def _topic_score(post: ScheduledPost, topics: list[str]) -> int:
@@ -276,6 +311,90 @@ def patch_reader_miniapp_profile(
     )
     db.commit()
     return _miniapp_profile_out(row)
+
+
+@router.get("/continue-state", response_model=ReaderContinueStateOut)
+def get_reader_continue_state(
+    telegram_user_id: int = Query(ge=1),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderContinueStateOut:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    row = _get_or_create_pref(db, telegram_user_id)
+    db.commit()
+    db.refresh(row)
+
+    saved_count = int(
+        db.execute(
+            select(func.count())
+            .select_from(ReaderSavedPost)
+            .where(ReaderSavedPost.telegram_user_id == telegram_user_id)
+        ).scalar()
+        or 0
+    )
+    recent_events_24h = int(
+        db.execute(
+            select(func.count())
+            .select_from(ReaderMiniAppEvent)
+            .where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id)
+            .where(ReaderMiniAppEvent.created_at >= now - timedelta(hours=24))
+        ).scalar()
+        or 0
+    )
+
+    last_action_event = db.execute(
+        select(ReaderMiniAppEvent)
+        .where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id)
+        .where(ReaderMiniAppEvent.action.is_not(None))
+        .order_by(ReaderMiniAppEvent.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    # Keep payload filtering DB-agnostic for SQLite/PostgreSQL test/runtime parity.
+    lead_intent_events = list(
+        db.execute(
+            select(Event)
+            .where(Event.type == "reader.lead_intent")
+            .where(Event.created_at >= now - timedelta(days=30))
+            .order_by(Event.created_at.desc())
+            .limit(2000)
+        ).scalars().all()
+    )
+    lead_intents_30d = 0
+    for item in lead_intent_events:
+        payload = item.payload if isinstance(item.payload, dict) else {}
+        value = payload.get("telegram_user_id")
+        try:
+            if int(value) == int(telegram_user_id):
+                lead_intents_30d += 1
+        except (TypeError, ValueError):
+            continue
+
+    recommended_section, recommended_reason = _recommended_section(
+        pref=row,
+        saved_count=saved_count,
+        lead_intents_30d=lead_intents_30d,
+    )
+    recommended_screen = _SECTION_TO_SCREEN.get(recommended_section, "content")
+
+    return ReaderContinueStateOut(
+        telegram_user_id=row.telegram_user_id,
+        onboarding_done=bool(row.miniapp_onboarding_done),
+        audience=_normalize_audience(row.miniapp_audience),
+        interests=_normalize_topics((row.miniapp_interests if isinstance(row.miniapp_interests, list) else []) or []),
+        topics=_normalize_topics((row.topics if isinstance(row.topics, list) else []) or []),
+        goal=row.miniapp_goal,
+        last_action=row.miniapp_last_action,
+        last_action_at=(last_action_event.created_at if last_action_event else None),
+        updated_at=row.updated_at,
+        saved_count=saved_count,
+        recent_events_24h=recent_events_24h,
+        lead_intents_30d=lead_intents_30d,
+        recommended_section=recommended_section,
+        recommended_screen=recommended_screen,
+        recommended_reason=recommended_reason,
+    )
 
 
 @router.post("/miniapp/event", response_model=ReaderMiniAppEventOut)

@@ -617,6 +617,24 @@ class ReaderMiniAppDeepLinkOut(BaseModel):
     query: dict[str, str]
 
 
+class ReaderContinueStateOut(BaseModel):
+    telegram_user_id: int
+    onboarding_done: bool
+    audience: str
+    interests: list[str]
+    topics: list[str]
+    goal: str | None
+    last_action: str | None
+    last_action_at: datetime | None
+    updated_at: datetime
+    saved_count: int
+    recent_events_24h: int
+    lead_intents_30d: int
+    recommended_section: str
+    recommended_screen: str
+    recommended_reason: str
+
+
 class ReaderFeedItem(BaseModel):
     id: uuid.UUID
     title: str | None

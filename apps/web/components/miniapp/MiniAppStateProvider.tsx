@@ -12,6 +12,12 @@ export type MiniAppState = {
   goal: string;
   lastAction: string;
   updatedAt: string;
+  savedCount: number;
+  recentEvents24h: number;
+  leadIntents30d: number;
+  recommendedSection: string;
+  recommendedScreen: string;
+  recommendedReason: string;
 };
 
 export type MiniAppActionMeta = {
@@ -40,6 +46,12 @@ const DEFAULT_STATE: MiniAppState = {
   goal: "",
   lastAction: "",
   updatedAt: "",
+  savedCount: 0,
+  recentEvents24h: 0,
+  leadIntents30d: 0,
+  recommendedSection: "discover",
+  recommendedScreen: "content",
+  recommendedReason: "",
 };
 
 const MiniAppStateContext = createContext<MiniAppStateContextValue | undefined>(undefined);
@@ -69,6 +81,12 @@ function sanitizeState(raw: unknown): MiniAppState {
     goal: typeof value.goal === "string" ? value.goal : "",
     lastAction: typeof value.lastAction === "string" ? value.lastAction : "",
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+    savedCount: Number.isFinite(Number(value.savedCount)) ? Math.max(0, Number(value.savedCount)) : 0,
+    recentEvents24h: Number.isFinite(Number(value.recentEvents24h)) ? Math.max(0, Number(value.recentEvents24h)) : 0,
+    leadIntents30d: Number.isFinite(Number(value.leadIntents30d)) ? Math.max(0, Number(value.leadIntents30d)) : 0,
+    recommendedSection: typeof value.recommendedSection === "string" ? value.recommendedSection : "discover",
+    recommendedScreen: typeof value.recommendedScreen === "string" ? value.recommendedScreen : "content",
+    recommendedReason: typeof value.recommendedReason === "string" ? value.recommendedReason : "",
   };
 }
 
@@ -96,7 +114,7 @@ function resolveTelegramUserIdFromRuntime(): number | null {
   return null;
 }
 
-function mapProfileFromServer(payload: any, prev: MiniAppState): MiniAppState {
+function mapStateFromServer(payload: any, prev: MiniAppState): MiniAppState {
   const updatedAt = typeof payload?.updated_at === "string" ? payload.updated_at : prev.updatedAt;
   const interests = Array.isArray(payload?.interests)
     ? payload.interests.filter((item: unknown): item is string => typeof item === "string")
@@ -110,6 +128,19 @@ function mapProfileFromServer(payload: any, prev: MiniAppState): MiniAppState {
     goal: typeof payload?.goal === "string" ? payload.goal : "",
     lastAction: typeof payload?.last_action === "string" ? payload.last_action : prev.lastAction,
     updatedAt,
+    savedCount: Number.isFinite(Number(payload?.saved_count)) ? Math.max(0, Number(payload.saved_count)) : prev.savedCount,
+    recentEvents24h: Number.isFinite(Number(payload?.recent_events_24h))
+      ? Math.max(0, Number(payload.recent_events_24h))
+      : prev.recentEvents24h,
+    leadIntents30d: Number.isFinite(Number(payload?.lead_intents_30d))
+      ? Math.max(0, Number(payload.lead_intents_30d))
+      : prev.leadIntents30d,
+    recommendedSection:
+      typeof payload?.recommended_section === "string" ? payload.recommended_section : prev.recommendedSection,
+    recommendedScreen:
+      typeof payload?.recommended_screen === "string" ? payload.recommended_screen : prev.recommendedScreen,
+    recommendedReason:
+      typeof payload?.recommended_reason === "string" ? payload.recommended_reason : prev.recommendedReason,
   };
 }
 
@@ -211,14 +242,14 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
     void (async () => {
       try {
         const response = await fetch(
-          `/api/reader/miniapp/profile?telegram_user_id=${encodeURIComponent(String(state.telegramUserId))}`,
+          `/api/reader/continue-state?telegram_user_id=${encodeURIComponent(String(state.telegramUserId))}`,
           { cache: "no-store" },
         );
         if (!response.ok) {
           return;
         }
         const payload = await response.json();
-        setState((prev) => mapProfileFromServer(payload, prev));
+        setState((prev) => mapStateFromServer(payload, prev));
       } catch {
         // Keep local fallback when backend is unavailable.
       }

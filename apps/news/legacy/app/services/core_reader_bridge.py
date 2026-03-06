@@ -150,6 +150,33 @@ async def fetch_reader_miniapp_profile(*, user_id: int) -> dict[str, Any] | None
         return None
 
 
+async def fetch_reader_continue_state(*, user_id: int) -> dict[str, Any] | None:
+    if not _enabled():
+        return None
+
+    def _send() -> requests.Response:
+        return requests.get(
+            _core_url("/api/v1/reader/continue-state"),
+            params={"telegram_user_id": int(user_id)},
+            headers={"X-API-Key": settings.api_key_news},
+            timeout=8,
+        )
+
+    try:
+        response = await asyncio.to_thread(_send)
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict):
+            return payload
+        return {}
+    except Exception as exc:
+        logger.warning(
+            "reader_continue_state_fetch_failed",
+            extra={"user_id": int(user_id), "error": str(exc)},
+        )
+        return None
+
+
 async def push_reader_save_state(*, user_id: int, publication_id: str, saved: bool) -> bool:
     if not _enabled():
         return False

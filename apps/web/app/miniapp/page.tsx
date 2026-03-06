@@ -13,6 +13,13 @@ const audienceHints = {
   mixed: "Фокус на стыке юридической и бизнес-функции.",
 } as const;
 
+const sectionLabel: Record<string, string> = {
+  discover: "🧠 Узнать",
+  validate: "🧪 Проверить",
+  solutions: "🛠 Внедрить",
+  profile: "👤 Профиль",
+};
+
 export default function MiniAppHomePage() {
   const { state, ready } = useMiniAppState();
 
@@ -39,6 +46,19 @@ export default function MiniAppHomePage() {
       "1 готовый шаблон для пилота legal ops",
     ];
   }, [state.audience]);
+
+  const recommendedHref = useMemo(() => {
+    if (state.recommendedSection === "validate") {
+      return `${ROUTES.contractAI}#demo`;
+    }
+    if (state.recommendedSection === "solutions") {
+      return ROUTES.miniAppSolutions;
+    }
+    if (state.recommendedSection === "profile") {
+      return ROUTES.miniAppProfile;
+    }
+    return ROUTES.miniAppContent;
+  }, [state.recommendedSection]);
 
   return (
     <section className="space-y-4">
@@ -96,6 +116,31 @@ export default function MiniAppHomePage() {
             ? `Последнее действие: ${state.lastAction}.`
             : "Пока нет действий — начните с контента или с проверки договора."}
         </p>
+        <p className="mt-2 text-xs text-slate-300">
+          Сохранено: {state.savedCount} • Событий за 24ч: {state.recentEvents24h} • Лид-интентов за 30д:{" "}
+          {state.leadIntents30d}
+        </p>
+      </article>
+
+      <article className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+        <h2 className="text-base font-semibold text-white">Рекомендованный следующий шаг</h2>
+        <p className="mt-2 text-sm text-slate-200">
+          {sectionLabel[state.recommendedSection] || "🧠 Узнать"}
+          {state.recommendedReason ? ` — ${state.recommendedReason}` : ""}
+        </p>
+        <MiniTrackedLink
+          href={recommendedHref}
+          action="miniapp_home_open_recommended_step"
+          meta={{
+            eventType: "cta_click",
+            source: "miniapp_home",
+            screen: "/miniapp",
+            payload: { section: state.recommendedSection, screen: state.recommendedScreen },
+          }}
+          className="mt-3 inline-flex rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
+        >
+          Открыть рекомендованный шаг
+        </MiniTrackedLink>
       </article>
 
       <MiniAppCtaFlowCard

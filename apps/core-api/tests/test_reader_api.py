@@ -429,3 +429,103 @@ def test_reader_feedback_cta_and_lead_intent_flow() -> None:
         finally:
             db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_reader_continue_state_flow() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.reader.continue_state"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    telegram_user_id = 9_800_000 + int(datetime.now(timezone.utc).timestamp() % 100000)
+    post_id = None
+
+    db = SessionLocal()
+    try:
+        post = ScheduledPost(
+            title="Контрактный разбор: пилот AI",
+            text="Короткий практический материал по проверке договора",
+            rubric="contracts",
+            publish_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            posted_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            status=ScheduledPostStatus.posted,
+        )
+        db.add(post)
+        db.commit()
+        db.refresh(post)
+        post_id = post.id
+    finally:
+        db.close()
+
+    try:
+        state_response = client.get(
+            f"/api/v1/reader/continue-state?telegram_user_id={telegram_user_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert state_response.status_code == 200
+        initial_state = state_response.json()
+        assert initial_state["onboarding_done"] is False
+        assert initial_state["recommended_section"] == "profile"
+
+        patch_response = client.patch(
+            "/api/v1/reader/miniapp/profile",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "onboarding_done": True,
+                "audience": "lawyer",
+                "interests": ["contracts", "ai_law"],
+                "last_action": "miniapp_content_open_contract_ai",
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert patch_response.status_code == 200
+
+        save_response = client.post(
+            "/api/v1/reader/save",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "post_id": str(post_id),
+                "saved": True,
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert save_response.status_code == 200
+        assert save_response.json()["saved"] is True
+
+        lead_intent_response = client.post(
+            "/api/v1/reader/lead-intent",
+            json={
+                "telegram_user_id": telegram_user_id,
+                "post_id": str(post_id),
+                "intent_type": "consultation",
+                "message": "Нужен формат внедрения",
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert lead_intent_response.status_code == 200
+
+        final_state_response = client.get(
+            f"/api/v1/reader/continue-state?telegram_user_id={telegram_user_id}",
+            headers={"X-API-Key": raw_key},
+        )
+        assert final_state_response.status_code == 200
+        final_state = final_state_response.json()
+        assert final_state["onboarding_done"] is True
+        assert final_state["saved_count"] >= 1
+        assert final_state["lead_intents_30d"] >= 1
+        assert final_state["recommended_section"] == "solutions"
+        assert final_state["recommended_screen"] == "solutions"
+        assert isinstance(final_state["recommended_reason"], str) and final_state["recommended_reason"]
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ReaderMiniAppEvent).where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id))
+            db.execute(delete(ReaderSavedPost).where(ReaderSavedPost.telegram_user_id == telegram_user_id))
+            db.execute(delete(ReaderPreference).where(ReaderPreference.telegram_user_id == telegram_user_id))
+            db.execute(delete(Event).where(Event.type == "reader.lead_intent"))
+            db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id))
+            if post_id is not None:
+                db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id == post_id))
+                db.execute(delete(ScheduledPost).where(ScheduledPost.id == post_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)

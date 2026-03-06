@@ -49,6 +49,7 @@ from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
 from app.services.core_reader_bridge import (
     build_reader_miniapp_deeplink,
+    fetch_reader_continue_state,
     fetch_reader_miniapp_profile,
     push_reader_cta_click,
     push_reader_lead_intent,
@@ -224,6 +225,17 @@ def _humanize_miniapp_action(last_action: str | None) -> str:
     return value
 
 
+def _humanize_recommended_section(section: str | None) -> str:
+    value = (section or "").strip().lower()
+    labels = {
+        "discover": "Узнать",
+        "validate": "Проверить",
+        "solutions": "Решения",
+        "profile": "Мое",
+    }
+    return labels.get(value, "Узнать")
+
+
 def _build_reader_nav_keyboard(
     *,
     profile_ready: bool,
@@ -261,7 +273,8 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
     """Render home screen for already onboarded user."""
     lead_profile = await get_lead_profile(user.id, db)
     saved_articles = await _safe_get_saved_articles(user.id, db=db)
-    miniapp_profile = await fetch_reader_miniapp_profile(user_id=user.id)
+    continue_state = await fetch_reader_continue_state(user_id=user.id)
+    miniapp_profile = continue_state if isinstance(continue_state, dict) else await fetch_reader_miniapp_profile(user_id=user.id)
     miniapp_last_action = (
         str((miniapp_profile or {}).get("last_action") or "").strip() if isinstance(miniapp_profile, dict) else ""
     )
@@ -271,6 +284,19 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
         interests = miniapp_profile.get("interests")
         if isinstance(interests, list):
             miniapp_interests_count = len([item for item in interests if isinstance(item, str) and item.strip()])
+    recommended_section = (
+        str((continue_state or {}).get("recommended_section") or "").strip() if isinstance(continue_state, dict) else ""
+    )
+    recommended_reason = (
+        str((continue_state or {}).get("recommended_reason") or "").strip() if isinstance(continue_state, dict) else ""
+    )
+    saved_count_core = -1
+    if isinstance(continue_state, dict):
+        try:
+            saved_count_core = int(continue_state.get("saved_count", -1))
+        except (TypeError, ValueError):
+            saved_count_core = -1
+    saved_count_display = saved_count_core if saved_count_core >= 0 else len(saved_articles)
 
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user.id,
@@ -306,6 +332,12 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
     miniapp_state = (
         f"{miniapp_status} · интересов: {miniapp_interests_count} · последнее: {_humanize_miniapp_action(miniapp_last_action)}"
     )
+    recommendation_line = ""
+    if recommended_section:
+        recommendation_line = (
+            f"\nРекомендуемый шаг: {_humanize_recommended_section(recommended_section)}"
+            f"{f' — {recommended_reason}' if recommended_reason else ''}"
+        )
 
     await target.answer(
         f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
@@ -315,9 +347,9 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
         "• 🧪 Проверить — быстрый вход в Contract AI System\n"
         "• 🧰 Решения — сценарии внедрения для юристов и бизнеса\n"
         "• 👤 Мое — сохраненное, настройки и персонализация\n\n"
-        f"Сохранённых статей: <b>{len(saved_articles)}</b>\n"
+        f"Сохранённых статей: <b>{saved_count_display}</b>\n"
         f"{lead_magnet_text}\n"
-        f"{escape(miniapp_state)}",
+        f"{escape(miniapp_state)}{escape(recommendation_line)}",
         parse_mode="HTML",
         reply_markup=nav_markup,
     )

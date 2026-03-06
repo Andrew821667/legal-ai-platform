@@ -297,6 +297,8 @@ python -u -m app.reader_bot
 - доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:
   - `discover`, `validate`, `solutions`, `profile`, `search`;
   - `miniapp_content`, `miniapp_tools`, `miniapp_solutions`, `miniapp_profile`.
+- для сквозной персонализации mini-app/reader используется endpoint
+  `/api/v1/reader/continue-state` (recommended section/screen + saved/events/lead-intent counters).
 
 Запуск reader digest-воркера (локально):
 ```bash
