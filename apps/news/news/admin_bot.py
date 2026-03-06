@@ -1800,13 +1800,13 @@ class NewsAdminBot:
     def _format_feedback_snapshot(snapshot: dict[str, Any] | None) -> str:
         data = snapshot or {}
         if not data:
-            return "Feedback: пока нет сигналов."
+            return "🧠 Feedback: пока нет сигналов."
 
         lines = [
-            "Сводка feedback",
-            f"score: {data.get('score', 0)}",
-            f"реакции: +{data.get('reaction_positive', 0)} / -{data.get('reaction_negative', 0)} / всего {data.get('reaction_total', 0)}",
-            f"комментарии: +{data.get('comments_positive', 0)} / -{data.get('comments_negative', 0)} / всего {data.get('comments_total', 0)}",
+            "🧠 Feedback",
+            f"Score: {data.get('score', 0)}",
+            f"Реакции: +{data.get('reaction_positive', 0)} / -{data.get('reaction_negative', 0)} / всего {data.get('reaction_total', 0)}",
+            f"Комментарии: +{data.get('comments_positive', 0)} / -{data.get('comments_negative', 0)} / всего {data.get('comments_total', 0)}",
         ]
         top_reactions = data.get("top_reactions") or []
         if top_reactions:
@@ -1814,10 +1814,10 @@ class NewsAdminBot:
                 f"{row.get('reaction')}×{row.get('count')}" for row in top_reactions[:4] if row.get("reaction")
             )
             if summary:
-                lines.append(f"топ реакций: {summary}")
+                lines.append(f"Топ реакций: {summary}")
         negative_comments = data.get("recent_negative_comments") or []
         if negative_comments:
-            lines.append("свежие негативные сигналы:")
+            lines.append("Свежие негативные сигналы:")
             for item in negative_comments[:2]:
                 lines.append(f"- {str(item)[:180]}")
         return "\n".join(lines)
@@ -3879,10 +3879,12 @@ class NewsAdminBot:
 
     def _posts_text(self, total: int, rows: list[dict[str, Any]], offset: int, status: str) -> str:
         label = _status_label(status)
+        total_pages = max(1, (total + _POSTS_PAGE_SIZE - 1) // _POSTS_PAGE_SIZE)
+        current_page = min(total_pages, (offset // _POSTS_PAGE_SIZE) + 1)
         if not rows:
-            return f"{label} (status={status})\n\nСейчас записей нет."
+            return f"{label} (status={status})\n\nСтраница: {current_page}/{total_pages}\n\nСейчас записей нет."
 
-        lines = [f"{label}: {total}", ""]
+        lines = [f"{label}: {total}", f"Страница: {current_page}/{total_pages}", ""]
         for idx, row in enumerate(rows, start=offset + 1):
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             publish_at = str(row.get("publish_at") or "")
@@ -3904,12 +3906,15 @@ class NewsAdminBot:
         label = _review_origin_label(review_filter)
         kind_label = "Все виды" if kind_filter == "all" else publication_kind_label(kind_filter)
         theme_label = "Все темы" if theme_filter == "all" else _pillar_display(theme_filter)
+        total_pages = max(1, (total + _POSTS_PAGE_SIZE - 1) // _POSTS_PAGE_SIZE)
+        current_page = min(total_pages, (offset // _POSTS_PAGE_SIZE) + 1)
         if not rows:
             return (
                 "🟡 На проверке\n\n"
                 f"Фильтр: {label}\n"
                 f"Вид: {kind_label}\n"
                 f"Тема: {theme_label}\n\n"
+                f"Страница: {current_page}/{total_pages}\n\n"
                 "Сейчас записей нет."
             )
 
@@ -3920,6 +3925,7 @@ class NewsAdminBot:
             f"Вид: {kind_label}",
             f"Тема: {theme_label}",
             f"Всего: {total}",
+            f"Страница: {current_page}/{total_pages}",
             "",
         ]
         for idx, row in enumerate(rows, start=offset + 1):
@@ -4177,7 +4183,7 @@ class NewsAdminBot:
 
     def _post_card_text(self, post: dict[str, Any]) -> str:
         title = str(post.get("title") or "Без заголовка")
-        publish_at = str(post.get("publish_at") or "")
+        publish_at = str(post.get("publish_at") or "") or "—"
         status = str(post.get("status") or "")
         text = _strip_html_markup(str(post.get("text") or ""))
         format_type = str(post.get("format_type") or "n/a")
@@ -4188,53 +4194,64 @@ class NewsAdminBot:
         pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{text}")
         telegram_message_id = post.get("telegram_message_id")
         posted_at = str(post.get("posted_at") or "")
-        preview = text if len(text) <= 2500 else text[:2500] + "\n\n…"
+        preview = text if len(text) <= 1800 else text[:1800] + "\n\n…"
         source_url = str(post.get("source_url") or "")
         feedback_snapshot = post.get("feedback_snapshot") or {}
+        status_badge = _status_badge(status)
+        status_label = _status_label(status)
 
         parts = [
-            f"Пост: {title}",
-            f"ID: {post.get('id')}",
-            f"Статус: {status}",
-            f"Публикация (план): {publish_at}",
-            f"Вид публикации: {publication_kind_badge(publication_kind)} {publication_kind_label(publication_kind)}",
-            f"Формат: {format_label}",
-            f"Format type: {format_type}",
-            f"CTA: {cta_type}",
-            f"Тематика: {_pillar_display(pillar)}",
-            f"Рубрика: {_rubric_label(rubric)}",
+            "Карточка поста",
+            "",
+            f"🆔 {post.get('id')} | {status_badge} {status_label}",
+            f"📰 {title}",
+            f"📌 {publication_kind_badge(publication_kind)} {publication_kind_label(publication_kind)}",
+            f"🧭 {_pillar_display(pillar)} | {_rubric_label(rubric)}",
+            f"🧩 {format_label} | CTA: {cta_type}",
+            f"🗓 План публикации: {publish_at}",
+            f"🔧 Технический формат: {format_type}",
         ]
         if telegram_message_id:
-            parts.append(f"Telegram message_id: {telegram_message_id}")
+            parts.append(f"📨 Telegram message_id: {telegram_message_id}")
         if posted_at:
-            parts.append(f"Опубликован: {posted_at}")
+            parts.append(f"✅ Опубликован: {posted_at}")
+        if source_url:
+            parts.append(f"🔗 Источник: {source_url}")
         parts.extend(
             [
                 "",
                 self._format_feedback_snapshot(feedback_snapshot),
                 "",
+                "Текст (фрагмент):",
+                "",
                 preview,
             ]
         )
-        if source_url:
-            parts.extend(["", f"Источник: {source_url}"])
         return "\n".join(parts)
 
     def _post_card_keyboard(self, post_id: str, status: str, offset: int) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
         if status != "posted":
             rows.extend(
-                [
+                self._two_column_rows(
                     [
                         InlineKeyboardButton("⏱ +1ч", callback_data=f"pt:{post_id}:{status}:{offset}:h1"),
                         InlineKeyboardButton("🌙 19:00", callback_data=f"pt:{post_id}:{status}:{offset}:e19"),
-                    ],
-                    [InlineKeyboardButton("🌤 Завтра 10:00", callback_data=f"pt:{post_id}:{status}:{offset}:t10")],
-                    [InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"ppc:{post_id}:{status}:{offset}")],
-                    [InlineKeyboardButton("✍️ Редактировать вручную", callback_data=f"pm:{post_id}:{status}:{offset}")],
-                    [InlineKeyboardButton("🤖 Редактировать через LLM", callback_data=f"pa:{post_id}:{status}:{offset}")],
-                    [InlineKeyboardButton("🧩 Добавить футер", callback_data=f"pf:{post_id}:{status}:{offset}")],
-                    [InlineKeyboardButton("🗑 Нерелевантно / удалить", callback_data=f"pdd:{post_id}:{status}:{offset}", style=_BUTTON_STYLE_DANGER)],
+                        InlineKeyboardButton("🌤 Завтра 10:00", callback_data=f"pt:{post_id}:{status}:{offset}:t10"),
+                        InlineKeyboardButton("🚀 Опубликовать сейчас", callback_data=f"ppc:{post_id}:{status}:{offset}"),
+                        InlineKeyboardButton("✍️ Редактировать вручную", callback_data=f"pm:{post_id}:{status}:{offset}"),
+                        InlineKeyboardButton("🤖 Редактировать через LLM", callback_data=f"pa:{post_id}:{status}:{offset}"),
+                        InlineKeyboardButton("🧩 Добавить футер", callback_data=f"pf:{post_id}:{status}:{offset}"),
+                    ]
+                )
+            )
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        "🗑 Нерелевантно / удалить",
+                        callback_data=f"pdd:{post_id}:{status}:{offset}",
+                        style=_BUTTON_STYLE_DANGER,
+                    )
                 ]
             )
         else:

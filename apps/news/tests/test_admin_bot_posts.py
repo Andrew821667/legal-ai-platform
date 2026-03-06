@@ -371,6 +371,28 @@ def test_post_card_keyboard_has_add_footer_button() -> None:
     assert "🧩 Добавить футер" in labels
 
 
+def test_post_card_text_compact_sections() -> None:
+    bot = NewsAdminBot()
+    text = bot._post_card_text(
+        {
+            "id": "42",
+            "title": "Тестовый материал",
+            "status": "review",
+            "publish_at": "2026-03-06T18:00:00+00:00",
+            "text": "<b>Заголовок</b>\n\nОсновной текст поста.",
+            "format_type": "manual_opinion",
+            "cta_type": "soft",
+            "rubric": "legal_ops",
+            "source_url": "https://example.com/post",
+        }
+    )
+    assert "Карточка поста" in text
+    assert "🆔 42" in text
+    assert "🔗 Источник: https://example.com/post" in text
+    assert "🧠 Feedback: пока нет сигналов." in text
+    assert "Текст (фрагмент):" in text
+
+
 def test_fallback_footer_text_is_varied_for_different_posts() -> None:
     bot = NewsAdminBot()
     first = bot._fallback_footer_text(
