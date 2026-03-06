@@ -15,6 +15,7 @@ from core_api.db import get_db
 from core_api.models import ActorType, AuditLog, ContractJob, ContractJobStatus, Scope
 from core_api.schemas import (
     ClaimRequest,
+    ContractJobBulkRetryOut,
     ContractJobCreate,
     ContractJobHistoryEntry,
     ContractJobHistoryResponse,
@@ -220,6 +221,73 @@ def contract_jobs_summary(
         done_last_hours_count=done_last_hours_count,
         window_hours=window_hours,
         stale_minutes=stale_minutes,
+    )
+
+
+@router.post("/retry-failed", response_model=ContractJobBulkRetryOut)
+def retry_failed_contract_jobs(
+    limit: int = Query(default=100, ge=1, le=500),
+    retryable_only: bool = Query(default=True),
+    older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
+    dry_run: bool = Query(default=False),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobBulkRetryOut:
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(ContractJob)
+        .where(ContractJob.status == ContractJobStatus.failed)
+        .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+        .with_for_update(skip_locked=True)
+        .limit(limit)
+    )
+    if retryable_only:
+        stmt = stmt.where(ContractJob.attempts < ContractJob.max_attempts)
+    if older_than_minutes is not None:
+        stmt = stmt.where(ContractJob.updated_at < (now - timedelta(minutes=older_than_minutes)))
+
+    rows = list(db.execute(stmt).scalars().all())
+    job_ids = [row.id for row in rows]
+    if dry_run:
+        db.commit()
+        return ContractJobBulkRetryOut(
+            requested_limit=limit,
+            matched_count=len(rows),
+            retried_count=0,
+            retryable_only=retryable_only,
+            dry_run=True,
+            older_than_minutes=older_than_minutes,
+            job_ids=job_ids,
+        )
+
+    for job in rows:
+        job.status = ContractJobStatus.new
+        job.worker_id = None
+        job.last_error = None
+        job.updated_at = now
+        db.add(job)
+        write_audit(
+            db,
+            actor_type=ActorType.api_key,
+            actor_id=identity.name,
+            action="job.retry_failed",
+            target_type="contract_job",
+            target_id=job.id,
+            details={
+                "retryable_only": retryable_only,
+                "older_than_minutes": older_than_minutes,
+            },
+        )
+
+    db.commit()
+    return ContractJobBulkRetryOut(
+        requested_limit=limit,
+        matched_count=len(rows),
+        retried_count=len(rows),
+        retryable_only=retryable_only,
+        dry_run=False,
+        older_than_minutes=older_than_minutes,
+        job_ids=job_ids,
     )
 
 

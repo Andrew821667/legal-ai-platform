@@ -349,6 +349,12 @@ curl -s "$CORE_API_URL/api/v1/contract-jobs?stale_processing_only=true&stale_min
 
 curl -s "$CORE_API_URL/api/v1/contract-jobs?failed_retryable_only=true&order_by=updated_at&order_dir=asc&limit=50" \
   -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true&limit=100" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
+curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/retry-failed?retryable_only=true&limit=100" \
+  -H "X-API-Key: $API_KEY_ADMIN"
 ```
 
 Если MacBook оффлайн:

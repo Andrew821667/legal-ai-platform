@@ -627,3 +627,117 @@ def test_contract_jobs_pagination_sort_and_sla_filters() -> None:
         finally:
             db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_retry_failed_contract_jobs_supports_dry_run_and_applies_retryable_only() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.admin.contract.retry_failed"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    retryable_id = None
+    terminal_id = None
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        retryable = ContractJob(
+            status=ContractJobStatus.failed,
+            input_mode=InputMode.text_only,
+            document_text="retryable",
+            attempts=1,
+            max_attempts=3,
+            worker_id="worker-r",
+            last_error="temporary",
+            created_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(hours=2),
+        )
+        terminal = ContractJob(
+            status=ContractJobStatus.failed,
+            input_mode=InputMode.text_only,
+            document_text="terminal",
+            attempts=3,
+            max_attempts=3,
+            worker_id="worker-t",
+            last_error="terminal",
+            created_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(hours=2),
+        )
+        db.add_all([retryable, terminal])
+        db.commit()
+        db.refresh(retryable)
+        db.refresh(terminal)
+        retryable_id = retryable.id
+        terminal_id = terminal.id
+    finally:
+        db.close()
+
+    try:
+        dry = client.post(
+            "/api/v1/contract-jobs/retry-failed?limit=10&dry_run=true",
+            headers={"X-API-Key": raw_key},
+        )
+        assert dry.status_code == 200
+        dry_payload = dry.json()
+        assert dry_payload["dry_run"] is True
+        assert dry_payload["matched_count"] >= 1
+        assert dry_payload["retried_count"] == 0
+
+        db = SessionLocal()
+        try:
+            still_failed = db.execute(select(ContractJob).where(ContractJob.id == retryable_id)).scalar_one()
+            assert still_failed.status == ContractJobStatus.failed
+        finally:
+            db.close()
+
+        do_retry = client.post(
+            "/api/v1/contract-jobs/retry-failed?limit=10&retryable_only=true",
+            headers={"X-API-Key": raw_key},
+        )
+        assert do_retry.status_code == 200
+        payload = do_retry.json()
+        assert payload["dry_run"] is False
+        assert payload["retried_count"] >= 1
+        assert str(retryable_id) in payload["job_ids"]
+        assert str(terminal_id) not in payload["job_ids"]
+
+        db = SessionLocal()
+        try:
+            retryable_row = db.execute(select(ContractJob).where(ContractJob.id == retryable_id)).scalar_one()
+            terminal_row = db.execute(select(ContractJob).where(ContractJob.id == terminal_id)).scalar_one()
+            assert retryable_row.status == ContractJobStatus.new
+            assert retryable_row.worker_id is None
+            assert retryable_row.last_error is None
+            assert terminal_row.status == ContractJobStatus.failed
+
+            retry_audits = db.execute(
+                select(AuditLog).where(
+                    AuditLog.target_type == "contract_job",
+                    AuditLog.target_id == retryable_id,
+                    AuditLog.action == "job.retry_failed",
+                )
+            ).scalars().all()
+            assert len(retry_audits) >= 1
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            if retryable_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == retryable_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == retryable_id))
+            if terminal_id is not None:
+                db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id == terminal_id,
+                    )
+                )
+                db.execute(delete(ContractJob).where(ContractJob.id == terminal_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)

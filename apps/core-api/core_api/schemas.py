@@ -364,6 +364,16 @@ class ContractJobHistoryResponse(BaseModel):
     entries: list[ContractJobHistoryEntry]
 
 
+class ContractJobBulkRetryOut(BaseModel):
+    requested_limit: int
+    matched_count: int
+    retried_count: int
+    retryable_only: bool
+    dry_run: bool
+    older_than_minutes: int | None = None
+    job_ids: list[uuid.UUID]
+
+
 class HeartbeatRequest(BaseModel):
     worker_id: str
     info: dict[str, Any] | None = None

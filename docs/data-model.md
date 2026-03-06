@@ -39,3 +39,6 @@
 - Для мониторинга очереди и диагностики задачи:
   - `GET /api/v1/contract-jobs/summary`
   - `GET /api/v1/contract-jobs/{job_id}/history`
+- Для безопасного массового ретрая:
+  - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&dry_run=true`
+  - `POST /api/v1/contract-jobs/retry-failed?retryable_only=true&limit=100`
