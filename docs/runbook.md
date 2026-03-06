@@ -332,6 +332,7 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 Граница контура:
 - текущий production-контур договоров = `core-api` + `contract-worker`;
 - `apps/contract-ai` не подключён к runtime-контуру и не запускается в основном compose.
+- Логика анализатора и формат `result_json`: [docs/contract-analyzer.md](./contract-analyzer.md).
 
 1. Установить зависимости:
 ```bash

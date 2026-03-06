@@ -9,6 +9,7 @@
   - `news.publish` — лёгкий cron-паблишер.
   - `news.admin_bot` — Telegram админ-панель управления автоматизациями.
 - `contract-worker` — воркер анализа договоров на MacBook.
+  - Алгоритм анализа и структура результата: [docs/contract-analyzer.md](./contract-analyzer.md).
 - `caddy` — reverse proxy и автогенерация TLS.
 - `automation control plane` — таблица `automation_controls` + API для runtime-тумблеров автоматизаций.
 

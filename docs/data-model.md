@@ -61,3 +61,16 @@
   - возвращает в `new`, пока лимит попыток не исчерпан;
   - переводит в terminal `failed`, если `max_attempts` достигнут.
 - `finalize-exhausted-new` переводит зависшие `new` задачи с исчерпанными попытками в `failed`.
+
+## `contract_jobs.result_json` (текущий формат от contract-worker)
+- `summary` — сводка анализа.
+- `risk_level` — `low|medium|high`.
+- `risk_score` — балл `0..100`.
+- `word_count` — число слов документа.
+- `risk_hits_total` — общее число срабатываний риск-маркеров.
+- `risk_counts` — частоты по маркерам.
+- `risks` — уникальные найденные маркеры.
+- `risk_snippets` — контекстные фрагменты вокруг срабатываний.
+- `top_words` — частотный словарь.
+
+Детально алгоритм описан в [docs/contract-analyzer.md](./contract-analyzer.md).

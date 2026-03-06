@@ -12,6 +12,9 @@
 - `apps/web` — сайт
 - `packages/shared` — общие схемы/типы
 
+Документация по анализу договоров:
+- `docs/contract-analyzer.md` — алгоритм и формат результата `contract-worker`.
+
 ## Быстрый старт (dev)
 ```bash
 uv sync
