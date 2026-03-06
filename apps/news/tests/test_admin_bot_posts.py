@@ -393,6 +393,16 @@ def test_post_card_text_compact_sections() -> None:
     assert "Текст (фрагмент):" in text
 
 
+def test_instruction_blocks_present_in_key_admin_screens() -> None:
+    bot = NewsAdminBot()
+    workspace_text = bot._workspace_text({}, "—")
+    worklists_text = bot._worklists_text({}, "—")
+    system_text = bot._system_text({}, "—")
+    assert "ℹ️ Что это:" in workspace_text
+    assert "🛠 Как управлять:" in worklists_text
+    assert "ℹ️ Что это:" in system_text
+
+
 def test_fallback_footer_text_is_varied_for_different_posts() -> None:
     bot = NewsAdminBot()
     first = bot._fallback_footer_text(

@@ -1136,9 +1136,26 @@ def _worker_id_from_callback_token(token: str) -> str:
     return unquote(token or "").strip()
 
 
+def _screen_guide(what: str, actions: list[str]) -> str:
+    lines = [f"ℹ️ Что это: {what}", "🛠 Как управлять:"]
+    lines.extend(f"{index}. {item}" for index, item in enumerate(actions, start=1))
+    return "\n".join(lines)
+
+
 def _worker_list_text(payload: dict[str, Any]) -> str:
     workers = payload.get("workers") or []
-    lines = [_format_workers_status(payload), "", "Нажмите на воркер, чтобы открыть активность за последние 24 часа."]
+    lines = [
+        _format_workers_status(payload),
+        "",
+        _screen_guide(
+            "Сводный список фоновых воркеров и их доступности.",
+            [
+                "Нажмите на конкретного воркера, чтобы открыть карточку активности за 24 часа.",
+                "Если список пуст, проверьте, что сервисы подняты и шлют heartbeat.",
+            ],
+        ),
+        "",
+    ]
     if not workers:
         lines.append("Когда сервисы начнут слать heartbeat, список и карточки заполнятся автоматически.")
     return "\n".join(lines).strip()
@@ -1159,6 +1176,14 @@ def _format_worker_activity(payload: dict[str, Any]) -> str:
         f"ID: {worker_id}",
         f"Статус: {'🟢 активен' if active else '⚪ неактивен'}",
         f"Последний heartbeat: {last_seen}",
+        "",
+        _screen_guide(
+            "Детальная карточка конкретного воркера.",
+            [
+                "Смотрите блок «Запуски» и «Что делал за период», чтобы проверить фактическую работу.",
+                "Если heartbeat старый или действий нет, откройте логи сервиса и перезапустите контейнер.",
+            ],
+        ),
         "",
         f"Запуски за {hours} ч: {len(startup_events)}",
     ]
@@ -1768,6 +1793,15 @@ class NewsAdminBot:
         lines = [
             "Автоматизация news",
             "",
+            _screen_guide(
+                "Центр управления автопилотом: генерация, парсер, публикация, feedback и ограничения.",
+                [
+                    "Включайте/выключайте нужные контуры тумблерами в этом разделе.",
+                    "Меняйте временные слоты и лимиты через разделы «Время слотов» и «Ритм».",
+                    "После изменений проверьте «Воркеры», чтобы убедиться, что настройки применились.",
+                ],
+            ),
+            "",
             f"Автопилот контента: {'🟢 включен' if autopilot_enabled else '🔴 выключен'}",
             f"Telegram-парсер: {ingest_morning} и {ingest_evening}; лимит канала {ingest_fetch_limit}",
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
@@ -1862,6 +1896,15 @@ class NewsAdminBot:
         return (
             "Рабочий стол редактора\n\n"
             "Это единая стартовая страница модератора: отсюда открываются рабочие списки, календарь, источники, тематики, генерация и автоочередь.\n\n"
+            + _screen_guide(
+                "Главный экран управления контент-контуром.",
+                [
+                    "Открывайте нужный раздел кнопками ниже.",
+                    "Для быстрого старта нового материала используйте «➕ Создать пост».",
+                    "После изменений обновляйте экран кнопкой «🔄 Обновить».",
+                ],
+            )
+            + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
             f"✅ Готовые: {counts.get('scheduled', -1)}\n"
@@ -1913,6 +1956,14 @@ class NewsAdminBot:
     def _worklists_text(self, counts: dict[str, int], next_publish: str) -> str:
         return (
             "Рабочие списки\n\n"
+            + _screen_guide(
+                "Списки постов по статусам модерации.",
+                [
+                    "Выберите статус: черновики, проверка, готовые, опубликованные или ошибки.",
+                    "Откройте карточку поста, чтобы редактировать, перенести статус или опубликовать.",
+                ],
+            )
+            + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
             f"✅ Готовые: {counts.get('scheduled', -1)}\n"
@@ -1925,6 +1976,14 @@ class NewsAdminBot:
         return (
             "Система и сервисные функции\n\n"
             "Этот раздел собран для операций, которые раньше были доступны только через slash-команды.\n\n"
+            + _screen_guide(
+                "Сервисные функции и диагностика редакторского контура.",
+                [
+                    "Проверяйте статус API и Reader-разделы.",
+                    "При зависаниях используйте «Сброс stale», затем проверьте воркеры.",
+                ],
+            )
+            + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
             f"✅ Готовые: {counts.get('scheduled', -1)}\n"
@@ -1985,6 +2044,14 @@ class NewsAdminBot:
         run_token = str(config.get("run_once_token") or "").strip()
         return (
             "Reader digest-воркер\n\n"
+            + _screen_guide(
+                "Управление авторассылкой персональных дайджестов reader-бота.",
+                [
+                    "Меняйте слот и лимит цикла кнопками ниже.",
+                    "«Тестовый прогон» запускает внеплановый единичный цикл.",
+                ],
+            )
+            + "\n\n"
             f"Статус: {'🟢 включен' if enabled else '🔴 выключен'}\n"
             f"Слот авторассылки: {slot}\n"
             f"Лимит пользователей за цикл: {max_users}\n\n"
@@ -2031,6 +2098,14 @@ class NewsAdminBot:
         lines = [
             f"Reader-метрики за {days} дн.",
             "",
+            _screen_guide(
+                "Сводка пользовательских сигналов из reader-бота.",
+                [
+                    "Переключайте период 7/14/30 дней кнопками.",
+                    "Используйте негативные причины и топ-посты для корректировки контент-стратегии.",
+                ],
+            ),
+            "",
             f"Сигналов всего: {stats.get('signals_total', 0)}",
             f"Открыт weekly digest: {stats.get('weekly_opened', 0)}",
             f"Запрошено «Идея внедрения»: {stats.get('idea_requested', 0)}",
@@ -2074,6 +2149,14 @@ class NewsAdminBot:
 
         lines = [
             f"Reader → Lead воронка за {days} дн.",
+            "",
+            _screen_guide(
+                "Конверсия читателей reader-бота в лиды.",
+                [
+                    "Следите за переходами между этапами воронки.",
+                    "Если CR падает, корректируйте темы, структуру постов и CTA.",
+                ],
+            ),
             "",
             "Reader-сигналы",
             f"• Weekly opened: {feedback.get('weekly_opened', 0)} (users: {feedback.get('weekly_users', 0)})",
@@ -2163,6 +2246,15 @@ class NewsAdminBot:
             "",
             "Здесь показан каталог источников с постраничной навигацией.",
             "Нажмите на источник, чтобы открыть карточку с описанием, статусом, URL и связанными постами.",
+            "",
+            _screen_guide(
+                "Реестр RSS/Search/Telegram-источников для генерации.",
+                [
+                    "Открывайте карточку источника, чтобы включать/выключать его.",
+                    "Листайте страницы кнопками «Стр. назад/далее».",
+                    "Используйте «Telegram-каналы» для управления каналами по отдельности.",
+                ],
+            ),
             "",
             f"Активных интегрированных источников: {active_count}",
             f"Всего источников в каталоге: {len(specs)}",
@@ -2306,6 +2398,14 @@ class NewsAdminBot:
         lines = [
             f"Источник: {spec.name}",
             "",
+            _screen_guide(
+                "Карточка одного источника.",
+                [
+                    "Кнопкой «Включить/Выключить» управляйте участием источника в генерации.",
+                    "Кнопка «Посты по источнику» открывает историю материалов от этого источника.",
+                ],
+            ),
+            "",
             f"Тип: {spec.kind}",
             f"Статус: {status}",
             "",
@@ -2385,6 +2485,14 @@ class NewsAdminBot:
         lines = [
             f"Telegram-канал: {label}",
             "",
+            _screen_guide(
+                "Карточка Telegram-канала как отдельного источника.",
+                [
+                    "Включайте/выключайте канал независимо от остальных.",
+                    "Используйте ссылку на канал для ручной проверки релевантности потока.",
+                ],
+            ),
+            "",
             f"Группа: {_telegram_channel_group_label(_telegram_channel_group(normalized))}",
             "",
             f"Статус: {'✅ Включен' if enabled else '☐ Выключен'}",
@@ -2449,9 +2557,35 @@ class NewsAdminBot:
     def _source_posts_text(self, source_key: str, total: int, rows: list[dict[str, Any]], offset: int) -> str:
         spec = source_catalog(settings).get(source_key)
         label = spec.name if spec else source_key
+        total_pages = max(1, (total + _POSTS_PAGE_SIZE - 1) // _POSTS_PAGE_SIZE)
+        current_page = min(total_pages, (offset // _POSTS_PAGE_SIZE) + 1)
         if not rows:
-            return f"Источник: {label}\n\nПостов по этому источнику пока нет."
-        lines = [f"Источник: {label}", f"Всего постов: {total}", ""]
+            return (
+                f"Источник: {label}\n\n"
+                + _screen_guide(
+                    "История постов, собранных из выбранного источника.",
+                    [
+                        "Открывайте карточку поста для модерации или публикации.",
+                        "Используйте пагинацию внизу для перехода по списку.",
+                    ],
+                )
+                + f"\n\nСтраница: {current_page}/{total_pages}\n\nПостов по этому источнику пока нет."
+            )
+        lines = [
+            f"Источник: {label}",
+            "",
+            _screen_guide(
+                "История постов, собранных из выбранного источника.",
+                [
+                    "Открывайте карточку поста для модерации или публикации.",
+                    "Используйте пагинацию внизу для перехода по списку.",
+                ],
+            ),
+            "",
+            f"Всего постов: {total}",
+            f"Страница: {current_page}/{total_pages}",
+            "",
+        ]
         for idx, row in enumerate(rows, start=offset + 1):
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             status_badge = _status_badge(str(row.get("status") or ""))
@@ -2532,6 +2666,15 @@ class NewsAdminBot:
             "1) 🗞 Ежедневные/регулярные посты (темы автогенерации)\n"
             "2) 📚 Воскресные лонгриды (отдельный пул тем)\n"
             "3) 🗂 Архивные корзины (уже созданные посты)\n\n"
+            + _screen_guide(
+                "Центр управления темами генерации и публикаций.",
+                [
+                    "Откройте «Ежедневные», чтобы включить/выключить контент-темы автогенерации.",
+                    "Откройте «Лонгриды», чтобы настроить пул воскресных тем.",
+                    "Откройте «Архив», чтобы смотреть уже созданные посты по тематикам.",
+                ],
+            )
+            + "\n\n"
             f"Активно ежедневных тем: {len(enabled_generation_themes)}/{len(generation_counts)}\n"
             f"Активно тем лонгридов: {len(active_longread_topics)}/{len(_LONGREAD_TOPIC_LIBRARY)}\n"
             f"Постов в архивных корзинах: {total_archive}\n\n"
@@ -2571,6 +2714,14 @@ class NewsAdminBot:
             "Эти тумблеры влияют на генерацию ежедневных постов, обзоров недели и юмора.",
             "Воскресный лонгрид настраивается отдельно в разделе «Лонгриды».",
             "Быстрые действия: «Включить все» и «Профиль канала» (юридический фокус + ограниченный общий AI).",
+            "",
+            _screen_guide(
+                "Матрица активных тем генерации.",
+                [
+                    "Нажатие на тему переключает ее состояние (вкл/выкл).",
+                    "Кнопка «Профиль канала» быстро применяет рекомендуемый набор тем.",
+                ],
+            ),
             "",
         ]
         for theme_key in generation_theme_keys():
@@ -2617,6 +2768,14 @@ class NewsAdminBot:
             "Здесь только уже созданные посты (на проверке / готовые / опубликованные / ошибки).",
             "Нажмите на корзину, чтобы открыть список постов по тематике.",
             "",
+            _screen_guide(
+                "Архив по тематическим корзинам.",
+                [
+                    "Откройте корзину, чтобы посмотреть материалы этой тематики.",
+                    "Используйте статистику для балансировки контент-микса.",
+                ],
+            ),
+            "",
         ]
         for pillar, label in _PILLAR_LABELS.items():
             rubric_labels = ", ".join(_rubric_label(item) for item in _PILLAR_RUBRICS.get(pillar, ()))
@@ -2657,9 +2816,35 @@ class NewsAdminBot:
 
     def _theme_posts_text(self, pillar: str, total: int, rows: list[dict[str, Any]], offset: int) -> str:
         label = _pillar_label(pillar)
+        total_pages = max(1, (total + _POSTS_PAGE_SIZE - 1) // _POSTS_PAGE_SIZE)
+        current_page = min(total_pages, (offset // _POSTS_PAGE_SIZE) + 1)
         if not rows:
-            return f"Тематика: {label}\n\nПостов пока нет."
-        lines = [f"Тематика: {label}", f"Всего: {total}", ""]
+            return (
+                f"Тематика: {label}\n\n"
+                + _screen_guide(
+                    "Список постов в выбранной тематической корзине.",
+                    [
+                        "Откройте карточку поста для модерации.",
+                        "Переходите по страницам кнопками «Назад/Далее».",
+                    ],
+                )
+                + f"\n\nСтраница: {current_page}/{total_pages}\n\nПостов пока нет."
+            )
+        lines = [
+            f"Тематика: {label}",
+            "",
+            _screen_guide(
+                "Список постов в выбранной тематической корзине.",
+                [
+                    "Откройте карточку поста для модерации.",
+                    "Переходите по страницам кнопками «Назад/Далее».",
+                ],
+            ),
+            "",
+            f"Всего: {total}",
+            f"Страница: {current_page}/{total_pages}",
+            "",
+        ]
         for idx, row in enumerate(rows, start=offset + 1):
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             rubric = _rubric_label(str(row.get("rubric") or ""))
@@ -2711,6 +2896,15 @@ class NewsAdminBot:
         telegram_channel_count = len(self._telegram_channel_enabled_map())
         return (
             "Ручная генерация\n\n"
+            + _screen_guide(
+                "Раздел запуска ручной генерации драфтов и контроля генераторного контура.",
+                [
+                    "Кнопки «Сгенерировать N» создают реальные драфты сразу в «На проверке».",
+                    "Перед запуском проверьте статусы парсера/генерации/публикации в этом экране.",
+                    "Для изменения расписания используйте «Время слотов» и «Ритм».",
+                ],
+            )
+            + "\n\n"
             f"Telegram-парсер: {'🟢' if controls.get('news.telegram_ingest.enabled', True) else '🔴'}\n"
             f"Автогенерация: {'🟢' if controls.get('news.generate.enabled', True) else '🔴'}\n"
             f"Автопубликация: {'🟢' if controls.get('news.publish.enabled', True) else '🔴'}\n"
@@ -2996,6 +3190,15 @@ class NewsAdminBot:
         lines = [
             "Автоочередь публикации",
             "",
+            _screen_guide(
+                "Автоматическая очередь scheduled-постов с фильтрами по виду и теме.",
+                [
+                    "Используйте фильтры, чтобы быстро отобрать нужный тип публикаций.",
+                    "Открывайте карточку поста для ручных правок или немедленной публикации.",
+                    "Переходите в «Календарь/Время слотов/Ритм» для корректировки расписания.",
+                ],
+            ),
+            "",
             f"Фильтр: {filter_label}",
             f"Тема: {theme_label}",
             f"Автогенерация: {generate_morning} и {generate_evening}",
@@ -3122,6 +3325,14 @@ class NewsAdminBot:
         lines = [
             "Рабочий стол модератора Legal AI PRO",
             "",
+            _screen_guide(
+                "Сводка состояния редакторского контура на текущий момент.",
+                [
+                    "Проверяйте статусы автопилота и текущие остатки по очередям.",
+                    "Для действий переходите в профильные разделы кнопками ниже.",
+                ],
+            ),
+            "",
             f"Автопилот: {'🟢' if control_map.get('news.generate.enabled', True) and control_map.get('news.telegram_ingest.enabled', True) and control_map.get('news.publish.enabled', True) else '🔴'}",
             f"Telegram-парсер: {telegram_morning} и {telegram_evening}",
             f"Автогенерация: {generate_morning} и {generate_evening}; лимит {generate_limit}",
@@ -3237,7 +3448,18 @@ class NewsAdminBot:
         generate_limit = self._configured_generate_limit()
         retention_days = self._configured_review_retention_days()
         if not groups:
-            lines = ["Календарь публикаций", ""]
+            lines = [
+                "Календарь публикаций",
+                "",
+                _screen_guide(
+                    "Недельное представление автосетки публикаций.",
+                    [
+                        "Открывайте конкретный день для ручного управления постами и слотами.",
+                        "Используйте кнопки вида День/Неделя/Месяц для переключения режима.",
+                    ],
+                ),
+                "",
+            ]
             if overdue_count:
                 lines.append(f"Просроченных scheduled-постов: {overdue_count}")
                 lines.append("Они не смешиваются с будущими датами. Откройте ручную очередь и переразложите их.")
@@ -3249,6 +3471,14 @@ class NewsAdminBot:
         now_local = datetime.now(tz).date()
         lines = [
             "Календарь автопубликаций",
+            "",
+            _screen_guide(
+                "Недельное представление автосетки публикаций.",
+                [
+                    "Открывайте конкретный день для ручного управления постами и слотами.",
+                    "Используйте кнопки вида День/Неделя/Месяц для переключения режима.",
+                ],
+            ),
             "",
             "Редакционная сетка:",
             f"• Ежедневные по будням: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
@@ -3291,6 +3521,14 @@ class NewsAdminBot:
         schedule = self._schedule_config()
         lines = [
             "Календарь автопубликаций — месячный вид",
+            "",
+            _screen_guide(
+                "Месячное представление сетки публикаций.",
+                [
+                    "Сверяйте заполненность дней и типы запланированных публикаций.",
+                    "Для действий по конкретному дню переключайтесь в режим «День».",
+                ],
+            ),
             "",
             "Сетка:",
             f"• Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
@@ -3486,7 +3724,17 @@ class NewsAdminBot:
         tz = ZoneInfo(settings.tz_name)
         slots = self._calendar_day_slots(day_key)
         if not slots and not rows:
-            return f"Календарь публикаций\n\nНа {day_key} запланированных слотов нет."
+            return (
+                f"Календарь публикаций\n\n"
+                + _screen_guide(
+                    "Детальный экран одного календарного дня.",
+                    [
+                        "Используйте «Опубликовать день/На завтра/Следующие слоты» для пакетных действий.",
+                        "Открывайте карточку конкретного поста для точечной модерации.",
+                    ],
+                )
+                + f"\n\nНа {day_key} запланированных слотов нет."
+            )
 
         slot_map: dict[str, dict[str, Any]] = {}
         extra_rows: list[dict[str, Any]] = []
@@ -3501,7 +3749,20 @@ class NewsAdminBot:
                 continue
             slot_map[slot_map_key] = row
 
-        lines = [f"Календарь: {day_key}", f"Занятых публикаций: {len(rows)}", ""]
+        lines = [
+            f"Календарь: {day_key}",
+            "",
+            _screen_guide(
+                "Детальный экран одного календарного дня.",
+                [
+                    "Используйте «Опубликовать день/На завтра/Следующие слоты» для пакетных действий.",
+                    "Открывайте карточку конкретного поста для точечной модерации.",
+                ],
+            ),
+            "",
+            f"Занятых публикаций: {len(rows)}",
+            "",
+        ]
         for index, slot in enumerate(slots, start=1):
             time_label = slot.publish_at_local.strftime("%H:%M")
             row = slot_map.get(time_label)
@@ -3580,6 +3841,14 @@ class NewsAdminBot:
         lines = [
             "Настройка автоматической сетки публикаций",
             "",
+            _screen_guide(
+                "Управление расписанием типов публикаций (будни, weekly, longread, humor).",
+                [
+                    "Откройте конкретный тип публикации, чтобы включить/выключить и выбрать время.",
+                    "Пул тем лонгридов меняется отдельно через «Темы лонгридов».",
+                ],
+            ),
+            "",
             f"• Будни утром: {'вкл' if schedule.daily_morning_enabled else 'выкл'} — {schedule_slot_label(schedule.daily_morning_slot)}",
             f"• Будни вечером: {'вкл' if schedule.daily_evening_enabled else 'выкл'} — {schedule_slot_label(schedule.daily_evening_slot)}",
             f"• Пятничный обзор: {'вкл' if schedule.weekly_review_enabled else 'выкл'} — {schedule_slot_label(schedule.weekly_review_slot)}",
@@ -3613,6 +3882,14 @@ class NewsAdminBot:
         options = getattr(schedule, f"{alias}_options")
         lines = [
             meta["label"],
+            "",
+            _screen_guide(
+                "Детальная настройка одного типа публикации.",
+                [
+                    "Переключайте статус слота (включен/выключен).",
+                    "Выберите время из доступных вариантов кнопками ниже.",
+                ],
+            ),
             "",
             f"Тип публикации: {publication_kind_label(meta['kind'])}",
             f"Окно: {meta['window']}",
@@ -3660,6 +3937,14 @@ class NewsAdminBot:
         lines = [
             "Темы воскресных лонгридов",
             "",
+            _screen_guide(
+                "Пул тем для автоматического воскресного лонгрида.",
+                [
+                    "Включайте/выключайте темы кнопками в списке.",
+                    "Минимум одна тема должна оставаться активной.",
+                ],
+            ),
+            "",
             "Воскресный лонгрид выбирается автоматически из активного пула тем.",
             "Вы можете отключать или включать отдельные темы. Автовыбор будет вращаться только по активным позициям.",
             "",
@@ -3694,6 +3979,14 @@ class NewsAdminBot:
         reader_digest_limit = self._configured_reader_digest_limit(force_refresh=True)
         return (
             "Ритм автоматической генерации и публикации\n\n"
+            + _screen_guide(
+                "Глобальные интервалы и лимиты генераторного контура.",
+                [
+                    "Откройте параметр и выберите одно из готовых значений.",
+                    "После изменений проверьте воркеры: должен измениться фактический ритм запусков.",
+                ],
+            )
+            + "\n\n"
             f"• Telegram-парсер: {telegram_morning} и {telegram_evening} (до {telegram_fetch_limit} сообщений/канал)\n"
             f"• Автогенерация: {generate_morning} и {generate_evening}\n"
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
@@ -3778,6 +4071,14 @@ class NewsAdminBot:
         current_label = _humanize_interval(current) if kind == "publish" else (f"{current} дн." if kind == "retention" else str(current))
         return (
             f"{label}\n\n"
+            + _screen_guide(
+                "Точечная настройка выбранного интервала/лимита.",
+                [
+                    "Выберите новое значение кнопкой внизу.",
+                    "Изменение применяется сразу после сохранения.",
+                ],
+            )
+            + "\n\n"
             f"Текущее значение: {current_label}\n"
             f"Доступные варианты: {options_line}"
         )
@@ -3882,9 +4183,32 @@ class NewsAdminBot:
         total_pages = max(1, (total + _POSTS_PAGE_SIZE - 1) // _POSTS_PAGE_SIZE)
         current_page = min(total_pages, (offset // _POSTS_PAGE_SIZE) + 1)
         if not rows:
-            return f"{label} (status={status})\n\nСтраница: {current_page}/{total_pages}\n\nСейчас записей нет."
+            return (
+                f"{label} (status={status})\n\n"
+                + _screen_guide(
+                    "Список постов выбранного статуса.",
+                    [
+                        "Откройте карточку поста для детального управления.",
+                        "Используйте пагинацию и массовые кнопки внизу списка.",
+                    ],
+                )
+                + f"\n\nСтраница: {current_page}/{total_pages}\n\nСейчас записей нет."
+            )
 
-        lines = [f"{label}: {total}", f"Страница: {current_page}/{total_pages}", ""]
+        lines = [
+            f"{label}: {total}",
+            "",
+            _screen_guide(
+                "Список постов выбранного статуса.",
+                [
+                    "Откройте карточку поста для детального управления.",
+                    "Используйте пагинацию и массовые кнопки внизу списка.",
+                ],
+            ),
+            "",
+            f"Страница: {current_page}/{total_pages}",
+            "",
+        ]
         for idx, row in enumerate(rows, start=offset + 1):
             title = str(row.get("title") or "Без заголовка").replace("\n", " ")
             publish_at = str(row.get("publish_at") or "")
@@ -3911,6 +4235,14 @@ class NewsAdminBot:
         if not rows:
             return (
                 "🟡 На проверке\n\n"
+                + _screen_guide(
+                    "Ключевой список модерации перед публикацией.",
+                    [
+                        "Фильтруйте материалы по источнику (AI/ручные), виду публикации и теме.",
+                        "После проверки переводите выбранные посты в «Готовые».",
+                    ],
+                )
+                + "\n\n"
                 f"Фильтр: {label}\n"
                 f"Вид: {kind_label}\n"
                 f"Тема: {theme_label}\n\n"
@@ -3920,6 +4252,14 @@ class NewsAdminBot:
 
         lines = [
             "🟡 На проверке",
+            "",
+            _screen_guide(
+                "Ключевой список модерации перед публикацией.",
+                [
+                    "Фильтруйте материалы по источнику (AI/ручные), виду публикации и теме.",
+                    "После проверки переводите выбранные посты в «Готовые».",
+                ],
+            ),
             "",
             f"Фильтр: {label}",
             f"Вид: {kind_label}",
@@ -3957,6 +4297,14 @@ class NewsAdminBot:
         if not rows:
             return (
                 "Ручная очередь публикации (расширенный режим)\n\n"
+                + _screen_guide(
+                    "Ручной контур публикации готовых постов.",
+                    [
+                        "Режим «К публикации сейчас» показывает due-посты для немедленного выхода.",
+                        "Доступны пакетные режимы: страница / топ-3 / топ-5.",
+                    ],
+                )
+                + "\n\n"
                 f"Фильтр: {filter_label}\n"
                 f"Тема: {theme_label}\n"
                 f"Готовые сейчас: {due_total} из {scheduled_total}\n\n"
@@ -3966,6 +4314,15 @@ class NewsAdminBot:
         now_utc = datetime.now(timezone.utc)
         lines = [
             "Ручная очередь публикации (расширенный режим)",
+            "",
+            _screen_guide(
+                "Ручной контур публикации готовых постов.",
+                [
+                    "Режим «К публикации сейчас» показывает due-посты для немедленного выхода.",
+                    "Доступны пакетные режимы: страница / топ-3 / топ-5.",
+                ],
+            ),
+            "",
             f"Фильтр: {filter_label}",
             f"Тема: {theme_label}",
             f"Готовые сейчас: {due_total} из {scheduled_total}",
@@ -4202,6 +4559,14 @@ class NewsAdminBot:
 
         parts = [
             "Карточка поста",
+            "",
+            _screen_guide(
+                "Детальный экран одного поста.",
+                [
+                    "Используйте кнопки публикации, редактирования и переноса статуса.",
+                    "Перед публикацией проверьте feedback, источник и фрагмент текста.",
+                ],
+            ),
             "",
             f"🆔 {post.get('id')} | {status_badge} {status_label}",
             f"📰 {title}",
