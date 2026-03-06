@@ -2051,6 +2051,7 @@ class NewsAdminBot:
         counts, next_publish = await self._queue_snapshot()
         overdue = self._overdue_scheduled_count()
         stale_publishing = self._publishing_stale_count(stale_minutes=30)
+        miniapp_line = "• Mini-app события 24ч: n/a"
 
         worker_lines: list[str] = []
         issues: list[str] = []
@@ -2115,6 +2116,21 @@ class NewsAdminBot:
             worker_lines.append(f"⚠️ Статус воркеров временно недоступен: {exc}")
             issues.append("workers_status_unavailable")
 
+        try:
+            miniapp_response = await asyncio.to_thread(
+                self.admin_client.reader_miniapp_events_summary,
+                hours=24,
+                limit_users=5,
+            )
+            miniapp_response.raise_for_status()
+            miniapp_payload = miniapp_response.json() or {}
+            miniapp_total = int(miniapp_payload.get("total_events") or 0)
+            miniapp_users = int(miniapp_payload.get("unique_users") or 0)
+            miniapp_line = f"• Mini-app события 24ч: {miniapp_total} (users: {miniapp_users})"
+        except Exception as exc:
+            miniapp_line = f"• Mini-app события 24ч: n/a ({exc})"
+            issues.append("miniapp_summary_unavailable")
+
         failed_posts = int(counts.get("failed", 0)) if int(counts.get("failed", 0)) > 0 else 0
         if failed_posts > 0:
             issues.append("failed_posts")
@@ -2148,6 +2164,7 @@ class NewsAdminBot:
             f"• Зависшие publishing (>30м): {stale_publishing}",
             f"• Ошибки в ленте (посл.100): {failed_posts}",
             f"• На проверке: {counts.get('review', -1)}",
+            miniapp_line,
             "",
             "Критичные воркеры:",
         ]

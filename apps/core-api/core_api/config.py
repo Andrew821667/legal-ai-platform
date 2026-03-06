@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     api_key_cache_ttl_seconds: int = 60
     health_worker_active_minutes: int = 10
     news_retry_failed_after_minutes: int = 15
-    miniapp_public_base_url: str = "https://legalaipro.ru"
+    miniapp_public_base_url: str = "http://localhost:3000"
     db_pool_size: int = 8
     db_max_overflow: int = 8
     db_pool_timeout_seconds: int = 30
