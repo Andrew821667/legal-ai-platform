@@ -321,6 +321,10 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 - Все операции логируются в `audit_log`.
 
 ## MacBook Protocol (contract-worker)
+Граница контура:
+- текущий production-контур договоров = `core-api` + `contract-worker`;
+- `apps/contract-ai` не подключён к runtime-контуру и не запускается в основном compose.
+
 1. Установить зависимости:
 ```bash
 uv sync

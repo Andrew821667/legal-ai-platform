@@ -12,6 +12,11 @@
 - `caddy` — reverse proxy и автогенерация TLS.
 - `automation control plane` — таблица `automation_controls` + API для runtime-тумблеров автоматизаций.
 
+## Граница контрактного контура (важно)
+- В текущей версии production-контур договоров состоит только из `core-api` (`contract_jobs`) и `contract-worker` на MacBook.
+- `apps/contract-ai` не подключён к runtime-контуру и не деплоится сервисом в production compose.
+- Сейчас в проекте реализуются и поддерживаются только API/endpoints и очередь задач для будущей интеграции.
+
 ## Всегда включено на VPS
 - `caddy`
 - `core-api`
@@ -36,7 +41,7 @@
 
 ## Ключевые API-endpoints
 - `GET /health` — быстрый liveness для Caddy/Docker/monitoring (вне version prefix).
-- `GET /health/detailed` — расширенный health для админов (вне version prefix).
+- `GET /health/detailed` — расширенный health для инфраструктуры/мониторинга (public, вне version prefix).
 - `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
 - `POST /api/v1/contract-jobs/claim` — атомарный claim одной задачи worker'ом.
 - `POST /api/v1/scheduled-posts/claim?limit=10` — атомарный claim пачки постов паблишером.

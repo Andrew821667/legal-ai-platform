@@ -64,13 +64,18 @@
 
 ### День 4: Security и эксплуатация
 - [x] Проверить scoped API keys (`bot/news/worker/admin`) и audit-лог.
-- [x] Проверить `/health/detailed` под admin key.
+- [x] Проверить публичную доступность `/health/detailed` как инфраструктурного endpoint.
 - [x] Проверить Telegram-alert на обработчике 500.
 
 ### День 5: Тесты и release gate
 - [x] Прогнать `pytest` по `apps/core-api`.
 - [x] Прогнать smoke сценарий generate/publish/claim локально.
-- [ ] Сформировать PR с changelog и чеклистом релиза.
+- [x] Сформировать чеклист release-gate (`docs/release-gate-phase1.md`).
+
+## Scope-контур по договорам (чтобы не дублировать системы)
+- `apps/contract-ai` не является частью текущего production-контура.
+- На данном этапе реализуется только endpoint-слой и очередь задач в `core-api` + исполнение воркером `apps/contract-worker` (MacBook).
+- Полноценная интеграция `contract-ai` рассматривается отдельной фазой после стабилизации текущего ядра.
 
 ## Правила релизов
 - Ветка на фазу -> PR в `main` -> CI -> deploy на VPS.

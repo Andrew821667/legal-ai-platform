@@ -8,6 +8,7 @@
 - `apps/news` — генератор, паблишер и admin-бот новостей
 - `apps/news/legacy` — reader-бот канала (персонализация/поиск/сохранённое)
 - `apps/contract-worker` — воркер анализа договоров (MacBook)
+- `apps/contract-ai` — отдельный исследовательский контур (не интегрирован в текущий production pipeline)
 - `apps/web` — сайт
 - `packages/shared` — общие схемы/типы
 
