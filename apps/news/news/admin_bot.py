@@ -118,6 +118,7 @@ _POST_CACHE_TTL_SECONDS = 12
 _QUEUE_CACHE_TTL_SECONDS = 15
 _DERIVED_CACHE_TTL_SECONDS = 20
 _CALENDAR_CACHE_TTL_SECONDS = 20
+_SOURCES_PAGE_SIZE = 12
 
 _PILLAR_LABELS = {
     "regulation": "AI в праве и регулирование",
@@ -153,6 +154,19 @@ _PILLAR_RUBRICS = {
 }
 _QUEUE_THEME_FILTERS = ("all",) + tuple(_PILLAR_LABELS)
 _LONGREAD_TOPIC_LIBRARY = tuple(dict.fromkeys(settings.news_longread_topics_list))
+_DEFAULT_GENERATION_THEME_PROFILE = (
+    "legal_function_ai",
+    "contracts_ai",
+    "leads_ai",
+    "documents_ai",
+    "disputes_ai",
+    "privacy_compliance_ai",
+    "legal_ops_automation",
+    "tools_products_ai",
+    "ai_regulation",
+    "legal_ai_market",
+    "general_ai",
+)
 _CALENDAR_CALLBACK_PREFIXES = ("cal:", "cav:", "cap:", "cpc:", "cpn:", "cas:", "car:")
 _CREATE_CALLBACK_PREFIXES = ("cn:", "ck:", "ct:", "cm:", "cl:", "cd:", "cr:", "ce:", "cs:")
 _CONTROLS_CALLBACK_EXACT = frozenset({"noop", "refresh", "sections", "automation", "status", "workers", "resetstale"})
@@ -168,6 +182,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "srt:",
     "stc:",
     "scc:",
+    "srcm:",
     "src:",
     "th:",
     "lt:",
@@ -2131,22 +2146,31 @@ class NewsAdminBot:
             "/start, /newpost, /generate_now, /calendar, /help"
         )
 
-    def _sources_text(self) -> str:
+    def _sources_text(self, page: int = 0) -> str:
         enabled_map = self._source_enabled_map()
         catalog = source_catalog(settings)
+        specs = list(catalog.values())
         counts = self._source_stats()
         active_count = sum(1 for key, spec in catalog.items() if enabled_map.get(key, True) and spec.integrated)
+        total_pages = max(1, (len(specs) + _SOURCES_PAGE_SIZE - 1) // _SOURCES_PAGE_SIZE)
+        safe_page = max(0, min(page, total_pages - 1))
+        start = safe_page * _SOURCES_PAGE_SIZE
+        chunk = specs[start : start + _SOURCES_PAGE_SIZE]
+        rss_count = sum(1 for spec in specs if spec.kind in {"rss", "search_rss", "search_api"})
+        telegram_count = sum(1 for spec in specs if spec.kind == "telegram")
         lines = [
             "Источники новостей",
             "",
-            "Здесь показан общий каталог источников.",
+            "Здесь показан каталог источников с постраничной навигацией.",
             "Нажмите на источник, чтобы открыть карточку с описанием, статусом, URL и связанными постами.",
             "",
             f"Активных интегрированных источников: {active_count}",
-            f"Всего источников в каталоге: {len(catalog)}",
+            f"Всего источников в каталоге: {len(specs)}",
+            f"RSS/Search: {rss_count} | Telegram: {telegram_count}",
+            f"Страница: {safe_page + 1}/{total_pages}",
             "",
         ]
-        for index, spec in enumerate(catalog.values(), start=1):
+        for index, spec in enumerate(chunk, start=start + 1):
             row = counts.get(spec.key, {})
             enabled = enabled_map.get(spec.key, True)
             if not spec.integrated:
@@ -2163,21 +2187,46 @@ class NewsAdminBot:
             lines.append(f"   {status}; постов в истории: {total}")
         return "\n".join(lines)
 
-    def _sources_keyboard(self) -> InlineKeyboardMarkup:
+    def _sources_keyboard(self, page: int = 0) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
         specs = list(source_catalog(settings).values())
-        for index in range(0, len(specs), 2):
-            chunk = specs[index : index + 2]
+        total_pages = max(1, (len(specs) + _SOURCES_PAGE_SIZE - 1) // _SOURCES_PAGE_SIZE)
+        safe_page = max(0, min(page, total_pages - 1))
+        start = safe_page * _SOURCES_PAGE_SIZE
+        chunk = specs[start : start + _SOURCES_PAGE_SIZE]
+
+        rows.append(
+            [
+                _inline_button("📣 Telegram-каналы", callback_data="srd:telegram_channels"),
+                _inline_button("🔄 Обновить", callback_data=f"srcm:{safe_page}"),
+            ]
+        )
+        for index in range(0, len(chunk), 2):
+            pair = chunk[index : index + 2]
             rows.append(
                 [
                     _inline_button(
                         spec.name[:20],
                         callback_data=f"srd:{spec.key}",
                     )
-                    for spec in chunk
+                    for spec in pair
                 ]
             )
-        rows.append([_inline_button("⚙️ Генерация", callback_data="sec:generate")])
+
+        nav: list[InlineKeyboardButton] = []
+        if safe_page > 0:
+            nav.append(_inline_button("⬅️ Стр. назад", callback_data=f"srcm:{safe_page - 1}"))
+        if safe_page + 1 < total_pages:
+            nav.append(_inline_button("➡️ Стр. далее", callback_data=f"srcm:{safe_page + 1}"))
+        if nav:
+            rows.append(nav)
+
+        rows.append(
+            [
+                _inline_button("⚙️ Генерация", callback_data="sec:generate"),
+                _inline_button("🧭 Тематики", callback_data="sec:themes"),
+            ]
+        )
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
@@ -2490,13 +2539,25 @@ class NewsAdminBot:
         )
 
     def _themes_keyboard(self, counts: dict[str, int], generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
-        _ = counts, generation_counts
+        generation_counts = generation_counts or self._generation_theme_stats()
+        enabled_generation_themes = self._enabled_generation_theme_keys()
+        active_longread_topics = self._longread_topics_active()
+        total_archive = sum(max(0, int(value)) for value in counts.values())
         rows: list[list[InlineKeyboardButton]] = [
             [
-                _inline_button("🗞 Ежедневные темы", callback_data="thm:daily"),
-                _inline_button("📚 Лонгриды", callback_data="lt:menu"),
+                _inline_button(
+                    f"🗞 Ежедневные ({len(enabled_generation_themes)}/{len(generation_counts)})",
+                    callback_data="thm:daily",
+                ),
+                _inline_button(
+                    f"📚 Лонгриды ({len(active_longread_topics)}/{len(_LONGREAD_TOPIC_LIBRARY)})",
+                    callback_data="lt:menu",
+                ),
             ],
-            [_inline_button("🗂 Архивные корзины", callback_data="thm:archive")],
+            [
+                _inline_button(f"🗂 Архив ({total_archive})", callback_data="thm:archive"),
+                _inline_button("⚙️ Генерация", callback_data="sec:generate"),
+            ],
         ]
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
@@ -2509,6 +2570,7 @@ class NewsAdminBot:
             "",
             "Эти тумблеры влияют на генерацию ежедневных постов, обзоров недели и юмора.",
             "Воскресный лонгрид настраивается отдельно в разделе «Лонгриды».",
+            "Быстрые действия: «Включить все» и «Профиль канала» (юридический фокус + ограниченный общий AI).",
             "",
         ]
         for theme_key in generation_theme_keys():
@@ -2522,7 +2584,12 @@ class NewsAdminBot:
     def _themes_daily_keyboard(self, generation_counts: dict[str, int] | None = None) -> InlineKeyboardMarkup:
         generation_counts = generation_counts or self._generation_theme_stats()
         enabled_generation_themes = self._enabled_generation_theme_keys()
-        rows: list[list[InlineKeyboardButton]] = []
+        rows: list[list[InlineKeyboardButton]] = [
+            [
+                _inline_button("✅ Включить все", callback_data="gt:bulk:on"),
+                _inline_button("⚖️ Профиль канала", callback_data="gt:bulk:profile"),
+            ]
+        ]
         for theme_key in generation_theme_keys():
             rows.append(
                 [
@@ -5186,8 +5253,8 @@ class NewsAdminBot:
 
     async def _show_sources_message(self, update: Update) -> None:
         await update.effective_message.reply_text(
-            self._sources_text(),
-            reply_markup=self._sources_keyboard(),
+            self._sources_text(0),
+            reply_markup=self._sources_keyboard(0),
         )
 
     async def _show_themes_message(self, update: Update) -> None:
@@ -6380,12 +6447,22 @@ class NewsAdminBot:
             if data == "sec:sources":
                 await self._safe_edit_message_text(
                     query,
-                    self._sources_text(),
-                    reply_markup=self._sources_keyboard(),
+                    self._sources_text(0),
+                    reply_markup=self._sources_keyboard(0),
                 )
                 return
 
             if data == "noop":
+                return
+
+            if data.startswith("srcm:"):
+                _, page_raw = data.split(":", maxsplit=1)
+                page = max(0, int(page_raw))
+                await self._safe_edit_message_text(
+                    query,
+                    self._sources_text(page),
+                    reply_markup=self._sources_keyboard(page),
+                )
                 return
 
             if data.startswith("srd:"):
@@ -6493,19 +6570,25 @@ class NewsAdminBot:
 
             if data.startswith("gt:"):
                 _, theme_key = data.split(":", maxsplit=1)
-                if theme_key not in GENERATION_THEME_DEFS:
-                    await query.answer("Неизвестная контент-тема.", show_alert=True)
-                    return
                 row = self._generate_control_row(force_refresh=True)
                 config = dict(row.get("config") or {})
                 enabled_themes = self._enabled_generation_theme_keys(force_refresh=True)
-                if theme_key in enabled_themes and len(enabled_themes) == 1:
-                    await query.answer("Нужна хотя бы одна активная тема генерации.", show_alert=True)
-                    return
-                if theme_key in enabled_themes:
-                    enabled_themes.remove(theme_key)
+                if theme_key == "bulk:on":
+                    enabled_themes = set(generation_theme_keys())
+                elif theme_key == "bulk:profile":
+                    profile = [key for key in _DEFAULT_GENERATION_THEME_PROFILE if key in GENERATION_THEME_DEFS]
+                    enabled_themes = set(profile or generation_theme_keys()[:1])
                 else:
-                    enabled_themes.add(theme_key)
+                    if theme_key not in GENERATION_THEME_DEFS:
+                        await query.answer("Неизвестная контент-тема.", show_alert=True)
+                        return
+                    if theme_key in enabled_themes and len(enabled_themes) == 1:
+                        await query.answer("Нужна хотя бы одна активная тема генерации.", show_alert=True)
+                        return
+                    if theme_key in enabled_themes:
+                        enabled_themes.remove(theme_key)
+                    else:
+                        enabled_themes.add(theme_key)
                 config["enabled_themes"] = [key for key in generation_theme_keys() if key in enabled_themes]
                 payload = {
                     "scope": "news",

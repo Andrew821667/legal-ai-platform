@@ -95,6 +95,7 @@ def test_callback_route_matchers() -> None:
     assert _is_create_callback("cn:start")
     assert _is_controls_callback("refresh")
     assert _is_controls_callback("sec:sources")
+    assert _is_controls_callback("srcm:1")
     assert _is_controls_callback("rdg:menu")
     assert _is_posts_callback("pv:123:review:0")
     assert not _is_posts_callback("sec:sources")
