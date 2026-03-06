@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -16,10 +17,13 @@ export default function Header() {
   }, []);
 
   const navigation = [
-    { name: "Преимущества", href: "/#features" },
-    { name: "Услуги", href: "/#services" },
-    { name: "Калькулятор", href: "/#calculator" },
-    { name: "FAQ", href: "/#faq" },
+    { name: "Главная", href: "/" },
+    { name: "Для юристов", href: "/for-lawyers" },
+    { name: "Для бизнеса", href: "/for-business" },
+    { name: "Contract_AI_System", href: "/contract-ai-system" },
+    { name: "Решения", href: "/solutions" },
+    { name: "Контент / Кейсы", href: "/content-cases" },
+    { name: "О платформе", href: "/about" },
   ];
 
   return (
@@ -34,7 +38,7 @@ export default function Header() {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <a href="/" className="flex items-center gap-3 group">
+            <Link href="/" className="flex items-center gap-3 group">
               {/* AI Legal Scales Logo */}
               <svg width="40" height="40" viewBox="0 0 100 100" className="transition-transform group-hover:scale-110">
                 {/* Весы - основа */}
@@ -85,32 +89,30 @@ export default function Header() {
               <span className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">
                 Legal AI PRO
               </span>
-            </a>
+            </Link>
           </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {navigation.map((item) => (
-              <a
+              <Link
                 key={item.name}
                 href={item.href}
-                className="text-slate-300 hover:text-amber-400 transition-colors font-medium"
+                className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
               >
                 {item.name}
-              </a>
+              </Link>
             ))}
           </div>
 
           {/* Desktop CTA Button */}
           <div className="hidden md:block">
-            <a
-              href="https://t.me/legal_ai_helper_new_bot"
+            <Link
+              href="/contract-ai-system"
               className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
-              target="_blank"
-              rel="noopener noreferrer"
             >
-              Написать в Telegram →
-            </a>
+              Попробовать продукт →
+            </Link>
           </div>
 
           {/* Mobile menu button */}
@@ -158,24 +160,22 @@ export default function Header() {
           <div className="md:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
             <div className="px-4 py-2 space-y-1">
               {navigation.map((item) => (
-                <a
+                <Link
                   key={item.name}
                   href={item.href}
                   className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {item.name}
-                </a>
+                </Link>
               ))}
-              <a
-                href="https://t.me/legal_ai_helper_new_bot"
+              <Link
+                href="/contract-ai-system"
                 className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                 onClick={() => setIsMobileMenuOpen(false)}
-                target="_blank"
-                rel="noopener noreferrer"
               >
-                Написать в Telegram →
-              </a>
+                Попробовать продукт →
+              </Link>
             </div>
           </div>
         )}
