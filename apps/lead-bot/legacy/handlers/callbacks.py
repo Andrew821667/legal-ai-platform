@@ -1086,16 +1086,22 @@ def _format_users_for_admin(title: str, users: list[dict]) -> str:
 
 
 def _format_blacklist_for_admin() -> str:
-    blocked_ids = sorted(int(item) for item in security.security_manager.blacklist)
-    if not blocked_ids:
+    blocked = security.security_manager.list_blacklist(limit=300)
+    if not blocked:
         return "📋 Черный список\n\nСписок пуст."
     lines = [
         "📋 Черный список",
         "",
-        f"Всего заблокировано: {len(blocked_ids)}",
+        f"Всего заблокировано: {len(blocked)}",
         "",
     ]
-    lines.extend(f"• {telegram_id}" for telegram_id in blocked_ids)
+    for item in blocked:
+        telegram_id = item.get("telegram_user_id")
+        reason = (item.get("reason") or "").strip()
+        if reason:
+            lines.append(f"• {telegram_id} — {reason}")
+        else:
+            lines.append(f"• {telegram_id}")
     return "\n".join(lines)
 
 
@@ -1785,12 +1791,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
 
         elif action == "admin_security_reset":
-            security.security_manager.message_timestamps.clear()
-            security.security_manager.token_usage.clear()
-            security.security_manager.cooldowns.clear()
-            security.security_manager.suspicious_users.clear()
-            security.security_manager.total_tokens_today = 0
-            security.security_manager.reset_stats_time()
+            security.security_manager.reset_runtime_state(clear_blacklist=False)
             await utils.safe_edit_text(
                 query.message,
                 (
@@ -2084,13 +2085,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
 
         elif action == "cleanup_security":
             # Сброс счетчиков безопасности
-            security.security_manager.message_timestamps.clear()
-            security.security_manager.token_usage.clear()
-            security.security_manager.cooldowns.clear()
-            security.security_manager.suspicious_users.clear()
-            security.security_manager.blacklist.clear()
-            security.security_manager.total_tokens_today = 0
-            security.security_manager.reset_stats_time()
+            security.security_manager.reset_runtime_state(clear_blacklist=True)
 
             new_time = security.security_manager.stats_start_time.strftime("%d.%m.%Y %H:%M")
             await utils.safe_edit_text(
@@ -2130,12 +2125,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
             backup_file = _backup_and_truncate_log(config.LOG_FILE)
 
             # Безопасность
-            security.security_manager.message_timestamps.clear()
-            security.security_manager.token_usage.clear()
-            security.security_manager.cooldowns.clear()
-            security.security_manager.suspicious_users.clear()
-            security.security_manager.blacklist.clear()
-            security.security_manager.total_tokens_today = 0
+            security.security_manager.reset_runtime_state(clear_blacklist=True)
 
             result_message = (
                 "✅ ВСЕ ДАННЫЕ ОЧИЩЕНЫ\n\n"

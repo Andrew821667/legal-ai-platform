@@ -230,7 +230,8 @@ async def unblacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         target_user_id = int(args[0])
 
         # Проверяем что пользователь в черном списке
-        if target_user_id not in security.security_manager.blacklist:
+        is_blocked, _ = security.security_manager.is_blacklisted(target_user_id)
+        if not is_blocked:
             await update.message.reply_text(f"Пользователь {target_user_id} не найден в черном списке")
             return
 

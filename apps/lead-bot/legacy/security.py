@@ -128,15 +128,24 @@ class SecurityManager:
         """
         now = time.time()
 
-        if user_id in self.cooldowns:
-            last_message_time = self.cooldowns[user_id]
-            time_since_last = now - last_message_time
+        last_message_time: float | None = None
+        try:
+            last_message_time = database.db.get_security_cooldown(user_id)
+        except Exception as db_error:
+            logger.warning("Cooldown DB fallback for user %s: %s", user_id, db_error)
+            last_message_time = self.cooldowns.get(user_id)
 
+        if last_message_time is not None:
+            time_since_last = now - float(last_message_time)
             if time_since_last < self.COOLDOWN_SECONDS:
                 wait_time = self.COOLDOWN_SECONDS - time_since_last
                 return False, f"Подождите {wait_time:.1f} секунд перед следующим сообщением."
 
-        self.cooldowns[user_id] = now
+        try:
+            database.db.set_security_cooldown(user_id, now)
+        except Exception as db_error:
+            logger.warning("Failed to persist cooldown for user %s: %s", user_id, db_error)
+            self.cooldowns[user_id] = now
         return True, None
 
     def check_message_length(self, message: str) -> tuple[bool, Optional[str]]:
@@ -220,21 +229,53 @@ class SecurityManager:
 
     def is_blacklisted(self, user_id: int) -> tuple[bool, Optional[str]]:
         """Проверка черного списка"""
-        if user_id in self.blacklist:
-            logger.warning(f"Blacklisted user attempted access: {user_id}")
-            return True, "Доступ заблокирован. Свяжитесь с нашей командой для разблокировки."
+        try:
+            entry = database.db.get_security_blacklist_entry(user_id)
+            if entry:
+                reason = (entry.get("reason") or "").strip()
+                logger.warning("Blacklisted user attempted access: %s", user_id)
+                suffix = f" Причина: {reason}." if reason else ""
+                return True, f"Доступ заблокирован. Свяжитесь с нашей командой для разблокировки.{suffix}"
+        except Exception as db_error:
+            logger.warning("Blacklist DB fallback for user %s: %s", user_id, db_error)
+            if user_id in self.blacklist:
+                return True, "Доступ заблокирован. Свяжитесь с нашей командой для разблокировки."
         return False, None
 
     def add_to_blacklist(self, user_id: int, reason: str = "Suspicious activity"):
         """Добавить пользователя в черный список"""
-        self.blacklist.add(user_id)
+        try:
+            database.db.add_security_blacklist(user_id, reason)
+        except Exception as db_error:
+            logger.warning("Failed to persist blacklist for user %s: %s", user_id, db_error)
+            self.blacklist.add(user_id)
         logger.warning(f"User {user_id} added to blacklist. Reason: {reason}")
 
     def remove_from_blacklist(self, user_id: int):
         """Убрать пользователя из черного списка"""
+        removed = 0
+        try:
+            removed = database.db.remove_security_blacklist(user_id)
+        except Exception as db_error:
+            logger.warning("Failed to remove persisted blacklist for user %s: %s", user_id, db_error)
+
         if user_id in self.blacklist:
             self.blacklist.remove(user_id)
+            removed = max(removed, 1)
+
+        if removed:
             logger.info(f"User {user_id} removed from blacklist")
+
+    def list_blacklist(self, limit: int = 200) -> list[dict]:
+        """Возвращает blacklist для админ-панели."""
+        try:
+            return database.db.list_security_blacklist(limit=limit)
+        except Exception as db_error:
+            logger.warning("Blacklist list fallback: %s", db_error)
+            rows: list[dict] = []
+            for item in sorted(int(uid) for uid in self.blacklist):
+                rows.append({"telegram_user_id": item, "reason": "", "updated_at": None, "created_at": None})
+            return rows[: max(1, int(limit))]
 
     def detect_suspicious_activity(self, user_id: int, message: str) -> bool:
         """
@@ -260,11 +301,18 @@ class SecurityManager:
             is_suspicious = True
 
         if is_suspicious:
-            self.suspicious_users[user_id] += 1
-            logger.warning(f"Suspicious activity detected from user {user_id}. Count: {self.suspicious_users[user_id]}")
+            count = 0
+            try:
+                count = database.db.increment_security_suspicious(user_id)
+            except Exception as db_error:
+                logger.warning("Suspicious counter DB fallback for user %s: %s", user_id, db_error)
+                self.suspicious_users[user_id] += 1
+                count = self.suspicious_users[user_id]
+
+            logger.warning(f"Suspicious activity detected from user {user_id}. Count: {count}")
 
             # После 3 подозрительных сообщений - в блэклист
-            if self.suspicious_users[user_id] >= 3:
+            if count >= 3:
                 self.add_to_blacklist(user_id, "Multiple suspicious messages")
                 return True
 
@@ -320,17 +368,36 @@ class SecurityManager:
         self.stats_start_time = datetime.now()
         logger.info(f"Stats start time reset to {self.stats_start_time}")
 
+    def reset_runtime_state(self, clear_blacklist: bool = False):
+        """Сброс in-memory + персистентных security-счетчиков."""
+        self.message_timestamps.clear()
+        self.token_usage.clear()
+        self.cooldowns.clear()
+        self.suspicious_users.clear()
+        if clear_blacklist:
+            self.blacklist.clear()
+        self.total_tokens_today = 0
+        self.reset_stats_time()
+        try:
+            database.db.reset_security_counters(clear_blacklist=clear_blacklist)
+        except Exception as db_error:
+            logger.warning("Failed to reset persisted security counters: %s", db_error)
+
     def get_stats(self) -> Dict:
         """Получить статистику безопасности"""
         total_tokens_today = self.total_tokens_today
+        blacklisted_users = len(self.blacklist)
+        suspicious_users_count = len(self.suspicious_users)
         try:
             total_tokens_today = database.db.get_security_total_tokens(self._today_key())
             self.total_tokens_today = total_tokens_today
+            blacklisted_users = database.db.count_security_blacklist()
+            suspicious_users_count = database.db.count_security_suspicious_users()
         except Exception as db_error:
             logger.debug("Security stats DB fallback: %s", db_error)
         return {
-            'blacklisted_users': len(self.blacklist),
-            'suspicious_users': len(self.suspicious_users),
+            'blacklisted_users': blacklisted_users,
+            'suspicious_users': suspicious_users_count,
             'total_tokens_today': total_tokens_today,
             'daily_budget': self.TOTAL_DAILY_BUDGET,
             'budget_remaining': self.TOTAL_DAILY_BUDGET - total_tokens_today,

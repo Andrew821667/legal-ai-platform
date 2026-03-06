@@ -361,6 +361,40 @@ class Database:
                 "ON security_token_usage_daily(date_key)"
             )
 
+            # Таблица blacklist для долгоживущей блокировки пользователей.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_blacklist (
+                    telegram_user_id INTEGER PRIMARY KEY,
+                    reason TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            # Таблица cooldown для межсообщенческого антиспама.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_cooldowns (
+                    telegram_user_id INTEGER PRIMARY KEY,
+                    last_message_ts REAL NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            # Таблица счетчиков подозрительной активности.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_suspicious_users (
+                    telegram_user_id INTEGER PRIMARY KEY,
+                    strike_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
             # Миграция: добавляем notification_sent если его нет
             cursor.execute("PRAGMA table_info(leads)")
             columns = [column[1] for column in cursor.fetchall()]
@@ -626,6 +660,194 @@ class Database:
             )
             row = cursor.fetchone()
             return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def add_security_blacklist(self, telegram_user_id: int, reason: str = "") -> None:
+        """Добавляет/обновляет пользователя в персистентном blacklist."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_blacklist (telegram_user_id, reason, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                    reason = excluded.reason,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (int(telegram_user_id), str(reason or "").strip()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def remove_security_blacklist(self, telegram_user_id: int) -> int:
+        """Удаляет пользователя из blacklist. Возвращает число удаленных строк."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "DELETE FROM security_blacklist WHERE telegram_user_id = ?",
+                (int(telegram_user_id),),
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def get_security_blacklist_entry(self, telegram_user_id: int) -> Optional[Dict]:
+        """Возвращает запись blacklist по пользователю."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT telegram_user_id, reason, created_at, updated_at
+                FROM security_blacklist
+                WHERE telegram_user_id = ?
+                LIMIT 1
+                """,
+                (int(telegram_user_id),),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def list_security_blacklist(self, limit: int = 200) -> List[Dict]:
+        """Список blacklist в порядке свежих изменений."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT telegram_user_id, reason, created_at, updated_at
+                FROM security_blacklist
+                ORDER BY updated_at DESC, telegram_user_id DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def count_security_blacklist(self) -> int:
+        """Количество пользователей в blacklist."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM security_blacklist")
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def set_security_cooldown(self, telegram_user_id: int, last_message_ts: float) -> None:
+        """Сохраняет отметку последнего сообщения пользователя для cooldown."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_cooldowns (telegram_user_id, last_message_ts, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                    last_message_ts = excluded.last_message_ts,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (int(telegram_user_id), float(last_message_ts)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_security_cooldown(self, telegram_user_id: int) -> Optional[float]:
+        """Возвращает ts последнего сообщения пользователя для cooldown."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT last_message_ts FROM security_cooldowns WHERE telegram_user_id = ? LIMIT 1",
+                (int(telegram_user_id),),
+            )
+            row = cursor.fetchone()
+            return float(row[0]) if row and row[0] is not None else None
+        finally:
+            conn.close()
+
+    def clear_security_cooldowns(self) -> int:
+        """Очищает все cooldown-записи."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM security_cooldowns")
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def increment_security_suspicious(self, telegram_user_id: int) -> int:
+        """Увеличивает счетчик suspicious strike и возвращает новое значение."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_suspicious_users (telegram_user_id, strike_count, updated_at)
+                VALUES (?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                    strike_count = security_suspicious_users.strike_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (int(telegram_user_id),),
+            )
+            conn.commit()
+            cursor.execute(
+                "SELECT strike_count FROM security_suspicious_users WHERE telegram_user_id = ? LIMIT 1",
+                (int(telegram_user_id),),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def reset_security_suspicious(self) -> int:
+        """Очищает счетчик suspicious пользователей."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM security_suspicious_users")
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def count_security_suspicious_users(self) -> int:
+        """Количество пользователей с хотя бы одним suspicious strike."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM security_suspicious_users WHERE strike_count > 0")
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def reset_security_counters(self, clear_blacklist: bool = False) -> None:
+        """Сбрасывает персистентные security-счетчики."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM security_message_events")
+            cursor.execute("DELETE FROM security_token_usage_daily")
+            cursor.execute("DELETE FROM security_cooldowns")
+            cursor.execute("DELETE FROM security_suspicious_users")
+            if clear_blacklist:
+                cursor.execute("DELETE FROM security_blacklist")
+            conn.commit()
         finally:
             conn.close()
 

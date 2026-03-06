@@ -499,12 +499,13 @@ async def _handle_admin_lookup_input(
 
         reason = parts[1].strip() if len(parts) > 1 else "Заблокирован администратором через панель"
         security.security_manager.add_to_blacklist(telegram_id, reason)
+        total_blocked = security.security_manager.get_stats().get("blacklisted_users", 0)
         await utils.safe_reply_text(
             message,
             (
                 f"🚫 Пользователь {telegram_id} добавлен в черный список.\n"
                 f"Причина: {reason}\n"
-                f"Всего в списке: {len(security.security_manager.blacklist)}"
+                f"Всего в списке: {total_blocked}"
             ),
             action="admin_blacklist_add_done",
         )
@@ -520,7 +521,8 @@ async def _handle_admin_lookup_input(
             )
             return True
 
-        if telegram_id not in security.security_manager.blacklist:
+        is_blocked, _ = security.security_manager.is_blacklisted(telegram_id)
+        if not is_blocked:
             await utils.safe_reply_text(
                 message,
                 f"Пользователь {telegram_id} не найден в черном списке.",
@@ -529,11 +531,12 @@ async def _handle_admin_lookup_input(
             return True
 
         security.security_manager.remove_from_blacklist(telegram_id)
+        total_blocked = security.security_manager.get_stats().get("blacklisted_users", 0)
         await utils.safe_reply_text(
             message,
             (
                 f"✅ Пользователь {telegram_id} удален из черного списка.\n"
-                f"Всего в списке: {len(security.security_manager.blacklist)}"
+                f"Всего в списке: {total_blocked}"
             ),
             action="admin_blacklist_remove_done",
         )
