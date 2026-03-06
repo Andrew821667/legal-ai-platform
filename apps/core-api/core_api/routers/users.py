@@ -5,14 +5,15 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
+from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
-from core_api.models import Scope, User, UserRole
-from core_api.schemas import UserCreate, UserOut, UserPatch
+from core_api.models import ActorType, Event, Lead, Scope, User, UserRole
+from core_api.schemas import UserCreate, UserDataOperationOut, UserOut, UserPatch
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -89,9 +90,11 @@ def list_users(
     without_consent: bool = False,
     revoked_only: bool = False,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[User]:
     _ = identity
     capped_limit = max(1, min(limit, 500))
+    capped_offset = max(0, offset)
     query = select(User)
     if telegram_id is not None:
         query = query.where(User.telegram_id == telegram_id)
@@ -102,8 +105,177 @@ def list_users(
     query = query.order_by(
         func.coalesce(User.last_interaction, User.created_at).desc(),
         User.created_at.desc(),
-    ).limit(capped_limit)
+    ).offset(capped_offset).limit(capped_limit)
     return list(db.execute(query).scalars().all())
+
+
+def _get_user_by_telegram_id(db: Session, telegram_id: int) -> User | None:
+    return db.execute(select(User).where(User.telegram_id == telegram_id).limit(1)).scalar_one_or_none()
+
+
+def _delete_events_for_telegram_user(db: Session, telegram_user_id: int, lead_ids: list[uuid.UUID], user_id: uuid.UUID) -> int:
+    deleted = 0
+    if lead_ids:
+        deleted += db.execute(delete(Event).where(Event.lead_id.in_(lead_ids))).rowcount or 0
+
+    deleted += db.execute(delete(Event).where(Event.user_id == user_id)).rowcount or 0
+
+    # Cleanup events mirrored from legacy/user flows where telegram id is only in payload JSON.
+    deleted += (
+        db.execute(
+            text(
+                """
+                DELETE FROM events
+                WHERE (payload ->> 'telegram_user_id') = :tg_id
+                   OR (payload ->> 'user_id') = :tg_id
+                   OR (payload ->> 'telegram_id') = :tg_id
+                """
+            ),
+            {"tg_id": str(int(telegram_user_id))},
+        ).rowcount
+        or 0
+    )
+    return int(deleted)
+
+
+@router.post("/by-telegram/{telegram_user_id}/gdpr-clear", response_model=UserDataOperationOut)
+def gdpr_clear_user_data(
+    telegram_user_id: int,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> UserDataOperationOut:
+    user = _get_user_by_telegram_id(db, telegram_user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.now(timezone.utc)
+    user.consent_given = False
+    user.consent_date = None
+    user.consent_revoked = True
+    user.consent_revoked_at = now
+    user.transborder_consent = False
+    user.transborder_consent_date = None
+    user.marketing_consent = False
+    user.marketing_consent_date = None
+    user.last_interaction = now
+    db.add(user)
+
+    leads = list(db.execute(select(Lead).where(Lead.telegram_user_id == telegram_user_id)).scalars().all())
+    leads_anonymized = 0
+    for lead in leads:
+        lead.name = "Анонимизировано"
+        lead.contact = None
+        lead.company = None
+        lead.email = None
+        lead.phone = None
+        lead.notes = ((lead.notes or "").rstrip() + "\n[PDN] Анонимизировано по запросу пользователя")[-4000:]
+        lead.updated_at = now
+        db.add(lead)
+        leads_anonymized += 1
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="user.gdpr_clear",
+        target_type="user",
+        target_id=user.id,
+        details={"telegram_user_id": telegram_user_id, "leads_anonymized": leads_anonymized},
+    )
+    db.commit()
+    return UserDataOperationOut(
+        telegram_user_id=telegram_user_id,
+        users_updated=1,
+        leads_anonymized=leads_anonymized,
+        messages_deleted=0,
+    )
+
+
+@router.post("/by-telegram/{telegram_user_id}/reset-new", response_model=UserDataOperationOut)
+def reset_user_to_new(
+    telegram_user_id: int,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> UserDataOperationOut:
+    user = _get_user_by_telegram_id(db, telegram_user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.now(timezone.utc)
+    lead_ids = list(
+        db.execute(select(Lead.id).where(Lead.telegram_user_id == telegram_user_id)).scalars().all()
+    )
+    events_deleted = _delete_events_for_telegram_user(db, telegram_user_id, lead_ids, user.id)
+    leads_deleted = db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id)).rowcount or 0
+
+    user.consent_given = False
+    user.consent_date = None
+    user.consent_revoked = False
+    user.consent_revoked_at = None
+    user.transborder_consent = False
+    user.transborder_consent_date = None
+    user.marketing_consent = False
+    user.marketing_consent_date = None
+    user.conversation_stage = "discover"
+    user.cta_variant = None
+    user.cta_shown = False
+    user.cta_shown_at = None
+    user.last_interaction = now
+    db.add(user)
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="user.reset_new",
+        target_type="user",
+        target_id=user.id,
+        details={"telegram_user_id": telegram_user_id, "leads_deleted": int(leads_deleted), "events_deleted": events_deleted},
+    )
+    db.commit()
+    return UserDataOperationOut(
+        telegram_user_id=telegram_user_id,
+        users_reset=1,
+        leads_deleted=int(leads_deleted),
+        events_deleted=events_deleted,
+        messages_deleted=0,
+    )
+
+
+@router.delete("/by-telegram/{telegram_user_id}", response_model=UserDataOperationOut)
+def delete_user_by_telegram(
+    telegram_user_id: int,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> UserDataOperationOut:
+    user = _get_user_by_telegram_id(db, telegram_user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    lead_ids = list(
+        db.execute(select(Lead.id).where(Lead.telegram_user_id == telegram_user_id)).scalars().all()
+    )
+    events_deleted = _delete_events_for_telegram_user(db, telegram_user_id, lead_ids, user.id)
+    leads_deleted = db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id)).rowcount or 0
+    users_deleted = db.execute(delete(User).where(User.id == user.id)).rowcount or 0
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="user.delete_by_telegram",
+        target_type="user",
+        target_id=user.id,
+        details={"telegram_user_id": telegram_user_id, "leads_deleted": int(leads_deleted), "events_deleted": events_deleted},
+    )
+    db.commit()
+    return UserDataOperationOut(
+        telegram_user_id=telegram_user_id,
+        users_deleted=int(users_deleted),
+        leads_deleted=int(leads_deleted),
+        events_deleted=events_deleted,
+        messages_deleted=0,
+    )
 
 
 @router.get("/{user_id}", response_model=UserOut)

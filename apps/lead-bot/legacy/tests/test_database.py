@@ -233,6 +233,68 @@ def test_set_core_lead_id_persists_mapping(test_db):
     assert lead["core_lead_id"] == "11111111-1111-1111-1111-111111111111"
 
 
+def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10005,
+        username="reset_user",
+        first_name="Reset",
+        last_name="Candidate",
+    )
+    test_db.grant_user_consent(user_id)
+    test_db.set_user_transborder_consent(user_id, True)
+    test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Reset Candidate",
+            "email": "reset@example.com",
+            "phone": "+79001234567",
+        },
+    )
+    test_db.add_message(user_id, "user", "старое сообщение")
+    test_db.track_event(user_id, "stage_changed", payload={"from": "discover", "to": "diagnose"})
+
+    result = test_db.reset_user_to_new_state(user_id)
+    assert result["users_reset"] == 1
+    assert result["leads_deleted"] >= 1
+    assert result["messages_deleted"] >= 1
+    assert result["events_deleted"] >= 1
+
+    user = test_db.get_user_by_id(user_id)
+    assert user is not None
+    assert bool(user["consent_given"]) is False
+    assert bool(user["transborder_consent"]) is False
+    assert user["conversation_stage"] == "discover"
+    assert test_db.get_lead_by_user_id(user_id) is None
+    assert test_db.get_conversation_history(user_id) == []
+
+
+def test_delete_user_completely_removes_profile_and_related_data(test_db):
+    user_id = test_db.create_or_update_user(
+        telegram_id=10006,
+        username="delete_user",
+        first_name="Delete",
+        last_name="Candidate",
+    )
+    test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Delete Candidate",
+            "email": "delete@example.com",
+        },
+    )
+    test_db.add_message(user_id, "user", "какой-то диалог")
+    test_db.track_event(user_id, "cta_clicked", payload={"variant": "a"})
+
+    result = test_db.delete_user_completely(user_id)
+    assert result["users_deleted"] == 1
+    assert result["leads_deleted"] >= 1
+    assert result["messages_deleted"] >= 1
+    assert result["events_deleted"] >= 1
+
+    assert test_db.get_user_by_id(user_id) is None
+    assert test_db.get_user_by_telegram_id(10006) is None
+
+
 def test_create_or_update_lead_syncs_to_core_bridge(test_db, monkeypatch):
     user_id = test_db.create_or_update_user(
         telegram_id=10004,

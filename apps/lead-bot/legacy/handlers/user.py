@@ -234,6 +234,10 @@ def _services_inline_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
+def _quick_nav_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(QUICK_NAV_MENU)
+
+
 def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU, resize_keyboard=True)
 
@@ -247,6 +251,14 @@ def _profile_edit_markup() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def _profile_panel_markup(is_admin: bool) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if not is_admin:
+        rows.extend(_profile_edit_markup().inline_keyboard)
+    rows.extend(QUICK_NAV_MENU)
+    return InlineKeyboardMarkup(rows)
 
 
 def _personal_mode_markup() -> InlineKeyboardMarkup:
@@ -390,8 +402,8 @@ async def _handle_admin_lookup_input(
             )
             return True
 
-        target_user = database.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
+        result = admin_interface.admin_interface.clear_user_data_by_telegram_id(telegram_id)
+        if result is None:
             await utils.safe_reply_text(
                 message,
                 f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
@@ -399,7 +411,6 @@ async def _handle_admin_lookup_input(
             )
             return True
 
-        result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
         await utils.safe_reply_text(
             message,
             (
@@ -409,6 +420,69 @@ async def _handle_admin_lookup_input(
                 f"Удалено сообщений: {result.get('messages_deleted', 0)}"
             ),
             action="admin_lookup_revoke_done",
+        )
+        return True
+
+    if action == "reset_new":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_lookup_reset_new_invalid_id",
+            )
+            return True
+
+        result = admin_interface.admin_interface.reset_user_to_new_by_telegram_id(telegram_id)
+        if result is None:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_reset_new_not_found",
+            )
+            return True
+
+        await utils.safe_reply_text(
+            message,
+            (
+                f"♻️ Пользователь ID {telegram_id} сброшен в состояние «как новый».\n\n"
+                f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
+                f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
+                f"Аналитика очищена: {result.get('events_deleted', 0)}"
+            ),
+            action="admin_lookup_reset_new_done",
+        )
+        return True
+
+    if action == "delete_user":
+        telegram_id = _parse_id(message_text)
+        if telegram_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Введите корректный Telegram ID числом.\nНапример: 321681061",
+                action="admin_lookup_delete_user_invalid_id",
+            )
+            return True
+
+        result = admin_interface.admin_interface.delete_user_by_telegram_id(telegram_id)
+        if result is None:
+            await utils.safe_reply_text(
+                message,
+                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
+                action="admin_lookup_delete_user_not_found",
+            )
+            return True
+
+        await utils.safe_reply_text(
+            message,
+            (
+                f"🧨 Пользователь ID {telegram_id} полностью удален.\n\n"
+                f"Профиль удален: {result.get('users_deleted', 0)}\n"
+                f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
+                f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
+                f"Аналитика удалена: {result.get('events_deleted', 0)}"
+            ),
+            action="admin_lookup_delete_user_done",
         )
         return True
 
@@ -786,7 +860,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
-    await utils.safe_reply_text(update.message, content.HELP_MESSAGE, action="help_command")
+    await utils.safe_reply_text(
+        update.message,
+        content.HELP_MESSAGE,
+        reply_markup=_quick_nav_markup(),
+        action="help_command",
+    )
 
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -806,7 +885,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lead = snapshot.get("lead")
     consent_state = snapshot.get("consent", {})
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
-    reply_markup = None if is_admin else _profile_edit_markup()
+    reply_markup = _profile_panel_markup(is_admin)
     await utils.safe_reply_text(
         update.message,
         _format_profile_text(snapshot.get("user", user_data), lead, consent_state, is_admin),
@@ -1810,6 +1889,12 @@ async def handle_handoff_request(
             content.HANDOFF_ACK_TEXT,
             reply_markup=_main_menu_markup(user.id),
             action="handoff_ack",
+        )
+        await utils.safe_reply_text(
+            update.message,
+            "Навигация:",
+            reply_markup=_quick_nav_markup(),
+            action="handoff_quick_nav",
         )
 
         # Создаем лид только если его нет, либо используем явно переданный lead_id.

@@ -125,6 +125,8 @@ def _admin_lookup_menu_markup(back_callback: str, back_label: str) -> InlineKeyb
         [InlineKeyboardButton("💬 История диалога по ID", callback_data="admin_lookup_dialog_prompt")],
         [InlineKeyboardButton("✏️ Редактировать ПД", callback_data="admin_lookup_edit_prompt")],
         [InlineKeyboardButton("🗑️ Отозвать согласие по ID", callback_data="admin_lookup_revoke_prompt")],
+        [InlineKeyboardButton("♻️ Сделать как новый по ID", callback_data="admin_lookup_reset_new_prompt")],
+        [InlineKeyboardButton("🧨 Полностью удалить по ID", callback_data="admin_lookup_delete_prompt")],
         [InlineKeyboardButton("👥 Открыть список пользователей", callback_data="admin_users_list")],
         [InlineKeyboardButton(back_label, callback_data=back_callback)],
     ]
@@ -846,7 +848,9 @@ def _admin_user_detail_markup(telegram_id: int) -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("🧾 Экспорт данных", callback_data=f"admin_user_export_{telegram_id}")],
             [InlineKeyboardButton("🔄 Сбросить диалог", callback_data=f"admin_user_reset_dialog_{telegram_id}")],
+            [InlineKeyboardButton("♻️ Сделать как новый", callback_data=f"admin_user_reset_new_confirm_{telegram_id}")],
             [InlineKeyboardButton("🗑️ Очистить данные", callback_data=f"admin_user_clear_confirm_{telegram_id}")],
+            [InlineKeyboardButton("🧨 Полностью удалить", callback_data=f"admin_user_delete_confirm_{telegram_id}")],
             [InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")],
         ]
     )
@@ -863,33 +867,38 @@ def _admin_user_clear_confirm_markup(telegram_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def _admin_user_reset_new_confirm_markup(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Да, сбросить", callback_data=f"admin_user_reset_new_{telegram_id}"),
+                InlineKeyboardButton("❌ Отмена", callback_data=f"admin_user_detail_{telegram_id}"),
+            ]
+        ]
+    )
+
+
+def _admin_user_delete_confirm_markup(telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Да, удалить", callback_data=f"admin_user_delete_{telegram_id}"),
+                InlineKeyboardButton("❌ Отмена", callback_data=f"admin_user_detail_{telegram_id}"),
+            ]
+        ]
+    )
+
+
 def _fetch_users_page(page: int = 1, per_page: int = 5) -> tuple[list[dict], int, int]:
     page = max(1, page)
+    users_all = admin_interface.admin_interface.get_recent_users(limit=500)
+    total = len(users_all)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
     offset = (page - 1) * per_page
-
-    conn = database.db.get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) AS total FROM users")
-        total = int((cursor.fetchone() or {"total": 0})["total"])
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        if page > total_pages:
-            page = total_pages
-            offset = (page - 1) * per_page
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM users
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            (per_page, offset),
-        )
-        users = [dict(row) for row in cursor.fetchall()]
-        return users, total, total_pages
-    finally:
-        conn.close()
+    users = users_all[offset : offset + per_page]
+    return users, total, total_pages
 
 
 def _build_admin_users_page_text(users: list[dict], page: int, total_pages: int, total_users: int) -> str:
@@ -901,6 +910,7 @@ def _build_admin_users_page_text(users: list[dict], page: int, total_pages: int,
         "",
         "Нажмите на пользователя для подробной карточки.",
         "Для поиска по ID используйте кнопку «🔎 Поиск / карточка по ID».",
+        "Для сброса/удаления по ID используйте кнопки «♻️» и «🧨» в разделе пользователей.",
         "",
     ]
     for user in users:
@@ -913,7 +923,9 @@ def _build_admin_users_page_text(users: list[dict], page: int, total_pages: int,
     return "\n".join(lines).strip()
 
 
-def _get_user_conversation_count(user_id: int) -> int:
+def _get_user_conversation_count(user_id: int | None) -> int:
+    if not user_id:
+        return 0
     conn = database.db.get_connection()
     try:
         cursor = conn.cursor()
@@ -1186,8 +1198,12 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
         user_detail_match = re.fullmatch(r"admin_user_detail_(\d+)", action or "")
         user_export_match = re.fullmatch(r"admin_user_export_(\d+)", action or "")
         user_reset_match = re.fullmatch(r"admin_user_reset_dialog_(\d+)", action or "")
+        user_reset_new_confirm_match = re.fullmatch(r"admin_user_reset_new_confirm_(\d+)", action or "")
+        user_reset_new_match = re.fullmatch(r"admin_user_reset_new_(\d+)", action or "")
         user_clear_confirm_match = re.fullmatch(r"admin_user_clear_confirm_(\d+)", action or "")
         user_clear_match = re.fullmatch(r"admin_user_clear_(\d+)", action or "")
+        user_delete_confirm_match = re.fullmatch(r"admin_user_delete_confirm_(\d+)", action or "")
+        user_delete_match = re.fullmatch(r"admin_user_delete_(\d+)", action or "")
 
         if action == "admin_users_page_noop":
             return
@@ -1224,7 +1240,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 return
 
             target_user = snapshot["user"]
-            conversations_count = _get_user_conversation_count(target_user["id"])
+            conversations_count = _get_user_conversation_count(target_user.get("id"))
             detail_text = _build_admin_user_detail_text(
                 target_user,
                 snapshot.get("lead"),
@@ -1273,8 +1289,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if user_reset_match:
             telegram_id = int(user_reset_match.group(1))
-            target_user = database.db.get_user_by_telegram_id(telegram_id)
-            if not target_user:
+            if not admin_interface.admin_interface.reset_user_dialog_by_telegram_id(telegram_id):
                 await utils.safe_edit_text(
                     query.message,
                     "❌ Пользователь не найден.",
@@ -1285,17 +1300,14 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            database.db.clear_conversation_history(target_user["id"])
-            database.db.reset_user_funnel_state(target_user["id"])
-
             snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id) or {
-                "user": target_user,
+                "user": admin_interface.admin_interface.get_user_by_telegram_id(telegram_id) or {},
                 "lead": {},
-                "consent": database.db.get_user_consent_state(target_user["id"]),
+                "consent": {},
             }
             detail_text = (
                 "✅ Диалог пользователя сброшен.\n\n"
-                + _build_admin_user_detail_text(target_user, snapshot.get("lead"), snapshot.get("consent", {}), 0)
+                + _build_admin_user_detail_text(snapshot.get("user", {}), snapshot.get("lead"), snapshot.get("consent", {}), 0)
             )
             await utils.safe_edit_text(
                 query.message,
@@ -1319,10 +1331,38 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             )
             return
 
+        if user_reset_new_confirm_match:
+            telegram_id = int(user_reset_new_confirm_match.group(1))
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"⚠️ Подтвердите сброс пользователя ID {telegram_id} в состояние «как новый»\n\n"
+                    "Будут удалены все лиды, диалоги и аналитика пользователя.\n"
+                    "Профиль Telegram сохранится."
+                ),
+                reply_markup=_admin_user_reset_new_confirm_markup(telegram_id),
+                action="admin_user_reset_new_confirm",
+            )
+            return
+
+        if user_delete_confirm_match:
+            telegram_id = int(user_delete_confirm_match.group(1))
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"⚠️ Подтвердите ПОЛНОЕ удаление пользователя ID {telegram_id}\n\n"
+                    "Будет удален профиль пользователя и все связанные данные.\n"
+                    "Действие необратимо."
+                ),
+                reply_markup=_admin_user_delete_confirm_markup(telegram_id),
+                action="admin_user_delete_confirm",
+            )
+            return
+
         if user_clear_match:
             telegram_id = int(user_clear_match.group(1))
-            target_user = database.db.get_user_by_telegram_id(telegram_id)
-            if not target_user:
+            result = admin_interface.admin_interface.clear_user_data_by_telegram_id(telegram_id)
+            if result is None:
                 await utils.safe_edit_text(
                     query.message,
                     "❌ Пользователь не найден.",
@@ -1333,7 +1373,6 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            result = database.db.revoke_user_consent_and_delete_data(target_user["id"])
             await utils.safe_edit_text(
                 query.message,
                 (
@@ -1349,6 +1388,68 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                     ]
                 ),
                 action="admin_user_clear",
+            )
+            return
+
+        if user_reset_new_match:
+            telegram_id = int(user_reset_new_match.group(1))
+            result = admin_interface.admin_interface.reset_user_to_new_by_telegram_id(telegram_id)
+            if result is None:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_reset_new_not_found",
+                )
+                return
+
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"♻️ Пользователь ID {telegram_id} сброшен в состояние «как новый».\n\n"
+                    f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
+                    f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
+                    f"Аналитика очищена: {result.get('events_deleted', 0)}"
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("◀️ К карточке", callback_data=f"admin_user_detail_{telegram_id}")],
+                        [InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")],
+                    ]
+                ),
+                action="admin_user_reset_new",
+            )
+            return
+
+        if user_delete_match:
+            telegram_id = int(user_delete_match.group(1))
+            result = admin_interface.admin_interface.delete_user_by_telegram_id(telegram_id)
+            if result is None:
+                await utils.safe_edit_text(
+                    query.message,
+                    "❌ Пользователь не найден.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                    ),
+                    action="admin_user_delete_not_found",
+                )
+                return
+
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    f"🧨 Пользователь ID {telegram_id} полностью удален.\n\n"
+                    f"Профиль удален: {result.get('users_deleted', 0)}\n"
+                    f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
+                    f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
+                    f"Аналитика удалена: {result.get('events_deleted', 0)}"
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("◀️ К списку пользователей", callback_data="admin_users_list")]]
+                ),
+                action="admin_user_delete",
             )
             return
 
@@ -1502,6 +1603,42 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                     back_label="◀️ Назад в раздел пользователей",
                 ),
                 action="admin_lookup_revoke_prompt",
+            )
+
+        elif action == "admin_lookup_reset_new_prompt":
+            context.user_data["admin_lookup_action"] = "reset_new"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "♻️ Сброс пользователя «как новый»\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Будут удалены диалоги, лиды и аналитика, профиль останется.\n\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
+                action="admin_lookup_reset_new_prompt",
+            )
+
+        elif action == "admin_lookup_delete_prompt":
+            context.user_data["admin_lookup_action"] = "delete_user"
+            context.user_data.pop("admin_lookup_field", None)
+            await utils.safe_edit_text(
+                query.message,
+                (
+                    "🧨 Полное удаление пользователя\n\n"
+                    "Введите Telegram ID пользователя одним сообщением.\n"
+                    "Будет удален профиль и все связанные данные.\n\n"
+                    "Пример: 321681061"
+                ),
+                reply_markup=_admin_lookup_menu_markup(
+                    back_callback="admin_section_users",
+                    back_label="◀️ Назад в раздел пользователей",
+                ),
+                action="admin_lookup_delete_prompt",
             )
 
         elif action == "admin_lookup_edit_prompt":

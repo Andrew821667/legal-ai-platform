@@ -5,6 +5,7 @@ import asyncio
 import json
 import urllib.parse
 import urllib.request
+import urllib.error
 from typing import Dict
 import database
 from config import Config
@@ -22,7 +23,19 @@ class AdminInterface:
     def _core_headers(self) -> dict[str, str]:
         return {"X-API-Key": config.API_KEY_BOT, "Content-Type": "application/json"}
 
-    def _core_get_json(self, path: str, params: dict | None = None):
+    def _core_admin_headers(self) -> dict[str, str]:
+        key = config.API_KEY_ADMIN or config.API_KEY_BOT
+        return {"X-API-Key": key, "Content-Type": "application/json"}
+
+    def _core_request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+        payload: dict | None = None,
+        admin_scope: bool = False,
+    ):
         if not self.core_api_enabled:
             return None
 
@@ -31,18 +44,37 @@ class AdminInterface:
             cleaned = {key: value for key, value in params.items() if value is not None}
             if cleaned:
                 query = "?" + urllib.parse.urlencode(cleaned)
+
+        body = None
+        if payload is not None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
         request = urllib.request.Request(
             url=f"{self.core_api_url}{path}{query}",
-            headers=self._core_headers(),
-            method="GET",
+            data=body,
+            headers=self._core_admin_headers() if admin_scope else self._core_headers(),
+            method=method.upper(),
         )
         try:
             with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else None
-        except Exception as error:
-            logger.warning("Core API read fallback to SQLite for %s: %s", path, error)
+        except urllib.error.HTTPError as error:
+            payload_text = error.read().decode("utf-8", errors="ignore")
+            logger.warning(
+                "Core API %s fallback for %s [%s]: %s",
+                method.upper(),
+                path,
+                error.code,
+                payload_text[:300],
+            )
             return None
+        except Exception as error:
+            logger.warning("Core API %s fallback for %s: %s", method.upper(), path, error)
+            return None
+
+    def _core_get_json(self, path: str, params: dict | None = None):
+        return self._core_request_json("GET", path, params=params, admin_scope=False)
 
     def _map_core_lead(self, row: dict) -> dict:
         return {
@@ -107,6 +139,56 @@ class AdminInterface:
         if isinstance(core_users, list):
             return [self._map_core_user(row) for row in core_users]
         return self.db.get_recent_users(limit=limit)
+
+    def reset_user_dialog_by_telegram_id(self, telegram_id: int) -> bool:
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return False
+        self.db.clear_conversation_history(target_user["id"])
+        self.db.reset_user_funnel_state(target_user["id"])
+        return True
+
+    def clear_user_data_by_telegram_id(self, telegram_id: int) -> dict | None:
+        core_result = self._core_request_json(
+            "POST",
+            f"/api/v1/users/by-telegram/{telegram_id}/gdpr-clear",
+            admin_scope=True,
+        )
+        if isinstance(core_result, dict):
+            return core_result
+
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return None
+        return self.db.revoke_user_consent_and_delete_data(target_user["id"])
+
+    def reset_user_to_new_by_telegram_id(self, telegram_id: int) -> dict | None:
+        core_result = self._core_request_json(
+            "POST",
+            f"/api/v1/users/by-telegram/{telegram_id}/reset-new",
+            admin_scope=True,
+        )
+        if isinstance(core_result, dict):
+            return core_result
+
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return None
+        return self.db.reset_user_to_new_state(target_user["id"])
+
+    def delete_user_by_telegram_id(self, telegram_id: int) -> dict | None:
+        core_result = self._core_request_json(
+            "DELETE",
+            f"/api/v1/users/by-telegram/{telegram_id}",
+            admin_scope=True,
+        )
+        if isinstance(core_result, dict):
+            return core_result
+
+        target_user = self.db.get_user_by_telegram_id(telegram_id)
+        if not target_user:
+            return None
+        return self.db.delete_user_completely(target_user["id"])
 
     def get_users_without_consent(self, limit: int = 20) -> list[dict]:
         core_users = self._core_get_json("/api/v1/users", {"without_consent": True, "limit": limit})

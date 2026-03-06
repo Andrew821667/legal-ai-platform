@@ -67,6 +67,22 @@ class UserPatch(BaseModel):
     last_interaction: datetime | None = None
 
 
+class UserDataOperationOut(BaseModel):
+    telegram_user_id: int
+    users_updated: int = 0
+    users_reset: int = 0
+    users_deleted: int = 0
+    leads_anonymized: int = 0
+    leads_deleted: int = 0
+    messages_deleted: int = 0
+    events_deleted: int = 0
+    notifications_deleted: int = 0
+    chat_states_cleared: int = 0
+    business_states_cleared: int = 0
+    chat_states_deleted: int = 0
+    business_states_deleted: int = 0
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     created_at: datetime

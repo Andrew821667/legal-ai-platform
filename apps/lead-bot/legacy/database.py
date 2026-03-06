@@ -879,6 +879,164 @@ class Database:
         finally:
             conn.close()
 
+    def reset_user_to_new_state(self, user_id: int) -> Dict:
+        """
+        Сброс пользователя в состояние "как новый":
+        - удаляются диалоги, лиды и аналитика;
+        - обнуляются согласия и состояние воронки;
+        - профиль пользователя (telegram_id/username/имя) сохраняется.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT telegram_id FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    "users_reset": 0,
+                    "leads_deleted": 0,
+                    "messages_deleted": 0,
+                    "events_deleted": 0,
+                }
+
+            telegram_id = row[0]
+            cursor.execute("SELECT id FROM leads WHERE user_id = ?", (user_id,))
+            lead_ids = [int(item[0]) for item in cursor.fetchall()]
+
+            notifications_deleted = 0
+            if lead_ids:
+                placeholders = ",".join("?" for _ in lead_ids)
+                cursor.execute(
+                    f"DELETE FROM admin_notifications WHERE lead_id IN ({placeholders})",
+                    lead_ids,
+                )
+                notifications_deleted = cursor.rowcount
+
+            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+            messages_deleted = cursor.rowcount
+
+            cursor.execute("DELETE FROM analytics_events WHERE user_id = ?", (user_id,))
+            events_deleted = cursor.rowcount
+
+            cursor.execute("DELETE FROM leads WHERE user_id = ?", (user_id,))
+            leads_deleted = cursor.rowcount
+
+            cursor.execute(
+                """
+                UPDATE users
+                SET consent_given = 0,
+                    consent_date = NULL,
+                    consent_revoked = 0,
+                    consent_revoked_at = NULL,
+                    transborder_consent = 0,
+                    transborder_consent_date = NULL,
+                    marketing_consent = 0,
+                    marketing_consent_date = NULL,
+                    conversation_stage = 'discover',
+                    cta_variant = NULL,
+                    cta_shown = 0,
+                    cta_shown_at = NULL,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+            users_reset = cursor.rowcount
+
+            chat_states_cleared = 0
+            business_states_cleared = 0
+            if telegram_id is not None:
+                cursor.execute("DELETE FROM chat_states WHERE chat_id = ?", (int(telegram_id),))
+                chat_states_cleared = cursor.rowcount
+                cursor.execute("DELETE FROM business_connection_states WHERE user_chat_id = ?", (int(telegram_id),))
+                business_states_cleared = cursor.rowcount
+
+            conn.commit()
+            self._sync_user_to_core(user_id)
+            return {
+                "users_reset": users_reset,
+                "leads_deleted": leads_deleted,
+                "messages_deleted": messages_deleted,
+                "events_deleted": events_deleted,
+                "notifications_deleted": notifications_deleted,
+                "chat_states_cleared": chat_states_cleared,
+                "business_states_cleared": business_states_cleared,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def delete_user_completely(self, user_id: int) -> Dict:
+        """
+        Полное удаление пользователя и всех связанных данных.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT telegram_id FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    "users_deleted": 0,
+                    "leads_deleted": 0,
+                    "messages_deleted": 0,
+                    "events_deleted": 0,
+                }
+
+            telegram_id = row[0]
+
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE user_id = ?", (user_id,))
+            leads_deleted = int((cursor.fetchone() or [0])[0])
+
+            cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
+            messages_deleted = int((cursor.fetchone() or [0])[0])
+
+            cursor.execute("SELECT COUNT(*) FROM analytics_events WHERE user_id = ?", (user_id,))
+            events_deleted = int((cursor.fetchone() or [0])[0])
+
+            cursor.execute("SELECT id FROM leads WHERE user_id = ?", (user_id,))
+            lead_ids = [int(item[0]) for item in cursor.fetchall()]
+            notifications_deleted = 0
+            if lead_ids:
+                placeholders = ",".join("?" for _ in lead_ids)
+                cursor.execute(
+                    f"DELETE FROM admin_notifications WHERE lead_id IN ({placeholders})",
+                    lead_ids,
+                )
+                notifications_deleted = cursor.rowcount
+
+            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM analytics_events WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM leads WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            users_deleted = cursor.rowcount
+
+            chat_states_deleted = 0
+            business_states_deleted = 0
+            if telegram_id is not None:
+                cursor.execute("DELETE FROM chat_states WHERE chat_id = ?", (int(telegram_id),))
+                chat_states_deleted = cursor.rowcount
+                cursor.execute("DELETE FROM business_connection_states WHERE user_chat_id = ?", (int(telegram_id),))
+                business_states_deleted = cursor.rowcount
+
+            conn.commit()
+            return {
+                "users_deleted": users_deleted,
+                "leads_deleted": leads_deleted,
+                "messages_deleted": messages_deleted,
+                "events_deleted": events_deleted,
+                "notifications_deleted": notifications_deleted,
+                "chat_states_deleted": chat_states_deleted,
+                "business_states_deleted": business_states_deleted,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def export_user_data(self, user_id: int) -> Dict:
         """Экспорт данных пользователя и связанной анкеты."""
         user = self.get_user_by_id(user_id)

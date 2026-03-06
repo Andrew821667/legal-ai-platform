@@ -38,6 +38,17 @@ WORKSPACE_INLINE_MENU = [
     ],
 ]
 
+QUICK_NAV_MENU = [
+    [
+        InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
+        InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+    ],
+    [
+        InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+    ],
+]
+
 LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("📞 Консультация 30 мин", callback_data="magnet_consultation")],
     [InlineKeyboardButton("📄 Чек-лист по договорам", callback_data="magnet_checklist")],
@@ -78,6 +89,13 @@ DOCUMENTS_MENU = [
         InlineKeyboardButton("📑 Статус согласий", callback_data="doc_consent_status"),
         InlineKeyboardButton("📊 Экспорт данных", callback_data="doc_export_data"),
     ],
+    [
+        InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
+        InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+    ],
+    [
+        InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+    ],
 ]
 
 # Админ-панель inline кнопки
@@ -110,6 +128,8 @@ ADMIN_USERS_MENU = [
     [InlineKeyboardButton("🕒 Последние пользователи", callback_data="admin_users_recent")],
     [InlineKeyboardButton("⚠️ Без согласия ПД", callback_data="admin_users_no_consent")],
     [InlineKeyboardButton("🗑️ Отозвали согласие", callback_data="admin_users_revoked")],
+    [InlineKeyboardButton("♻️ Сделать как новый (ID)", callback_data="admin_lookup_reset_new_prompt")],
+    [InlineKeyboardButton("🧨 Полностью удалить (ID)", callback_data="admin_lookup_delete_prompt")],
     [InlineKeyboardButton("🔎 Поиск / карточка по ID", callback_data="admin_users_lookup_help")],
     [InlineKeyboardButton("◀️ Назад в админ-панель", callback_data="admin_panel")],
 ]
@@ -119,6 +139,8 @@ ADMIN_LOOKUP_MENU = [
     [InlineKeyboardButton("💬 История диалога по ID", callback_data="admin_lookup_dialog_prompt")],
     [InlineKeyboardButton("✏️ Редактировать ПД", callback_data="admin_lookup_edit_prompt")],
     [InlineKeyboardButton("🗑️ Отозвать согласие по ID", callback_data="admin_lookup_revoke_prompt")],
+    [InlineKeyboardButton("♻️ Сделать как новый по ID", callback_data="admin_lookup_reset_new_prompt")],
+    [InlineKeyboardButton("🧨 Полностью удалить по ID", callback_data="admin_lookup_delete_prompt")],
     [InlineKeyboardButton("👥 Открыть список пользователей", callback_data="admin_users_list")],
     [InlineKeyboardButton("◀️ Назад в раздел пользователей", callback_data="admin_section_users")],
 ]
