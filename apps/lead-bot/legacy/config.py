@@ -36,8 +36,9 @@ class Config:
 
     def __init__(self):
         # Telegram Bot Token
-        # Поддерживаем старое имя LEAD_BOT_TOKEN для обратной совместимости deploy-окружений.
-        self.TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('LEAD_BOT_TOKEN')
+        # Для лид-бота приоритетно используем LEAD_BOT_TOKEN.
+        # TELEGRAM_BOT_TOKEN оставляем только как fallback для старых окружений.
+        self.TELEGRAM_BOT_TOKEN: str = os.getenv('LEAD_BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN')
         if not self.TELEGRAM_BOT_TOKEN:
             raise ValueError("TELEGRAM_BOT_TOKEN не установлен в переменных окружения")
 
