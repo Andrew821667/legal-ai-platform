@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+from shared.schemas import ContractJobCreateBase, EventCreateBase, LeadCreateBase, ScheduledPostCreateBase
 
 from core_api.models import (
     ContractJobStatus,
@@ -114,36 +115,10 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class LeadCreate(BaseModel):
+class LeadCreate(LeadCreateBase):
     source: LeadSource
-    legacy_lead_id: int | None = None
-    telegram_user_id: int | None = None
-    name: str | None = None
-    contact: str | None = None
-    company: str | None = None
-    email: str | None = None
-    phone: str | None = None
     segment: LeadSegment | None = None
     status: LeadStatus = LeadStatus.new
-    score: int | None = None
-    temperature: str | None = None
-    service_category: str | None = None
-    specific_need: str | None = None
-    pain_point: str | None = None
-    budget: str | None = None
-    urgency: str | None = None
-    industry: str | None = None
-    conversation_stage: str | None = None
-    cta_variant: str | None = None
-    cta_shown: bool = False
-    lead_magnet_type: str | None = None
-    lead_magnet_delivered: bool = False
-    notes: str | None = None
-    utm_source: str | None = None
-    utm_medium: str | None = None
-    utm_campaign: str | None = None
-    utm_content: str | None = None
-    utm_term: str | None = None
 
 
 class LeadPatch(BaseModel):
@@ -227,11 +202,10 @@ class LeadStatsOut(BaseModel):
     stage_handoff: int
 
 
-class EventCreate(BaseModel):
+class EventCreate(EventCreateBase):
     lead_id: uuid.UUID | None = None
     user_id: uuid.UUID | None = None
     type: str = Field(min_length=1, max_length=100)
-    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class EventOut(BaseModel):
@@ -245,17 +219,7 @@ class EventOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ScheduledPostCreate(BaseModel):
-    channel_id: str | None = None
-    channel_username: str | None = None
-    title: str | None = None
-    text: str
-    media_urls: list[str] | None = None
-    source_url: str | None = None
-    source_hash: str | None = None
-    rubric: str | None = None
-    format_type: str | None = None
-    cta_type: str | None = None
+class ScheduledPostCreate(ScheduledPostCreateBase):
     publish_at: datetime
     status: ScheduledPostStatus = ScheduledPostStatus.scheduled
 
@@ -329,14 +293,10 @@ class PostFeedbackOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ContractJobCreate(BaseModel):
+class ContractJobCreate(ContractJobCreateBase):
     lead_id: uuid.UUID | None = None
-    priority: int = 0
     deadline_at: datetime | None = None
     input_mode: InputMode
-    document_name: str | None = None
-    document_text: str | None = None
-    document_url: str | None = None
 
 
 class ContractJobPatch(BaseModel):
