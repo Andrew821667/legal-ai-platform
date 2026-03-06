@@ -114,6 +114,12 @@ export default function ContentCasesPage() {
             >
               Обсудить кейс
             </a>
+            <Link
+              href={ROUTES.miniAppContent}
+              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+            >
+              Открыть mini-app
+            </Link>
           </div>
         </div>
       </section>

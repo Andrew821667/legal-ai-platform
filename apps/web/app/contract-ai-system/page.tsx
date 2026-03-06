@@ -179,6 +179,12 @@ export default function ContractAISystemPage() {
             >
               Посмотреть roadmap внедрения
             </Link>
+            <Link
+              href={ROUTES.miniAppTools}
+              className="rounded-lg border border-sky-500/60 px-5 py-3 font-semibold text-sky-200 hover:border-sky-300 transition-colors"
+            >
+              Открыть mini-app
+            </Link>
           </div>
         </div>
       </section>

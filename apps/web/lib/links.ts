@@ -6,6 +6,11 @@ export const ROUTES = {
   solutions: "/solutions",
   contentCases: "/content-cases",
   about: "/about",
+  miniApp: "/miniapp",
+  miniAppContent: "/miniapp/content",
+  miniAppTools: "/miniapp/tools",
+  miniAppSolutions: "/miniapp/solutions",
+  miniAppProfile: "/miniapp/profile",
 } as const;
 
 const LEAD_BOT_USERNAME = "legal_ai_helper_new_bot";
