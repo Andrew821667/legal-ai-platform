@@ -160,8 +160,7 @@ Cron оставляем для служебных задач:
 ```cron
 */10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_posts.sh >> /var/log/stale-posts.log 2>&1
 */5 * * * * /opt/legal-ai/infra/scripts/healthcheck.sh >> /var/log/healthcheck.log 2>&1
-*/10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_jobs.sh >> /var/log/stale-jobs.log 2>&1
-*/30 * * * * /opt/legal-ai/infra/scripts/cron_finalize_exhausted_jobs.sh >> /var/log/finalize-exhausted-jobs.log 2>&1
+*/10 * * * * /opt/legal-ai/infra/scripts/cron_contract_jobs_maintenance.sh >> /var/log/contract-jobs-maintenance.log 2>&1
 */15 * * * * /opt/legal-ai/infra/scripts/disk_monitor.sh
 0 3 * * * /opt/legal-ai/infra/scripts/backup_postgres.sh >> /var/log/backup.log 2>&1
 0 4 * * * /opt/legal-ai/infra/scripts/cron_cleanup_idempotency.sh >> /var/log/cleanup.log 2>&1
@@ -181,6 +180,11 @@ DUE_POSTS_ALERT_THRESHOLD=0
 ALERT_COOLDOWN_SECONDS=1800
 ALERT_STATE_FILE=/tmp/legal-ai-alert-state.json
 CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD=0
+CONTRACT_MAINTENANCE_LIMIT_EACH=200
+CONTRACT_MAINTENANCE_STALE_MINUTES=30
+CONTRACT_MAINTENANCE_RETRY_FAILED=0
+CONTRACT_MAINTENANCE_RETRY_FAILED_ONLY_RETRYABLE=1
+# CONTRACT_MAINTENANCE_RETRY_FAILED_OLDER_THAN_MINUTES=60
 ```
 
 Ручная проверка генерации без записи в БД:
