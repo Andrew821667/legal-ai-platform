@@ -106,7 +106,7 @@ _INTERVAL_SETTING_KINDS = (
     "reader_digest_limit",
 )
 _MAIN_MENU_WORKSPACE = "🏠 Рабочий стол"
-_MAIN_MENU_CREATE = "➕ Создать"
+_MAIN_MENU_CREATE = "➕ Создать пост"
 
 _BUTTON_STYLE_PRIMARY = None
 _BUTTON_STYLE_SUCCESS = "success"
@@ -1859,12 +1859,14 @@ class NewsAdminBot:
     def _workspace_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
         section_buttons = [
             _inline_button("📂 Рабочие списки", callback_data="sec:worklists"),
-            _inline_button("⏱ Автоочередь", callback_data="sec:autoqueue"),
             _inline_button("🗓 Календарь", callback_data="cal:summary"),
+            _inline_button("⏱ Автоочередь", callback_data="sec:autoqueue"),
+            _inline_button("⚙️ Генерация", callback_data="sec:generate"),
             _inline_button("📰 Источники", callback_data="sec:sources"),
             _inline_button("🧭 Тематики", callback_data="sec:themes"),
-            _inline_button("⚙️ Генерация", callback_data="sec:generate"),
-            _inline_button("🛠 Система", callback_data="sec:system"),
+            _inline_button("🤖 Автоматизация", callback_data="sec:automation"),
+            _inline_button("👷 Воркеры", callback_data="sec:workers"),
+            _inline_button("🛠 Сервис", callback_data="sec:system"),
             _inline_button("🔄 Обновить", callback_data="refresh"),
         ]
         rows: list[list[InlineKeyboardButton]] = [
@@ -1915,19 +1917,17 @@ class NewsAdminBot:
             f"❌ Ошибки: {counts.get('failed', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
             f"Следующая публикация: {next_publish}\n\n"
-            "Отсюда доступны: статус API, статус воркеров, глобальная автоматизация, принудительный reset stale и справка.\n"
-            "Если воркеры не настроены, раздел «Воркеры» может показывать пустой список."
+            "Отсюда доступны: статус API, Reader-раздел, принудительный reset stale и справка.\n"
+            "Глобальная автоматизация и список воркеров вынесены на рабочий стол."
         )
 
     def _system_keyboard(self) -> InlineKeyboardMarkup:
         rows = self._two_column_rows(
             [
                 _inline_button("📊 Статус API", callback_data="status"),
-                _inline_button("👷 Воркеры", callback_data="workers"),
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
-                _inline_button("🤖 Автоматизация", callback_data="automation"),
                 _inline_button("❓ Помощь", callback_data="sec:help"),
                 _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
             ]
@@ -2125,9 +2125,10 @@ class NewsAdminBot:
             "🗓 Календарь — недельный/месячный обзор и работа с конкретным днем\n"
             "📰 Источники / 🧭 Тематики — контроль discovery-слоя и генерации\n"
             "🤖 Автоматизация — тумблеры, интервалы, слоты и лимиты\n"
-            "🛠 Система — статус API, воркеры, reset stale, сервисные функции\n\n"
-            "Команды (если нужно):\n"
-            "/start, /admin, /newpost, /generate_now, /calendar, /help"
+            "👷 Воркеры — состояние и запуски за 24 часа\n"
+            "🛠 Сервис — статус API, Reader-метрики, reset stale и справка\n\n"
+            "Команды (опционально):\n"
+            "/start, /newpost, /generate_now, /calendar, /help"
         )
 
     def _sources_text(self) -> str:
@@ -5243,7 +5244,6 @@ class NewsAdminBot:
         await app.bot.set_my_commands(
             [
                 BotCommand("start", "Открыть рабочий стол"),
-                BotCommand("admin", "Рабочий стол"),
                 BotCommand("newpost", "Создать пост"),
                 BotCommand("calendar", "Календарь публикаций"),
                 BotCommand("generate_now", "Принудительная генерация"),
@@ -6066,6 +6066,26 @@ class NewsAdminBot:
                     query,
                     self._worklists_text(counts, next_publish),
                     reply_markup=self._worklists_keyboard(counts),
+                )
+                return
+
+            if data == "sec:automation":
+                controls = self._load_controls(force_refresh=True)
+                await self._safe_edit_message_text(
+                    query,
+                    self._controls_text(controls),
+                    reply_markup=self._automation_keyboard(controls),
+                )
+                return
+
+            if data == "sec:workers":
+                response = self.admin_client.workers_status()
+                response.raise_for_status()
+                payload = response.json()
+                await self._safe_edit_message_text(
+                    query,
+                    _worker_list_text(payload),
+                    reply_markup=self._workers_keyboard(payload),
                 )
                 return
 
@@ -7780,23 +7800,36 @@ class NewsAdminBot:
 
         pending = context.user_data.get(_STATE_PENDING_EDIT)
         if not pending:
-            if _button_text_equals(message_text, _MAIN_MENU_WORKSPACE) or _button_text_equals(message_text, "🏠 Панель"):
+            if _button_text_equals(message_text, _MAIN_MENU_WORKSPACE):
                 await self.cmd_panel(update, context)
                 return
-            if _button_text_equals(message_text, _MAIN_MENU_CREATE):
+            if _button_text_equals(message_text, _MAIN_MENU_CREATE) or _button_text_equals(message_text, "➕ Создать"):
                 await self.cmd_new_post(update, context)
                 return
             if _button_text_equals(message_text, "🗓 Календарь"):
                 await self.cmd_calendar(update, context)
                 return
-            if _button_text_equals(message_text, "📚 Разделы"):
-                await self.cmd_panel(update, context)
+            if _button_text_equals(message_text, "🤖 Автоматизация"):
+                controls = self._load_controls(force_refresh=True)
+                await update.effective_message.reply_text(
+                    self._controls_text(controls),
+                    reply_markup=self._automation_keyboard(controls),
+                )
+                return
+            if _button_text_equals(message_text, "👷 Воркеры"):
+                response = self.admin_client.workers_status()
+                response.raise_for_status()
+                payload = response.json()
+                await update.effective_message.reply_text(
+                    _worker_list_text(payload),
+                    reply_markup=self._workers_keyboard(payload),
+                )
                 return
             if _button_text_equals(message_text, "ℹ️ Помощь"):
                 await self.cmd_help(update, context)
                 return
             await update.effective_message.reply_text(
-                "Для навигации используйте inline-кнопки в текущем сообщении. Основная точка входа — «Рабочий стол», а ручное создание запускается через «➕ Создать пост».",
+                "Для навигации используйте inline-кнопки. Основная точка входа — «🏠 Рабочий стол».",
                 reply_markup=_main_menu_markup(),
             )
             return

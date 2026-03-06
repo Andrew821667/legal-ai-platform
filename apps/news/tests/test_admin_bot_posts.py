@@ -312,7 +312,8 @@ def test_workspace_keyboard_contains_system_section() -> None:
     rows = payload.get("inline_keyboard") or []
     callbacks = [btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")]
     assert "sec:system" in callbacks
-    assert "automation" not in callbacks
+    assert "sec:automation" in callbacks
+    assert "sec:workers" in callbacks
 
 
 def test_system_keyboard_exposes_service_actions() -> None:
@@ -321,13 +322,16 @@ def test_system_keyboard_exposes_service_actions() -> None:
     payload = markup.to_dict()
     rows = payload.get("inline_keyboard") or []
     callbacks = {btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")}
-    assert {"status", "workers", "rdg:menu", "reader:funnel:7", "automation", "resetstale", "sec:help", "refresh"} <= callbacks
+    assert {"status", "rdg:menu", "reader:funnel:7", "resetstale", "sec:help", "refresh"} <= callbacks
+    assert "workers" not in callbacks
+    assert "automation" not in callbacks
 
 
 def test_help_text_has_reduced_fallback_commands() -> None:
     bot = NewsAdminBot()
     text = bot._help_text()
-    assert "/start, /admin, /newpost, /generate_now, /calendar, /help" in text
+    assert "/start, /newpost, /generate_now, /calendar, /help" in text
+    assert "/admin" not in text
     assert _review_origin_badge("daily") == "🤖"
 
 
