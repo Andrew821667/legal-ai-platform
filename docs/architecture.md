@@ -48,6 +48,7 @@
 - `GET /api/v1/contract-jobs/ops-overview` — единый операционный обзор (summary + sample задач + последние audit-события).
 - `GET /api/v1/contract-jobs/{job_id}/history` — история действий по задаче из `audit_log`.
 - `GET /api/v1/contract-jobs` — списки задач с пагинацией/сортировкой и SLA-фильтрами.
+- `POST /api/v1/contract-jobs/maintenance` — единая операция обслуживания очереди (`dry_run`, reset stale, finalize exhausted, retry failed).
 - `POST /api/v1/contract-jobs/{job_id}/requeue` — ручной возврат конкретной задачи в `new` (admin, с `force`).
 - `POST /api/v1/contract-jobs/retry-failed` — массовый безопасный перевод `failed -> new` (admin, с `dry_run`).
 - `POST /api/v1/contract-jobs/finalize-exhausted-new` — перевод `new` задач с исчерпанными попытками в `failed` (admin, с `dry_run`).

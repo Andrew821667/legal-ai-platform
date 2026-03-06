@@ -18,6 +18,8 @@ from core_api.schemas import (
     ContractJobBulkRetryOut,
     ContractJobCreate,
     ContractJobFinalizeExhaustedOut,
+    ContractJobMaintenanceActionOut,
+    ContractJobMaintenanceOut,
     ContractJobOpsActionCount,
     ContractJobOpsEventEntry,
     ContractJobOpsOverviewOut,
@@ -379,6 +381,189 @@ def contract_jobs_ops_overview(
         stale_minutes=stale_minutes,
         sample_limit=sample_limit,
         events_limit=events_limit,
+    )
+
+
+@router.post("/maintenance", response_model=ContractJobMaintenanceOut)
+def contract_jobs_maintenance(
+    dry_run: bool = Query(default=True),
+    stale_minutes: int = Query(default=30, ge=1, le=240),
+    limit_each: int = Query(default=200, ge=1, le=1000),
+    reset_stale: bool = Query(default=True),
+    finalize_exhausted_new: bool = Query(default=True),
+    retry_failed: bool = Query(default=False),
+    retry_failed_only_retryable: bool = Query(default=True),
+    retry_failed_older_than_minutes: int | None = Query(default=None, ge=1, le=10080),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ContractJobMaintenanceOut:
+    now = datetime.now(timezone.utc)
+    before_summary = _build_contract_job_summary(
+        db,
+        now=now,
+        window_hours=24,
+        stale_minutes=stale_minutes,
+    )
+
+    reset_rows: list[ContractJob] = []
+    finalize_rows: list[ContractJob] = []
+    retry_rows: list[ContractJob] = []
+
+    if reset_stale:
+        reset_rows = list(
+            db.execute(
+                select(ContractJob)
+                .where(
+                    ContractJob.status == ContractJobStatus.processing,
+                    ContractJob.updated_at < (now - timedelta(minutes=stale_minutes)),
+                )
+                .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+                .limit(limit_each)
+            ).scalars().all()
+        )
+    if finalize_exhausted_new:
+        finalize_rows = list(
+            db.execute(
+                select(ContractJob)
+                .where(
+                    ContractJob.status == ContractJobStatus.new,
+                    ContractJob.attempts >= ContractJob.max_attempts,
+                )
+                .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+                .limit(limit_each)
+            ).scalars().all()
+        )
+    if retry_failed:
+        retry_stmt = (
+            select(ContractJob)
+            .where(ContractJob.status == ContractJobStatus.failed)
+            .order_by(ContractJob.updated_at.asc(), ContractJob.created_at.asc())
+            .with_for_update(skip_locked=True)
+            .limit(limit_each)
+        )
+        if retry_failed_only_retryable:
+            retry_stmt = retry_stmt.where(ContractJob.attempts < ContractJob.max_attempts)
+        if retry_failed_older_than_minutes is not None:
+            retry_stmt = retry_stmt.where(
+                ContractJob.updated_at < (now - timedelta(minutes=retry_failed_older_than_minutes))
+            )
+        retry_rows = list(db.execute(retry_stmt).scalars().all())
+
+    reset_requeued_count = 0
+    reset_failed_terminal_count = 0
+    applied_reset_count = 0
+    applied_finalize_count = 0
+    applied_retry_count = 0
+
+    if dry_run:
+        db.commit()
+    else:
+        for job in reset_rows:
+            job.attempts = min(job.max_attempts, job.attempts + 1)
+            job.worker_id = None
+            if job.attempts >= job.max_attempts:
+                job.status = ContractJobStatus.failed
+                job.last_error = "stale processing reset (max attempts reached)"
+                reset_failed_terminal_count += 1
+            else:
+                job.status = ContractJobStatus.new
+                job.last_error = "stale processing reset"
+                reset_requeued_count += 1
+            job.updated_at = now
+            db.add(job)
+            write_audit(
+                db,
+                actor_type=ActorType.api_key,
+                actor_id=identity.name,
+                action="job.reset_stale",
+                target_type="contract_job",
+                target_id=job.id,
+                details={
+                    "older_than_minutes": stale_minutes,
+                    "result_status": job.status.value,
+                    "source": "maintenance",
+                },
+            )
+            applied_reset_count += 1
+
+        for job in finalize_rows:
+            job.status = ContractJobStatus.failed
+            if not job.last_error:
+                job.last_error = "exhausted attempts finalized from new queue"
+            job.updated_at = now
+            db.add(job)
+            write_audit(
+                db,
+                actor_type=ActorType.api_key,
+                actor_id=identity.name,
+                action="job.finalize_exhausted_new",
+                target_type="contract_job",
+                target_id=job.id,
+                details={"source": "maintenance"},
+            )
+            applied_finalize_count += 1
+
+        for job in retry_rows:
+            job.status = ContractJobStatus.new
+            job.worker_id = None
+            job.last_error = None
+            job.updated_at = now
+            db.add(job)
+            write_audit(
+                db,
+                actor_type=ActorType.api_key,
+                actor_id=identity.name,
+                action="job.retry_failed",
+                target_type="contract_job",
+                target_id=job.id,
+                details={
+                    "retryable_only": retry_failed_only_retryable,
+                    "older_than_minutes": retry_failed_older_than_minutes,
+                    "source": "maintenance",
+                },
+            )
+            applied_retry_count += 1
+        db.commit()
+
+    after_now = datetime.now(timezone.utc)
+    after_summary = _build_contract_job_summary(
+        db,
+        now=after_now,
+        window_hours=24,
+        stale_minutes=stale_minutes,
+    )
+    if dry_run:
+        reset_requeued_count = sum(1 for job in reset_rows if (job.attempts + 1) < job.max_attempts)
+        reset_failed_terminal_count = len(reset_rows) - reset_requeued_count
+
+    return ContractJobMaintenanceOut(
+        generated_at=after_now,
+        dry_run=dry_run,
+        stale_minutes=stale_minutes,
+        before_summary=before_summary,
+        after_summary=after_summary,
+        reset_stale=ContractJobMaintenanceActionOut(
+            requested=reset_stale,
+            matched_count=len(reset_rows),
+            applied_count=applied_reset_count,
+            requeued_count=reset_requeued_count,
+            failed_terminal_count=reset_failed_terminal_count,
+            job_ids=[job.id for job in reset_rows],
+        ),
+        finalize_exhausted_new=ContractJobMaintenanceActionOut(
+            requested=finalize_exhausted_new,
+            matched_count=len(finalize_rows),
+            applied_count=applied_finalize_count,
+            job_ids=[job.id for job in finalize_rows],
+        ),
+        retry_failed=ContractJobMaintenanceActionOut(
+            requested=retry_failed,
+            matched_count=len(retry_rows),
+            applied_count=applied_retry_count,
+            job_ids=[job.id for job in retry_rows],
+        ),
     )
 
 

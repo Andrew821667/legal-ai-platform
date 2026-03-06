@@ -430,6 +430,26 @@ class ContractJobOpsOverviewOut(BaseModel):
     events_limit: int
 
 
+class ContractJobMaintenanceActionOut(BaseModel):
+    requested: bool
+    matched_count: int
+    applied_count: int
+    requeued_count: int = 0
+    failed_terminal_count: int = 0
+    job_ids: list[uuid.UUID]
+
+
+class ContractJobMaintenanceOut(BaseModel):
+    generated_at: datetime
+    dry_run: bool
+    stale_minutes: int
+    before_summary: ContractJobSummaryOut
+    after_summary: ContractJobSummaryOut
+    reset_stale: ContractJobMaintenanceActionOut
+    finalize_exhausted_new: ContractJobMaintenanceActionOut
+    retry_failed: ContractJobMaintenanceActionOut
+
+
 class HeartbeatRequest(BaseModel):
     worker_id: str
     info: dict[str, Any] | None = None

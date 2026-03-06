@@ -661,6 +661,147 @@ def test_contract_jobs_ops_overview_returns_samples_and_recent_events() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_contract_jobs_maintenance_dry_run_and_apply() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.admin.contract.maintenance"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    created_ids: list = []
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = [
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="stale requeue",
+                worker_id="worker-maint-1",
+                attempts=0,
+                max_attempts=3,
+                created_at=now - timedelta(hours=3),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.processing,
+                input_mode=InputMode.text_only,
+                document_text="stale terminal",
+                worker_id="worker-maint-2",
+                attempts=2,
+                max_attempts=3,
+                created_at=now - timedelta(hours=3),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ContractJob(
+                status=ContractJobStatus.new,
+                input_mode=InputMode.text_only,
+                document_text="new exhausted",
+                attempts=3,
+                max_attempts=3,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+            ContractJob(
+                status=ContractJobStatus.failed,
+                input_mode=InputMode.text_only,
+                document_text="failed retryable",
+                attempts=1,
+                max_attempts=3,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=1),
+            ),
+        ]
+        db.add_all(rows)
+        db.commit()
+        for row in rows:
+            db.refresh(row)
+            created_ids.append(row.id)
+    finally:
+        db.close()
+
+    try:
+        dry = client.post(
+            "/api/v1/contract-jobs/maintenance?dry_run=true&retry_failed=true&limit_each=50&stale_minutes=30",
+            headers={"X-API-Key": raw_key},
+        )
+        assert dry.status_code == 200
+        dry_payload = dry.json()
+        assert dry_payload["dry_run"] is True
+        assert dry_payload["reset_stale"]["matched_count"] >= 2
+        assert dry_payload["reset_stale"]["applied_count"] == 0
+        assert dry_payload["finalize_exhausted_new"]["matched_count"] >= 1
+        assert dry_payload["finalize_exhausted_new"]["applied_count"] == 0
+        assert dry_payload["retry_failed"]["matched_count"] >= 1
+        assert dry_payload["retry_failed"]["applied_count"] == 0
+
+        db = SessionLocal()
+        try:
+            statuses_after_dry = list(
+                db.execute(select(ContractJob).where(ContractJob.id.in_(created_ids))).scalars().all()
+            )
+            status_map = {row.document_text: row.status for row in statuses_after_dry}
+            assert status_map["stale requeue"] == ContractJobStatus.processing
+            assert status_map["stale terminal"] == ContractJobStatus.processing
+            assert status_map["new exhausted"] == ContractJobStatus.new
+            assert status_map["failed retryable"] == ContractJobStatus.failed
+        finally:
+            db.close()
+
+        apply_resp = client.post(
+            "/api/v1/contract-jobs/maintenance?dry_run=false&retry_failed=true&limit_each=50&stale_minutes=30",
+            headers={"X-API-Key": raw_key},
+        )
+        assert apply_resp.status_code == 200
+        payload = apply_resp.json()
+        assert payload["dry_run"] is False
+        assert payload["reset_stale"]["applied_count"] >= 2
+        assert payload["finalize_exhausted_new"]["applied_count"] >= 1
+        assert payload["retry_failed"]["applied_count"] >= 1
+
+        db = SessionLocal()
+        try:
+            rows_after_apply = list(
+                db.execute(select(ContractJob).where(ContractJob.id.in_(created_ids))).scalars().all()
+            )
+            by_text = {row.document_text: row for row in rows_after_apply}
+            assert by_text["stale requeue"].status == ContractJobStatus.new
+            assert by_text["stale requeue"].attempts == 1
+            assert by_text["stale terminal"].status == ContractJobStatus.failed
+            assert by_text["stale terminal"].attempts == 3
+            assert by_text["new exhausted"].status == ContractJobStatus.failed
+            assert by_text["failed retryable"].status == ContractJobStatus.new
+            assert by_text["failed retryable"].worker_id is None
+            assert by_text["failed retryable"].last_error is None
+
+            audit_rows = list(
+                db.execute(
+                    select(AuditLog).where(
+                        AuditLog.target_type == "contract_job",
+                        AuditLog.target_id.in_(created_ids),
+                    )
+                ).scalars().all()
+            )
+            actions = {row.action for row in audit_rows}
+            assert "job.reset_stale" in actions
+            assert "job.finalize_exhausted_new" in actions
+            assert "job.retry_failed" in actions
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(
+                delete(AuditLog).where(
+                    AuditLog.target_type == "contract_job",
+                    AuditLog.target_id.in_(created_ids),
+                )
+            )
+            db.execute(delete(ContractJob).where(ContractJob.id.in_(created_ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_contract_job_history_returns_audit_entries() -> None:
     client = TestClient(app)
     api_key_name = "pytest.worker.contract.history"

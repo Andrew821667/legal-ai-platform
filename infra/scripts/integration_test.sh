@@ -64,6 +64,15 @@ else
   exit 1
 fi
 
+MAINTENANCE_DRY=$(curl -sf -X POST "$API/contract-jobs/maintenance?dry_run=true&retry_failed=true&limit_each=20&stale_minutes=30" \
+  -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
+if [ "$MAINTENANCE_DRY" = "true" ]; then
+  echo "✅ Contract jobs maintenance dry-run works"
+else
+  echo "❌ Contract jobs maintenance dry-run FAILED"
+  exit 1
+fi
+
 RETRY_DRY=$(curl -sf -X POST "$API/contract-jobs/retry-failed?dry_run=true&limit=10" \
   -H "X-API-Key: $KEY" | jq -r '.dry_run // false')
 if [ "$RETRY_DRY" = "true" ]; then

@@ -346,6 +346,9 @@ curl -s "$CORE_API_URL/api/v1/contract-jobs/summary?window_hours=24&stale_minute
 curl -s "$CORE_API_URL/api/v1/contract-jobs/ops-overview?window_hours=24&stale_minutes=30&sample_limit=10&events_limit=30" \
   -H "X-API-Key: $API_KEY_ADMIN"
 
+curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/maintenance?dry_run=true&retry_failed=true&limit_each=200&stale_minutes=30" \
+  -H "X-API-Key: $API_KEY_ADMIN"
+
 curl -s "$CORE_API_URL/api/v1/contract-jobs/{job_id}/history?limit=20" \
   -H "X-API-Key: $API_KEY_ADMIN"
 
