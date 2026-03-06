@@ -120,6 +120,9 @@ _DERIVED_CACHE_TTL_SECONDS = 20
 _CALENDAR_CACHE_TTL_SECONDS = 20
 _SOURCES_PAGE_SIZE = 12
 _UI_HINTS_ENABLED = True
+_UI_HINTS_CONTROL_KEY = "news.admin.ui_hints.enabled"
+_UI_HINTS_CONTROL_TITLE = "Подсказки интерфейса admin-бота"
+_UI_HINTS_CONTROL_DESCRIPTION = "Показывать блоки «Что это / Как управлять» на экранах admin-бота."
 
 _PILLAR_LABELS = {
     "regulation": "AI в праве и регулирование",
@@ -1504,10 +1507,12 @@ class NewsAdminBot:
         return False
 
     def _load_controls(self, *, force_refresh: bool = False) -> list[dict[str, Any]]:
+        global _UI_HINTS_ENABLED
         now = datetime.now(timezone.utc)
         if not force_refresh and self._controls_cache is not None:
             loaded_at, cached_rows = self._controls_cache
             if (now - loaded_at).total_seconds() <= 30:
+                _UI_HINTS_ENABLED = self._ui_hints_enabled_from_rows(cached_rows)
                 return list(cached_rows)
 
         response = self.client.list_automation_controls(scope="news")
@@ -1515,6 +1520,7 @@ class NewsAdminBot:
         rows = response.json()
         rows.sort(key=lambda row: row.get("key", ""))
         self._controls_cache = (now, list(rows))
+        _UI_HINTS_ENABLED = self._ui_hints_enabled_from_rows(rows)
         return rows
 
     def _derived_cache_get(self, key: str, *, ttl_seconds: int, force_refresh: bool = False) -> Any | None:
@@ -1606,6 +1612,27 @@ class NewsAdminBot:
     def _controls_lookup(self, *, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
         rows = self._load_controls(force_refresh=force_refresh)
         return {str(row.get("key") or ""): row for row in rows if str(row.get("key") or "")}
+
+    @staticmethod
+    def _ui_hints_enabled_from_rows(rows: list[dict[str, Any]]) -> bool:
+        for row in rows:
+            if str(row.get("key") or "") == _UI_HINTS_CONTROL_KEY:
+                return bool(row.get("enabled", True))
+        return True
+
+    def _ui_hints_enabled(self, *, force_refresh: bool = False) -> bool:
+        controls = self._controls_map(force_refresh=force_refresh)
+        return controls.get(_UI_HINTS_CONTROL_KEY, True)
+
+    def _ui_hints_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        return self._controls_lookup(force_refresh=force_refresh).get(_UI_HINTS_CONTROL_KEY, {})
+
+    def _sync_ui_hints_state(self, *, force_refresh: bool = False) -> None:
+        try:
+            self._load_controls(force_refresh=force_refresh)
+        except Exception:
+            # Не блокируем UX экранов, если control-plane временно недоступен.
+            pass
 
     def _schedule_config(self, *, force_refresh: bool = False):
         return resolve_schedule_config(self._load_controls(force_refresh=force_refresh))
@@ -5887,6 +5914,7 @@ class NewsAdminBot:
         _ = context
         if not await self._ensure_admin(update):
             return
+        self._sync_ui_hints_state()
 
         query = update.callback_query
         await query.answer()
@@ -6494,7 +6522,7 @@ class NewsAdminBot:
         _ = context
         if not await self._ensure_admin(update):
             return
-        global _UI_HINTS_ENABLED
+        self._sync_ui_hints_state()
         query = update.callback_query
         await query.answer()
         data = query.data or ""
@@ -6520,7 +6548,18 @@ class NewsAdminBot:
                 return
 
             if data == "uih:toggle":
-                _UI_HINTS_ENABLED = not _UI_HINTS_ENABLED
+                current = self._ui_hints_enabled(force_refresh=True)
+                row = self._ui_hints_control_row(force_refresh=True)
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or _UI_HINTS_CONTROL_TITLE,
+                    "description": row.get("description") or _UI_HINTS_CONTROL_DESCRIPTION,
+                    "enabled": not current,
+                    "config": dict(row.get("config") or {}),
+                }
+                self.admin_client.update_automation_control(_UI_HINTS_CONTROL_KEY, payload).raise_for_status()
+                self._invalidate_controls_cache()
+                self._sync_ui_hints_state(force_refresh=True)
                 counts, next_publish = await self._queue_snapshot()
                 state = "включены" if _UI_HINTS_ENABLED else "выключены"
                 await self._safe_edit_message_text(
@@ -7346,6 +7385,7 @@ class NewsAdminBot:
     async def cb_posts(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_admin(update):
             return
+        self._sync_ui_hints_state()
 
         query = update.callback_query
         await query.answer()
