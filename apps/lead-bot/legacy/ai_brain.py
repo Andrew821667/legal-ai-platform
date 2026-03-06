@@ -1,6 +1,8 @@
 """
 AI Brain - интеграция с OpenAI GPT + RAG
 """
+from __future__ import annotations
+
 import logging
 import re
 from typing import List, Dict, Optional, AsyncGenerator

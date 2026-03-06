@@ -1,6 +1,8 @@
 """
 Работа с SQLite базой данных
 """
+from __future__ import annotations
+
 import sqlite3
 import logging
 import json

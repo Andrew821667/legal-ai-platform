@@ -1,6 +1,8 @@
 """
 Handlers: common
 """
+from __future__ import annotations
+
 import logging
 import time
 import re
@@ -91,4 +93,3 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except (BadRequest, NetworkError, TimedOut) as notify_error:
         logger.warning("Failed to notify user from error handler: %s", notify_error)
-

@@ -3,6 +3,8 @@ RAG (Retrieval-Augmented Generation) Engine
 Извлекает релевантные примеры успешных диалогов для улучшения ответов бота
 """
 
+from __future__ import annotations
+
 import logging
 import json
 import math
