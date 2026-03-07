@@ -118,6 +118,9 @@ _POST_CACHE_TTL_SECONDS = 12
 _QUEUE_CACHE_TTL_SECONDS = 15
 _DERIVED_CACHE_TTL_SECONDS = 20
 _CALENDAR_CACHE_TTL_SECONDS = 20
+_CONTROLS_CACHE_TTL_SECONDS = 30
+_WORKERS_STATUS_CACHE_TTL_SECONDS = 12
+_WORKER_ACTIVITY_CACHE_TTL_SECONDS = 12
 _SOURCES_PAGE_SIZE = 12
 _UI_HINTS_ENABLED = True
 _UI_HINTS_CONTROL_KEY = "news.admin.ui_hints.enabled"
@@ -1513,7 +1516,7 @@ class NewsAdminBot:
         now = datetime.now(timezone.utc)
         if not force_refresh and self._controls_cache is not None:
             loaded_at, cached_rows = self._controls_cache
-            if (now - loaded_at).total_seconds() <= 30:
+            if (now - loaded_at).total_seconds() <= _CONTROLS_CACHE_TTL_SECONDS:
                 _UI_HINTS_ENABLED = self._ui_hints_enabled_from_rows(cached_rows)
                 return list(cached_rows)
 
@@ -1635,6 +1638,50 @@ class NewsAdminBot:
         except Exception:
             # Не блокируем UX экранов, если control-plane временно недоступен.
             pass
+
+    def _workers_status_payload(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        cache_key = "workers_status_payload"
+        cached = self._derived_cache_get(
+            cache_key,
+            ttl_seconds=_WORKERS_STATUS_CACHE_TTL_SECONDS,
+            force_refresh=force_refresh,
+        )
+        if isinstance(cached, dict):
+            return dict(cached)
+
+        response = self.admin_client.workers_status()
+        response.raise_for_status()
+        payload = response.json() or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        self._derived_cache_set(cache_key, payload)
+        return dict(payload)
+
+    def _worker_activity_payload(
+        self,
+        worker_id: str,
+        *,
+        hours: int = 24,
+        limit: int = 50,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        normalized_worker_id = worker_id.strip()
+        cache_key = f"worker_activity:{normalized_worker_id}:{hours}:{limit}"
+        cached = self._derived_cache_get(
+            cache_key,
+            ttl_seconds=_WORKER_ACTIVITY_CACHE_TTL_SECONDS,
+            force_refresh=force_refresh,
+        )
+        if isinstance(cached, dict):
+            return dict(cached)
+
+        response = self.admin_client.workers_activity(normalized_worker_id, hours, limit)
+        response.raise_for_status()
+        payload = response.json() or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        self._derived_cache_set(cache_key, payload)
+        return dict(payload)
 
     def _schedule_config(self, *, force_refresh: bool = False):
         return resolve_schedule_config(self._load_controls(force_refresh=force_refresh))
@@ -2047,7 +2094,7 @@ class NewsAdminBot:
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
-    async def _ops_summary_text(self) -> str:
+    async def _ops_summary_text(self, *, force_refresh: bool = False) -> str:
         counts, next_publish = await self._queue_snapshot()
         overdue = self._overdue_scheduled_count()
         stale_publishing = self._publishing_stale_count(stale_minutes=30)
@@ -2057,9 +2104,11 @@ class NewsAdminBot:
         issues: list[str] = []
         now_utc = datetime.now(timezone.utc)
         try:
-            status_response = await asyncio.to_thread(self.admin_client.workers_status)
-            status_response.raise_for_status()
-            worker_rows = status_response.json().get("workers") or []
+            status_payload = await asyncio.to_thread(
+                self._workers_status_payload,
+                force_refresh=force_refresh,
+            )
+            worker_rows = status_payload.get("workers") or []
             worker_map = {str(item.get("worker_id") or ""): item for item in worker_rows}
 
             for worker_id in _CRITICAL_WORKER_IDS:
@@ -2079,13 +2128,13 @@ class NewsAdminBot:
             for worker_id in _CRITICAL_WORKER_IDS:
                 try:
                     activity_response = await asyncio.to_thread(
-                        self.admin_client.workers_activity,
+                        self._worker_activity_payload,
                         worker_id,
-                        24,
-                        50,
+                        hours=24,
+                        limit=50,
+                        force_refresh=force_refresh,
                     )
-                    activity_response.raise_for_status()
-                    payload = activity_response.json()
+                    payload = activity_response
                 except Exception as exc:
                     worker_lines.append(f"⚠️ {_WORKER_LABELS.get(worker_id, worker_id)}: не удалось прочитать события 24ч ({exc})")
                     issues.append(f"worker_activity_unavailable:{worker_id}")
@@ -2180,7 +2229,7 @@ class NewsAdminBot:
     def _ops_summary_keyboard(self) -> InlineKeyboardMarkup:
         rows = self._two_column_rows(
             [
-                _inline_button("🔄 Обновить", callback_data="sec:ops"),
+                _inline_button("🔄 Обновить", callback_data="sec:ops:refresh"),
                 _inline_button("👷 Воркеры", callback_data="workers"),
                 _inline_button("🧹 Сброс stale", callback_data="resetstale", style=_BUTTON_STYLE_DANGER),
                 _inline_button("🗓 Календарь", callback_data="cal:summary"),
@@ -2476,14 +2525,14 @@ class NewsAdminBot:
             display_name = _WORKER_LABELS.get(worker_id, worker_id)
             worker_buttons.append(_inline_button(f"{mark} {display_name}"[:32], callback_data=f"wrk:{token}"))
         rows = self._two_column_rows(worker_buttons)
-        rows.append([_inline_button("🔄 Обновить список", callback_data="workers")])
+        rows.append([_inline_button("🔄 Обновить список", callback_data="workers:refresh")])
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
         return InlineKeyboardMarkup(rows)
 
     def _worker_activity_keyboard(self, worker_id: str) -> InlineKeyboardMarkup:
         token = _worker_callback_token(worker_id)
         rows: list[list[InlineKeyboardButton]] = [
-            [_inline_button("🔄 Обновить карточку", callback_data=f"wrk:{token}")]
+            [_inline_button("🔄 Обновить карточку", callback_data=f"wrk:{token}:refresh")]
         ]
         rows.extend(self._submenu_nav_rows(back_callback="workers", back_label="🔙 К воркерам"))
         return InlineKeyboardMarkup(rows)
@@ -4144,7 +4193,7 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(buttons)
 
     def _schedule_settings_text(self) -> str:
-        schedule = self._schedule_config(force_refresh=True)
+        schedule = self._schedule_config()
         lines = [
             "Настройка автоматической сетки публикаций",
             "",
@@ -4182,7 +4231,7 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _schedule_detail_text(self, alias: str) -> str:
-        schedule = self._schedule_config(force_refresh=True)
+        schedule = self._schedule_config()
         meta = schedule_alias_meta(alias)
         slot_value = getattr(schedule, f"{alias}_slot")
         enabled = getattr(schedule, f"{alias}_enabled")
@@ -4213,7 +4262,7 @@ class NewsAdminBot:
         return "\n".join(lines)
 
     def _schedule_detail_keyboard(self, alias: str) -> InlineKeyboardMarkup:
-        schedule = self._schedule_config(force_refresh=True)
+        schedule = self._schedule_config()
         enabled = getattr(schedule, f"{alias}_enabled")
         options = getattr(schedule, f"{alias}_options")
         rows: list[list[InlineKeyboardButton]] = [
@@ -4240,7 +4289,7 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _longread_topics_text(self) -> str:
-        active_topics = self._longread_topics_active(force_refresh=True)
+        active_topics = self._longread_topics_active()
         lines = [
             "Темы воскресных лонгридов",
             "",
@@ -4264,7 +4313,7 @@ class NewsAdminBot:
         return "\n".join(lines)
 
     def _longread_topics_keyboard(self) -> InlineKeyboardMarkup:
-        active_topics = set(self._longread_topics_active(force_refresh=True))
+        active_topics = set(self._longread_topics_active())
         topic_buttons: list[InlineKeyboardButton] = []
         for index, topic in enumerate(_LONGREAD_TOPIC_LIBRARY, start=1):
             label = f"{'✅' if topic in active_topics else '☐'} {index}. {topic[:34]}"
@@ -4275,15 +4324,15 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _interval_settings_text(self) -> str:
-        generate_morning, generate_evening = self._configured_generate_times(force_refresh=True)
-        telegram_morning, telegram_evening = self._configured_telegram_ingest_times(force_refresh=True)
-        telegram_fetch_limit = self._configured_telegram_fetch_limit(force_refresh=True)
-        publish_interval = self._configured_publish_interval(force_refresh=True)
-        generate_limit = self._configured_generate_limit(force_refresh=True)
-        retention_days = self._configured_review_retention_days(force_refresh=True)
-        broad_ai_limit = self._configured_broad_ai_limit(force_refresh=True)
-        reader_digest_slot = self._configured_reader_digest_time(force_refresh=True)
-        reader_digest_limit = self._configured_reader_digest_limit(force_refresh=True)
+        generate_morning, generate_evening = self._configured_generate_times()
+        telegram_morning, telegram_evening = self._configured_telegram_ingest_times()
+        telegram_fetch_limit = self._configured_telegram_fetch_limit()
+        publish_interval = self._configured_publish_interval()
+        generate_limit = self._configured_generate_limit()
+        retention_days = self._configured_review_retention_days()
+        broad_ai_limit = self._configured_broad_ai_limit()
+        reader_digest_slot = self._configured_reader_digest_time()
+        reader_digest_limit = self._configured_reader_digest_limit()
         return (
             "Ритм автоматической генерации и публикации\n\n"
             + _screen_guide(
@@ -4325,47 +4374,47 @@ class NewsAdminBot:
 
     def _interval_detail_text(self, kind: str) -> str:
         if kind == "generate_morning":
-            current = self._configured_generate_times(force_refresh=True)[0]
+            current = self._configured_generate_times()[0]
             options = settings.news_generate_morning_options_list
             label = "Утренний слот автогенерации"
         elif kind == "generate_evening":
-            current = self._configured_generate_times(force_refresh=True)[1]
+            current = self._configured_generate_times()[1]
             options = settings.news_generate_evening_options_list
             label = "Вечерний слот автогенерации"
         elif kind == "telegram_morning":
-            current = self._configured_telegram_ingest_times(force_refresh=True)[0]
+            current = self._configured_telegram_ingest_times()[0]
             options = settings.news_telegram_ingest_morning_options_list
             label = "Утренний слот Telegram-парсера"
         elif kind == "telegram_evening":
-            current = self._configured_telegram_ingest_times(force_refresh=True)[1]
+            current = self._configured_telegram_ingest_times()[1]
             options = settings.news_telegram_ingest_evening_options_list
             label = "Вечерний слот Telegram-парсера"
         elif kind == "telegram_limit":
-            current = self._configured_telegram_fetch_limit(force_refresh=True)
+            current = self._configured_telegram_fetch_limit()
             options = [30, 50, 80, 100, 150]
             label = "Лимит сообщений Telegram-парсера"
         elif kind == "reader_digest_slot":
-            current = self._configured_reader_digest_time(force_refresh=True)
-            options = self._configured_reader_digest_time_options(force_refresh=True)
+            current = self._configured_reader_digest_time()
+            options = self._configured_reader_digest_time_options()
             label = "Слот рассылки reader-digest"
         elif kind == "reader_digest_limit":
-            current = self._configured_reader_digest_limit(force_refresh=True)
-            options = self._configured_reader_digest_limit_options(force_refresh=True)
+            current = self._configured_reader_digest_limit()
+            options = self._configured_reader_digest_limit_options()
             label = "Лимит получателей за цикл reader-digest"
         elif kind == "publish":
-            current = self._configured_publish_interval(force_refresh=True)
+            current = self._configured_publish_interval()
             options = settings.news_publish_interval_options_list
             label = "Автопубликация"
         elif kind == "retention":
-            current = self._configured_review_retention_days(force_refresh=True)
+            current = self._configured_review_retention_days()
             options = settings.news_review_retention_options_list
             label = "Хранение драфтов На проверке"
         elif kind == "broad_ai":
-            current = self._configured_broad_ai_limit(force_refresh=True)
-            options = self._configured_broad_ai_options(force_refresh=True)
+            current = self._configured_broad_ai_limit()
+            options = self._configured_broad_ai_options()
             label = "Лимит broad-AI за цикл"
         else:
-            current = self._configured_generate_limit(force_refresh=True)
+            current = self._configured_generate_limit()
             options = settings.news_generate_limit_options_list
             label = "Лимит генерации за цикл"
 
@@ -4402,15 +4451,15 @@ class NewsAdminBot:
         elif kind == "telegram_limit":
             options = [30, 50, 80, 100, 150]
         elif kind == "reader_digest_slot":
-            options = self._configured_reader_digest_time_options(force_refresh=True)
+            options = self._configured_reader_digest_time_options()
         elif kind == "reader_digest_limit":
-            options = self._configured_reader_digest_limit_options(force_refresh=True)
+            options = self._configured_reader_digest_limit_options()
         elif kind == "publish":
             options = settings.news_publish_interval_options_list
         elif kind == "retention":
             options = settings.news_review_retention_options_list
         elif kind == "broad_ai":
-            options = self._configured_broad_ai_options(force_refresh=True)
+            options = self._configured_broad_ai_options()
         else:
             options = settings.news_generate_limit_options_list
 
@@ -5906,8 +5955,8 @@ class NewsAdminBot:
         except Exception as exc:
             logger.exception("news_feedback_reaction_failed", extra={"error": str(exc)})
 
-    async def _show_panel_message(self, update: Update, *, intro: bool = False) -> None:
-        controls = self._load_controls(force_refresh=True)
+    async def _show_panel_message(self, update: Update, *, intro: bool = False, force_refresh: bool = False) -> None:
+        controls = self._load_controls(force_refresh=force_refresh)
         text = await self._panel_text(controls)
         counts, _ = await self._queue_snapshot()
         if intro:
@@ -5957,7 +6006,7 @@ class NewsAdminBot:
         )
 
     async def _show_generation_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        controls = self._controls_map(force_refresh=True)
+        controls = self._controls_map()
         await update.effective_message.reply_text(
             self._generation_text(controls),
             reply_markup=self._generation_keyboard(),
@@ -6136,9 +6185,7 @@ class NewsAdminBot:
         if not await self._ensure_admin(update):
             return
         try:
-            response = self.admin_client.workers_status()
-            response.raise_for_status()
-            payload = response.json()
+            payload = self._workers_status_payload(force_refresh=True)
             await update.effective_message.reply_text(
                 _worker_list_text(payload),
                 reply_markup=self._workers_keyboard(payload),
@@ -6852,7 +6899,7 @@ class NewsAdminBot:
                 return
 
             if data == "sec:automation":
-                controls = self._load_controls(force_refresh=True)
+                controls = self._load_controls()
                 await self._safe_edit_message_text(
                     query,
                     self._controls_text(controls),
@@ -6861,9 +6908,7 @@ class NewsAdminBot:
                 return
 
             if data == "sec:workers":
-                response = self.admin_client.workers_status()
-                response.raise_for_status()
-                payload = response.json()
+                payload = self._workers_status_payload()
                 await self._safe_edit_message_text(
                     query,
                     _worker_list_text(payload),
@@ -6880,10 +6925,11 @@ class NewsAdminBot:
                 )
                 return
 
-            if data == "sec:ops":
+            if data in {"sec:ops", "sec:ops:refresh"}:
+                force_refresh = data.endswith(":refresh")
                 await self._safe_edit_message_text(
                     query,
-                    await self._ops_summary_text(),
+                    await self._ops_summary_text(force_refresh=force_refresh),
                     reply_markup=self._ops_summary_keyboard(),
                 )
                 return
@@ -7348,7 +7394,7 @@ class NewsAdminBot:
                 return
 
             if data == "sec:generate":
-                controls = self._controls_map(force_refresh=True)
+                controls = self._controls_map()
                 previews = context.user_data.get(_STATE_GENERATION_PREVIEWS) or []
                 await self._safe_edit_message_text(
                     query,
@@ -7394,7 +7440,7 @@ class NewsAdminBot:
                         reply_markup=self._review_posts_keyboard(total, rows, 0, "ai"),
                     )
                     return
-                controls = self._controls_map(force_refresh=True)
+                controls = self._controls_map()
                 await self._safe_edit_message_text(
                     query,
                     (
@@ -7409,7 +7455,7 @@ class NewsAdminBot:
 
             if data == "gen:clear":
                 context.user_data.pop(_STATE_GENERATION_PREVIEWS, None)
-                controls = self._controls_map(force_refresh=True)
+                controls = self._controls_map()
                 await self._safe_edit_message_text(
                     query,
                     self._generation_text(controls),
@@ -7446,7 +7492,7 @@ class NewsAdminBot:
                 return
 
             if data == "automation":
-                controls = self._load_controls(force_refresh=True)
+                controls = self._load_controls()
                 await self._safe_edit_message_text(
                     query,
                     self._controls_text(controls),
@@ -7455,7 +7501,8 @@ class NewsAdminBot:
                 return
 
             if data == "preset:twice_daily":
-                generate_row = self._generate_control_row(force_refresh=True)
+                controls_lookup = self._controls_lookup(force_refresh=True)
+                generate_row = controls_lookup.get("news.generate.enabled", {})
                 generate_config = dict(generate_row.get("config") or {})
                 generate_config.update(
                     {
@@ -7475,7 +7522,7 @@ class NewsAdminBot:
                 }
                 self.admin_client.update_automation_control("news.generate.enabled", generate_payload).raise_for_status()
 
-                publish_row = self._publish_control_row(force_refresh=True)
+                publish_row = controls_lookup.get("news.publish.enabled", {})
                 publish_config = dict(publish_row.get("config") or {})
                 publish_config["interval_seconds"] = int(settings.news_publish_interval_seconds)
                 publish_payload = {
@@ -7487,7 +7534,7 @@ class NewsAdminBot:
                 }
                 self.admin_client.update_automation_control("news.publish.enabled", publish_payload).raise_for_status()
 
-                ingest_row = self._telegram_ingest_control_row(force_refresh=True)
+                ingest_row = controls_lookup.get("news.telegram_ingest.enabled", {})
                 ingest_config = dict(ingest_row.get("config") or {})
                 ingest_config.update(
                     {
@@ -7527,8 +7574,9 @@ class NewsAdminBot:
 
             if data.startswith("fa:"):
                 enabled = data.split(":", maxsplit=1)[1] == "1"
+                controls_lookup = self._controls_lookup(force_refresh=True)
                 for key in ("news.generate.enabled", "news.telegram_ingest.enabled", "news.publish.enabled"):
-                    row = self._controls_lookup(force_refresh=True).get(key, {})
+                    row = controls_lookup.get(key, {})
                     payload = {
                         "scope": "news",
                         "title": row.get("title") or key,
@@ -7606,10 +7654,8 @@ class NewsAdminBot:
                 )
                 return
 
-            if data == "workers":
-                response = self.admin_client.workers_status()
-                response.raise_for_status()
-                payload = response.json()
+            if data in {"workers", "workers:refresh"}:
+                payload = self._workers_status_payload(force_refresh=data.endswith(":refresh"))
                 await self._safe_edit_message_text(
                     query,
                     _worker_list_text(payload),
@@ -7618,16 +7664,25 @@ class NewsAdminBot:
                 return
 
             if data.startswith("wrk:"):
-                token = data.split(":", maxsplit=1)[1]
+                parts = data.split(":", maxsplit=2)
+                if len(parts) < 2:
+                    await query.answer("Некорректный worker_id", show_alert=True)
+                    return
+                token = parts[1]
+                force_refresh = len(parts) == 3 and parts[2] == "refresh"
                 worker_id = _worker_id_from_callback_token(token)
                 if not worker_id:
                     await query.answer("Некорректный worker_id", show_alert=True)
                     return
-                response = self.admin_client.workers_activity(worker_id, hours=24, limit=30)
-                response.raise_for_status()
+                payload = self._worker_activity_payload(
+                    worker_id,
+                    hours=24,
+                    limit=30,
+                    force_refresh=force_refresh,
+                )
                 await self._safe_edit_message_text(
                     query,
-                    _format_worker_activity(response.json()),
+                    _format_worker_activity(payload),
                     reply_markup=self._worker_activity_keyboard(worker_id),
                 )
                 return
@@ -8634,16 +8689,14 @@ class NewsAdminBot:
                 await self.cmd_calendar(update, context)
                 return
             if _button_text_equals(message_text, "🤖 Автоматизация"):
-                controls = self._load_controls(force_refresh=True)
+                controls = self._load_controls()
                 await update.effective_message.reply_text(
                     self._controls_text(controls),
                     reply_markup=self._automation_keyboard(controls),
                 )
                 return
             if _button_text_equals(message_text, "👷 Воркеры"):
-                response = self.admin_client.workers_status()
-                response.raise_for_status()
-                payload = response.json()
+                payload = self._workers_status_payload()
                 await update.effective_message.reply_text(
                     _worker_list_text(payload),
                     reply_markup=self._workers_keyboard(payload),
