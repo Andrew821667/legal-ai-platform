@@ -635,6 +635,32 @@ class ReaderContinueStateOut(BaseModel):
     recommended_reason: str
 
 
+class ReaderConversionFunnelStageOut(BaseModel):
+    key: str
+    title: str
+    users: int
+
+
+class ReaderConversionFunnelRateOut(BaseModel):
+    key: str
+    title: str
+    value: float
+
+
+class ReaderConversionFunnelOut(BaseModel):
+    hours: int
+    since: datetime
+    until: datetime
+    unique_users_total: int
+    leads_total: int
+    stages: list[ReaderConversionFunnelStageOut]
+    rates: list[ReaderConversionFunnelRateOut]
+    top_miniapp_sources: list[ReaderMiniAppTopMetric]
+    top_cta_sources: list[ReaderMiniAppTopMetric]
+    top_intent_sources: list[ReaderMiniAppTopMetric]
+    top_actions: list[ReaderMiniAppTopMetric]
+
+
 class ReaderFeedItem(BaseModel):
     id: uuid.UUID
     title: str | None

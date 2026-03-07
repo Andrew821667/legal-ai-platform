@@ -300,6 +300,117 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_reader_conversion_funnel_endpoint() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.reader.funnel"
+    raw_key = _create_api_key(Scope.news, api_key_name)
+    user_a = 9_880_101
+    user_b = 9_880_102
+
+    try:
+        event_a = client.post(
+            "/api/v1/reader/miniapp/event",
+            json={
+                "telegram_user_id": user_a,
+                "event_type": "nav_click",
+                "source": "miniapp_home",
+                "screen": "home",
+                "action": "miniapp_home_open_content",
+                "payload": {},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert event_a.status_code == 200
+
+        event_b = client.post(
+            "/api/v1/reader/miniapp/event",
+            json={
+                "telegram_user_id": user_b,
+                "event_type": "cta_click",
+                "source": "miniapp_flow",
+                "screen": "/miniapp",
+                "action": "miniapp_flow_open_lead_bot",
+                "payload": {},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert event_b.status_code == 200
+
+        cta_a = client.post(
+            "/api/v1/reader/cta-click",
+            json={
+                "telegram_user_id": user_a,
+                "cta_type": "consultation",
+                "context": "reader_post",
+                "payload": {"action": "cta.consultation"},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert cta_a.status_code == 200
+
+        cta_b = client.post(
+            "/api/v1/reader/cta-click",
+            json={
+                "telegram_user_id": user_b,
+                "cta_type": "miniapp_open",
+                "context": "reader_nav",
+                "payload": {"action": "open.miniapp.home"},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert cta_b.status_code == 200
+
+        intent_a = client.post(
+            "/api/v1/reader/lead-intent",
+            json={
+                "telegram_user_id": user_a,
+                "intent_type": "consultation",
+                "message": "Нужен пилот",
+                "payload": {"source": "reader_bot", "action": "lead.consultation"},
+            },
+            headers={"X-API-Key": raw_key},
+        )
+        assert intent_a.status_code == 200
+        assert intent_a.json()["created"] is True
+
+        funnel_response = client.get(
+            "/api/v1/reader/conversion-funnel?hours=168",
+            headers={"X-API-Key": raw_key},
+        )
+        assert funnel_response.status_code == 200
+        funnel = funnel_response.json()
+        assert funnel["hours"] == 168
+        assert funnel["unique_users_total"] >= 2
+        assert funnel["leads_total"] >= 1
+
+        stages = {item["key"]: item["users"] for item in funnel["stages"]}
+        assert stages["miniapp_active"] >= 2
+        assert stages["cta_click"] >= 2
+        assert stages["lead_intent"] >= 1
+
+        rates = {item["key"]: item["value"] for item in funnel["rates"]}
+        assert rates["miniapp_to_cta"] >= 0.0
+        assert rates["cta_to_intent"] >= 0.0
+        assert rates["miniapp_to_intent"] >= 0.0
+
+        assert any(item["label"] == "miniapp.home" for item in funnel["top_miniapp_sources"])
+        assert any(item["label"] == "reader.post" for item in funnel["top_cta_sources"])
+        assert any(item["label"] == "reader.bot" for item in funnel["top_intent_sources"])
+        assert any(item["label"] == "open.content" for item in funnel["top_actions"])
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ReaderMiniAppEvent).where(ReaderMiniAppEvent.telegram_user_id.in_([user_a, user_b])))
+            db.execute(delete(ReaderSavedPost).where(ReaderSavedPost.telegram_user_id.in_([user_a, user_b])))
+            db.execute(delete(ReaderPreference).where(ReaderPreference.telegram_user_id.in_([user_a, user_b])))
+            db.execute(delete(Event).where(Event.type.in_(["reader.cta_click", "reader.lead_intent"])))
+            db.execute(delete(Lead).where(Lead.telegram_user_id.in_([user_a, user_b])))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_reader_feedback_cta_and_lead_intent_flow() -> None:
     client = TestClient(app)
     api_key_name = "pytest.reader.intent"

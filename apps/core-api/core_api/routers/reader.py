@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
@@ -44,6 +45,9 @@ from core_api.schemas import (
     MessageResponse,
     PostFeedbackOut,
     ReaderContinueStateOut,
+    ReaderConversionFunnelOut,
+    ReaderConversionFunnelRateOut,
+    ReaderConversionFunnelStageOut,
     ReaderCtaClickCreate,
     ReaderFeedItem,
     ReaderFeedbackCreate,
@@ -136,6 +140,25 @@ def _trim_optional_text(value: str | None, *, max_len: int) -> str | None:
     if not normalized:
         return None
     return normalized[:max_len]
+
+
+def _payload_user_id(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    return parsed
+
+
+def _top_counter(counter: Counter[str], *, limit: int = 8) -> list[ReaderMiniAppTopMetric]:
+    rows = sorted(counter.items(), key=lambda item: (-int(item[1]), item[0]))
+    return [
+        ReaderMiniAppTopMetric(label=str(label), count=int(count))
+        for label, count in rows[:limit]
+        if str(label or "").strip()
+    ]
 
 
 def _miniapp_profile_out(row: ReaderPreference) -> ReaderMiniAppProfileOut:
@@ -534,6 +557,134 @@ def summarize_reader_miniapp_events(
         top_actions=_top_metrics(ReaderMiniAppEvent.action),
         top_users=top_users,
         recent_events=recent_events,
+    )
+
+
+@router.get("/conversion-funnel", response_model=ReaderConversionFunnelOut)
+def reader_conversion_funnel(
+    hours: int = Query(default=24 * 7, ge=1, le=24 * 90),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> ReaderConversionFunnelOut:
+    _ = identity
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(hours=hours)
+
+    miniapp_rows = list(
+        db.execute(
+            select(ReaderMiniAppEvent)
+            .where(ReaderMiniAppEvent.created_at >= since)
+            .order_by(ReaderMiniAppEvent.created_at.desc())
+            .limit(200000)
+        ).scalars().all()
+    )
+    cta_rows = list(
+        db.execute(
+            select(Event)
+            .where(Event.type == "reader.cta_click")
+            .where(Event.created_at >= since)
+            .order_by(Event.created_at.desc())
+            .limit(200000)
+        ).scalars().all()
+    )
+    intent_rows = list(
+        db.execute(
+            select(Event)
+            .where(Event.type == "reader.lead_intent")
+            .where(Event.created_at >= since)
+            .order_by(Event.created_at.desc())
+            .limit(200000)
+        ).scalars().all()
+    )
+
+    miniapp_users: set[int] = set()
+    cta_users: set[int] = set()
+    intent_users: set[int] = set()
+    lead_ids: set[uuid.UUID] = set()
+    unique_users_total: set[int] = set()
+
+    miniapp_sources = Counter[str]()
+    cta_sources = Counter[str]()
+    intent_sources = Counter[str]()
+    actions = Counter[str]()
+
+    for row in miniapp_rows:
+        user_id = _payload_user_id(row.telegram_user_id)
+        if user_id is not None:
+            miniapp_users.add(user_id)
+            unique_users_total.add(user_id)
+        source = normalize_reader_source(row.source, default="miniapp.app")
+        miniapp_sources[source] += 1
+        action = normalize_reader_action(row.action)
+        if action:
+            actions[action] += 1
+
+    for row in cta_rows:
+        payload = row.payload if isinstance(row.payload, dict) else {}
+        user_id = _payload_user_id(payload.get("telegram_user_id"))
+        if user_id is not None:
+            cta_users.add(user_id)
+            unique_users_total.add(user_id)
+        source = normalize_reader_source(payload.get("source") or payload.get("context"), default="reader.post")
+        cta_sources[source] += 1
+        action = normalize_reader_action(payload.get("action"))
+        if action:
+            actions[action] += 1
+
+    for row in intent_rows:
+        payload = row.payload if isinstance(row.payload, dict) else {}
+        user_id = _payload_user_id(payload.get("telegram_user_id"))
+        if user_id is not None:
+            intent_users.add(user_id)
+            unique_users_total.add(user_id)
+        source = normalize_reader_source(payload.get("source"), default="reader.bot")
+        intent_sources[source] += 1
+        action = normalize_reader_action(payload.get("action"))
+        if action:
+            actions[action] += 1
+        if row.lead_id is not None:
+            lead_ids.add(row.lead_id)
+
+    def _rate(numerator: int, denominator: int) -> float:
+        if denominator <= 0:
+            return 0.0
+        return round((float(numerator) / float(denominator)) * 100.0, 2)
+
+    stages = [
+        ReaderConversionFunnelStageOut(key="miniapp_active", title="Mini App активные", users=len(miniapp_users)),
+        ReaderConversionFunnelStageOut(key="cta_click", title="CTA клики", users=len(cta_users)),
+        ReaderConversionFunnelStageOut(key="lead_intent", title="Лид-интент", users=len(intent_users)),
+    ]
+    rates = [
+        ReaderConversionFunnelRateOut(
+            key="miniapp_to_cta",
+            title="Mini App -> CTA",
+            value=_rate(len(cta_users), len(miniapp_users)),
+        ),
+        ReaderConversionFunnelRateOut(
+            key="cta_to_intent",
+            title="CTA -> Lead intent",
+            value=_rate(len(intent_users), len(cta_users)),
+        ),
+        ReaderConversionFunnelRateOut(
+            key="miniapp_to_intent",
+            title="Mini App -> Lead intent",
+            value=_rate(len(intent_users), len(miniapp_users)),
+        ),
+    ]
+
+    return ReaderConversionFunnelOut(
+        hours=hours,
+        since=since,
+        until=now,
+        unique_users_total=len(unique_users_total),
+        leads_total=len(lead_ids),
+        stages=stages,
+        rates=rates,
+        top_miniapp_sources=_top_counter(miniapp_sources),
+        top_cta_sources=_top_counter(cta_sources),
+        top_intent_sources=_top_counter(intent_sources),
+        top_actions=_top_counter(actions),
     )
 
 

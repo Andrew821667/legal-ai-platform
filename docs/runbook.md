@@ -305,6 +305,8 @@ python -u -m app.reader_bot
   - `miniapp_content`, `miniapp_tools`, `miniapp_solutions`, `miniapp_profile`.
 - для сквозной персонализации mini-app/reader используется endpoint
   `/api/v1/reader/continue-state` (recommended section/screen + saved/events/lead-intent counters).
+- для сквозной конверсии reader/mini-app используется endpoint
+  `/api/v1/reader/conversion-funnel?hours=168` (воронка + top `source/action`).
 
 Запуск reader digest-воркера (локально):
 ```bash

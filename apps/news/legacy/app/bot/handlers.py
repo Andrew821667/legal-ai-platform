@@ -36,6 +36,7 @@ from app.modules.llm_provider import get_llm_provider
 from app.modules.vector_search import get_vector_search
 from app.modules.analytics import AnalyticsService
 from app.modules.channel_moderation import ChannelModeration
+from app.services.core_reader_bridge import fetch_reader_conversion_funnel
 import structlog
 
 logger = structlog.get_logger()
@@ -1703,7 +1704,8 @@ def format_analytics_report(
     views_stats: Optional[Dict] = None,
     best_time: Optional[Dict] = None,
     trending_topics: Optional[List[Dict]] = None,
-    alerts: Optional[List[Dict]] = None
+    alerts: Optional[List[Dict]] = None,
+    conversion_funnel: Optional[Dict] = None,
 ) -> str:
     """
     Форматировать красивый отчёт аналитики.
@@ -1929,6 +1931,42 @@ def format_analytics_report(
         for alert in alerts:
             report += f"{alert['message']}\n"
             report += f"   └─ {alert['details']}\n\n"
+
+    if conversion_funnel:
+        stages = conversion_funnel.get("stages") or []
+        rates = conversion_funnel.get("rates") or []
+        stage_map = {str(item.get("key")): int(item.get("users", 0)) for item in stages if isinstance(item, dict)}
+        rate_map = {str(item.get("key")): float(item.get("value", 0.0)) for item in rates if isinstance(item, dict)}
+        top_sources = conversion_funnel.get("top_miniapp_sources") or []
+        top_actions = conversion_funnel.get("top_actions") or []
+        leads_total = int(conversion_funnel.get("leads_total", 0) or 0)
+        unique_total = int(conversion_funnel.get("unique_users_total", 0) or 0)
+        hours = int(conversion_funnel.get("hours", 0) or 0)
+
+        report += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        report += "🔀 <b>Сквозная воронка Reader/Mini App</b>\n\n"
+        report += f"Период: {hours}ч | Уникальных пользователей: {unique_total}\n"
+        report += f"├─ 🧩 Mini App активные: {stage_map.get('miniapp_active', 0)}\n"
+        report += f"├─ 🎯 CTA клики: {stage_map.get('cta_click', 0)}\n"
+        report += f"├─ 📝 Lead intent: {stage_map.get('lead_intent', 0)}\n"
+        report += f"└─ 👤 Создано лидов: {leads_total}\n\n"
+        report += f"CR MiniApp → CTA: {rate_map.get('miniapp_to_cta', 0.0):.2f}%\n"
+        report += f"CR CTA → Intent: {rate_map.get('cta_to_intent', 0.0):.2f}%\n"
+        report += f"CR MiniApp → Intent: {rate_map.get('miniapp_to_intent', 0.0):.2f}%\n"
+
+        if top_sources:
+            report += "\nТоп источники Mini App:\n"
+            for idx, item in enumerate(top_sources[:3], 1):
+                label = html.escape(str(item.get("label", "unknown")))
+                count = int(item.get("count", 0) or 0)
+                report += f"{idx}. {label} — {count}\n"
+
+        if top_actions:
+            report += "\nТоп actions:\n"
+            for idx, item in enumerate(top_actions[:5], 1):
+                label = html.escape(str(item.get("label", "unknown")))
+                count = int(item.get("count", 0) or 0)
+                report += f"{idx}. {label} — {count}\n"
 
     report += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     report += f"📅 Обновлено: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
@@ -4010,6 +4048,8 @@ async def callback_analytics(callback: CallbackQuery, db: AsyncSession):
         best_time = await analytics.get_best_publish_time(min(days, 30))
         trending_topics = await analytics.get_trending_topics(days, top_n=5)
         alerts = await analytics.get_performance_alerts(days)
+        funnel_hours = min(max(days * 24, 24), 24 * 30)
+        conversion_funnel = await fetch_reader_conversion_funnel(hours=funnel_hours)
 
         # Форматируем отчёт
         report = format_analytics_report(
@@ -4023,7 +4063,8 @@ async def callback_analytics(callback: CallbackQuery, db: AsyncSession):
             views_stats=views_stats,
             best_time=best_time,
             trending_topics=trending_topics,
-            alerts=alerts
+            alerts=alerts,
+            conversion_funnel=conversion_funnel,
         )
 
 
@@ -4452,4 +4493,3 @@ async def start_bot():
 
 if __name__ == "__main__":
     asyncio.run(start_bot())
-
