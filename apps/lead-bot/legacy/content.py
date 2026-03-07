@@ -33,6 +33,67 @@ MODULE_CATALOG = {
     "custom_integrations": "Кастомные интеграции (CRM/1C/ERP)",
 }
 
+CLIENT_PLATFORM = {
+    "inhouse": {
+        "title": "Инхаус-команда / юрдепартамент",
+        "services": [
+            "Intake и маршрутизация внутренних юридических запросов (SLA, приоритеты, контроль сроков).",
+            "Договорной контур: предчек, redline-процессы, согласование с бизнесом.",
+            "Контроль комплаенса и ПДн: чек-листы, триггеры рисков, регламентные напоминания.",
+            "Внутренний AI-ассистент по базе знаний, шаблонам и типовым позициям команды.",
+            "Legal Ops-аналитика: узкие места, метрики, roadmap автоматизации.",
+        ],
+        "pricing": [
+            "Пилот (2-4 недели): от 150 000 ₽.",
+            "Рабочий контур 1-2 процессов: от 300 000 ₽.",
+            "Интеграции и масштабирование (CRM/1C/ERP): от 500 000 ₽.",
+        ],
+    },
+    "law_firm": {
+        "title": "Юрфирма / адвокатская практика",
+        "services": [
+            "Intake входящих обращений и первичная квалификация по практикам.",
+            "Стандартизация клиентских документов и ускорение подготовки типовых комплектов.",
+            "Контроль сроков по делам, задачам и точкам эскалации.",
+            "AI-помощник по шаблонам, позициям и внутренним регламентам практики.",
+            "Управляемая воронка заявок: от первого контакта до передачи в работу.",
+        ],
+        "pricing": [
+            "Пилот intake + квалификация: от 120 000 ₽.",
+            "Контур документов/дел и контроль сроков: от 250 000 ₽.",
+            "Комплексная автоматизация практики: от 450 000 ₽.",
+        ],
+    },
+    "business": {
+        "title": "Собственник / руководитель бизнеса",
+        "services": [
+            "Единая точка входа в юридические задачи от бизнеса (без потерь и хаоса в коммуникациях).",
+            "Быстрая оценка договорных рисков до передачи юристу.",
+            "Типовые юридические процессы: шаблоны, согласование, напоминания и контроль этапов.",
+            "Прозрачные статусы: что в работе, где узкое место, когда результат.",
+            "Пошаговый формат внедрения без перегруза команды.",
+        ],
+        "pricing": [
+            "Стартовый пилот на одной задаче: от 100 000 ₽.",
+            "Рабочий контур на 1-2 направления: от 220 000 ₽.",
+            "Сквозной контур с интеграциями: от 400 000 ₽.",
+        ],
+    },
+    "universal": {
+        "title": "Базовый профиль (уточняется)",
+        "services": [
+            "Диагностика текущего процесса и подбор реалистичного сценария автоматизации.",
+            "Пилот intake/договоров/типовых процессов под вашу роль и объем.",
+            "Дальнейшее масштабирование через legal ops и внутренние AI-инструменты.",
+        ],
+        "pricing": [
+            "Пилотный сценарий: от 150 000 ₽.",
+            "Рабочее решение с интеграциями: от 300 000 ₽.",
+            "Комплексная автоматизация: от 500 000 ₽.",
+        ],
+    },
+}
+
 
 def _build_service_cards() -> list[str]:
     cards: list[str] = []
@@ -45,6 +106,46 @@ def _build_service_cards() -> list[str]:
 
 SERVICE_CARDS = _build_service_cards()
 SERVICE_CATALOG_TEXT = "\n".join(f"• {item}" for item in SERVICE_CARDS)
+
+
+def _detect_client_platform(lead: dict | None) -> str:
+    if not lead:
+        return "universal"
+    haystack = " ".join(
+        str(lead.get(field) or "").lower()
+        for field in ("industry", "service_category", "specific_need", "pain_point", "company", "notes")
+    )
+    if any(token in haystack for token in ("юрфирм", "адвокат", "legal practice", "клиентск", "практик")):
+        return "law_firm"
+    if any(token in haystack for token in ("инхаус", "юрдеп", "корпорат", "комплаенс", "legal ops", "договор")):
+        return "inhouse"
+    if any(token in haystack for token in ("собствен", "директор", "ceo", "founder", "бизнес", "предприним")):
+        return "business"
+    return "universal"
+
+
+def _platform_services_text(platform_key: str) -> str:
+    platform = CLIENT_PLATFORM.get(platform_key) or CLIENT_PLATFORM["universal"]
+    bullets = "\n".join(f"• {line}" for line in platform["services"])
+    return (
+        "🎯 НАПРАВЛЕНИЯ РАБОТЫ\n\n"
+        f"Профиль клиента: {platform['title']}\n\n"
+        "Формат оказания услуг на платформе:\n"
+        f"{bullets}\n\n"
+        "Если профиль определился неточно, напишите вашу роль/тип компании — сразу перестрою предложения."
+    )
+
+
+def _platform_prices_text(platform_key: str) -> str:
+    platform = CLIENT_PLATFORM.get(platform_key) or CLIENT_PLATFORM["universal"]
+    bullets = "\n".join(f"• {line}" for line in platform["pricing"])
+    return (
+        "💰 СТОИМОСТЬ И ФОРМАТЫ\n\n"
+        f"Профиль клиента: {platform['title']}\n\n"
+        "Ориентиры по стоимости:\n"
+        f"{bullets}\n\n"
+        "Точный расчет зависит от объема, интеграций и SLA. Для персонального расчета нажмите «📞 Консультация»."
+    )
 
 
 def contact_lines(include_github: bool = False) -> str:
@@ -187,11 +288,15 @@ BUTTON_TO_MENU_KEY = {
 }
 
 
-def menu_response_by_key(key: str) -> str:
+def menu_response_by_key(key: str, lead: dict | None = None) -> str:
+    if key == "menu_services":
+        return _platform_services_text(_detect_client_platform(lead))
+    if key == "menu_prices":
+        return _platform_prices_text(_detect_client_platform(lead))
     return MENU_RESPONSES.get(key, "Выберите пункт меню.")
 
 
-def menu_response_by_button(button_text: str) -> str:
+def menu_response_by_button(button_text: str, lead: dict | None = None) -> str:
     normalized_text = normalize_button_text(button_text)
     key = BUTTON_TO_MENU_KEY.get(button_text)
     if not key:
@@ -201,7 +306,7 @@ def menu_response_by_button(button_text: str) -> str:
                 break
     if not key:
         return "Выберите пункт меню."
-    return menu_response_by_key(key)
+    return menu_response_by_key(key, lead=lead)
 
 
 LEAD_MAGNET_OFFER_TEXT = (

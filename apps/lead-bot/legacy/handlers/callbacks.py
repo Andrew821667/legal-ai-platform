@@ -152,7 +152,6 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             logger.warning(f"Failed to answer business menu callback: {answer_error}")
         
         callback_data = query.data or ""
-        response_text = content.menu_response_by_key(callback_data)
         menu_markup = _services_inline_menu_markup()
         contact_actions = {"menu_consultation", "menu_leave_contact"}
 
@@ -164,6 +163,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
 
         user = query.from_user
         user_db_id = None
+        lead = None
         if user:
             user_db_id = database.db.create_or_update_user(
                 telegram_id=user.id,
@@ -171,6 +171,9 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 first_name=user.first_name,
                 last_name=user.last_name,
             )
+            lead = database.db.get_lead_by_user_id(user_db_id) if user_db_id else None
+
+        response_text = content.menu_response_by_key(callback_data, lead=lead)
 
         contact_flow_actions = contact_actions | {"menu_contact_send_phone", "menu_contact_telegram_only"}
         if callback_data not in contact_flow_actions:

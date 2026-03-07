@@ -1875,7 +1875,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, button_text: str):
     """Обработчик кнопок меню"""
     _ = context
-    response = content.menu_response_by_button(button_text)
+    user = update.effective_user
+    lead = None
+    if user:
+        user_row = database.db.get_user_by_telegram_id(user.id)
+        if user_row:
+            lead = database.db.get_lead_by_user_id(user_row["id"])
+    response = content.menu_response_by_button(button_text, lead=lead)
     await update.message.reply_text(response)
 
 
