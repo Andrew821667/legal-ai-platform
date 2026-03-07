@@ -1877,11 +1877,17 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
     _ = context
     user = update.effective_user
     lead = None
+    selected_profile = None
     if user:
         user_row = database.db.get_user_by_telegram_id(user.id)
         if user_row:
             lead = database.db.get_lead_by_user_id(user_row["id"])
-    response = content.menu_response_by_button(button_text, lead=lead)
+            selected_profile = database.db.get_user_offer_profile(user_row["id"])
+    response = content.menu_response_by_button(
+        button_text,
+        lead=lead,
+        selected_profile=selected_profile,
+    )
     await update.message.reply_text(response)
 
 

@@ -73,6 +73,23 @@ def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
     )
 
 
+def _offer_profile_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🏢 Инхаус", callback_data="menu_offer_set_inhouse"),
+                InlineKeyboardButton("⚖️ Юрфирма", callback_data="menu_offer_set_law_firm"),
+            ],
+            [
+                InlineKeyboardButton("📈 Бизнес", callback_data="menu_offer_set_business"),
+                InlineKeyboardButton("📦 Базовый", callback_data="menu_offer_set_universal"),
+            ],
+            [InlineKeyboardButton("🧭 Автоопределение", callback_data="menu_offer_set_auto")],
+            [InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard")],
+        ]
+    )
+
+
 def _consultation_contact_markup() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
@@ -164,6 +181,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         user = query.from_user
         user_db_id = None
         lead = None
+        selected_profile = None
         if user:
             user_db_id = database.db.create_or_update_user(
                 telegram_id=user.id,
@@ -172,8 +190,72 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 last_name=user.last_name,
             )
             lead = database.db.get_lead_by_user_id(user_db_id) if user_db_id else None
+            selected_profile = database.db.get_user_offer_profile(user_db_id)
 
-        response_text = content.menu_response_by_key(callback_data, lead=lead)
+        profile_callback_map = {
+            "menu_offer_set_inhouse": "inhouse",
+            "menu_offer_set_law_firm": "law_firm",
+            "menu_offer_set_business": "business",
+            "menu_offer_set_universal": "universal",
+            "menu_offer_set_auto": None,
+        }
+        if callback_data in profile_callback_map:
+            if not user_db_id:
+                await utils.safe_reply_text(
+                    query.message,
+                    "Не удалось определить пользователя. Нажмите /start и повторите.",
+                    action="offer_profile_no_user",
+                )
+                return
+            new_profile = profile_callback_map[callback_data]
+            database.db.set_user_offer_profile(user_db_id, new_profile)
+            lead = database.db.get_lead_by_user_id(user_db_id) if user_db_id else None
+            response_text = content.offer_profile_change_success_text(new_profile)
+            response_text = (
+                f"{response_text}\n\n"
+                f"{content.offer_profile_panel_text(lead=lead, selected_profile=new_profile)}"
+            )
+            response_markup = _offer_profile_markup()
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=response_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    _clip_for_edit(response_text),
+                    reply_markup=response_markup,
+                    action="menu_offer_profile_set",
+                )
+            return
+
+        if callback_data == "menu_offer_profile":
+            response_text = content.offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
+            response_markup = _offer_profile_markup()
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=response_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    _clip_for_edit(response_text),
+                    reply_markup=response_markup,
+                    action="menu_offer_profile",
+                )
+            return
+
+        response_text = content.menu_response_by_key(
+            callback_data,
+            lead=lead,
+            selected_profile=selected_profile,
+        )
 
         contact_flow_actions = contact_actions | {"menu_contact_send_phone", "menu_contact_telegram_only"}
         if callback_data not in contact_flow_actions:

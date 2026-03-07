@@ -95,6 +95,14 @@ CLIENT_PLATFORM = {
 }
 
 
+OFFER_PROFILE_LABELS = {
+    "inhouse": "Инхаус-команда / юрдепартамент",
+    "law_firm": "Юрфирма / адвокатская практика",
+    "business": "Собственник / руководитель бизнеса",
+    "universal": "Базовый профиль (уточняется)",
+}
+
+
 def _build_service_cards() -> list[str]:
     cards: list[str] = []
     index = 1
@@ -132,7 +140,7 @@ def _platform_services_text(platform_key: str) -> str:
         f"Профиль клиента: {platform['title']}\n\n"
         "Формат оказания услуг на платформе:\n"
         f"{bullets}\n\n"
-        "Если профиль определился неточно, напишите вашу роль/тип компании — сразу перестрою предложения."
+        "Если профиль определился неточно, используйте кнопку «🧩 Сменить профиль»."
     )
 
 
@@ -144,7 +152,44 @@ def _platform_prices_text(platform_key: str) -> str:
         f"Профиль клиента: {platform['title']}\n\n"
         "Ориентиры по стоимости:\n"
         f"{bullets}\n\n"
-        "Точный расчет зависит от объема, интеграций и SLA. Для персонального расчета нажмите «📞 Консультация»."
+        "Точный расчет зависит от объема, интеграций и SLA. Для персонального расчета нажмите «📞 Консультация».\n"
+        "Для просмотра цен в другом сценарии используйте кнопку «🧩 Сменить профиль»."
+    )
+
+
+def _resolve_client_platform(lead: dict | None, selected_profile: str | None) -> str:
+    if selected_profile and selected_profile in CLIENT_PLATFORM:
+        return selected_profile
+    return _detect_client_platform(lead)
+
+
+def offer_profile_panel_text(lead: dict | None = None, selected_profile: str | None = None) -> str:
+    if selected_profile and selected_profile in OFFER_PROFILE_LABELS:
+        current = OFFER_PROFILE_LABELS[selected_profile]
+        mode = "ручной выбор"
+    else:
+        auto_key = _detect_client_platform(lead)
+        current = OFFER_PROFILE_LABELS.get(auto_key, OFFER_PROFILE_LABELS["universal"])
+        mode = "автоопределение"
+    return (
+        "🧩 СМЕНА ПРОФИЛЯ ПРЕДЛОЖЕНИЙ\n\n"
+        "Вы можете переключать профиль и смотреть услуги/цены для разных ролей.\n\n"
+        f"Текущий режим: {mode}\n"
+        f"Активный профиль: {current}\n\n"
+        "Выберите профиль кнопками ниже."
+    )
+
+
+def offer_profile_change_success_text(profile_key: str | None) -> str:
+    if profile_key and profile_key in OFFER_PROFILE_LABELS:
+        return (
+            "✅ Профиль предложений обновлен.\n\n"
+            f"Теперь услуги и цены показываю для: {OFFER_PROFILE_LABELS[profile_key]}.\n"
+            "В любой момент можно вернуться в автоопределение."
+        )
+    return (
+        "✅ Профиль переключен на автоопределение.\n\n"
+        "Теперь услуги и цены снова подбираются автоматически по вашему контексту."
     )
 
 
@@ -283,20 +328,31 @@ BUTTON_TO_MENU_KEY = {
     "📲 Оставить контакт": "menu_leave_contact",
     "📲 Контакт": "menu_leave_contact",
     "👤 Профиль": "menu_profile",
+    "🧩 Сменить профиль": "menu_offer_profile",
     "📚 Документы": "menu_documents",
     "✉️ Личное обращение": "menu_personal_request",
 }
 
 
-def menu_response_by_key(key: str, lead: dict | None = None) -> str:
+def menu_response_by_key(
+    key: str,
+    lead: dict | None = None,
+    selected_profile: str | None = None,
+) -> str:
     if key == "menu_services":
-        return _platform_services_text(_detect_client_platform(lead))
+        return _platform_services_text(_resolve_client_platform(lead, selected_profile))
     if key == "menu_prices":
-        return _platform_prices_text(_detect_client_platform(lead))
+        return _platform_prices_text(_resolve_client_platform(lead, selected_profile))
+    if key == "menu_offer_profile":
+        return offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
     return MENU_RESPONSES.get(key, "Выберите пункт меню.")
 
 
-def menu_response_by_button(button_text: str, lead: dict | None = None) -> str:
+def menu_response_by_button(
+    button_text: str,
+    lead: dict | None = None,
+    selected_profile: str | None = None,
+) -> str:
     normalized_text = normalize_button_text(button_text)
     key = BUTTON_TO_MENU_KEY.get(button_text)
     if not key:
@@ -306,7 +362,7 @@ def menu_response_by_button(button_text: str, lead: dict | None = None) -> str:
                 break
     if not key:
         return "Выберите пункт меню."
-    return menu_response_by_key(key, lead=lead)
+    return menu_response_by_key(key, lead=lead, selected_profile=selected_profile)
 
 
 LEAD_MAGNET_OFFER_TEXT = (

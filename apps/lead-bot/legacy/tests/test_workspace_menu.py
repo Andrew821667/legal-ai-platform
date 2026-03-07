@@ -16,6 +16,7 @@ def test_workspace_inline_menu_contains_profile_and_documents() -> None:
         for button in row
     ]
     assert "menu_profile" in callback_values
+    assert "menu_offer_profile" in callback_values
     assert "menu_documents" in callback_values
 
 
@@ -24,3 +25,10 @@ def test_profile_and_documents_buttons_resolve_menu_keys() -> None:
     documents_response = content.menu_response_by_button("📚 Документы")
     assert "ПРОФИЛЬ" in profile_response
     assert "ДОКУМЕНТЫ" in documents_response
+
+
+def test_offer_profile_button_and_override() -> None:
+    selector_response = content.menu_response_by_button("🧩 Сменить профиль")
+    business_services = content.menu_response_by_key("menu_services", selected_profile="business")
+    assert "СМЕНА ПРОФИЛЯ" in selector_response
+    assert "Собственник / руководитель бизнеса" in business_services

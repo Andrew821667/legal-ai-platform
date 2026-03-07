@@ -25,10 +25,13 @@ WORKSPACE_INLINE_MENU = [
     ],
     [
         InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
-        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+        InlineKeyboardButton("🧩 Сменить профиль", callback_data="menu_offer_profile"),
     ],
     [
+        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
         InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
+    ],
+    [
         InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
     ],
 ]
@@ -40,6 +43,9 @@ QUICK_NAV_MENU = [
     ],
     [
         InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+        InlineKeyboardButton("🧩 Сменить профиль", callback_data="menu_offer_profile"),
+    ],
+    [
         InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
     ],
 ]

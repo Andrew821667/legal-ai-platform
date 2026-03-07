@@ -24,6 +24,7 @@ _USERS_COLUMNS = frozenset({
     "transborder_consent", "transborder_consent_date",
     "marketing_consent", "marketing_consent_date",
     "conversation_stage", "cta_variant", "cta_shown", "cta_shown_at",
+    "offer_profile_override",
     "created_at", "last_interaction",
 })
 
@@ -115,6 +116,7 @@ class Database:
             "cta_variant": row.get("cta_variant"),
             "cta_shown": bool(row.get("cta_shown")),
             "cta_shown_at": row.get("cta_shown_at"),
+            "offer_profile_override": row.get("offer_profile_override"),
             "created_at": row.get("created_at"),
             "last_interaction": row.get("last_interaction"),
         }
@@ -234,6 +236,7 @@ class Database:
                     cta_variant TEXT,
                     cta_shown BOOLEAN DEFAULT 0,
                     cta_shown_at TIMESTAMP,
+                    offer_profile_override TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -521,6 +524,10 @@ class Database:
             if 'marketing_consent_date' not in user_columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN marketing_consent_date TIMESTAMP")
                 logger.info("Added marketing_consent_date column to users table")
+
+            if 'offer_profile_override' not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN offer_profile_override TEXT")
+                logger.info("Added offer_profile_override column to users table")
 
             # Таблица для состояний чатов (вкл/выкл по chat_id)
             cursor.execute("""
@@ -1088,6 +1095,36 @@ class Database:
                 return self._merge_user_row_with_core(dict(row))
             return None
 
+        finally:
+            conn.close()
+
+    def get_user_offer_profile(self, user_id: int) -> Optional[str]:
+        """Возвращает ручной override профиля предложений пользователя."""
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return None
+        value = user.get("offer_profile_override")
+        return str(value) if value else None
+
+    def set_user_offer_profile(self, user_id: int, profile_key: Optional[str]) -> None:
+        """Сохраняет ручной override профиля предложений (или сбрасывает в авто-режим)."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET offer_profile_override = ?,
+                    last_interaction = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (profile_key, user_id),
+            )
+            conn.commit()
+            self._sync_user_to_core(user_id)
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
