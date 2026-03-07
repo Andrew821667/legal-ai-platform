@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callReaderCore, ensureReaderKey } from "../core";
+import { callReaderCoreCached, ensureReaderKey } from "../core";
 
 export async function GET(request: NextRequest) {
   if (!ensureReaderKey()) {
@@ -14,12 +14,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ detail: "hours must be > 0" }, { status: 400 });
   }
 
-  const { response, data } = await callReaderCore(
-    `/api/v1/reader/conversion-funnel?hours=${encodeURIComponent(String(Math.floor(hours)))}`,
-  );
-  if (!response.ok) {
-    return NextResponse.json(data, { status: response.status });
+  try {
+    const { response, data, cacheState } = await callReaderCoreCached(
+      `/api/v1/reader/conversion-funnel?hours=${encodeURIComponent(String(Math.floor(hours)))}`,
+      { method: "GET" },
+      { ttlMs: 15000, staleMs: 120000 },
+    );
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+    const headers: Record<string, string> = {};
+    if (cacheState === "hit" || cacheState === "stale") {
+      headers["X-Reader-Core-Cache"] = cacheState;
+    }
+    return NextResponse.json(data, { headers });
+  } catch (error: any) {
+    return NextResponse.json(
+      { detail: error?.message || "Failed to fetch conversion funnel" },
+      { status: 500 },
+    );
   }
-  return NextResponse.json(data);
 }
-

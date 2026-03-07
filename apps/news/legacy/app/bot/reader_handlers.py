@@ -8,6 +8,7 @@ Handles user interactions:
 - Save/unsave articles
 """
 
+import asyncio
 import re
 from html import escape
 from typing import Optional
@@ -50,7 +51,6 @@ from app.services.core_feedback import push_reader_feedback, reader_post_deeplin
 from app.services.core_reader_bridge import (
     build_reader_miniapp_deeplink,
     fetch_reader_continue_state,
-    fetch_reader_miniapp_profile,
     push_reader_cta_click,
     push_reader_lead_intent,
     push_reader_save_state,
@@ -152,29 +152,36 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
         from app.modules.llm_provider import get_llm_provider
 
         llm = get_llm_provider(settings.default_llm_provider)
-        digest = await llm.generate_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты редактор канала про AI в юридической функции. "
-                        "Сделай короткий недельный дайджест по материалам. "
-                        "Структура:\n"
-                        "1) Главный тренд недели (1-2 предложения)\n"
-                        "2) Что важно юристу/руководителю (3 пункта)\n"
-                        "3) Какие внедрения имеет смысл пилотировать (2 пункта)\n"
-                        "Пиши только по-русски, без Markdown-таблиц и без ссылок."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"Материалы за неделю:\n\n{source_blob}",
-                },
-            ],
-            max_tokens=650,
-            temperature=0.35,
-            operation="reader_weekly_digest",
-            db=db,
+        timeout_seconds = max(
+            4.0,
+            float(getattr(settings, "reader_weekly_digest_timeout_seconds", 12) or 12),
+        )
+        digest = await asyncio.wait_for(
+            llm.generate_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Ты редактор канала про AI в юридической функции. "
+                            "Сделай короткий недельный дайджест по материалам. "
+                            "Структура:\n"
+                            "1) Главный тренд недели (1-2 предложения)\n"
+                            "2) Что важно юристу/руководителю (3 пункта)\n"
+                            "3) Какие внедрения имеет смысл пилотировать (2 пункта)\n"
+                            "Пиши только по-русски, без Markdown-таблиц и без ссылок."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Материалы за неделю:\n\n{source_blob}",
+                    },
+                ],
+                max_tokens=650,
+                temperature=0.35,
+                operation="reader_weekly_digest",
+                db=db,
+            ),
+            timeout=timeout_seconds,
         )
         digest_text = " ".join((digest or "").split()).strip()
         if digest_text:
@@ -277,10 +284,12 @@ def _build_reader_nav_keyboard(
 
 async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> None:
     """Render home screen for already onboarded user."""
-    lead_profile = await get_lead_profile(user.id, db)
-    saved_articles = await _safe_get_saved_articles(user.id, db=db)
-    continue_state = await fetch_reader_continue_state(user_id=user.id)
-    miniapp_profile = continue_state if isinstance(continue_state, dict) else await fetch_reader_miniapp_profile(user_id=user.id)
+    lead_profile, saved_articles, continue_state = await asyncio.gather(
+        get_lead_profile(user.id, db),
+        _safe_get_saved_articles(user.id, db=db),
+        fetch_reader_continue_state(user_id=user.id),
+    )
+    miniapp_profile = continue_state if isinstance(continue_state, dict) else {}
     miniapp_last_action = (
         str((miniapp_profile or {}).get("last_action") or "").strip() if isinstance(miniapp_profile, dict) else ""
     )

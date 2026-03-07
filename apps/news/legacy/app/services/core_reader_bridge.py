@@ -28,6 +28,9 @@ _CACHE_LOCK = threading.Lock()
 _FAIL_FAST_UNTIL = 0.0
 _FAIL_FAST_LOCK = threading.Lock()
 
+_INFLIGHT_READS: dict[str, asyncio.Task[Any]] = {}
+_INFLIGHT_READS_LOCK = asyncio.Lock()
+
 
 def _enabled() -> bool:
     return bool((settings.core_api_url or "").strip() and (settings.api_key_news or "").strip())
@@ -159,14 +162,32 @@ async def _cached_get_json(
     if cached is not None:
         return cached
 
+    is_leader = False
+    task: asyncio.Task[Any] | None = None
+    async with _INFLIGHT_READS_LOCK:
+        existing = _INFLIGHT_READS.get(cache_key)
+        if existing is not None and not existing.done():
+            task = existing
+        else:
+            is_leader = True
+            task = asyncio.create_task(asyncio.to_thread(_request_sync, "GET", path, params=params))
+            _INFLIGHT_READS[cache_key] = task
+
+    assert task is not None
     try:
-        response = await asyncio.to_thread(_request_sync, "GET", path, params=params)
+        response = await task
         response.raise_for_status()
         payload = response.json()
         _cache_set(cache_key, payload)
         return payload
     except Exception:
         return _cache_get(cache_key, allow_stale=True)
+    finally:
+        if is_leader:
+            async with _INFLIGHT_READS_LOCK:
+                current = _INFLIGHT_READS.get(cache_key)
+                if current is task:
+                    _INFLIGHT_READS.pop(cache_key, None)
 
 
 async def push_reader_preferences(

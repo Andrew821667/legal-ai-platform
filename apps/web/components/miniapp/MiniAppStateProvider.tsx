@@ -44,6 +44,10 @@ type MiniAppStateContextValue = {
 
 const STORAGE_KEY = "legal_ai_miniapp_state_v1";
 const STORAGE_TG_KEY = "legal_ai_miniapp_tg_v1";
+const CORE_SYNC_TIMEOUT_MS = 4000;
+const CONTINUE_STATE_TIMEOUT_MS = 5000;
+const PROFILE_SYNC_DEBOUNCE_MS = 800;
+const EVENT_DEDUP_WINDOW_MS = 1500;
 
 const DEFAULT_STATE: MiniAppState = {
   telegramUserId: null,
@@ -151,57 +155,166 @@ function mapStateFromServer(payload: any, prev: MiniAppState): MiniAppState {
   };
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs: number = CORE_SYNC_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  const onAbort = () => controller.abort();
+  if (upstreamSignal) {
+    upstreamSignal.addEventListener("abort", onAbort, { once: true });
+  }
+  const timeoutId = setTimeout(() => controller.abort(), Math.max(500, timeoutMs));
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+    if (upstreamSignal) {
+      upstreamSignal.removeEventListener("abort", onAbort);
+    }
+  }
+}
+
 export default function MiniAppStateProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<MiniAppState>(DEFAULT_STATE);
   const [ready, setReady] = useState(false);
   const loadedRemoteForUserRef = useRef<number | null>(null);
+  const profileSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingProfileRef = useRef<MiniAppState | null>(null);
+  const lastProfileSignatureRef = useRef<string>("");
+  const lastEventSignatureRef = useRef<string>("");
+  const lastEventAtRef = useRef<number>(0);
 
-  const pushProfileToCore = useCallback(async (nextState: MiniAppState) => {
+  const syncProfileToCoreNow = useCallback(async (nextState: MiniAppState) => {
     if (!nextState.telegramUserId) {
       return;
     }
 
+    const payload = {
+      telegram_user_id: nextState.telegramUserId,
+      onboarding_done: nextState.onboardingDone,
+      audience: nextState.audience,
+      interests: nextState.interests,
+      goal: nextState.goal,
+      last_action: nextState.lastAction,
+      sync_reader_topics: true,
+    };
+    const signature = JSON.stringify(payload);
+    if (signature === lastProfileSignatureRef.current) {
+      return;
+    }
+
     try {
-      await fetch("/api/reader/miniapp/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          telegram_user_id: nextState.telegramUserId,
-          onboarding_done: nextState.onboardingDone,
-          audience: nextState.audience,
-          interests: nextState.interests,
-          goal: nextState.goal,
-          last_action: nextState.lastAction,
-          sync_reader_topics: true,
-        }),
-      });
+      const response = await fetchWithTimeout(
+        "/api/reader/miniapp/profile",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        CORE_SYNC_TIMEOUT_MS,
+      );
+      if (!response.ok) {
+        return;
+      }
+      lastProfileSignatureRef.current = signature;
     } catch {
       // Silent fallback to local state if core API is unavailable.
     }
   }, []);
 
+  const scheduleProfileSync = useCallback(
+    (nextState: MiniAppState, immediate: boolean = false) => {
+      if (!nextState.telegramUserId) {
+        return;
+      }
+
+      pendingProfileRef.current = nextState;
+      if (profileSyncTimerRef.current) {
+        clearTimeout(profileSyncTimerRef.current);
+        profileSyncTimerRef.current = null;
+      }
+
+      const flush = () => {
+        profileSyncTimerRef.current = null;
+        const pending = pendingProfileRef.current;
+        pendingProfileRef.current = null;
+        if (pending) {
+          void syncProfileToCoreNow(pending);
+        }
+      };
+
+      if (immediate) {
+        flush();
+        return;
+      }
+
+      profileSyncTimerRef.current = setTimeout(flush, PROFILE_SYNC_DEBOUNCE_MS);
+    },
+    [syncProfileToCoreNow],
+  );
+
   const pushEventToCore = useCallback(
     async (telegramUserId: number, action: string, meta?: MiniAppActionMeta) => {
+      const eventType = String(meta?.eventType || MINIAPP_EVENT_TYPES.action).slice(0, 100);
+      const source = String(meta?.source || MINIAPP_EVENT_SOURCES.app);
+      const screen = meta?.screen || null;
+      const payload = meta?.payload || {};
+      const signature = JSON.stringify([telegramUserId, action, eventType, source, screen, payload]);
+      const now = Date.now();
+      if (
+        signature === lastEventSignatureRef.current &&
+        now - lastEventAtRef.current <= EVENT_DEDUP_WINDOW_MS
+      ) {
+        return;
+      }
+      lastEventSignatureRef.current = signature;
+      lastEventAtRef.current = now;
+
       try {
-        await fetch("/api/reader/miniapp/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            telegram_user_id: telegramUserId,
-            event_type: (meta?.eventType || MINIAPP_EVENT_TYPES.action).slice(0, 100),
-            source: meta?.source || MINIAPP_EVENT_SOURCES.app,
-            screen: meta?.screen || null,
-            action,
-            payload: meta?.payload || {},
-            update_last_action: true,
-          }),
-        });
+        await fetchWithTimeout(
+          "/api/reader/miniapp/event",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              telegram_user_id: telegramUserId,
+              event_type: eventType,
+              source,
+              screen,
+              action,
+              payload,
+              update_last_action: true,
+            }),
+          },
+          CORE_SYNC_TIMEOUT_MS,
+        );
       } catch {
         // Keep UX non-blocking.
       }
     },
     [],
   );
+
+  useEffect(() => {
+    return () => {
+      if (profileSyncTimerRef.current) {
+        clearTimeout(profileSyncTimerRef.current);
+        profileSyncTimerRef.current = null;
+      }
+      const pending = pendingProfileRef.current;
+      pendingProfileRef.current = null;
+      if (pending) {
+        void syncProfileToCoreNow(pending);
+      }
+    };
+  }, [syncProfileToCoreNow]);
 
   useEffect(() => {
     try {
@@ -248,9 +361,10 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
 
     void (async () => {
       try {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `/api/reader/continue-state?telegram_user_id=${encodeURIComponent(String(state.telegramUserId))}`,
           { cache: "no-store" },
+          CONTINUE_STATE_TIMEOUT_MS,
         );
         if (!response.ok) {
           return;
@@ -272,12 +386,12 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
           updatedAt: new Date().toISOString(),
         };
         if (next.telegramUserId) {
-          void pushProfileToCore(next);
+          scheduleProfileSync(next);
         }
         return next;
       });
     },
-    [pushProfileToCore],
+    [scheduleProfileSync],
   );
 
   const recordAction = useCallback(
@@ -305,11 +419,11 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
         updatedAt: new Date().toISOString(),
       };
       if (next.telegramUserId) {
-        void pushProfileToCore(next);
+        scheduleProfileSync(next, true);
       }
       return next;
     });
-  }, [pushProfileToCore]);
+  }, [scheduleProfileSync]);
 
   const contextValue = useMemo<MiniAppStateContextValue>(
     () => ({

@@ -13,7 +13,7 @@ import {
 export default function MiniAppDeepLinkSync() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { ready, recordAction, updateState } = useMiniAppState();
+  const { ready, recordAction } = useMiniAppState();
   const handledRef = useRef<string>("");
 
   useEffect(() => {
@@ -43,8 +43,7 @@ export default function MiniAppDeepLinkSync() {
       screen,
       payload: postId ? { post_id: postId } : {},
     });
-    updateState({ lastAction: action });
-  }, [pathname, ready, recordAction, searchParams, updateState]);
+  }, [pathname, ready, recordAction, searchParams]);
 
   return null;
 }

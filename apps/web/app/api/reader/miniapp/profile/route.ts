@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callReaderCore, ensureReaderKey } from "../../core";
+import { callReaderCore, callReaderCoreCached, ensureReaderKey } from "../../core";
 
 export async function GET(request: NextRequest) {
   if (!ensureReaderKey()) {
@@ -15,14 +15,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { response, data } = await callReaderCore(
+    const { response, data, cacheState } = await callReaderCoreCached(
       `/api/v1/reader/miniapp/profile?telegram_user_id=${encodeURIComponent(telegramUserId)}`,
       { method: "GET" },
+      { ttlMs: 12000, staleMs: 180000 },
     );
     if (!response.ok) {
       return NextResponse.json(data, { status: response.status });
     }
-    return NextResponse.json(data);
+    const headers: Record<string, string> = {};
+    if (cacheState === "hit" || cacheState === "stale") {
+      headers["X-Reader-Core-Cache"] = cacheState;
+    }
+    return NextResponse.json(data, { headers });
   } catch (error: any) {
     return NextResponse.json(
       { detail: error?.message || "Failed to fetch miniapp profile" },

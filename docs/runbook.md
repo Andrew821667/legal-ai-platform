@@ -306,6 +306,9 @@ python -u -m app.reader_bot
   - `CORE_API_POOL_MAXSIZE=50`
 - для web mini-app proxy также задайте таймаут upstream:
   - `CORE_API_FETCH_TIMEOUT_MS=7000`
+- для web mini-app proxy read-cache/stale fallback (снижение нагрузки и graceful degradation):
+  - `CORE_API_READ_CACHE_TTL_MS=10000`
+  - `CORE_API_READ_CACHE_STALE_MS=120000`
 - чтобы разделы `Проверить/Решения` открывали корректные маршруты, при необходимости задайте:
   - `READER_CONTRACT_AI_URL` (по умолчанию `https://legalaipro.ru/contract-ai-system`);
   - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);
