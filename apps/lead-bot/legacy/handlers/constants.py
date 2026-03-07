@@ -6,13 +6,12 @@ from telegram_ui import reply_button as KeyboardButton
 
 # Меню кнопок
 MAIN_MENU = [
-    [KeyboardButton("🧭 Рабочий стол"), KeyboardButton("🔄 Начать заново")],
+    [KeyboardButton("🧭 Рабочий стол")],
 ]
 
 # Админское меню (видно только админу)
 ADMIN_MENU = [
-    [KeyboardButton("🧭 Рабочий стол"), KeyboardButton("🔄 Начать заново")],
-    [KeyboardButton("⚙️ Админ-панель")],
+    [KeyboardButton("🧭 Рабочий стол")],
 ]
 
 WORKSPACE_INLINE_MENU = [
