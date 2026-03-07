@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | Legal AI PRO",
   },
   description:
-    "Помогаем юридическим командам внедрять AI-сценарии для заявок, договорной работы, комплаенса и типовых процессов.",
+    "Помогаем юридическим командам внедрять AI-сценарии для intake заявок, договорной и судебной работы, комплаенса, legal ops и типовых процессов.",
   keywords: [
     "автоматизация юридической работы",
     "AI для юристов",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title: "Автоматизация юридической работы | Legal AI PRO",
     description:
-      "AI-сценарии для юридической функции: заявки, договоры, комплаенс и типовые процессы.",
+      "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
     siteName: "Legal AI PRO",
     images: [
       {
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Автоматизация юридической работы | Legal AI PRO",
     description:
-      "AI-сценарии для юридической функции: договоры, комплаенс, заявки и типовые процессы.",
+      "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
     images: [`${siteUrl}/twitter-image`],
   },
   robots: {

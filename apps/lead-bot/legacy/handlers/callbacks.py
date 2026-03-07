@@ -117,7 +117,7 @@ def _build_client_profile_text(user_row: dict, lead: dict | None, consent_state:
         f"• Телефон: {lead.get('phone') or 'не указан'}\n"
         f"• Компания: {lead.get('company') or 'не указана'}\n\n"
         f"{consent_hint}\n\n"
-        "Чтобы исправить ФИО или email, используйте кнопку «👤 Мой профиль» в нижнем меню."
+        "Чтобы исправить ФИО или email, используйте кнопку «👤 Профиль» на рабочем столе."
     )
 
 
@@ -206,7 +206,10 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if user_db_id:
                 database.db.reset_user_funnel_state(user_db_id)
 
-            response_text = content.build_welcome_message(user.first_name if user else "клиент")
+            if is_business:
+                response_text = content.build_business_welcome_message(user.first_name if user else "клиент")
+            else:
+                response_text = content.build_welcome_message(user.first_name if user else "клиент")
             if is_business:
                 await context.bot.send_message(
                     chat_id=query.message.chat.id,

@@ -378,7 +378,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             _clear_business_contact_state(context)
             if chat_id is not None:
                 database.db.set_chat_mode(int(chat_id), "bot")
-            welcome_message = content.build_welcome_message(message.from_user.first_name)
+            welcome_message = content.build_business_welcome_message(message.from_user.first_name)
             
             # Для бизнес-чатов используем InlineKeyboard (ReplyKeyboard не поддерживается)
             reply_markup = _business_menu_markup()
@@ -389,13 +389,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )
-            await context.bot.send_message(
-                chat_id=message.chat.id,
-                text=content.WORKSPACE_TEXT,
-                reply_markup=reply_markup,
-                business_connection_id=message.business_connection_id,
-            )
-            logger.info("[Business] Workspace sent on /start for user %s", user_id)
+            logger.info("[Business] Welcome sent on /start for user %s", user_id)
             return
         
         # Обработка кнопок меню для бизнес-чата (удалено - используем callback)
@@ -454,7 +448,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 database.db.reset_user_funnel_state(user)
                 await context.bot.send_message(
                     chat_id=message.chat.id,
-                    text=content.build_welcome_message(message.from_user.first_name),
+                    text=content.build_business_welcome_message(message.from_user.first_name),
                     reply_markup=_business_menu_markup(),
                     business_connection_id=message.business_connection_id,
                 )
@@ -470,17 +464,11 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             _clear_business_contact_state(context)
             await context.bot.send_message(
                 chat_id=message.chat.id,
-                text=content.build_welcome_message(message.from_user.first_name),
+                text=content.build_business_welcome_message(message.from_user.first_name),
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
-            await context.bot.send_message(
-                chat_id=message.chat.id,
-                text=content.WORKSPACE_TEXT,
-                reply_markup=_business_menu_markup(),
-                business_connection_id=message.business_connection_id,
-            )
-            logger.info("[Business] Workspace sent on forced new session for user %s", user_id)
+            logger.info("[Business] Welcome sent on forced new session for user %s", user_id)
             return
 
         # На первом сообщении-приветствии в business-режиме отдаем
@@ -488,17 +476,11 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         if text and _looks_like_plain_greeting(text):
             await context.bot.send_message(
                 chat_id=message.chat.id,
-                text=content.build_welcome_message(message.from_user.first_name),
+                text=content.build_business_welcome_message(message.from_user.first_name),
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
-            await context.bot.send_message(
-                chat_id=message.chat.id,
-                text=content.WORKSPACE_TEXT,
-                reply_markup=_business_menu_markup(),
-                business_connection_id=message.business_connection_id,
-            )
-            logger.info("[Business] Workspace sent on greeting for user %s", user_id)
+            logger.info("[Business] Welcome sent on greeting for user %s", user_id)
             return
 
         lead = database.db.get_lead_by_user_id(user) if allow_lead_processing else None

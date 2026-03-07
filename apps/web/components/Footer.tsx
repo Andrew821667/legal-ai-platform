@@ -65,8 +65,8 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h3 className="text-2xl font-bold text-white mb-4">Legal AI PRO</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
-              Платформа автоматизации юридической функции: от входящих заявок и договорной работы до управляемых
-              AI-процессов в legal ops.
+              Платформа автоматизации юридической функции: intake заявок, договорная и судебная работа,
+              комплаенс, внутренний контроль и управляемые AI-процессы в legal ops.
             </p>
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2">

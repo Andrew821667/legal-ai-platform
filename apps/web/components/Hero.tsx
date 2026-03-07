@@ -43,8 +43,8 @@ export default function Hero() {
             </h2>
 
             <p className="text-base text-slate-400 mb-8 max-w-4xl mx-auto lg:mx-0 animate-fade-in-delay-1">
-              Помогаем выстроить практичную автоматизацию для заявок, договорной работы,
-              типовых юридических процессов и внутреннего контроля.
+              Помогаем выстроить практичную автоматизацию для intake заявок, договорной и судебной работы,
+              комплаенса, legal ops и внутреннего контроля.
             </p>
             
             {/* Stats - SIMPLIFIED for readability */}
