@@ -306,7 +306,11 @@ python -u -m app.reader_bot
 - для сквозной персонализации mini-app/reader используется endpoint
   `/api/v1/reader/continue-state` (recommended section/screen + saved/events/lead-intent counters).
 - для сквозной конверсии reader/mini-app используется endpoint
-  `/api/v1/reader/conversion-funnel?hours=168` (воронка + top `source/action`).
+  `/api/v1/reader/conversion-funnel?hours=168` (воронка + top `source/action` + разбивка по `cta_variant`).
+- A/B-раскладка CTA для reader/mini-app управляется control key
+  `news.reader_cta_ab.enabled` (`seed`, `enabled_variants`, `split`).
+- для ускорения аналитики используется rollup-таблица `reader_event_rollups`;
+  если миграция еще не применена, API продолжит работать по raw-событиям (с меньшей производительностью).
 
 Запуск reader digest-воркера (локально):
 ```bash

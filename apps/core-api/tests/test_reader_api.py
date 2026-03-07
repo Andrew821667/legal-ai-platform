@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect as sa_inspect, select
 
 from core_api.auth import cache
 from core_api.db import SessionLocal
@@ -14,6 +14,7 @@ from core_api.models import (
     Lead,
     PostFeedbackSignal,
     ReaderMiniAppEvent,
+    ReaderEventRollup,
     ReaderPreference,
     ReaderSavedPost,
     ScheduledPost,
@@ -50,6 +51,13 @@ def _delete_api_key_by_name(name: str) -> None:
         cache.invalidate()
     finally:
         db.close()
+
+
+def _rollup_table_exists(db) -> bool:
+    try:
+        return bool(sa_inspect(db.get_bind()).has_table("reader_event_rollups"))
+    except Exception:
+        return False
 
 
 def test_reader_preferences_feed_and_saved_flow() -> None:
@@ -183,7 +191,7 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
     client = TestClient(app)
     api_key_name = "pytest.reader.miniapp"
     raw_key = _create_api_key(Scope.news, api_key_name)
-    telegram_user_id = 9_880_003
+    telegram_user_id = 9_880_000 + int(datetime.now(timezone.utc).timestamp() % 100000)
 
     try:
         get_response = client.get(
@@ -234,6 +242,7 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
         assert event_payload["event_type"] == "action"
         assert event_payload["source"] == "miniapp.app"
         assert event_payload["action"] == "open.contract_ai"
+        assert event_payload["payload"]["cta_variant"] in {"v1_direct", "v2_diagnostic"}
 
         events_response = client.get(
             f"/api/v1/reader/miniapp/events?telegram_user_id={telegram_user_id}&limit=10",
@@ -294,6 +303,8 @@ def test_reader_miniapp_profile_events_and_deeplink() -> None:
                     )
                 )
             )
+            if _rollup_table_exists(db):
+                db.execute(delete(ReaderEventRollup))
             db.commit()
         finally:
             db.close()
@@ -397,6 +408,18 @@ def test_reader_conversion_funnel_endpoint() -> None:
         assert any(item["label"] == "reader.post" for item in funnel["top_cta_sources"])
         assert any(item["label"] == "reader.bot" for item in funnel["top_intent_sources"])
         assert any(item["label"] == "open.content" for item in funnel["top_actions"])
+        assert funnel["variants"]
+        assert any(item["cta_variant"] in {"v1_direct", "v2_diagnostic"} for item in funnel["variants"])
+
+        db = SessionLocal()
+        try:
+            if _rollup_table_exists(db):
+                rollups = list(db.execute(select(ReaderEventRollup)).scalars().all())
+                assert any(item.channel == "miniapp" for item in rollups)
+                assert any(item.channel == "cta" for item in rollups)
+                assert any(item.channel == "intent" for item in rollups)
+        finally:
+            db.close()
     finally:
         db = SessionLocal()
         try:
@@ -405,6 +428,8 @@ def test_reader_conversion_funnel_endpoint() -> None:
             db.execute(delete(ReaderPreference).where(ReaderPreference.telegram_user_id.in_([user_a, user_b])))
             db.execute(delete(Event).where(Event.type.in_(["reader.cta_click", "reader.lead_intent"])))
             db.execute(delete(Lead).where(Lead.telegram_user_id.in_([user_a, user_b])))
+            if _rollup_table_exists(db):
+                db.execute(delete(ReaderEventRollup))
             db.commit()
         finally:
             db.close()
@@ -529,6 +554,7 @@ def test_reader_feedback_cta_and_lead_intent_flow() -> None:
             cta_events = list(db.execute(select(Event).where(Event.type == "reader.cta_click")).scalars().all())
             assert any((item.payload or {}).get("context") == "reader.post" for item in cta_events)
             assert any((item.payload or {}).get("action") == "cta.consultation" for item in cta_events)
+            assert all((item.payload or {}).get("cta_variant") for item in cta_events)
         finally:
             db.close()
     finally:
@@ -540,6 +566,8 @@ def test_reader_feedback_cta_and_lead_intent_flow() -> None:
                 )
             )
             db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id))
+            if _rollup_table_exists(db):
+                db.execute(delete(ReaderEventRollup))
             if post_id is not None:
                 db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id == post_id))
                 db.execute(delete(ScheduledPost).where(ScheduledPost.id == post_id))
@@ -640,6 +668,8 @@ def test_reader_continue_state_flow() -> None:
             db.execute(delete(ReaderPreference).where(ReaderPreference.telegram_user_id == telegram_user_id))
             db.execute(delete(Event).where(Event.type == "reader.lead_intent"))
             db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id))
+            if _rollup_table_exists(db):
+                db.execute(delete(ReaderEventRollup))
             if post_id is not None:
                 db.execute(delete(PostFeedbackSignal).where(PostFeedbackSignal.post_id == post_id))
                 db.execute(delete(ScheduledPost).where(ScheduledPost.id == post_id))

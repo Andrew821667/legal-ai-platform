@@ -563,6 +563,7 @@ class ReaderMiniAppEventCreate(BaseModel):
     source: str | None = None
     screen: str | None = None
     action: str | None = None
+    cta_variant: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     update_last_action: bool = True
 
@@ -647,6 +648,17 @@ class ReaderConversionFunnelRateOut(BaseModel):
     value: float
 
 
+class ReaderConversionFunnelVariantOut(BaseModel):
+    cta_variant: str
+    miniapp_users: int
+    cta_users: int
+    lead_intent_users: int
+    leads_total: int
+    miniapp_to_cta: float
+    cta_to_intent: float
+    miniapp_to_intent: float
+
+
 class ReaderConversionFunnelOut(BaseModel):
     hours: int
     since: datetime
@@ -655,6 +667,7 @@ class ReaderConversionFunnelOut(BaseModel):
     leads_total: int
     stages: list[ReaderConversionFunnelStageOut]
     rates: list[ReaderConversionFunnelRateOut]
+    variants: list[ReaderConversionFunnelVariantOut] = Field(default_factory=list)
     top_miniapp_sources: list[ReaderMiniAppTopMetric]
     top_cta_sources: list[ReaderMiniAppTopMetric]
     top_intent_sources: list[ReaderMiniAppTopMetric]
@@ -700,6 +713,7 @@ class ReaderCtaClickCreate(BaseModel):
     post_id: uuid.UUID | None = None
     cta_type: str | None = None
     context: str | None = None
+    cta_variant: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -710,6 +724,7 @@ class ReaderLeadIntentCreate(BaseModel):
     message: str | None = None
     contact: str | None = None
     name: str | None = None
+    cta_variant: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

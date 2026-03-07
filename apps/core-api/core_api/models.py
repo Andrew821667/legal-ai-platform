@@ -214,6 +214,7 @@ class Event(Base):
     __table_args__ = (
         Index("ix_events_lead_id", "lead_id", postgresql_where=sa_text("lead_id IS NOT NULL")),
         Index("ix_events_created_at", "created_at"),
+        Index("ix_events_type_created_at", "type", "created_at"),
     )
 
 
@@ -327,6 +328,40 @@ class ReaderMiniAppEvent(Base):
     __table_args__ = (
         Index("ix_reader_miniapp_events_user_created", "telegram_user_id", "created_at"),
         Index("ix_reader_miniapp_events_type_created", "event_type", "created_at"),
+        Index("ix_reader_miniapp_events_source_created", "source", "created_at"),
+        Index("ix_reader_miniapp_events_action_created", "action", "created_at"),
+    )
+
+
+class ReaderEventRollup(Base):
+    __tablename__ = "reader_event_rollups"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(120), nullable=False, default="", server_default=sa_text("''"))
+    cta_variant: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="v1_direct", server_default=sa_text("'v1_direct'")
+    )
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        Index(
+            "ux_reader_event_rollups_bucket_dims",
+            "bucket_start",
+            "channel",
+            "source",
+            "action",
+            "cta_variant",
+            unique=True,
+        ),
+        Index("ix_reader_event_rollups_bucket_channel", "bucket_start", "channel"),
+        Index("ix_reader_event_rollups_variant_bucket", "cta_variant", "bucket_start"),
     )
 
 

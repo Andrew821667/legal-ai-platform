@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import re
+from typing import Any
 from typing import Final
 
 MINIAPP_EVENT_TYPES: Final[frozenset[str]] = frozenset(
@@ -191,6 +193,14 @@ _INTENT_TYPE_ALIASES: Final[dict[str, str]] = {
     "article_q": "article_question",
 }
 
+_CTA_VARIANT_ALIASES: Final[dict[str, str]] = {
+    "direct": "v1_direct",
+    "v1": "v1_direct",
+    "diagnostic": "v2_diagnostic",
+    "diag": "v2_diagnostic",
+    "v2": "v2_diagnostic",
+}
+
 
 def _clean_token(value: str | None, *, max_len: int) -> str | None:
     if value is None:
@@ -265,6 +275,60 @@ def normalize_intent_type(value: str | None) -> str:
     if token in READER_INTENT_TYPES:
         return token
     return token
+
+
+def normalize_cta_variant(value: str | None, *, default: str = "v1_direct") -> str:
+    token = _clean_token(value, max_len=50)
+    if token is None:
+        return default
+    token = _CTA_VARIANT_ALIASES.get(token, token)
+    return token or default
+
+
+def select_cta_variant(
+    *,
+    telegram_user_id: int,
+    seed: str,
+    enabled_variants: list[str] | tuple[str, ...],
+    split: dict[str, Any] | None = None,
+    default: str = "v1_direct",
+) -> str:
+    variants: list[str] = []
+    seen: set[str] = set()
+    for item in enabled_variants:
+        normalized = normalize_cta_variant(str(item or ""), default=default)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        variants.append(normalized)
+    if not variants:
+        variants = [default]
+
+    weights: list[int] = []
+    for variant in variants:
+        raw_weight = None
+        if isinstance(split, dict):
+            raw_weight = split.get(variant)
+        try:
+            weight = int(raw_weight)
+        except (TypeError, ValueError):
+            weight = 0
+        weights.append(max(weight, 0))
+
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        weights = [100 for _ in variants]
+        total_weight = sum(weights)
+
+    digest = hashlib.sha256(f"{seed}:{telegram_user_id}".encode("utf-8")).hexdigest()
+    bucket = int(digest[:12], 16) % total_weight
+
+    cursor = 0
+    for variant, weight in zip(variants, weights):
+        cursor += weight
+        if bucket < cursor:
+            return variant
+    return variants[0]
 
 
 def normalize_screen_path(value: str | None) -> str | None:

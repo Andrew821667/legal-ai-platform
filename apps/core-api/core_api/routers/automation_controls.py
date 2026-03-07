@@ -165,6 +165,18 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "key": "news.reader_cta_ab.enabled",
+        "scope": Scope.news,
+        "title": "A/B CTA reader/mini-app",
+        "description": "Управление A/B-вариантами CTA для reader/mini-app в сквозной воронке.",
+        "enabled": True,
+        "config": {
+            "seed": "legal-ai-reader-cta-v1",
+            "enabled_variants": ["v1_direct", "v2_diagnostic"],
+            "split": {"v1_direct": 50, "v2_diagnostic": 50},
+        },
+    },
+    {
         "key": "lead_bot.autorespond.enabled",
         "scope": Scope.bot,
         "title": "Автоответы лид-бота",

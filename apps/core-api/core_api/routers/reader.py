@@ -7,7 +7,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, inspect as sa_inspect, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
@@ -16,6 +17,7 @@ from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import (
     ActorType,
+    AutomationControl,
     Event,
     Lead,
     LeadSource,
@@ -24,6 +26,7 @@ from core_api.models import (
     PostFeedbackSource,
     ReaderPreference,
     ReaderMiniAppEvent,
+    ReaderEventRollup,
     ReaderSavedPost,
     ScheduledPost,
     ScheduledPostStatus,
@@ -34,12 +37,14 @@ from core_api.reader_metrics import (
     MINIAPP_SCREEN_KEY_TO_PATH,
     normalize_cta_context,
     normalize_cta_type,
+    normalize_cta_variant,
     normalize_intent_type,
     normalize_miniapp_event_type,
     normalize_reader_action,
     normalize_reader_source,
     normalize_screen_key,
     normalize_screen_path,
+    select_cta_variant,
 )
 from core_api.schemas import (
     MessageResponse,
@@ -48,6 +53,7 @@ from core_api.schemas import (
     ReaderConversionFunnelOut,
     ReaderConversionFunnelRateOut,
     ReaderConversionFunnelStageOut,
+    ReaderConversionFunnelVariantOut,
     ReaderCtaClickCreate,
     ReaderFeedItem,
     ReaderFeedbackCreate,
@@ -88,6 +94,14 @@ _SECTION_TO_SCREEN: dict[str, str] = {
     "solutions": "solutions",
     "profile": "profile",
 }
+
+_CTA_AB_CONTROL_KEY = "news.reader_cta_ab.enabled"
+_DEFAULT_CTA_AB_CONFIG: dict[str, Any] = {
+    "seed": "legal-ai-reader-cta-v1",
+    "enabled_variants": ["v1_direct", "v2_diagnostic"],
+    "split": {"v1_direct": 50, "v2_diagnostic": 50},
+}
+_READER_ROLLUP_AVAILABLE: bool | None = None
 
 
 def _normalize_topics(topics: list[str] | None) -> list[str]:
@@ -152,11 +166,160 @@ def _payload_user_id(value: Any) -> int | None:
     return parsed
 
 
+def _cta_ab_config(db: Session) -> dict[str, Any]:
+    control = db.get(AutomationControl, _CTA_AB_CONTROL_KEY)
+    enabled = True
+    config: dict[str, Any] = dict(_DEFAULT_CTA_AB_CONFIG)
+    if control is not None:
+        enabled = bool(control.enabled)
+        if isinstance(control.config, dict):
+            config.update(control.config)
+
+    seed = str(config.get("seed") or _DEFAULT_CTA_AB_CONFIG["seed"]).strip() or _DEFAULT_CTA_AB_CONFIG["seed"]
+    raw_variants = config.get("enabled_variants")
+    variants = raw_variants if isinstance(raw_variants, list) else _DEFAULT_CTA_AB_CONFIG["enabled_variants"]
+    raw_split = config.get("split") if isinstance(config.get("split"), dict) else {}
+    if not enabled:
+        return {"seed": seed, "enabled_variants": ["v1_direct"], "split": {"v1_direct": 100}, "enabled": False}
+    return {"seed": seed, "enabled_variants": variants, "split": raw_split, "enabled": True}
+
+
+def _reader_rollup_available(db: Session) -> bool:
+    global _READER_ROLLUP_AVAILABLE
+    if _READER_ROLLUP_AVAILABLE is True:
+        return _READER_ROLLUP_AVAILABLE
+    try:
+        bind = db.get_bind()
+        _READER_ROLLUP_AVAILABLE = bool(sa_inspect(bind).has_table("reader_event_rollups"))
+    except SQLAlchemyError:
+        _READER_ROLLUP_AVAILABLE = None
+        return False
+    return _READER_ROLLUP_AVAILABLE
+
+
+def _resolve_cta_variant(
+    *,
+    db: Session,
+    telegram_user_id: int,
+    explicit_variant: str | None = None,
+) -> str:
+    config = _cta_ab_config(db)
+    normalized_explicit = normalize_cta_variant(explicit_variant, default="")
+    if normalized_explicit:
+        allowed = {
+            normalize_cta_variant(item, default="v1_direct")
+            for item in config.get("enabled_variants", [])
+            if str(item or "").strip()
+        }
+        if not allowed or normalized_explicit in allowed:
+            return normalized_explicit
+
+    return select_cta_variant(
+        telegram_user_id=telegram_user_id,
+        seed=str(config.get("seed") or _DEFAULT_CTA_AB_CONFIG["seed"]),
+        enabled_variants=list(config.get("enabled_variants") or _DEFAULT_CTA_AB_CONFIG["enabled_variants"]),
+        split=config.get("split") if isinstance(config.get("split"), dict) else {},
+        default="v1_direct",
+    )
+
+
+def _rollup_bucket(value: datetime) -> datetime:
+    return value.replace(minute=0, second=0, microsecond=0)
+
+
+def _increment_reader_rollup(
+    *,
+    db: Session,
+    now: datetime,
+    channel: str,
+    source: str,
+    action: str | None,
+    cta_variant: str,
+    increment: int = 1,
+) -> None:
+    global _READER_ROLLUP_AVAILABLE
+    if not _reader_rollup_available(db):
+        return
+    normalized_channel = str(channel or "").strip().lower()[:20] or "miniapp"
+    normalized_source = normalize_reader_source(source, default="miniapp.app")
+    normalized_action = _trim_optional_text(normalize_reader_action(action), max_len=120) or ""
+    normalized_variant = normalize_cta_variant(cta_variant, default="v1_direct")
+    bucket = _rollup_bucket(now)
+
+    try:
+        existing = db.execute(
+            select(ReaderEventRollup)
+            .where(ReaderEventRollup.bucket_start == bucket)
+            .where(ReaderEventRollup.channel == normalized_channel)
+            .where(ReaderEventRollup.source == normalized_source)
+            .where(ReaderEventRollup.action == normalized_action)
+            .where(ReaderEventRollup.cta_variant == normalized_variant)
+            .limit(1)
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.event_count = int(existing.event_count or 0) + int(increment)
+            existing.updated_at = now
+            db.add(existing)
+            return
+
+        row = ReaderEventRollup(
+            bucket_start=bucket,
+            channel=normalized_channel,
+            source=normalized_source,
+            action=normalized_action,
+            cta_variant=normalized_variant,
+            event_count=max(1, int(increment)),
+        )
+        db.add(row)
+    except SQLAlchemyError:
+        _READER_ROLLUP_AVAILABLE = None
+        return
+
+
 def _top_counter(counter: Counter[str], *, limit: int = 8) -> list[ReaderMiniAppTopMetric]:
     rows = sorted(counter.items(), key=lambda item: (-int(item[1]), item[0]))
     return [
         ReaderMiniAppTopMetric(label=str(label), count=int(count))
         for label, count in rows[:limit]
+        if str(label or "").strip()
+    ]
+
+
+def _top_rollup_metrics(
+    *,
+    db: Session,
+    since: datetime,
+    channel: str | None,
+    by: str,
+    limit: int = 8,
+) -> list[ReaderMiniAppTopMetric]:
+    global _READER_ROLLUP_AVAILABLE
+    if by not in {"source", "action"}:
+        return []
+    if not _reader_rollup_available(db):
+        return []
+    column = ReaderEventRollup.source if by == "source" else ReaderEventRollup.action
+
+    stmt = (
+        select(column.label("label"), func.sum(ReaderEventRollup.event_count).label("count"))
+        .where(ReaderEventRollup.bucket_start >= since)
+        .group_by(column)
+        .order_by(func.sum(ReaderEventRollup.event_count).desc(), column.asc())
+        .limit(limit)
+    )
+    if channel is not None:
+        stmt = stmt.where(ReaderEventRollup.channel == channel)
+    if by == "action":
+        stmt = stmt.where(ReaderEventRollup.action != "")
+
+    try:
+        rows = db.execute(stmt).all()
+    except SQLAlchemyError:
+        _READER_ROLLUP_AVAILABLE = None
+        return []
+    return [
+        ReaderMiniAppTopMetric(label=str(label), count=int(count or 0))
+        for label, count in rows
         if str(label or "").strip()
     ]
 
@@ -433,6 +596,16 @@ def create_reader_miniapp_event(
     normalized_source = normalize_reader_source(payload.source, default="miniapp.app")
     normalized_screen = normalize_screen_path(payload.screen)
     normalized_action = normalize_reader_action(payload.action)
+    raw_payload = payload.payload if isinstance(payload.payload, dict) else {}
+    explicit_variant = payload.cta_variant or raw_payload.get("cta_variant")
+    cta_variant = _resolve_cta_variant(
+        db=db,
+        telegram_user_id=payload.telegram_user_id,
+        explicit_variant=explicit_variant,
+    )
+    now = datetime.now(timezone.utc)
+    event_payload = dict(raw_payload)
+    event_payload["cta_variant"] = cta_variant
 
     row = ReaderMiniAppEvent(
         telegram_user_id=payload.telegram_user_id,
@@ -440,14 +613,22 @@ def create_reader_miniapp_event(
         source=normalized_source[:50],
         screen=_trim_optional_text(normalized_screen, max_len=120),
         action=_trim_optional_text(normalized_action, max_len=120),
-        payload=payload.payload,
+        payload=event_payload,
     )
     db.add(row)
+    _increment_reader_rollup(
+        db=db,
+        now=now,
+        channel="miniapp",
+        source=normalized_source,
+        action=normalized_action,
+        cta_variant=cta_variant,
+    )
 
     if payload.update_last_action and normalized_action:
         pref = _get_or_create_pref(db, payload.telegram_user_id)
         pref.miniapp_last_action = _trim_optional_text(normalized_action, max_len=255)
-        pref.updated_at = datetime.now(timezone.utc)
+        pref.updated_at = now
         db.add(pref)
 
     db.commit()
@@ -465,6 +646,7 @@ def create_reader_miniapp_event(
             "event_type": normalized_event_type,
             "source": normalized_source,
             "action": normalized_action,
+            "cta_variant": cta_variant,
         },
     )
     db.commit()
@@ -569,6 +751,7 @@ def reader_conversion_funnel(
     _ = identity
     now = datetime.now(timezone.utc)
     since = now - timedelta(hours=hours)
+    cta_ab_config = _cta_ab_config(db)
 
     miniapp_rows = list(
         db.execute(
@@ -607,12 +790,32 @@ def reader_conversion_funnel(
     cta_sources = Counter[str]()
     intent_sources = Counter[str]()
     actions = Counter[str]()
+    miniapp_users_by_variant: dict[str, set[int]] = {}
+    cta_users_by_variant: dict[str, set[int]] = {}
+    intent_users_by_variant: dict[str, set[int]] = {}
+    lead_ids_by_variant: dict[str, set[uuid.UUID]] = {}
+
+    def _variant_for_user_payload(user_id: int | None, payload: dict[str, Any]) -> str:
+        explicit = None
+        if isinstance(payload, dict):
+            explicit = payload.get("cta_variant")
+        if user_id is None:
+            return normalize_cta_variant(explicit, default="v1_direct")
+        return _resolve_cta_variant(db=db, telegram_user_id=user_id, explicit_variant=explicit)
+
+    def _add_variant_user(bucket: dict[str, set[int]], variant: str, user_id: int | None) -> None:
+        if user_id is None:
+            return
+        bucket.setdefault(variant, set()).add(user_id)
 
     for row in miniapp_rows:
         user_id = _payload_user_id(row.telegram_user_id)
+        payload = row.payload if isinstance(row.payload, dict) else {}
+        variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
             miniapp_users.add(user_id)
             unique_users_total.add(user_id)
+        _add_variant_user(miniapp_users_by_variant, variant, user_id)
         source = normalize_reader_source(row.source, default="miniapp.app")
         miniapp_sources[source] += 1
         action = normalize_reader_action(row.action)
@@ -622,9 +825,11 @@ def reader_conversion_funnel(
     for row in cta_rows:
         payload = row.payload if isinstance(row.payload, dict) else {}
         user_id = _payload_user_id(payload.get("telegram_user_id"))
+        variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
             cta_users.add(user_id)
             unique_users_total.add(user_id)
+        _add_variant_user(cta_users_by_variant, variant, user_id)
         source = normalize_reader_source(payload.get("source") or payload.get("context"), default="reader.post")
         cta_sources[source] += 1
         action = normalize_reader_action(payload.get("action"))
@@ -634,9 +839,11 @@ def reader_conversion_funnel(
     for row in intent_rows:
         payload = row.payload if isinstance(row.payload, dict) else {}
         user_id = _payload_user_id(payload.get("telegram_user_id"))
+        variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
             intent_users.add(user_id)
             unique_users_total.add(user_id)
+        _add_variant_user(intent_users_by_variant, variant, user_id)
         source = normalize_reader_source(payload.get("source"), default="reader.bot")
         intent_sources[source] += 1
         action = normalize_reader_action(payload.get("action"))
@@ -644,6 +851,7 @@ def reader_conversion_funnel(
             actions[action] += 1
         if row.lead_id is not None:
             lead_ids.add(row.lead_id)
+            lead_ids_by_variant.setdefault(variant, set()).add(row.lead_id)
 
     def _rate(numerator: int, denominator: int) -> float:
         if denominator <= 0:
@@ -673,6 +881,46 @@ def reader_conversion_funnel(
         ),
     ]
 
+    normalized_enabled_variants: list[str] = []
+    for item in cta_ab_config.get("enabled_variants", []):
+        normalized = normalize_cta_variant(str(item or ""), default="v1_direct")
+        if normalized and normalized not in normalized_enabled_variants:
+            normalized_enabled_variants.append(normalized)
+
+    variants_set = set(normalized_enabled_variants)
+    variants_set.update(miniapp_users_by_variant.keys())
+    variants_set.update(cta_users_by_variant.keys())
+    variants_set.update(intent_users_by_variant.keys())
+    variants_set.update(lead_ids_by_variant.keys())
+    ordered_variants = list(normalized_enabled_variants)
+    for item in sorted(variants_set):
+        if item not in ordered_variants:
+            ordered_variants.append(item)
+
+    variant_rows: list[ReaderConversionFunnelVariantOut] = []
+    for variant in ordered_variants:
+        mini_variant = len(miniapp_users_by_variant.get(variant, set()))
+        cta_variant = len(cta_users_by_variant.get(variant, set()))
+        intent_variant = len(intent_users_by_variant.get(variant, set()))
+        leads_variant = len(lead_ids_by_variant.get(variant, set()))
+        variant_rows.append(
+            ReaderConversionFunnelVariantOut(
+                cta_variant=variant,
+                miniapp_users=mini_variant,
+                cta_users=cta_variant,
+                lead_intent_users=intent_variant,
+                leads_total=leads_variant,
+                miniapp_to_cta=_rate(cta_variant, mini_variant),
+                cta_to_intent=_rate(intent_variant, cta_variant),
+                miniapp_to_intent=_rate(intent_variant, mini_variant),
+            )
+        )
+
+    top_miniapp_sources_rollup = _top_rollup_metrics(db=db, since=since, channel="miniapp", by="source")
+    top_cta_sources_rollup = _top_rollup_metrics(db=db, since=since, channel="cta", by="source")
+    top_intent_sources_rollup = _top_rollup_metrics(db=db, since=since, channel="intent", by="source")
+    top_actions_rollup = _top_rollup_metrics(db=db, since=since, channel=None, by="action")
+
     return ReaderConversionFunnelOut(
         hours=hours,
         since=since,
@@ -681,10 +929,11 @@ def reader_conversion_funnel(
         leads_total=len(lead_ids),
         stages=stages,
         rates=rates,
-        top_miniapp_sources=_top_counter(miniapp_sources),
-        top_cta_sources=_top_counter(cta_sources),
-        top_intent_sources=_top_counter(intent_sources),
-        top_actions=_top_counter(actions),
+        variants=variant_rows,
+        top_miniapp_sources=top_miniapp_sources_rollup or _top_counter(miniapp_sources),
+        top_cta_sources=top_cta_sources_rollup or _top_counter(cta_sources),
+        top_intent_sources=top_intent_sources_rollup or _top_counter(intent_sources),
+        top_actions=top_actions_rollup or _top_counter(actions),
     )
 
 
@@ -910,6 +1159,12 @@ def reader_cta_click(
     normalized_cta_type = normalize_cta_type(payload.cta_type)
     normalized_context = normalize_cta_context(payload.context)
     raw_payload = payload.payload if isinstance(payload.payload, dict) else {}
+    explicit_variant = payload.cta_variant or raw_payload.get("cta_variant")
+    cta_variant = _resolve_cta_variant(
+        db=db,
+        telegram_user_id=payload.telegram_user_id,
+        explicit_variant=explicit_variant,
+    )
     payload_action = normalize_reader_action(raw_payload.get("action")) if raw_payload else None
     fallback_action_map = {
         "consultation": "cta.consultation",
@@ -920,22 +1175,33 @@ def reader_cta_click(
         "implement": "flow.implement",
     }
     normalized_action = payload_action or fallback_action_map.get(normalized_cta_type or "")
+    now = datetime.now(timezone.utc)
+    event_payload = {
+        "telegram_user_id": payload.telegram_user_id,
+        "post_id": str(payload.post_id) if payload.post_id else None,
+        "cta_type": normalized_cta_type,
+        "context": normalized_context,
+        "source": normalized_context,
+        "action": normalized_action,
+        "cta_variant": cta_variant,
+        "payload": raw_payload,
+    }
 
     db.add(
         Event(
             lead_id=None,
             user_id=None,
             type="reader.cta_click",
-            payload={
-                "telegram_user_id": payload.telegram_user_id,
-                "post_id": str(payload.post_id) if payload.post_id else None,
-                "cta_type": normalized_cta_type,
-                "context": normalized_context,
-                "source": normalized_context,
-                "action": normalized_action,
-                "payload": raw_payload,
-            },
+            payload=event_payload,
         )
+    )
+    _increment_reader_rollup(
+        db=db,
+        now=now,
+        channel="cta",
+        source=normalized_context or "reader.post",
+        action=normalized_action,
+        cta_variant=cta_variant,
     )
     db.commit()
     return MessageResponse(message="ok")
@@ -952,6 +1218,12 @@ def reader_lead_intent(
     raw_payload = payload.payload if isinstance(payload.payload, dict) else {}
     normalized_source = normalize_reader_source(raw_payload.get("source"), default="reader.bot")
     normalized_action = normalize_reader_action(raw_payload.get("action"))
+    explicit_variant = payload.cta_variant or raw_payload.get("cta_variant")
+    cta_variant = _resolve_cta_variant(
+        db=db,
+        telegram_user_id=payload.telegram_user_id,
+        explicit_variant=explicit_variant,
+    )
 
     lead = db.execute(
         select(Lead)
@@ -969,7 +1241,7 @@ def reader_lead_intent(
             name=payload.name,
             contact=payload.contact,
             status=LeadStatus.new,
-            cta_variant="reader_referral",
+            cta_variant=cta_variant,
             notes=f"[READER_REFERRAL] intent={normalized_intent_type}",
             last_activity_at=now,
         )
@@ -982,26 +1254,38 @@ def reader_lead_intent(
             lead.contact = payload.contact
         if payload.name and not lead.name:
             lead.name = payload.name
+        lead.cta_variant = cta_variant
         note_suffix = f"\n[READER_REFERRAL] intent={normalized_intent_type}"
         current_notes = lead.notes or ""
         lead.notes = (current_notes + note_suffix)[-4000:]
         db.add(lead)
+
+    event_payload = {
+        "telegram_user_id": payload.telegram_user_id,
+        "post_id": str(payload.post_id) if payload.post_id else None,
+        "intent_type": normalized_intent_type,
+        "source": normalized_source,
+        "action": normalized_action,
+        "cta_variant": cta_variant,
+        "message": payload.message,
+        "payload": raw_payload,
+    }
 
     db.add(
         Event(
             lead_id=lead.id,
             user_id=None,
             type="reader.lead_intent",
-            payload={
-                "telegram_user_id": payload.telegram_user_id,
-                "post_id": str(payload.post_id) if payload.post_id else None,
-                "intent_type": normalized_intent_type,
-                "source": normalized_source,
-                "action": normalized_action,
-                "message": payload.message,
-                "payload": raw_payload,
-            },
+            payload=event_payload,
         )
+    )
+    _increment_reader_rollup(
+        db=db,
+        now=now,
+        channel="intent",
+        source=normalized_source,
+        action=normalized_action,
+        cta_variant=cta_variant,
     )
     db.commit()
 
