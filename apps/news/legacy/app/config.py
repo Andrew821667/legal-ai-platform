@@ -147,6 +147,13 @@ class Settings(BaseSettings):
     # Core API bridge (единый контур данных/feedback)
     core_api_url: str = Field(default="http://core-api:8000")
     api_key_news: str = Field(default="")
+    core_api_connect_timeout_seconds: float = Field(default=2.5)
+    core_api_read_timeout_seconds: float = Field(default=8.0)
+    core_api_fail_fast_seconds: int = Field(default=10)
+    core_api_read_cache_ttl_seconds: int = Field(default=20)
+    core_api_read_cache_stale_seconds: int = Field(default=180)
+    core_api_pool_connections: int = Field(default=20)
+    core_api_pool_maxsize: int = Field(default=50)
 
     # Telegram Client API (для сбора новостей из каналов)
     telegram_api_id: int = Field(default=0)

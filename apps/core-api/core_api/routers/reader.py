@@ -203,7 +203,19 @@ def _resolve_cta_variant(
     telegram_user_id: int,
     explicit_variant: str | None = None,
 ) -> str:
-    config = _cta_ab_config(db)
+    return _resolve_cta_variant_with_config(
+        telegram_user_id=telegram_user_id,
+        explicit_variant=explicit_variant,
+        config=_cta_ab_config(db),
+    )
+
+
+def _resolve_cta_variant_with_config(
+    *,
+    telegram_user_id: int | None,
+    explicit_variant: str | None,
+    config: dict[str, Any],
+) -> str:
     normalized_explicit = normalize_cta_variant(explicit_variant, default="")
     if normalized_explicit:
         allowed = {
@@ -213,6 +225,9 @@ def _resolve_cta_variant(
         }
         if not allowed or normalized_explicit in allowed:
             return normalized_explicit
+
+    if telegram_user_id is None:
+        return "v1_direct"
 
     return select_cta_variant(
         telegram_user_id=telegram_user_id,
@@ -532,33 +547,25 @@ def get_reader_continue_state(
         or 0
     )
 
-    last_action_event = db.execute(
-        select(ReaderMiniAppEvent)
+    last_action_at = db.execute(
+        select(ReaderMiniAppEvent.created_at)
         .where(ReaderMiniAppEvent.telegram_user_id == telegram_user_id)
         .where(ReaderMiniAppEvent.action.is_not(None))
         .order_by(ReaderMiniAppEvent.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
 
-    # Keep payload filtering DB-agnostic for SQLite/PostgreSQL test/runtime parity.
-    lead_intent_events = list(
+    lead_intents_30d = int(
         db.execute(
-            select(Event)
+            select(func.count())
+            .select_from(Event)
+            .join(Lead, Event.lead_id == Lead.id)
             .where(Event.type == "reader.lead_intent")
             .where(Event.created_at >= now - timedelta(days=30))
-            .order_by(Event.created_at.desc())
-            .limit(2000)
-        ).scalars().all()
+            .where(Lead.telegram_user_id == telegram_user_id)
+        ).scalar()
+        or 0
     )
-    lead_intents_30d = 0
-    for item in lead_intent_events:
-        payload = item.payload if isinstance(item.payload, dict) else {}
-        value = payload.get("telegram_user_id")
-        try:
-            if int(value) == int(telegram_user_id):
-                lead_intents_30d += 1
-        except (TypeError, ValueError):
-            continue
 
     recommended_section, recommended_reason = _recommended_section(
         pref=row,
@@ -575,7 +582,7 @@ def get_reader_continue_state(
         topics=_normalize_topics((row.topics if isinstance(row.topics, list) else []) or []),
         goal=row.miniapp_goal,
         last_action=row.miniapp_last_action,
-        last_action_at=(last_action_event.created_at if last_action_event else None),
+        last_action_at=last_action_at,
         updated_at=row.updated_at,
         saved_count=saved_count,
         recent_events_24h=recent_events_24h,
@@ -755,15 +762,20 @@ def reader_conversion_funnel(
 
     miniapp_rows = list(
         db.execute(
-            select(ReaderMiniAppEvent)
+            select(
+                ReaderMiniAppEvent.telegram_user_id,
+                ReaderMiniAppEvent.source,
+                ReaderMiniAppEvent.action,
+                ReaderMiniAppEvent.payload,
+            )
             .where(ReaderMiniAppEvent.created_at >= since)
             .order_by(ReaderMiniAppEvent.created_at.desc())
             .limit(200000)
-        ).scalars().all()
+        ).all()
     )
     cta_rows = list(
         db.execute(
-            select(Event)
+            select(Event.payload)
             .where(Event.type == "reader.cta_click")
             .where(Event.created_at >= since)
             .order_by(Event.created_at.desc())
@@ -772,13 +784,29 @@ def reader_conversion_funnel(
     )
     intent_rows = list(
         db.execute(
-            select(Event)
+            select(Event.payload, Event.lead_id)
             .where(Event.type == "reader.lead_intent")
             .where(Event.created_at >= since)
             .order_by(Event.created_at.desc())
             .limit(200000)
-        ).scalars().all()
+        ).all()
     )
+
+    lead_ids_for_lookup = {lead_id for _, lead_id in intent_rows if lead_id is not None}
+    lead_telegram_map: dict[uuid.UUID, int] = {}
+    if lead_ids_for_lookup:
+        lead_rows = db.execute(
+            select(Lead.id, Lead.telegram_user_id).where(Lead.id.in_(lead_ids_for_lookup))
+        ).all()
+        for lead_id, tg_user_id in lead_rows:
+            if lead_id is None:
+                continue
+            try:
+                parsed_tg = int(tg_user_id) if tg_user_id is not None else None
+            except (TypeError, ValueError):
+                parsed_tg = None
+            if parsed_tg is not None:
+                lead_telegram_map[lead_id] = parsed_tg
 
     miniapp_users: set[int] = set()
     cta_users: set[int] = set()
@@ -799,31 +827,33 @@ def reader_conversion_funnel(
         explicit = None
         if isinstance(payload, dict):
             explicit = payload.get("cta_variant")
-        if user_id is None:
-            return normalize_cta_variant(explicit, default="v1_direct")
-        return _resolve_cta_variant(db=db, telegram_user_id=user_id, explicit_variant=explicit)
+        return _resolve_cta_variant_with_config(
+            telegram_user_id=user_id,
+            explicit_variant=explicit,
+            config=cta_ab_config,
+        )
 
     def _add_variant_user(bucket: dict[str, set[int]], variant: str, user_id: int | None) -> None:
         if user_id is None:
             return
         bucket.setdefault(variant, set()).add(user_id)
 
-    for row in miniapp_rows:
-        user_id = _payload_user_id(row.telegram_user_id)
-        payload = row.payload if isinstance(row.payload, dict) else {}
+    for telegram_user_id, source_raw, action_raw, payload_raw in miniapp_rows:
+        user_id = _payload_user_id(telegram_user_id)
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
             miniapp_users.add(user_id)
             unique_users_total.add(user_id)
         _add_variant_user(miniapp_users_by_variant, variant, user_id)
-        source = normalize_reader_source(row.source, default="miniapp.app")
+        source = normalize_reader_source(source_raw, default="miniapp.app")
         miniapp_sources[source] += 1
-        action = normalize_reader_action(row.action)
+        action = normalize_reader_action(action_raw)
         if action:
             actions[action] += 1
 
-    for row in cta_rows:
-        payload = row.payload if isinstance(row.payload, dict) else {}
+    for payload_raw in cta_rows:
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         user_id = _payload_user_id(payload.get("telegram_user_id"))
         variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
@@ -836,9 +866,11 @@ def reader_conversion_funnel(
         if action:
             actions[action] += 1
 
-    for row in intent_rows:
-        payload = row.payload if isinstance(row.payload, dict) else {}
+    for payload_raw, lead_id in intent_rows:
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         user_id = _payload_user_id(payload.get("telegram_user_id"))
+        if user_id is None and lead_id is not None:
+            user_id = lead_telegram_map.get(lead_id)
         variant = _variant_for_user_payload(user_id, payload)
         if user_id is not None:
             intent_users.add(user_id)
@@ -849,9 +881,9 @@ def reader_conversion_funnel(
         action = normalize_reader_action(payload.get("action"))
         if action:
             actions[action] += 1
-        if row.lead_id is not None:
-            lead_ids.add(row.lead_id)
-            lead_ids_by_variant.setdefault(variant, set()).add(row.lead_id)
+        if lead_id is not None:
+            lead_ids.add(lead_id)
+            lead_ids_by_variant.setdefault(variant, set()).add(lead_id)
 
     def _rate(numerator: int, denominator: int) -> float:
         if denominator <= 0:

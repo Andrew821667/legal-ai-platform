@@ -296,6 +296,16 @@ python -u -m app.reader_bot
 Важно для reader-bot sync с core-api:
 - для единого контура (`/api/v1/reader/preferences`, `/api/v1/reader/feed`, `/api/v1/reader/saved`, `/api/v1/reader/save`, `/api/v1/reader/lead-intent`) должны быть заданы `CORE_API_URL` и `API_KEY_NEWS`;
 - при недоступности core-api reader-bot уходит в fallback на локальные таблицы и продолжает отвечать, но кросс-бот аналитика и lead-intent в core-api не записываются.
+- для стабильной работы на слабом VPS задайте параметры bridge-клиента (опционально):
+  - `CORE_API_CONNECT_TIMEOUT_SECONDS=2.5`
+  - `CORE_API_READ_TIMEOUT_SECONDS=8`
+  - `CORE_API_FAIL_FAST_SECONDS=10`
+  - `CORE_API_READ_CACHE_TTL_SECONDS=20`
+  - `CORE_API_READ_CACHE_STALE_SECONDS=180`
+  - `CORE_API_POOL_CONNECTIONS=20`
+  - `CORE_API_POOL_MAXSIZE=50`
+- для web mini-app proxy также задайте таймаут upstream:
+  - `CORE_API_FETCH_TIMEOUT_MS=7000`
 - чтобы разделы `Проверить/Решения` открывали корректные маршруты, при необходимости задайте:
   - `READER_CONTRACT_AI_URL` (по умолчанию `https://legalaipro.ru/contract-ai-system`);
   - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);

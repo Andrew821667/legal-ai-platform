@@ -10,10 +10,28 @@ from typing import Any
 from uuid import UUID
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_SESSION: requests.Session | None = None
+
+
+def _session() -> requests.Session:
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
+    session = requests.Session()
+    adapter = HTTPAdapter(
+        pool_connections=max(4, int(getattr(settings, "core_api_pool_connections", 20) or 20)),
+        pool_maxsize=max(8, int(getattr(settings, "core_api_pool_maxsize", 50) or 50)),
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    _SESSION = session
+    return _SESSION
 
 
 def reader_post_deeplink(post_id: str | UUID) -> str:
@@ -28,14 +46,17 @@ def _feedback_enabled() -> bool:
 
 
 def _send_feedback_sync(post_id: str, payload: dict[str, Any]) -> requests.Response:
-    return requests.post(
+    return _session().post(
         f"{settings.core_api_url.rstrip('/')}/api/v1/scheduled-posts/{post_id}/feedback",
         json=payload,
         headers={
             "X-API-Key": settings.api_key_news,
             "Content-Type": "application/json",
         },
-        timeout=8,
+        timeout=(
+            float(getattr(settings, "core_api_connect_timeout_seconds", 2.5) or 2.5),
+            float(getattr(settings, "core_api_read_timeout_seconds", 8.0) or 8.0),
+        ),
     )
 
 
