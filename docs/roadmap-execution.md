@@ -76,6 +76,21 @@
 - `apps/contract-ai` не является частью текущего production-контура.
 - На данном этапе реализуется только endpoint-слой и очередь задач в `core-api` + исполнение воркером `apps/contract-worker` (MacBook).
 - Полноценная интеграция `contract-ai` рассматривается отдельной фазой после стабилизации текущего ядра.
+- Концепция следующего этапа интеграции зафиксирована в `docs/contract-ai-system-integration-concept.md`.
+
+## Следующий крупный контур: Contract_AI_System как флагманский модуль
+
+Цель:
+- встроить `Contract_AI_System` в `Legal AI PRO` как договорный product-entry, лид-магнит и Telegram-first сценарий.
+
+Результат:
+- единая семантика сайта, mini-app и ботов;
+- gating по подписке на основной канал;
+- маршруты `демо-анализ -> консультация -> пилот`;
+- bridge к локальному `Contract-AI-System` без жесткой зависимости платформы от ноутбука.
+
+Опорный документ:
+- `docs/contract-ai-system-integration-concept.md`
 
 ## Правила релизов
 - Ветка на фазу -> PR в `main` -> CI -> deploy на VPS.
