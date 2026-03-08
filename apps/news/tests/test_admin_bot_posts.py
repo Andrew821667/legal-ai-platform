@@ -26,6 +26,8 @@ from news.admin_bot import (
     _manual_post_kind_prompt_block,
     _manual_post_kind_screen_template,
     _manual_post_kind_style_hint,
+    _normalize_reader_cta_split,
+    _normalize_reader_cta_variant,
     _post_format_display_label,
     _parse_review_filter_callback,
     _review_origin,
@@ -98,6 +100,7 @@ def test_callback_route_matchers() -> None:
     assert _is_controls_callback("srcm:1")
     assert _is_controls_callback("uih:toggle")
     assert _is_controls_callback("rdg:menu")
+    assert _is_controls_callback("rca:menu")
     assert _is_controls_callback("miniapp:summary:24")
     assert _is_posts_callback("pv:123:review:0")
     assert not _is_posts_callback("sec:sources")
@@ -329,6 +332,23 @@ def test_system_keyboard_exposes_service_actions() -> None:
     assert {"status", "rdg:menu", "reader:funnel:7", "miniapp:summary:24", "resetstale", "sec:help", "refresh"} <= callbacks
     assert "workers" not in callbacks
     assert "automation" not in callbacks
+
+
+def test_automation_keyboard_exposes_reader_cta_ab_menu() -> None:
+    bot = NewsAdminBot()
+    markup = bot._automation_keyboard([])
+    payload = markup.to_dict()
+    callbacks = {btn.get("callback_data") for row in payload.get("inline_keyboard", []) for btn in row if btn.get("callback_data")}
+    assert "rca:menu" in callbacks
+    assert "rdg:menu" in callbacks
+
+
+def test_reader_cta_helpers_normalize_aliases_and_split() -> None:
+    assert _normalize_reader_cta_variant("v1") == "v1_direct"
+    assert _normalize_reader_cta_variant("diag") == "v2_diagnostic"
+    assert _normalize_reader_cta_variant("unknown") == ""
+    split = _normalize_reader_cta_split(["v1_direct", "v2_diagnostic"], {"v1_direct": 70, "v2_diagnostic": 30})
+    assert split["v1_direct"] + split["v2_diagnostic"] == 100
 
 
 def test_help_text_has_reduced_fallback_commands() -> None:

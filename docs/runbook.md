@@ -49,6 +49,12 @@ SMOKE_SKIP_UP=1 make smoke-bots
 SMOKE_RUN_E2E=0 make smoke-bots
 ```
 
+## Release Gate (site + reader + mini-app)
+Для формальной приемки релиза по контуру сайта, reader-бота и mini-app используйте:
+- чеклист/критерии: `docs/stage-8-release-gate-site-reader-miniapp.md`;
+- обязательный smoke: `make smoke-bots`;
+- rollback-порядок: раздел 4 в `docs/stage-8-release-gate-site-reader-miniapp.md`.
+
 ## Первый запуск на production
 1. Развернуть `.env`.
 2. Поднять сервисы:

@@ -126,6 +126,18 @@ _UI_HINTS_ENABLED = True
 _UI_HINTS_CONTROL_KEY = "news.admin.ui_hints.enabled"
 _UI_HINTS_CONTROL_TITLE = "Подсказки интерфейса admin-бота"
 _UI_HINTS_CONTROL_DESCRIPTION = "Показывать блоки «Что это / Как управлять» на экранах admin-бота."
+_READER_CTA_AB_CONTROL_KEY = "news.reader_cta_ab.enabled"
+_READER_CTA_AB_DEFAULT_SEED = "legal-ai-reader-cta-v1"
+_READER_CTA_AB_VARIANTS = ("v1_direct", "v2_diagnostic")
+_READER_CTA_AB_VARIANT_LABELS = {
+    "v1_direct": "V1 прямой CTA",
+    "v2_diagnostic": "V2 диагностический CTA",
+}
+_READER_CTA_AB_SPLIT_PRESETS: dict[str, dict[str, int]] = {
+    "50_50": {"v1_direct": 50, "v2_diagnostic": 50},
+    "70_30": {"v1_direct": 70, "v2_diagnostic": 30},
+    "30_70": {"v1_direct": 30, "v2_diagnostic": 70},
+}
 
 _PILLAR_LABELS = {
     "regulation": "AI в праве и регулирование",
@@ -183,6 +195,7 @@ _CONTROLS_CALLBACK_PREFIXES = (
     "rdg:",
     "sec:",
     "reader:",
+    "rca:",
     "miniapp:",
     "thm:",
     "aq:",
@@ -592,6 +605,82 @@ def _pillar_display(pillar: str) -> str:
 def _rubric_label(rubric: str) -> str:
     normalized = (rubric or "").strip().lower()
     return _RUBRIC_LABELS.get(normalized, normalized or "без рубрики")
+
+
+def _reader_cta_variant_label(variant: str) -> str:
+    return _READER_CTA_AB_VARIANT_LABELS.get(variant, variant)
+
+
+def _normalize_reader_cta_variant(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    aliases = {
+        "v1": "v1_direct",
+        "direct": "v1_direct",
+        "v2": "v2_diagnostic",
+        "diag": "v2_diagnostic",
+        "diagnostic": "v2_diagnostic",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized in _READER_CTA_AB_VARIANTS:
+        return normalized
+    return ""
+
+
+def _normalize_reader_cta_variants(raw: Any) -> list[str]:
+    variants: list[str] = []
+    seen: set[str] = set()
+    if isinstance(raw, list):
+        for item in raw:
+            variant = _normalize_reader_cta_variant(str(item or ""))
+            if variant and variant not in seen:
+                seen.add(variant)
+                variants.append(variant)
+    if not variants:
+        variants = list(_READER_CTA_AB_VARIANTS)
+    return variants
+
+
+def _normalize_reader_cta_split(
+    enabled_variants: list[str] | tuple[str, ...],
+    raw_split: dict[str, Any] | None,
+) -> dict[str, int]:
+    variants = [variant for variant in _READER_CTA_AB_VARIANTS if variant in enabled_variants]
+    if not variants:
+        variants = [list(_READER_CTA_AB_VARIANTS)[0]]
+
+    raw_weights: list[int] = []
+    for variant in variants:
+        raw_value = raw_split.get(variant) if isinstance(raw_split, dict) else None
+        try:
+            weight = int(raw_value)
+        except (TypeError, ValueError):
+            weight = 0
+        raw_weights.append(max(weight, 0))
+
+    total = sum(raw_weights)
+    if total <= 0:
+        if len(variants) == 1:
+            return {variants[0]: 100}
+        base = int(100 / len(variants))
+        result = {variant: base for variant in variants}
+        remainder = 100 - (base * len(variants))
+        result[variants[0]] += remainder
+        return result
+
+    result: dict[str, int] = {}
+    allocated = 0
+    for index, variant in enumerate(variants):
+        if index == len(variants) - 1:
+            result[variant] = max(0, 100 - allocated)
+            continue
+        share = int(round((raw_weights[index] / total) * 100))
+        share = max(0, min(share, 100 - allocated))
+        result[variant] = share
+        allocated += share
+    if len(result) == 1:
+        only_variant = variants[0]
+        result[only_variant] = 100
+    return result
 
 
 def _source_profile(domain: str) -> tuple[str, str]:
@@ -1698,6 +1787,27 @@ class NewsAdminBot:
     def _reader_digest_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
         return self._controls_lookup(force_refresh=force_refresh).get("news.reader_digest.enabled", {})
 
+    def _reader_cta_ab_control_row(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        return self._controls_lookup(force_refresh=force_refresh).get(_READER_CTA_AB_CONTROL_KEY, {})
+
+    def _reader_cta_ab_state(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        row = self._reader_cta_ab_control_row(force_refresh=force_refresh)
+        config = dict(row.get("config") or {})
+        seed = str(config.get("seed") or _READER_CTA_AB_DEFAULT_SEED).strip() or _READER_CTA_AB_DEFAULT_SEED
+        enabled_variants = _normalize_reader_cta_variants(config.get("enabled_variants"))
+        split = _normalize_reader_cta_split(enabled_variants, config.get("split") if isinstance(config.get("split"), dict) else {})
+        return {
+            "enabled": bool(row.get("enabled", True)),
+            "seed": seed,
+            "enabled_variants": enabled_variants,
+            "split": split,
+            "title": str(row.get("title") or "A/B CTA reader/mini-app"),
+            "description": str(
+                row.get("description")
+                or "Управление A/B-вариантами CTA для reader/mini-app в сквозной воронке."
+            ),
+        }
+
     def _configured_generate_interval(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -1857,6 +1967,17 @@ class NewsAdminBot:
             if isinstance(reader_digest_config.get("max_users_per_cycle"), int)
             else 30
         )
+        reader_cta_state = self._reader_cta_ab_state(force_refresh=False)
+        reader_cta_variants = reader_cta_state.get("enabled_variants") or list(_READER_CTA_AB_VARIANTS)
+        reader_cta_split = reader_cta_state.get("split") if isinstance(reader_cta_state.get("split"), dict) else {}
+        reader_cta_split_text = ", ".join(
+            f"{_reader_cta_variant_label(variant)} {int(reader_cta_split.get(variant, 0))}%"
+            for variant in _READER_CTA_AB_VARIANTS
+            if variant in reader_cta_variants
+        ) or "н/д"
+        reader_cta_seed = str(reader_cta_state.get("seed") or _READER_CTA_AB_DEFAULT_SEED)
+        if len(reader_cta_seed) > 28:
+            reader_cta_seed = reader_cta_seed[:28] + "…"
         generate_limit = generate_config.get("generate_limit") if isinstance(generate_config.get("generate_limit"), int) else settings.news_generate_limit
         broad_ai_limit = generate_config.get("broad_ai_limit") if isinstance(generate_config.get("broad_ai_limit"), int) else 1
         retention_days = generate_config.get("retention_days") if isinstance(generate_config.get("retention_days"), int) else settings.news_review_retention_days
@@ -1887,6 +2008,7 @@ class NewsAdminBot:
             f"Генерация драфтов: {generate_morning} и {generate_evening}; лимит за цикл {generate_limit}",
             f"Публикация: {_humanize_interval(publish_interval)}",
             f"Reader-дайджест: {'🟢' if reader_digest_enabled else '🔴'} {reader_digest_slot}; лимит {reader_digest_limit}",
+            f"Reader CTA A/B: {'🟢' if reader_cta_state.get('enabled', True) else '🔴'} | {reader_cta_split_text} | seed {reader_cta_seed}",
             f"Хранение драфтов На проверке: {retention_days} дн.",
             f"Broad-AI лимит в цикле: {broad_ai_limit}",
             f"Активных контент-тем: {len(enabled_themes)}/{len(GENERATION_THEME_DEFS)}",
@@ -2084,6 +2206,7 @@ class NewsAdminBot:
                 _inline_button("📊 Статус API", callback_data="status"),
                 _inline_button("🚨 Оперконтроль", callback_data="sec:ops"),
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
+                _inline_button("🎛 Reader CTA A/B", callback_data="rca:menu"),
                 _inline_button("📚 Reader-метрики", callback_data="reader:summary:7"),
                 _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
                 _inline_button("🧩 Mini-App события", callback_data="miniapp:summary:24"),
@@ -2306,6 +2429,103 @@ class NewsAdminBot:
             ]
         )
         rows.extend(self._submenu_nav_rows(back_callback="sec:system", back_label="🔙 К системе"))
+        return InlineKeyboardMarkup(rows)
+
+    def _reader_cta_ab_text(self, *, force_refresh: bool = True) -> str:
+        state = self._reader_cta_ab_state(force_refresh=force_refresh)
+        variants = list(state.get("enabled_variants") or _READER_CTA_AB_VARIANTS)
+        split = state.get("split") if isinstance(state.get("split"), dict) else {}
+        split_line = ", ".join(
+            f"{_reader_cta_variant_label(variant)} {int(split.get(variant, 0))}%"
+            for variant in _READER_CTA_AB_VARIANTS
+            if variant in variants
+        ) or "н/д"
+
+        variant_stats: list[str] = []
+        try:
+            response = self.admin_client.reader_funnel_summary(days=7)
+            response.raise_for_status()
+            payload = response.json() or {}
+            rows = payload.get("variants") or []
+            for item in rows:
+                variant = _normalize_reader_cta_variant(str(item.get("cta_variant") or ""))
+                if not variant:
+                    continue
+                variant_stats.append(
+                    f"• {_reader_cta_variant_label(variant)}: CTA {int(item.get('cta_users', 0))}, "
+                    f"intent {int(item.get('intent_users', 0))}, CR {float(item.get('cta_to_intent', 0)):.1f}%"
+                )
+        except Exception:
+            variant_stats = []
+
+        lines = [
+            "A/B CTA reader/mini-app",
+            "",
+            _screen_guide(
+                "Управление CTA-вариантами reader/mini-app и их весами в распределении.",
+                [
+                    "Меняйте split только для активных вариантов.",
+                    "После смены seed распределение пользователей пересчитается детерминированно.",
+                    "Ориентируйтесь на CR в intent и консультации через Reader-воронку.",
+                ],
+            ),
+            "",
+            f"Статус A/B: {'🟢 включен' if state.get('enabled', True) else '🔴 выключен'}",
+            f"Seed: {state.get('seed')}",
+            "Активные варианты: " + ", ".join(_reader_cta_variant_label(variant) for variant in variants),
+            f"Split: {split_line}",
+        ]
+        if variant_stats:
+            lines.extend(["", "Факт за 7 дней:", *variant_stats[:6]])
+        else:
+            lines.extend(["", "Факт за 7 дней: нет данных или статистика временно недоступна."])
+        return "\n".join(lines)
+
+    def _reader_cta_ab_keyboard(self, *, force_refresh: bool = True) -> InlineKeyboardMarkup:
+        state = self._reader_cta_ab_state(force_refresh=force_refresh)
+        variants = set(state.get("enabled_variants") or [])
+        split = state.get("split") if isinstance(state.get("split"), dict) else {}
+
+        split_50 = _normalize_reader_cta_split(list(variants), _READER_CTA_AB_SPLIT_PRESETS["50_50"])
+        split_70 = _normalize_reader_cta_split(list(variants), _READER_CTA_AB_SPLIT_PRESETS["70_30"])
+        split_30 = _normalize_reader_cta_split(list(variants), _READER_CTA_AB_SPLIT_PRESETS["30_70"])
+        current_split = _normalize_reader_cta_split(list(variants), split)
+
+        def _split_matches(target: dict[str, int]) -> bool:
+            return all(int(current_split.get(variant, 0)) == int(target.get(variant, 0)) for variant in _READER_CTA_AB_VARIANTS)
+
+        rows = self._two_column_rows(
+            [
+                _inline_button(
+                    "⛔ Выключить A/B" if state.get("enabled", True) else "🟢 Включить A/B",
+                    callback_data=f"set:{_READER_CTA_AB_CONTROL_KEY}:{'0' if state.get('enabled', True) else '1'}",
+                    style=_BUTTON_STYLE_DANGER if state.get("enabled", True) else _BUTTON_STYLE_SUCCESS,
+                ),
+                _inline_button(
+                    ("✅ " if "v1_direct" in variants else "☑️ ") + _reader_cta_variant_label("v1_direct"),
+                    callback_data="rca:var:v1_direct",
+                ),
+                _inline_button(
+                    ("✅ " if "v2_diagnostic" in variants else "☑️ ") + _reader_cta_variant_label("v2_diagnostic"),
+                    callback_data="rca:var:v2_diagnostic",
+                ),
+                _inline_button(
+                    f"{'• ' if _split_matches(split_50) else ''}Split 50/50",
+                    callback_data="rca:split:50_50",
+                ),
+                _inline_button(
+                    f"{'• ' if _split_matches(split_70) else ''}Split 70/30",
+                    callback_data="rca:split:70_30",
+                ),
+                _inline_button(
+                    f"{'• ' if _split_matches(split_30) else ''}Split 30/70",
+                    callback_data="rca:split:30_70",
+                ),
+                _inline_button("🔁 Новый seed", callback_data="rca:seed:rotate"),
+                _inline_button("🎯 Reader-воронка", callback_data="reader:funnel:7"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="sec:automation", back_label="🔙 К автоматизации"))
         return InlineKeyboardMarkup(rows)
 
     def _reader_summary_text(self, days: int = 7) -> str:
@@ -3392,6 +3612,10 @@ class NewsAdminBot:
             [
                 _inline_button("🗓 Сетка публикаций", callback_data="sch:menu"),
                 _inline_button("📚 Темы лонгридов", callback_data="lt:menu"),
+            ],
+            [
+                _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
+                _inline_button("🎛 Reader CTA A/B", callback_data="rca:menu"),
             ],
             [
                 _inline_button("🧭 Темы генерации", callback_data="sec:themes"),
@@ -6939,6 +7163,80 @@ class NewsAdminBot:
                     query,
                     self._reader_digest_text(force_refresh=True),
                     reply_markup=self._reader_digest_keyboard(force_refresh=True),
+                )
+                return
+
+            if data == "rca:menu":
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_cta_ab_text(force_refresh=True),
+                    reply_markup=self._reader_cta_ab_keyboard(force_refresh=True),
+                )
+                return
+
+            if data.startswith("rca:"):
+                parts = data.split(":")
+                if len(parts) < 2:
+                    await query.answer("Некорректная команда CTA A/B.", show_alert=True)
+                    return
+                action = parts[1]
+                state = self._reader_cta_ab_state(force_refresh=True)
+                row = self._reader_cta_ab_control_row(force_refresh=True)
+                config = dict(row.get("config") or {})
+                variants = list(state.get("enabled_variants") or list(_READER_CTA_AB_VARIANTS))
+
+                if action == "var":
+                    if len(parts) < 3:
+                        await query.answer("Не указан вариант CTA.", show_alert=True)
+                        return
+                    variant = _normalize_reader_cta_variant(parts[2])
+                    if not variant:
+                        await query.answer("Неизвестный вариант CTA.", show_alert=True)
+                        return
+                    if variant in variants:
+                        if len(variants) == 1:
+                            await query.answer("Нужен хотя бы один активный вариант.", show_alert=True)
+                            return
+                        variants = [item for item in variants if item != variant]
+                    else:
+                        variants.append(variant)
+                    config["enabled_variants"] = [item for item in _READER_CTA_AB_VARIANTS if item in variants]
+                    config["split"] = _normalize_reader_cta_split(config["enabled_variants"], config.get("split"))
+                elif action == "split":
+                    if len(parts) < 3:
+                        await query.answer("Не указан split-профиль.", show_alert=True)
+                        return
+                    preset_key = parts[2]
+                    preset = _READER_CTA_AB_SPLIT_PRESETS.get(preset_key)
+                    if preset is None:
+                        await query.answer("Неизвестный split-профиль.", show_alert=True)
+                        return
+                    config["enabled_variants"] = [item for item in _READER_CTA_AB_VARIANTS if item in variants]
+                    config["split"] = _normalize_reader_cta_split(config["enabled_variants"], preset)
+                elif action == "seed":
+                    run_suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+                    config["seed"] = f"legal-ai-reader-cta-{run_suffix}"
+                    config["enabled_variants"] = [item for item in _READER_CTA_AB_VARIANTS if item in variants]
+                    config["split"] = _normalize_reader_cta_split(config["enabled_variants"], config.get("split"))
+                else:
+                    await query.answer("Неизвестная команда CTA A/B.", show_alert=True)
+                    return
+
+                payload = {
+                    "scope": "news",
+                    "title": state.get("title") or row.get("title") or "A/B CTA reader/mini-app",
+                    "description": state.get("description")
+                    or row.get("description")
+                    or "Управление A/B-вариантами CTA для reader/mini-app в сквозной воронке.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control(_READER_CTA_AB_CONTROL_KEY, payload).raise_for_status()
+                self._invalidate_controls_cache()
+                await self._safe_edit_message_text(
+                    query,
+                    self._reader_cta_ab_text(force_refresh=True),
+                    reply_markup=self._reader_cta_ab_keyboard(force_refresh=True),
                 )
                 return
 
