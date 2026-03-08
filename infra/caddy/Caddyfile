@@ -2,6 +2,11 @@
     email {$ACME_EMAIL}
 }
 
+{$CONTRACT_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy {$CONTRACT_AI_UPSTREAM}
+}
+
 {$DOMAIN} {
     encode zstd gzip
 

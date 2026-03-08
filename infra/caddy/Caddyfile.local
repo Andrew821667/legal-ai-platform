@@ -17,3 +17,8 @@
         reverse_proxy web:3000
     }
 }
+
+contract.localhost {
+    encode zstd gzip
+    reverse_proxy {$CONTRACT_AI_UPSTREAM}
+}

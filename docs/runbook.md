@@ -358,9 +358,19 @@ python -u -m app.reader_bot
   - `CORE_API_READ_CACHE_TTL_MS=10000`
   - `CORE_API_READ_CACHE_STALE_MS=120000`
 - чтобы разделы `Проверить/Решения` открывали корректные маршруты, при необходимости задайте:
-  - `READER_CONTRACT_AI_URL` (по умолчанию `https://legalaipro.ru/contract-ai-system`);
+  - `READER_CONTRACT_AI_URL` (по умолчанию `https://contract.legalaipro.ru`);
   - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);
   - `READER_FOR_BUSINESS_URL` (по умолчанию `https://legalaipro.ru/for-business`).
+
+Разделение доменов (рекомендуется):
+- `legalaipro.ru` — основной сайт платформы;
+- `contract.legalaipro.ru` — отдельный контур Contract_AI_System.
+
+Для `caddy` в `docker-compose.prod.yml` предусмотрены env:
+- `CONTRACT_DOMAIN` (по умолчанию `contract.legalaipro.ru`);
+- `CONTRACT_AI_UPSTREAM` (по умолчанию `host.docker.internal:8080`).
+
+Перед запуском убедитесь, что у DNS есть запись `A/AAAA` для `contract.legalaipro.ru`, а upstream доступен из контейнера `caddy`.
 - доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:
   - `discover`, `validate`, `solutions`, `profile`, `search`;
   - `miniapp_content`, `miniapp_tools`, `miniapp_solutions`, `miniapp_profile`.

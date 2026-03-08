@@ -66,6 +66,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
       MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://legalaipro.ru}
       TZ: ${TZ:-Europe/Moscow}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${CORE_API_PUBLISH_PORT:-8000}:8000"
     depends_on:
@@ -310,6 +312,10 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
+      CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.legalaipro.ru}
+      CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       web:
         condition: service_healthy
