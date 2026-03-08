@@ -128,6 +128,8 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
             success = email_sender.email_sender.send_checklist(email, user_name)
         elif magnet_type == 'demo':
             success = email_sender.email_sender.send_demo_request_confirmation(email, user_name)
+        elif magnet_type == 'sample_report':
+            success = email_sender.email_sender.send_sample_report(email, user_name)
 
         if success:
             # Обновляем email в lead если его там нет

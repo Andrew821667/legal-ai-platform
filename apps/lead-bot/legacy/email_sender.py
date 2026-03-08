@@ -450,6 +450,57 @@ class EmailSender:
 
         return self.send_email(to_email, subject, html_body)
 
+    def send_sample_report(self, to_email: str, name: Optional[str] = None) -> bool:
+        """Отправляет образец AI-отчета по договору."""
+        name_greeting = f"Здравствуйте, {name}!" if name else "Здравствуйте!"
+        subject = "Образец AI-отчета по договору"
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #34495e; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; background-color: #f9f9f9; }}
+        .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+        .card {{ background: #fff; border-left: 4px solid #34495e; padding: 16px; margin: 16px 0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Образец AI-отчета по договору</h1>
+            <p>Структура, которую используем в Contract_AI_System</p>
+        </div>
+        <div class="content">
+            <p>{name_greeting}</p>
+            <p>Направляем структуру отчета, которую используем в демо и рабочих проверках.</p>
+            <div class="card">
+                <strong>Что внутри образца:</strong>
+                <ul>
+                    <li>карта рисков по разделам договора;</li>
+                    <li>приоритеты: критично / важно / желательно;</li>
+                    <li>комментарии и рекомендации по правкам;</li>
+                    <li>следующий шаг для внедрения в процесс команды.</li>
+                </ul>
+            </div>
+            <p>Если хотите разбор на вашем документе, ответьте на это письмо или напишите в Telegram.</p>
+            <p>
+                Telegram: <a href="https://t.me/AndrewPopov821667">@AndrewPopov821667</a><br>
+                Email: <a href="mailto:a.popov.gv@gmail.com">a.popov.gv@gmail.com</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>Это письмо отправлено в ответ на ваш запрос через Telegram-бот Legal AI PRO.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        return self.send_email(to_email, subject, html_body)
+
 
 # Глобальный экземпляр
 email_sender = EmailSender()

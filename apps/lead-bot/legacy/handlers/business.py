@@ -706,6 +706,10 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 magnet_type = "demo"
                 database.db.create_or_update_lead(user, {"lead_magnet_type": "demo"})
                 lead = database.db.get_lead_by_user_id(user)
+            elif magnet_type == "report_sample":
+                magnet_type = "sample_report"
+                database.db.create_or_update_lead(user, {"lead_magnet_type": "sample_report"})
+                lead = database.db.get_lead_by_user_id(user)
 
             email = extract_email(text) if text else None
             if email:
@@ -717,6 +721,8 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                     success = email_sender.email_sender.send_checklist(email, user_name)
                 elif magnet_type == "demo":
                     success = email_sender.email_sender.send_demo_request_confirmation(email, user_name)
+                elif magnet_type == "sample_report":
+                    success = email_sender.email_sender.send_sample_report(email, user_name)
 
                 if success:
                     if not lead.get("email"):

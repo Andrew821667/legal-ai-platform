@@ -433,7 +433,9 @@ def format_lead_notification(lead_data: dict, user_data: dict) -> str:
         magnet_types = {
             'consultation': 'Консультация 30 мин',
             'checklist': 'Чек-лист по договорам',
-            'demo_analysis': 'Демо-анализ договора'
+            'demo_analysis': 'Демо-анализ договора',
+            'demo': 'Демо-анализ договора',
+            'sample_report': 'Образец AI-отчета по договору',
         }
         message += f"\nLead Magnet: {magnet_types.get(lead_data['lead_magnet_type'], lead_data['lead_magnet_type'])}\n"
 

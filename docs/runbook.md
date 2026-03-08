@@ -26,6 +26,28 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 - `reader-bot` в таком запуске требует `READER_BOT_TOKEN` в корневом `.env`.
 - Для отправки feedback-сигналов ридера в `core-api` также обязательны `API_KEY_NEWS` (scope `news`/`admin`) и, желательно, `READER_BOT_USERNAME` (deeplink вида `/start post_<uuid>`).
 
+## Contract_AI_System на локальном MacBook (Docker)
+
+Если `Contract-AI-System` запущен отдельным Docker-контуром на этом же MacBook, в `core-api` это должно быть отражено через `automation_controls`.
+
+Базовые ключи:
+- `contract_ai.enabled`
+- `contract_ai.channel_gate.enabled`
+- `contract_ai.quick_demo.enabled`
+- `contract_ai.demo_link.enabled`
+- `contract_ai.local_bridge.enabled`
+- `contract_ai.reader_cta.enabled`
+
+Рекомендуемый стартовый профиль для локального Docker-режима:
+- `contract_ai.local_bridge.enabled = true`
+- `contract_ai.local_bridge.config.deployment = "docker_local_macbook"`
+- `contract_ai.local_bridge.config.mode = "online"` если локальный контур доступен, иначе `offline`
+- `contract_ai.local_bridge.config.status_url|demo_link_url|analysis_url` — адреса bridge-эндпоинтов локального контура
+
+Важно:
+- при `mode=offline` внешние контуры (site/lead-bot/reader/mini-app) не должны ломаться;
+- пользователь переводится в сценарий очереди/консультации, а не получает ошибку доступа к кабинету.
+
 ## Единый smoke для всех ботов (Docker)
 После обновлений по ботам запускайте единый smoke:
 ```bash

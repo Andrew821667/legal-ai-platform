@@ -20,8 +20,12 @@ WORKSPACE_INLINE_MENU = [
         InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
     ],
     [
+        InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
         InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+    ],
+    [
         InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact"),
+        InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
     ],
     [
         InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
@@ -31,15 +35,12 @@ WORKSPACE_INLINE_MENU = [
         InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
         InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
     ],
-    [
-        InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
-    ],
 ]
 
 QUICK_NAV_MENU = [
     [
         InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
-        InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+        InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
     ],
     [
         InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
@@ -53,7 +54,8 @@ QUICK_NAV_MENU = [
 LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("📞 Консультация 30 мин", callback_data="magnet_consultation")],
     [InlineKeyboardButton("📄 Чек-лист по договорам", callback_data="magnet_checklist")],
-    [InlineKeyboardButton("🎯 Демо-анализ договора", callback_data="magnet_demo")]
+    [InlineKeyboardButton("🎯 Демо-анализ договора", callback_data="magnet_demo")],
+    [InlineKeyboardButton("🧾 Образец AI-отчета", callback_data="magnet_sample_report")],
 ]
 
 CONSENT_PDN_MENU = [

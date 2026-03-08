@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type LeadOffer = "consultation" | "checklist" | "demo" | "unknown";
+type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
 
 declare global {
@@ -16,6 +16,7 @@ const offerLabels: Record<LeadOffer, string> = {
   consultation: "Бесплатная консультация",
   checklist: "Гайд по внедрению AI",
   demo: "Демо-анализ договора",
+  sample_report: "Образец AI-отчета",
   unknown: "Общий запрос",
 };
 
@@ -169,6 +170,7 @@ export default function LeadCaptureForm() {
                   <option value="consultation">Консультация</option>
                   <option value="checklist">Гайд</option>
                   <option value="demo">Демо-анализ</option>
+                  <option value="sample_report">Образец AI-отчета</option>
                   <option value="unknown">Общий запрос</option>
                 </select>
               </label>

@@ -6,7 +6,7 @@ export default function LeadMagnets() {
   const { ref: headerRef, isVisible: headerVisible } = useScrollAnimation();
   const { ref: gridRef, isVisible: gridVisible } = useScrollAnimation({ threshold: 0.05 });
 
-  const offerByIndex = ["consultation", "checklist", "demo"] as const;
+  const offerByIndex = ["consultation", "checklist", "demo", "sample_report"] as const;
 
   const openLeadForm = (offer: (typeof offerByIndex)[number]) => {
     if (typeof window === "undefined") return;
@@ -62,6 +62,21 @@ export default function LeadMagnets() {
       cta: "Отправить договор",
       popular: false,
     },
+    {
+      icon: "🧾",
+      title: "Образец AI-отчета",
+      subtitle: "Структура результата",
+      description:
+        "Получите пример отчета по договору: карта рисков, приоритеты правок и формат следующего шага к внедрению.",
+      features: [
+        "Карта рисков по разделам",
+        "Приоритеты правок",
+        "Шаблон для команды",
+        "Переход к пилоту",
+      ],
+      cta: "Получить образец",
+      popular: false,
+    },
   ];
 
   return (
@@ -78,7 +93,7 @@ export default function LeadMagnets() {
         </div>
 
         {/* Magnets Grid */}
-        <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
           {magnets.map((magnet, index) => (
             <div
               key={index}

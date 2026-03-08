@@ -425,7 +425,11 @@ async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> Non
 
 async def _show_validate(target: Message, user_id: int) -> None:
     """Show contract validation section with direct CTA."""
-    helper_link = _build_helper_link("reader_validate")
+    demo_link = _build_helper_link("contract_demo")
+    checklist_link = _build_helper_link("contract_checklist")
+    sample_report_link = _build_helper_link("contract_sample_report")
+    pilot_link = _build_helper_link("contract_consultation")
+    cabinet_link = _build_helper_link("contract_cabinet")
     miniapp_url = await build_reader_miniapp_deeplink(
         user_id=user_id,
         source=READER_EVENT_SOURCES["validate"],
@@ -436,24 +440,39 @@ async def _show_validate(target: Message, user_id: int) -> None:
     rows: list[list[InlineKeyboardButton]] = []
     contract_url = (settings.reader_contract_ai_url or "").strip()
     if contract_url:
-        rows.append([InlineKeyboardButton(text="🧪 Проверить договор", url=contract_url)])
+        rows.append([InlineKeyboardButton(text="🖥 Открыть Contract AI", url=contract_url)])
+    if demo_link:
+        rows.append(
+            [
+                InlineKeyboardButton(text="🎯 Демо-анализ", url=demo_link),
+                InlineKeyboardButton(text="🧾 Образец отчета", url=sample_report_link or demo_link),
+            ]
+        )
+    if checklist_link:
+        rows.append([InlineKeyboardButton(text="📄 Чек-лист рисков", url=checklist_link)])
     if miniapp_url:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", url=miniapp_url)])
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", callback_data="rnav:miniapp_tools")])
-    if helper_link:
-        rows.append([InlineKeyboardButton(text="✉️ Обсудить внедрение", url=helper_link)])
+    if pilot_link:
+        rows.append(
+            [
+                InlineKeyboardButton(text="📞 Обсудить пилот", url=pilot_link),
+                InlineKeyboardButton(text="🔐 Доступ в кабинет", url=cabinet_link or pilot_link),
+            ]
+        )
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
         "🧪 <b>Раздел «Проверить»</b>\n\n"
         "Что это:\n"
-        "• быстрый вход в Contract AI System;\n"
-        "• первичная проверка договора и подсветка рисков.\n\n"
+        "• быстрый вход в Contract_AI_System;\n"
+        "• демо-анализ договора и карта рисков;\n"
+        "• маршрут от проверки к пилоту внедрения.\n\n"
         "Как использовать:\n"
-        "1. Нажмите «Проверить договор».\n"
-        "2. Загрузите документ.\n"
-        "3. Получите вывод и определите следующий шаг.",
+        "1. Выберите «Демо-анализ» или «Образец отчета».\n"
+        "2. Если нужен live-доступ, откройте кабинет или Mini App.\n"
+        "3. Для внедрения в процесс нажмите «Обсудить пилот».",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )

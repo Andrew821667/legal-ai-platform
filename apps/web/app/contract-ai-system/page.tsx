@@ -74,7 +74,7 @@ export default function ContractAISystemPage() {
           </p>
           <div className="mt-8">
             <CtaFrameworkPanel
-              leadStart="web_contract_ai_header"
+              leadStart="contract_demo"
               miniAppHref={ROUTES.miniAppTools}
               title="Маршрут Contract_AI_System: Узнать -> Проверить -> Внедрить"
             />
@@ -152,7 +152,7 @@ export default function ContractAISystemPage() {
           </p>
           <div className="mt-6">
             <CtaFrameworkPanel
-              leadStart="web_contract_ai_next_step"
+              leadStart="contract_consultation"
               miniAppHref={ROUTES.miniAppTools}
               title="Следующий шаг: Узнать -> Проверить -> Внедрить"
             />

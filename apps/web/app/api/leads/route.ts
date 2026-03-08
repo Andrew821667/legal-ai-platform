@@ -11,7 +11,7 @@ const CORE_API_BOT_KEY =
   "";
 
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
-type LeadOffer = "consultation" | "checklist" | "demo" | "unknown";
+type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 
 interface LeadRequestBody {
   name?: string;
@@ -42,7 +42,7 @@ function toSegment(input: unknown): LeadSegment {
 }
 
 function toOffer(input: unknown): LeadOffer {
-  if (input === "consultation" || input === "checklist" || input === "demo") {
+  if (input === "consultation" || input === "checklist" || input === "demo" || input === "sample_report") {
     return input;
   }
   return "unknown";

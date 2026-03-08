@@ -4,7 +4,7 @@ import AnimatedStat from "./AnimatedStat";
 import HeroIllustration from "./HeroIllustration";
 
 export default function Hero() {
-  const openLeadForm = (offer: "consultation" | "checklist" | "demo" | "unknown") => {
+  const openLeadForm = (offer: "consultation" | "checklist" | "demo" | "sample_report" | "unknown") => {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent("lead_offer_selected", { detail: { offer } }));
     const target = document.getElementById("lead-form");

@@ -380,6 +380,28 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 )
             return
 
+        if callback_data == "menu_contract_ai":
+            response_text = (
+                f"{content.menu_response_by_key('menu_contract_ai', lead=lead, selected_profile=selected_profile)}\n\n"
+                f"{content.LEAD_MAGNET_OFFER_TEXT}"
+            )
+            response_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
+            if is_business:
+                await context.bot.send_message(
+                    chat_id=query.message.chat.id,
+                    text=response_text,
+                    business_connection_id=query.message.business_connection_id,
+                    reply_markup=response_markup,
+                )
+            else:
+                await utils.safe_edit_text(
+                    query.message,
+                    _clip_for_edit(response_text),
+                    reply_markup=response_markup,
+                    action="menu_contract_ai",
+                )
+            return
+
         if callback_data in {"menu_contact_send_phone", "menu_contact_telegram_only"}:
             if not user_db_id:
                 await utils.safe_reply_text(
@@ -668,6 +690,8 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
     magnet_type = query.data.replace("magnet_", "")
     if magnet_type == "demo_analysis":
         magnet_type = "demo"
+    if magnet_type == "report_sample":
+        magnet_type = "sample_report"
 
     # Сохраняем выбор lead magnet
     lead = database.db.get_lead_by_user_id(user_data['id'])

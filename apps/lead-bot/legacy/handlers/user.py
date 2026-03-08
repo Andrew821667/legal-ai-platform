@@ -36,6 +36,9 @@ from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
 _READER_START_PAYLOAD_RE = re.compile(r"^readerq_(?P<post_id>[0-9a-fA-F-]{36})$")
+_CONTRACT_START_PAYLOAD_RE = re.compile(
+    r"^contract_(?P<entry>demo|checklist|sample_report|consultation|cabinet)$"
+)
 _EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
 _EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
 _PENDING_START_PAYLOAD_KEY = "pending_start_payload"
@@ -176,6 +179,90 @@ async def _handle_reader_referral_start(
     return True
 
 
+def _contract_payload_magnet(entry: str) -> str:
+    mapping = {
+        "demo": "demo",
+        "checklist": "checklist",
+        "sample_report": "sample_report",
+        "consultation": "consultation",
+        "cabinet": "consultation",
+    }
+    return mapping.get(entry, "consultation")
+
+
+async def _handle_contract_start_payload(
+    *,
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_data: Dict,
+    user,
+    payload: str,
+) -> bool:
+    match = _CONTRACT_START_PAYLOAD_RE.match(payload)
+    if not match:
+        return False
+
+    entry = match.group("entry")
+    magnet_type = _contract_payload_magnet(entry)
+    previous_lead = database.db.get_lead_by_user_id(user_data["id"]) or {}
+    is_update = bool(previous_lead)
+    notes = (previous_lead.get("notes") or "").strip()
+    marker = f"[CONTRACT_ENTRY] start={payload}"
+    notes = f"{notes}\n{marker}".strip() if notes else marker
+    lead_payload = {
+        "name": previous_lead.get("name") or user.first_name,
+        "email": previous_lead.get("email"),
+        "phone": previous_lead.get("phone"),
+        "company": previous_lead.get("company"),
+        "pain_point": previous_lead.get("pain_point") or "Интерес к Contract_AI_System и договорному контуру.",
+        "temperature": "warm",
+        "status": "new",
+        "notification_sent": 0,
+        "lead_magnet_type": magnet_type,
+        "lead_magnet_delivered": 0,
+        "service_category": previous_lead.get("service_category") or "contract_automation",
+        "specific_need": previous_lead.get("specific_need") or "Contract AI",
+        "notes": notes,
+    }
+    lead_id = database.db.create_or_update_lead(user_data["id"], lead_payload)
+    lead_snapshot = database.db.get_lead_by_id(lead_id) or lead_payload
+    await notify_admin_new_lead(
+        context=context,
+        lead_id=lead_id,
+        lead_data=lead_snapshot,
+        user_data=user_data,
+        is_update=is_update,
+    )
+
+    if entry == "cabinet":
+        await utils.safe_reply_text(
+            message,
+            (
+                "🖥 Запрос на доступ к кабинету Contract_AI_System принят.\n\n"
+                "Сейчас контур работает на локальном Docker-стенде. "
+                "Оставьте контакт для выдачи доступа и согласования следующего шага."
+            ),
+            reply_markup=_consultation_contact_markup(),
+            action="contract_start_cabinet",
+        )
+        return True
+
+    selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо! Продолжаем.")
+    if entry == "demo":
+        selection_text = (
+            f"{selection_text}\n\n"
+            "Можно сразу отправить договор (файл/фото), затем укажите email."
+        )
+    reply_markup = _consultation_contact_markup() if magnet_type == "consultation" else None
+    await utils.safe_reply_text(
+        message,
+        selection_text,
+        reply_markup=reply_markup,
+        action=f"contract_start_{entry}",
+    )
+    return True
+
+
 async def process_pending_start_payload(
     *,
     message,
@@ -189,7 +276,13 @@ async def process_pending_start_payload(
 
     match = _READER_START_PAYLOAD_RE.match(payload)
     if not match:
-        return False
+        return await _handle_contract_start_payload(
+            message=message,
+            context=context,
+            user_data=user_data,
+            user=user,
+            payload=payload,
+        )
 
     return await _handle_reader_referral_start(
         message=message,
@@ -820,6 +913,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"{consent_text}\n\n"
                         "После подтверждения согласия сразу подхвачу ваш запрос по материалу из ридер-бота."
                     )
+                elif _CONTRACT_START_PAYLOAD_RE.match(start_payload):
+                    consent_text = (
+                        f"{consent_text}\n\n"
+                        "После подтверждения согласия сразу переведу вас в договорный контур Contract_AI_System."
+                    )
                 await utils.safe_reply_text(
                     update.message,
                     consent_text,
@@ -1116,6 +1214,8 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def _normalize_magnet_type(value: Optional[str]) -> str:
     if value == "demo_analysis":
         return "demo"
+    if value == "report_sample":
+        return "sample_report"
     return value or ""
 
 

@@ -185,6 +185,73 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "config": {},
     },
     {
+        "key": "contract_ai.enabled",
+        "scope": None,
+        "title": "Contract AI контур",
+        "description": "Общий переключатель договорного контура (сайт, боты, mini-app).",
+        "enabled": True,
+        "config": {
+            "entrypoints": ["web", "lead_bot", "business", "reader", "miniapp"],
+        },
+    },
+    {
+        "key": "contract_ai.channel_gate.enabled",
+        "scope": None,
+        "title": "Contract AI: доступ после подписки",
+        "description": "Проверка подписки на основной канал перед выдачей продвинутых магнитов/демо.",
+        "enabled": True,
+        "config": {
+            "channel_username": "legal_ai_pro",
+            "required_for": ["sample_report", "quick_demo", "demo_link"],
+        },
+    },
+    {
+        "key": "contract_ai.quick_demo.enabled",
+        "scope": None,
+        "title": "Contract AI: quick demo",
+        "description": "Быстрый сценарий демо-анализа договора через Telegram/mini-app.",
+        "enabled": True,
+        "config": {
+            "daily_limit": 15,
+            "fallback_mode": "queue_or_consultation",
+        },
+    },
+    {
+        "key": "contract_ai.demo_link.enabled",
+        "scope": None,
+        "title": "Contract AI: выдача demo-link",
+        "description": "Временный доступ в demo-кабинет Contract-AI-System после квалификации.",
+        "enabled": True,
+        "config": {
+            "ttl_hours": 24,
+            "daily_limit": 10,
+        },
+    },
+    {
+        "key": "contract_ai.local_bridge.enabled",
+        "scope": None,
+        "title": "Contract AI: локальный bridge",
+        "description": "Bridge к локальному Docker-контру Contract-AI-System на MacBook.",
+        "enabled": False,
+        "config": {
+            "deployment": "docker_local_macbook",
+            "mode": "offline",
+            "status_url": "",
+            "demo_link_url": "",
+            "analysis_url": "",
+        },
+    },
+    {
+        "key": "contract_ai.reader_cta.enabled",
+        "scope": None,
+        "title": "Contract AI CTA в reader",
+        "description": "Показывать договорные CTA в reader только для релевантных материалов.",
+        "enabled": True,
+        "config": {
+            "rubrics": ["contracts", "legal_ops", "privacy", "regulation", "ai_law"],
+        },
+    },
+    {
         "key": "worker.autoclaim.enabled",
         "scope": Scope.worker,
         "title": "Автоклейм contract-jobs",
