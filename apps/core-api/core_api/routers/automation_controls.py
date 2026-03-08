@@ -9,11 +9,23 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ActorType, AutomationControl, Scope
 from core_api.schemas import AutomationControlOut, AutomationControlPatch
 
 router = APIRouter(prefix="/api/v1/automation-controls", tags=["automation-controls"])
+_SETTINGS = get_settings()
+
+
+def _contract_ai_bridge_default_config() -> dict[str, Any]:
+    return {
+        "deployment": _SETTINGS.contract_ai_bridge_deployment,
+        "mode": _SETTINGS.contract_ai_bridge_mode,
+        "status_url": _SETTINGS.contract_ai_bridge_status_url.strip(),
+        "demo_link_url": _SETTINGS.contract_ai_bridge_demo_link_url.strip(),
+        "analysis_url": _SETTINGS.contract_ai_bridge_analysis_url.strip(),
+    }
 
 _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
     {
@@ -232,14 +244,8 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "scope": None,
         "title": "Contract AI: локальный bridge",
         "description": "Bridge к локальному Docker-контру Contract-AI-System на MacBook.",
-        "enabled": False,
-        "config": {
-            "deployment": "docker_local_macbook",
-            "mode": "offline",
-            "status_url": "",
-            "demo_link_url": "",
-            "analysis_url": "",
-        },
+        "enabled": _SETTINGS.contract_ai_bridge_enabled_default,
+        "config": _contract_ai_bridge_default_config(),
     },
     {
         "key": "contract_ai.reader_cta.enabled",
@@ -264,24 +270,46 @@ _DEFAULT_BY_KEY = {row["key"]: row for row in _DEFAULT_CONTROLS}
 
 
 def _ensure_defaults(db: Session) -> int:
-    existing = set(db.execute(select(AutomationControl.key)).scalars().all())
+    existing_controls = {
+        control.key: control for control in db.execute(select(AutomationControl)).scalars().all()
+    }
     created = 0
+    updated = 0
     for row in _DEFAULT_CONTROLS:
-        if row["key"] in existing:
-            continue
-        db.add(
-            AutomationControl(
-                key=row["key"],
-                scope=row["scope"],
-                title=row["title"],
-                description=row["description"],
-                enabled=row["enabled"],
-                config=row["config"],
-                updated_by="system.bootstrap",
+        key = row["key"]
+        current = existing_controls.get(key)
+        if current is None:
+            db.add(
+                AutomationControl(
+                    key=key,
+                    scope=row["scope"],
+                    title=row["title"],
+                    description=row["description"],
+                    enabled=row["enabled"],
+                    config=row["config"],
+                    updated_by="system.bootstrap",
+                )
             )
-        )
-        created += 1
-    if created:
+            created += 1
+            continue
+
+        default_config = row.get("config") if isinstance(row.get("config"), dict) else {}
+        current_config = current.config if isinstance(current.config, dict) else {}
+        merged_config = dict(current_config)
+        touched = False
+        for cfg_key, cfg_default in default_config.items():
+            if cfg_key not in merged_config or merged_config[cfg_key] in ("", None):
+                if cfg_default in ("", None):
+                    continue
+                merged_config[cfg_key] = cfg_default
+                touched = True
+
+        if touched:
+            current.config = merged_config
+            current.updated_by = "system.bootstrap"
+            updated += 1
+
+    if created or updated:
         db.commit()
     return created
 

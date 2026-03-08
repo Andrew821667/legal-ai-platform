@@ -30,6 +30,10 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 
 Если `Contract-AI-System` запущен отдельным Docker-контуром на этом же MacBook, в `core-api` это должно быть отражено через `automation_controls`.
 
+Критично для Docker:
+- внутри контейнеров legal-ai-platform нельзя использовать `localhost` для связи с Contract-AI-System;
+- используйте `host.docker.internal:<port_contract_ai>` (или общий docker network + service name, если контуры объединены).
+
 Базовые ключи:
 - `contract_ai.enabled`
 - `contract_ai.channel_gate.enabled`
@@ -43,6 +47,22 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 - `contract_ai.local_bridge.config.deployment = "docker_local_macbook"`
 - `contract_ai.local_bridge.config.mode = "online"` если локальный контур доступен, иначе `offline`
 - `contract_ai.local_bridge.config.status_url|demo_link_url|analysis_url` — адреса bridge-эндпоинтов локального контура
+
+Рекомендуемые env (корневой `.env`) для автоподстановки в `automation_controls`:
+```bash
+CONTRACT_AI_BRIDGE_ENABLED_DEFAULT=true
+CONTRACT_AI_BRIDGE_DEPLOYMENT=docker_local_macbook
+CONTRACT_AI_BRIDGE_MODE=online
+CONTRACT_AI_BRIDGE_STATUS_URL=http://host.docker.internal:18080/health
+CONTRACT_AI_BRIDGE_DEMO_LINK_URL=http://host.docker.internal:18080/api/v1/public/demo-link
+CONTRACT_AI_BRIDGE_ANALYSIS_URL=http://host.docker.internal:18080/api/v1/public/analysis
+```
+
+Проверка доступности из `core-api` контейнера:
+```bash
+docker compose -f infra/compose/docker-compose.prod.yml exec core-api \
+  python -c "import urllib.request;print(urllib.request.urlopen('http://host.docker.internal:18080/health',timeout=5).status)"
+```
 
 Важно:
 - при `mode=offline` внешние контуры (site/lead-bot/reader/mini-app) не должны ломаться;
