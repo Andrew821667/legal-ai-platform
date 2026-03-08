@@ -91,6 +91,16 @@
 
 Опорный документ:
 - `docs/contract-ai-system-integration-concept.md`
+- `docs/contract-ai-system-integration-implementation-spec.md`
+
+Пакеты внедрения:
+- Пакет 1: семантика, CTA и договорная ветка в лид-боте.
+- Пакет 2: gating по основному каналу и контрактные магниты.
+- Пакет 3: bridge к локальному ноутбуку и статусы `online/busy/offline`.
+- Пакет 4: оркестрация через существующие `contract_jobs` без второй очереди.
+- Пакет 5: админка/control plane и сквозная аналитика.
+- Пакет 6: reader/mini-app/content сценарии.
+- Пакет 7: acceptance, smoke и rollout.
 
 ## Правила релизов
 - Ветка на фазу -> PR в `main` -> CI -> deploy на VPS.
