@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from news.admin_bot import (
@@ -51,6 +52,7 @@ from news.admin_bot import (
     _slot_label,
     _status_badge,
     _status_label,
+    _worker_callback_token,
 )
 
 
@@ -241,6 +243,145 @@ def test_format_workers_status_payload() -> None:
     )
     assert "Активные воркеры: да" in text
     assert "news-publish" in text
+
+
+def test_worker_activity_payload_uses_keyword_arguments() -> None:
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"events": [{"event": "tick"}]}
+
+    class _AdminClientStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, int, int]] = []
+
+        def workers_activity(self, worker_id: str, *, hours: int = 24, limit: int = 30) -> _Response:
+            self.calls.append((worker_id, hours, limit))
+            return _Response()
+
+    bot = NewsAdminBot()
+    stub = _AdminClientStub()
+    bot.admin_client = stub
+
+    payload = bot._worker_activity_payload("news-publish", hours=12, limit=5, force_refresh=True)
+
+    assert payload.get("events") == [{"event": "tick"}]
+    assert stub.calls == [("news-publish", 12, 5)]
+
+
+def test_cb_controls_workers_refresh_smoke(monkeypatch) -> None:
+    class _DummyMessage:
+        def __init__(self) -> None:
+            self.replies: list[str] = []
+
+        async def reply_text(self, text: str) -> None:
+            self.replies.append(text)
+
+    class _DummyQuery:
+        def __init__(self, data: str) -> None:
+            self.data = data
+            self.message = _DummyMessage()
+            self.answer_calls: list[tuple[str | None, bool]] = []
+
+        async def answer(self, text: str | None = None, show_alert: bool = False) -> None:
+            self.answer_calls.append((text, show_alert))
+
+    class _DummyUpdate:
+        def __init__(self, query: _DummyQuery) -> None:
+            self.callback_query = query
+
+    bot = NewsAdminBot()
+    query = _DummyQuery("workers:refresh")
+    update = _DummyUpdate(query)
+    edited: dict[str, object] = {}
+    calls: list[bool] = []
+    expected_markup = object()
+
+    async def _ensure_admin(_update) -> bool:  # noqa: ANN001
+        return True
+
+    async def _safe_edit(_query, text, reply_markup=None):  # noqa: ANN001
+        edited["text"] = text
+        edited["reply_markup"] = reply_markup
+
+    def _workers_payload(*, force_refresh: bool = False) -> dict[str, object]:
+        calls.append(force_refresh)
+        return {"workers": [{"worker_id": "news-publish", "active": True}]}
+
+    def _workers_keyboard(_payload: dict[str, object]):  # noqa: ANN001
+        return expected_markup
+
+    monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
+    monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bot, "_workers_status_payload", _workers_payload)
+    monkeypatch.setattr(bot, "_workers_keyboard", _workers_keyboard)
+    monkeypatch.setattr(bot, "_safe_edit_message_text", _safe_edit)
+    monkeypatch.setattr("news.admin_bot._worker_list_text", lambda _payload: "WORKERS_VIEW")
+
+    asyncio.run(bot.cb_controls(update, object()))
+
+    assert calls == [True]
+    assert edited == {"text": "WORKERS_VIEW", "reply_markup": expected_markup}
+    assert query.answer_calls == [(None, False)]
+
+
+def test_cb_controls_worker_activity_refresh_smoke(monkeypatch) -> None:
+    class _DummyMessage:
+        def __init__(self) -> None:
+            self.replies: list[str] = []
+
+        async def reply_text(self, text: str) -> None:
+            self.replies.append(text)
+
+    class _DummyQuery:
+        def __init__(self, data: str) -> None:
+            self.data = data
+            self.message = _DummyMessage()
+            self.answer_calls: list[tuple[str | None, bool]] = []
+
+        async def answer(self, text: str | None = None, show_alert: bool = False) -> None:
+            self.answer_calls.append((text, show_alert))
+
+    class _DummyUpdate:
+        def __init__(self, query: _DummyQuery) -> None:
+            self.callback_query = query
+
+    bot = NewsAdminBot()
+    token = _worker_callback_token("news-publish")
+    query = _DummyQuery(f"wrk:{token}:refresh")
+    update = _DummyUpdate(query)
+    edited: dict[str, object] = {}
+    activity_calls: list[tuple[str, int, int, bool]] = []
+    expected_markup = object()
+
+    async def _ensure_admin(_update) -> bool:  # noqa: ANN001
+        return True
+
+    async def _safe_edit(_query, text, reply_markup=None):  # noqa: ANN001
+        edited["text"] = text
+        edited["reply_markup"] = reply_markup
+
+    def _activity_payload(worker_id: str, *, hours: int, limit: int, force_refresh: bool) -> dict[str, object]:
+        activity_calls.append((worker_id, hours, limit, force_refresh))
+        return {"worker_id": worker_id, "events": [{"event": "tick"}]}
+
+    def _activity_keyboard(_worker_id: str) -> object:
+        return expected_markup
+
+    monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
+    monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bot, "_worker_activity_payload", _activity_payload)
+    monkeypatch.setattr(bot, "_worker_activity_keyboard", _activity_keyboard)
+    monkeypatch.setattr(bot, "_safe_edit_message_text", _safe_edit)
+    monkeypatch.setattr("news.admin_bot._format_worker_activity", lambda _payload: "WORKER_ACTIVITY_VIEW")
+
+    asyncio.run(bot.cb_controls(update, object()))
+
+    assert activity_calls == [("news-publish", 24, 30, True)]
+    assert edited == {"text": "WORKER_ACTIVITY_VIEW", "reply_markup": expected_markup}
+    assert query.answer_calls == [(None, False)]
 
 
 def test_main_menu_markup_removes_reply_keyboard(monkeypatch) -> None:
