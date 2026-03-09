@@ -75,6 +75,7 @@ export default function ForLawyersPage() {
               leadStart="web_for_lawyers"
               miniAppHref={ROUTES.miniAppTools}
               title="Единый маршрут для юристов: Узнать -> Проверить -> Внедрить"
+              variant="validate-first"
             />
           </div>
         </div>

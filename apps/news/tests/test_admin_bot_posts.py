@@ -318,8 +318,8 @@ def test_workspace_keyboard_contains_system_section() -> None:
     rows = payload.get("inline_keyboard") or []
     callbacks = [btn.get("callback_data") for row in rows for btn in row if btn.get("callback_data")]
     assert "sec:system" in callbacks
-    assert "sec:automation" in callbacks
-    assert "sec:workers" in callbacks
+    assert "sec:setup" in callbacks
+    assert "sec:plan" in callbacks
     assert "uih:toggle" in callbacks
 
 

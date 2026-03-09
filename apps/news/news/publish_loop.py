@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from news.control_plane import publish_interval_seconds, load_news_controls
 from news.logging_config import setup_logging
@@ -13,8 +14,11 @@ logger = logging.getLogger(__name__)
 _WORKER_ID = "news-publish"
 _TICK_HEARTBEAT_SECONDS = 600
 
+if TYPE_CHECKING:
+    from news.core_client import CoreClient
 
-def _send_worker_heartbeat(client: "CoreClient", info: dict[str, object]) -> None:
+
+def _send_worker_heartbeat(client: CoreClient, info: dict[str, object]) -> None:
     try:
         client.worker_heartbeat(_WORKER_ID, info).raise_for_status()
     except Exception as exc:

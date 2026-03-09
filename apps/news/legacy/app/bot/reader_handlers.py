@@ -15,6 +15,7 @@ from typing import Optional
 from uuid import UUID
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, ForceReply, User
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -560,43 +561,57 @@ async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> 
     )
 
 
-def get_article_keyboard(publication_id: str, user_saved: bool = False, show_read_button: bool = True) -> InlineKeyboardMarkup:
-    """Get keyboard for article with like/dislike/save buttons."""
+def get_article_keyboard(
+    publication_id: str,
+    user_saved: bool = False,
+    show_read_button: bool = True,
+    *,
+    expanded: bool = False,
+) -> InlineKeyboardMarkup:
+    """Compact keyboard for article card with optional expanded actions."""
     save_text = "❌ Удалить из сохранённых" if user_saved else "🔖 Сохранить"
     save_action = f"unsave:{publication_id}" if user_saved else f"save:{publication_id}"
 
-    keyboard = []
-
-    # Add "Read more" button if needed
+    keyboard: list[list[InlineKeyboardButton]] = []
     if show_read_button:
         keyboard.append([
             InlineKeyboardButton(text="📖 Читать полностью", callback_data=f"view:{publication_id}")
         ])
 
     keyboard.append([
-        InlineKeyboardButton(text="💡 Идея внедрения", callback_data=f"idea:{publication_id}"),
-        InlineKeyboardButton(text="❓ Вопрос по статье", callback_data=f"article_q:{publication_id}"),
-    ])
-
-    # Feedback buttons
-    keyboard.append([
         InlineKeyboardButton(text="👍 Полезно", callback_data=f"feedback:like:{publication_id}"),
         InlineKeyboardButton(text="👎 Не интересно", callback_data=f"feedback:dislike:{publication_id}"),
     ])
 
-    # Save button
-    keyboard.append([
-        InlineKeyboardButton(text=save_text, callback_data=save_action),
-    ])
+    if not expanded:
+        keyboard.append(
+            [
+                InlineKeyboardButton(text=save_text, callback_data=save_action),
+                InlineKeyboardButton(text="⋯ Ещё", callback_data=f"more:{publication_id}"),
+            ]
+        )
+        keyboard.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
+        return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-    # Quick navigation row
-    keyboard.append([
-        InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
-        InlineKeyboardButton(text="🧩 Mini App", callback_data=f"mini:{publication_id}"),
-    ])
-    keyboard.append([
-        InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home"),
-    ])
+    keyboard.append(
+        [
+            InlineKeyboardButton(text=save_text, callback_data=save_action),
+            InlineKeyboardButton(text="◀️ Свернуть", callback_data=f"less:{publication_id}"),
+        ]
+    )
+    keyboard.append(
+        [
+            InlineKeyboardButton(text="💡 Идея внедрения", callback_data=f"idea:{publication_id}"),
+            InlineKeyboardButton(text="❓ Вопрос по статье", callback_data=f"article_q:{publication_id}"),
+        ]
+    )
+    keyboard.append(
+        [
+            InlineKeyboardButton(text="🔍 Поиск", callback_data="rnav:search"),
+            InlineKeyboardButton(text="🧩 Mini App", callback_data=f"mini:{publication_id}"),
+        ]
+    )
+    keyboard.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -671,7 +686,7 @@ async def _open_start_section(
     if not profile:
         await state.update_data(post_start_section=section)
         await target.answer(
-            "Открою нужный раздел сразу после быстрой настройки профиля (1-2 шага)."
+            "Открою нужный раздел сразу после быстрой настройки профиля (3 коротких шага)."
         )
         await start_onboarding(target, state, db)
         return
@@ -1537,6 +1552,76 @@ async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
     await callback.answer("❌ Удалено из сохранённых")
+
+
+@router.callback_query(F.data.startswith("more:"))
+async def expand_article_actions(callback: CallbackQuery, db: AsyncSession):
+    """Expand article card actions without sending extra messages."""
+    if callback.message is None:
+        await callback.answer("Откройте карточку статьи заново", show_alert=True)
+        return
+    article_id = callback.data.split(":", 1)[1]
+    user_id = callback.from_user.id
+    saved_articles = await _safe_get_saved_articles(user_id, db=db)
+    user_saved = any(str(item.id) == article_id for item in saved_articles)
+    show_read_button = bool(
+        callback.message
+        and callback.message.reply_markup
+        and any(
+            button.callback_data == f"view:{article_id}"
+            for row in callback.message.reply_markup.inline_keyboard
+            for button in row
+            if button.callback_data
+        )
+    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=get_article_keyboard(
+                article_id,
+                user_saved=user_saved,
+                show_read_button=show_read_button,
+                expanded=True,
+            )
+        )
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("less:"))
+async def collapse_article_actions(callback: CallbackQuery, db: AsyncSession):
+    """Collapse article card actions back to compact mode."""
+    if callback.message is None:
+        await callback.answer("Откройте карточку статьи заново", show_alert=True)
+        return
+    article_id = callback.data.split(":", 1)[1]
+    user_id = callback.from_user.id
+    saved_articles = await _safe_get_saved_articles(user_id, db=db)
+    user_saved = any(str(item.id) == article_id for item in saved_articles)
+    show_read_button = bool(
+        callback.message
+        and callback.message.reply_markup
+        and any(
+            button.callback_data == f"view:{article_id}"
+            for row in callback.message.reply_markup.inline_keyboard
+            for button in row
+            if button.callback_data
+        )
+    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=get_article_keyboard(
+                article_id,
+                user_saved=user_saved,
+                show_read_button=show_read_button,
+                expanded=False,
+            )
+        )
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("view:"))

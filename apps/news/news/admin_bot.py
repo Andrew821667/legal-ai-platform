@@ -2097,11 +2097,15 @@ class NewsAdminBot:
     def _workspace_text(self, counts: dict[str, int], next_publish: str) -> str:
         return (
             "Рабочий стол редактора\n\n"
-            "Это единая стартовая страница модератора: отсюда открываются рабочие списки, календарь, источники, тематики, генерация и автоочередь.\n\n"
+            "Стартовая точка модератора с 4 укрупненными разделами:\n"
+            "• 🧾 Контент — черновики, проверка, готовые и публикации\n"
+            "• 🗓 План — календарь и автoочередь публикаций\n"
+            "• ⚙️ Настройка — генерация, источники, тематики, автоматизация\n"
+            "• 🛠 Система — воркеры, диагностика и сервисные функции\n\n"
             + _screen_guide(
                 "Главный экран управления контент-контуром.",
                 [
-                    "Открывайте нужный раздел кнопками ниже.",
+                    "Открывайте нужный кластер кнопками ниже.",
                     "Для быстрого старта нового материала используйте «➕ Создать пост».",
                     "После изменений обновляйте экран кнопкой «🔄 Обновить».",
                 ],
@@ -2118,24 +2122,53 @@ class NewsAdminBot:
         )
 
     def _workspace_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
-        hints_label = f"💡 Подсказки: {'вкл' if _UI_HINTS_ENABLED else 'выкл'}"
-        section_buttons = [
-            _inline_button("📂 Рабочие списки", callback_data="sec:worklists"),
-            _inline_button("🗓 Календарь", callback_data="cal:summary"),
-            _inline_button("⏱ Автоочередь", callback_data="sec:autoqueue"),
-            _inline_button("⚙️ Генерация", callback_data="sec:generate"),
-            _inline_button("📰 Источники", callback_data="sec:sources"),
-            _inline_button("🧭 Тематики", callback_data="sec:themes"),
-            _inline_button("🤖 Автоматизация", callback_data="sec:automation"),
-            _inline_button("👷 Воркеры", callback_data="sec:workers"),
-            _inline_button("🛠 Сервис", callback_data="sec:system"),
-            _inline_button(hints_label, callback_data="uih:toggle"),
-            _inline_button("🔄 Обновить", callback_data="refresh"),
-        ]
         rows: list[list[InlineKeyboardButton]] = [
             [_inline_button("➕ Создать пост", callback_data="cn:start", style=_BUTTON_STYLE_SUCCESS)],
-            *self._two_column_rows(section_buttons),
+            [
+                _inline_button("🧾 Контент", callback_data="sec:worklists"),
+                _inline_button("🗓 План", callback_data="sec:plan"),
+            ],
+            [
+                _inline_button("⚙️ Настройка", callback_data="sec:setup"),
+                _inline_button("🛠 Система", callback_data="sec:system"),
+            ],
+            [
+                _inline_button("🔄 Обновить", callback_data="refresh"),
+                _inline_button(f"💡 Подсказки: {'вкл' if _UI_HINTS_ENABLED else 'выкл'}", callback_data="uih:toggle"),
+            ],
         ]
+        return InlineKeyboardMarkup(rows)
+
+    def _setup_text(self, counts: dict[str, int], next_publish: str) -> str:
+        return (
+            "Настройка контент-контура\n\n"
+            + _screen_guide(
+                "Управление генерацией, источниками и тематиками.",
+                [
+                    "Откройте «Генерация» для ручного запуска и управления лимитами.",
+                    "Откройте «Источники» и «Тематики» для настройки входного контент-пула.",
+                    "Откройте «Автоматизация» для расписаний и автопилота.",
+                ],
+            )
+            + "\n\n"
+            f"📝 Черновики: {counts.get('draft', -1)}\n"
+            f"🟡 На проверке: {counts.get('review', -1)}\n"
+            f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+            f"📤 Опубликованные: {counts.get('posted', -1)}\n"
+            f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
+            f"Следующая публикация: {next_publish}"
+        )
+
+    def _setup_keyboard(self) -> InlineKeyboardMarkup:
+        rows = self._two_column_rows(
+            [
+                _inline_button("⚙️ Генерация", callback_data="sec:generate"),
+                _inline_button("📰 Источники", callback_data="sec:sources"),
+                _inline_button("🧭 Тематики", callback_data="sec:themes"),
+                _inline_button("🤖 Автоматизация", callback_data="sec:automation"),
+            ]
+        )
+        rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
     def _worklists_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
@@ -7119,6 +7152,24 @@ class NewsAdminBot:
                     query,
                     self._worklists_text(counts, next_publish),
                     reply_markup=self._worklists_keyboard(counts),
+                )
+                return
+
+            if data == "sec:plan":
+                groups = self._calendar_groups()
+                await self._safe_edit_message_text(
+                    query,
+                    self._calendar_summary_text(groups),
+                    reply_markup=self._calendar_summary_keyboard(groups, "week"),
+                )
+                return
+
+            if data == "sec:setup":
+                counts, next_publish = await self._queue_snapshot()
+                await self._safe_edit_message_text(
+                    query,
+                    self._setup_text(counts, next_publish),
+                    reply_markup=self._setup_keyboard(),
                 )
                 return
 

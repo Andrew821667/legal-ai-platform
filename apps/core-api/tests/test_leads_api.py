@@ -8,7 +8,7 @@ from sqlalchemy import delete
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, Lead, LeadSource, LeadStatus, Scope
+from core_api.models import ApiKey, Event, Lead, LeadSource, LeadStatus, Scope
 from core_api.security import generate_api_key, hash_api_key
 
 
@@ -210,4 +210,57 @@ def test_upsert_uses_legacy_lead_id_to_keep_separate_leads() -> None:
             db.commit()
         finally:
             db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_delete_lead_detaches_events() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.leads.delete-detach"
+    raw_key = _create_api_key(Scope.admin, api_key_name)
+    lead_id = None
+    event_id = None
+
+    db = SessionLocal()
+    try:
+        lead = Lead(
+            source=LeadSource.telegram_bot,
+            telegram_user_id=555001,
+            name="Delete With Event",
+            status=LeadStatus.new,
+        )
+        db.add(lead)
+        db.commit()
+        db.refresh(lead)
+        lead_id = lead.id
+
+        event = Event(lead_id=lead.id, user_id=None, type="pytest.lead.delete", payload={"kind": "test"})
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        event_id = event.id
+    finally:
+        db.close()
+
+    try:
+        response = client.delete(f"/api/v1/leads/{lead_id}", headers={"X-API-Key": raw_key})
+        assert response.status_code == 204
+
+        db = SessionLocal()
+        try:
+            deleted_lead = db.get(Lead, lead_id)
+            assert deleted_lead is None
+
+            detached_event = db.get(Event, event_id)
+            assert detached_event is not None
+            assert detached_event.lead_id is None
+        finally:
+            db.close()
+    finally:
+        if event_id is not None:
+            db = SessionLocal()
+            try:
+                db.execute(delete(Event).where(Event.id == event_id))
+                db.commit()
+            finally:
+                db.close()
         _delete_api_key_by_name(api_key_name)

@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
-from core_api.models import ActorType, Lead, LeadSource, LeadStatus, Scope
+from core_api.models import ActorType, ContractJob, Event, Lead, LeadSource, LeadStatus, Scope
 from core_api.schemas import LeadCreate, LeadOut, LeadPatch, LeadStatsOut
 
 router = APIRouter(prefix="/api/v1/leads", tags=["leads"])
@@ -223,6 +223,13 @@ def delete_lead(
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    detached_events = (
+        db.execute(update(Event).where(Event.lead_id == lead_id).values(lead_id=None)).rowcount or 0
+    )
+    detached_contract_jobs = (
+        db.execute(update(ContractJob).where(ContractJob.lead_id == lead_id).values(lead_id=None)).rowcount or 0
+    )
+
     db.delete(lead)
     write_audit(
         db,
@@ -231,6 +238,10 @@ def delete_lead(
         action="lead.delete",
         target_type="lead",
         target_id=lead_id,
+        details={
+            "detached_events": detached_events,
+            "detached_contract_jobs": detached_contract_jobs,
+        },
     )
     db.commit()
     return Response(status_code=204)

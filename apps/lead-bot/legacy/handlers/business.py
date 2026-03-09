@@ -225,6 +225,29 @@ def _looks_like_new_topic_after_handoff(text: str) -> bool:
     return len(normalized) >= 3
 
 
+def _should_process_after_forced_welcome(text: str) -> bool:
+    normalized = normalize_button_text(text).strip().lower()
+    if not normalized:
+        return False
+    if normalized in {
+        "/start",
+        "/menu",
+        "menu",
+        "/меню",
+        "меню",
+        "/reset",
+        "reset",
+        "сброс",
+        "рабочий стол",
+        "🔄 начать заново",
+        "🔄 начать сначала",
+    }:
+        return False
+    if _looks_like_plain_greeting(normalized) or _looks_like_ack_only(normalized):
+        return False
+    return True
+
+
 async def _send_business_handoff_and_notify(
     context: ContextTypes.DEFAULT_TYPE,
     message,
@@ -469,7 +492,9 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 business_connection_id=message.business_connection_id,
             )
             logger.info("[Business] Welcome sent on forced new session for user %s", user_id)
-            return
+            if not _should_process_after_forced_welcome(text):
+                return
+            logger.info("[Business] Continue processing first user intent after forced welcome for user %s", user_id)
 
         # На первом сообщении-приветствии в business-режиме отдаем
         # фиксированное приветствие без участия LLM.

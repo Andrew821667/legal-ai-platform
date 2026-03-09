@@ -57,6 +57,7 @@ export default function ContentCasesPage() {
               leadStart="web_cases_intro"
               miniAppHref={ROUTES.miniAppContent}
               title="Маршрут по кейсам: Узнать -> Проверить -> Внедрить"
+              variant="discover-first"
             />
           </div>
         </div>
@@ -89,6 +90,7 @@ export default function ContentCasesPage() {
               leadStart="web_cases_discuss"
               miniAppHref={ROUTES.miniAppContent}
               title="Следующий шаг после кейса: Узнать -> Проверить -> Внедрить"
+              variant="consult-first"
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ROUTES } from "@/lib/links";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
@@ -14,6 +14,33 @@ const audienceHints = {
   mixed: "Фокус на стыке юридической и бизнес-функции.",
 } as const;
 
+type HighlightCard = {
+  id: string;
+  title: string;
+  summary: string;
+  rubric: string;
+  kind: string;
+  postedAt: string;
+};
+
+const fallbackHighlights: Record<keyof typeof audienceHints, HighlightCard[]> = {
+  lawyer: [
+    { id: "fallback-lawyer-1", title: "2 сценария ускорения первичной проверки договора", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-lawyer-2", title: "Чек-лист рисков для переговорной версии договора", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-lawyer-3", title: "Шаблон маршрута согласования правок", summary: "", rubric: "", kind: "daily", postedAt: "" },
+  ],
+  business: [
+    { id: "fallback-business-1", title: "Как сократить цикл согласования без потери контроля", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-business-2", title: "Матрица эскалации юридических рисков для руководителей", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-business-3", title: "Быстрый запуск пилота с измеримым KPI", summary: "", rubric: "", kind: "daily", postedAt: "" },
+  ],
+  mixed: [
+    { id: "fallback-mixed-1", title: "Новые AI-обновления с практическим юридическим эффектом", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-mixed-2", title: "2 сценария для ускорения договорного потока", summary: "", rubric: "", kind: "daily", postedAt: "" },
+    { id: "fallback-mixed-3", title: "1 готовый шаблон для пилота legal ops", summary: "", rubric: "", kind: "daily", postedAt: "" },
+  ],
+};
+
 const sectionLabel: Record<string, string> = {
   discover: "🧠 Узнать",
   validate: "🧪 Проверить",
@@ -23,30 +50,56 @@ const sectionLabel: Record<string, string> = {
 
 export default function MiniAppHomePage() {
   const { state, ready } = useMiniAppState();
+  const [liveHighlights, setLiveHighlights] = useState<HighlightCard[]>([]);
 
-  const highlights = useMemo(() => {
-    if (state.audience === "lawyer") {
-      return [
-        "2 сценария ускорения первичной проверки договора",
-        "Чек-лист рисков для переговорной версии договора",
-        "Шаблон маршрута согласования правок",
-      ];
+  useEffect(() => {
+    if (!ready) {
+      return;
     }
 
-    if (state.audience === "business") {
-      return [
-        "Как сократить цикл согласования без потери контроля",
-        "Матрица эскалации юридических рисков для руководителей",
-        "Быстрый запуск пилота с измеримым KPI",
-      ];
-    }
+    let cancelled = false;
+    const fetchHighlights = async () => {
+      try {
+        const response = await fetch(
+          `/api/reader/highlights?audience=${encodeURIComponent(state.audience)}&limit=3`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          throw new Error(`Failed with ${response.status}`);
+        }
+        const payload = await response.json();
+        const rows = Array.isArray(payload?.highlights) ? payload.highlights : [];
+        if (!cancelled) {
+          setLiveHighlights(
+            rows
+              .map((row: any) => ({
+                id: String(row?.id || ""),
+                title: String(row?.title || "").trim(),
+                summary: String(row?.summary || "").trim(),
+                rubric: String(row?.rubric || "").trim(),
+                kind: String(row?.kind || "").trim(),
+                postedAt: String(row?.postedAt || "").trim(),
+              }))
+              .filter((item: HighlightCard) => item.title.length > 0),
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setLiveHighlights([]);
+        }
+      }
+    };
 
-    return [
-      "Новые AI-обновления с практическим юридическим эффектом",
-      "2 сценария для ускорения договорного потока",
-      "1 готовый шаблон для пилота legal ops",
-    ];
-  }, [state.audience]);
+    void fetchHighlights();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, state.audience]);
+
+  const highlights = useMemo<HighlightCard[]>(
+    () => (liveHighlights.length ? liveHighlights : fallbackHighlights[state.audience]),
+    [liveHighlights, state.audience],
+  );
 
   const recommendedHref = useMemo(() => {
     if (state.recommendedSection === "validate") {
@@ -70,9 +123,12 @@ export default function MiniAppHomePage() {
 
       <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
         <h2 className="text-base font-semibold text-white">Важное сегодня</h2>
-        <ul className="mt-3 space-y-2 text-sm text-slate-300">
+        <ul className="mt-3 space-y-3 text-sm text-slate-300">
           {highlights.map((item) => (
-            <li key={item}>• {item}</li>
+            <li key={item.id}>
+              <p>• {item.title}</p>
+              {item.summary ? <p className="mt-1 text-xs text-slate-400">{item.summary}</p> : null}
+            </li>
           ))}
         </ul>
       </article>

@@ -16,14 +16,18 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navigation = [
+  const mainNavigation = [
+    { name: "Решения", href: "/solutions" },
+    { name: "Contract_AI_System", href: "/contract-ai-system" },
+    { name: "Контент / Кейсы", href: "/content-cases" },
+    { name: "О платформе", href: "/about" },
+  ];
+
+  const secondaryNavigation = [
     { name: "Главная", href: "/" },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
-    { name: "Contract_AI_System", href: "/contract-ai-system" },
-    { name: "Решения", href: "/solutions" },
-    { name: "Контент / Кейсы", href: "/content-cases" },
-    { name: "О платформе", href: "/about" },
+    { name: "Команда", href: "/team" },
   ];
 
   return (
@@ -94,7 +98,7 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            {navigation.map((item) => (
+            {mainNavigation.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
@@ -103,6 +107,24 @@ export default function Header() {
                 {item.name}
               </Link>
             ))}
+            <details className="relative">
+              <summary className="list-none cursor-pointer text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap">
+                Еще
+              </summary>
+              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900 shadow-xl">
+                <div className="p-2 space-y-1">
+                  {secondaryNavigation.map((item) => (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className="block rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors"
+                    >
+                      {item.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </details>
           </div>
 
           {/* Desktop CTA Button */}
@@ -159,7 +181,7 @@ export default function Header() {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
             <div className="px-4 py-2 space-y-1">
-              {navigation.map((item) => (
+              {mainNavigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -176,6 +198,19 @@ export default function Header() {
               >
                 Попробовать продукт →
               </Link>
+              <div className="mt-4 border-t border-slate-700 pt-3">
+                <p className="px-4 pb-2 text-xs uppercase tracking-wide text-slate-400">Еще</p>
+                {secondaryNavigation.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         )}

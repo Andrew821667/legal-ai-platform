@@ -65,6 +65,7 @@ export default function SolutionsPage() {
               leadStart="web_solutions_intro"
               miniAppHref={ROUTES.miniAppSolutions}
               title="Единый маршрут решений: Узнать -> Проверить -> Внедрить"
+              variant="consult-first"
             />
           </div>
         </div>
@@ -121,6 +122,7 @@ export default function SolutionsPage() {
               leadStart="web_solutions_discuss"
               miniAppHref={ROUTES.miniAppSolutions}
               title="Выбор следующего шага: Узнать -> Проверить -> Внедрить"
+              variant="consult-first"
             />
           </div>
         </div>

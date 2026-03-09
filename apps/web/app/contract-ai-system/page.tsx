@@ -77,6 +77,7 @@ export default function ContractAISystemPage() {
               leadStart="contract_demo"
               miniAppHref={ROUTES.miniAppTools}
               title="Маршрут Contract_AI_System: Узнать -> Проверить -> Внедрить"
+              variant="validate-first"
             />
           </div>
         </div>
@@ -155,6 +156,7 @@ export default function ContractAISystemPage() {
               leadStart="contract_consultation"
               miniAppHref={ROUTES.miniAppTools}
               title="Следующий шаг: Узнать -> Проверить -> Внедрить"
+              variant="consult-first"
             />
           </div>
         </div>

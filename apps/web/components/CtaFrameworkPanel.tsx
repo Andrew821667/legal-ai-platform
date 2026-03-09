@@ -6,6 +6,7 @@ type CtaFrameworkPanelProps = {
   miniAppHref?: string;
   title?: string;
   className?: string;
+  variant?: "discover-first" | "validate-first" | "consult-first";
 };
 
 export default function CtaFrameworkPanel({
@@ -13,7 +14,27 @@ export default function CtaFrameworkPanel({
   miniAppHref = ROUTES.miniApp,
   title = "Единый маршрут: Узнать -> Проверить -> Внедрить",
   className = "",
+  variant = "validate-first",
 }: CtaFrameworkPanelProps) {
+  const primaryMap: Record<NonNullable<CtaFrameworkPanelProps["variant"]>, "discover" | "validate" | "consult"> = {
+    "discover-first": "discover",
+    "validate-first": "validate",
+    "consult-first": "consult",
+  };
+  const primary = primaryMap[variant];
+  const classFor = (kind: "discover" | "validate" | "consult"): string => {
+    const isPrimary = kind === primary;
+    if (kind === "consult") {
+      return isPrimary
+        ? "rounded-lg bg-sky-500 px-4 py-3 text-center font-semibold text-slate-950 hover:bg-sky-400 transition-colors"
+        : "rounded-lg border border-sky-500/60 px-4 py-3 text-center font-semibold text-sky-200 hover:border-sky-300 transition-colors";
+    }
+    if (isPrimary) {
+      return "rounded-lg bg-amber-500 px-4 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400 transition-colors";
+    }
+    return "rounded-lg border border-slate-700 px-4 py-3 text-center font-semibold text-slate-100 hover:border-amber-400 hover:text-amber-200 transition-colors";
+  };
+
   return (
     <div className={`rounded-2xl border border-amber-500/35 bg-slate-950/70 p-5 ${className}`.trim()}>
       <p className="text-xs uppercase tracking-wide text-amber-300/90">{title}</p>
@@ -22,7 +43,7 @@ export default function CtaFrameworkPanel({
           href={readerBotDeepLink("discover")}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-slate-700 px-4 py-3 text-center font-semibold text-slate-100 hover:border-amber-400 hover:text-amber-200 transition-colors"
+          className={classFor("discover")}
         >
           🧠 Узнать
         </a>
@@ -30,7 +51,7 @@ export default function CtaFrameworkPanel({
           href={readerBotDeepLink("validate")}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg bg-amber-500 px-4 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+          className={classFor("validate")}
         >
           🧪 Проверить
         </a>
@@ -38,7 +59,7 @@ export default function CtaFrameworkPanel({
           href={leadBotDeepLink(leadStart)}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-sky-500/60 px-4 py-3 text-center font-semibold text-sky-200 hover:border-sky-300 transition-colors"
+          className={classFor("consult")}
         >
           🛠 Внедрить
         </a>

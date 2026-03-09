@@ -76,6 +76,7 @@ export default function ForBusinessPage() {
               leadStart="web_for_business"
               miniAppHref={ROUTES.miniAppSolutions}
               title="Единый маршрут для бизнеса: Узнать -> Проверить -> Внедрить"
+              variant="consult-first"
             />
           </div>
         </div>

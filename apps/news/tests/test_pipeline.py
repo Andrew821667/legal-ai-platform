@@ -211,3 +211,21 @@ def test_normalize_post_text_trims_without_cutting_html_tag() -> None:
     assert normalized.count("<b>") == normalized.count("</b>")
     assert normalized.count("<a ") == normalized.count("</a>")
     assert not normalized.endswith("<")
+
+
+def test_normalize_post_text_removes_markdown_artifacts() -> None:
+    text = (
+        "### **Заголовок**\n\n"
+        "> __Подзаголовок__\n"
+        "* Пункт 1\n"
+        "```markdown\nтехнический блок\n```\n"
+        "Подробнее: [источник](https://example.com)\n"
+        "#LegalAI #LegalTech"
+    )
+    normalized = normalize_post_text(text)
+    assert "**" not in normalized
+    assert "```" not in normalized
+    assert "###" not in normalized
+    assert "[источник](" not in normalized
+    assert "• Пункт 1" in normalized
+    assert normalized.endswith(".")

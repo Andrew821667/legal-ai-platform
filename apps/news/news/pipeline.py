@@ -849,7 +849,7 @@ def select_rag_examples(query_text: str, examples: Iterable[RAGExample], top_k: 
 
 
 def normalize_post_text(text: str) -> str:
-    normalized = (text or "").strip()
+    normalized = _cleanup_technical_symbols((text or "").strip())
     if not normalized:
         return ""
     if len(normalized) <= 4000:
@@ -877,6 +877,41 @@ def normalize_post_text(text: str) -> str:
     if not result:
         return _trim_html_safely(normalized, 4000)
     return result
+
+
+def _cleanup_technical_symbols(text: str) -> str:
+    if not text:
+        return ""
+
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = re.sub(r"```[a-zA-Z0-9_-]*", "", cleaned)
+    cleaned = cleaned.replace("```", "")
+
+    # Remove markdown headings/blockquote markers that leak into final Telegram copy.
+    cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s*>\s?", "", cleaned)
+
+    # Convert common markdown emphasis to plain text.
+    emphasis_patterns = (
+        (r"\*\*(.+?)\*\*", r"\1"),
+        (r"__(.+?)__", r"\1"),
+        (r"`([^`]+)`", r"\1"),
+    )
+    for pattern, replacement in emphasis_patterns:
+        cleaned = re.sub(pattern, replacement, cleaned)
+
+    # Convert markdown links [text](url) to plain "text (url)".
+    cleaned = re.sub(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", r"\1 (\2)", cleaned)
+
+    # Strip isolated markdown list marks if they stay as raw symbols.
+    cleaned = re.sub(r"(?m)^\s*[-*]\s+", "• ", cleaned)
+
+    # If tail is hashtags-only, close sentence to pass quality gate checks.
+    if re.search(r"(?:#\w+\s*)+$", cleaned) and not re.search(r"[.!?…]\s*$", cleaned):
+        cleaned = cleaned.rstrip() + "."
+
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 class _HTMLTextExtractor(HTMLParser):
