@@ -277,7 +277,6 @@ from src.utils.knowledge_base import *
 def init_session_state():
     init_auth_state()  # Auth
     # ... KB manager
-    create_demo_users()  # Demo users
 ```
 
 ### Шаг 3: Обновить sidebar
