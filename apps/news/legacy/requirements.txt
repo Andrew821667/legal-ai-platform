@@ -18,7 +18,7 @@ kombu==5.3.5
 # AI/ML
 openai==1.10.0
 transformers==4.37.2
-torch==2.1.2
+torch==2.10.0
 sentence-transformers==2.3.1
 tiktoken==0.5.2
 qdrant-client==1.7.0
