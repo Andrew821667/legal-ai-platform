@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import AppShell from "@/components/AppShell";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import YandexMetrika from "@/components/YandexMetrika";
 import StructuredData from "@/components/StructuredData";
@@ -93,9 +92,7 @@ export default function RootLayout({
           <YandexMetrika counterId={process.env.NEXT_PUBLIC_YM_COUNTER_ID} />
         )}
 
-        <Header />
-        {children}
-        <Footer />
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

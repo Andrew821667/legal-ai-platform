@@ -12,7 +12,7 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
-from core_api.models import ActorType, Event, Lead, Scope, User, UserRole
+from core_api.models import ActorType, Event, Lead, Scope, User
 from core_api.schemas import UserCreate, UserDataOperationOut, UserOut, UserPatch, UsersCountOut
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])

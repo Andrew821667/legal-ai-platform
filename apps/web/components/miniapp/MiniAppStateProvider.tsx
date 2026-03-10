@@ -48,6 +48,7 @@ const CORE_SYNC_TIMEOUT_MS = 4000;
 const CONTINUE_STATE_TIMEOUT_MS = 5000;
 const PROFILE_SYNC_DEBOUNCE_MS = 800;
 const EVENT_DEDUP_WINDOW_MS = 1500;
+const TELEGRAM_INIT_DATA_HEADER = "X-Telegram-Init-Data";
 
 const DEFAULT_STATE: MiniAppState = {
   telegramUserId: null,
@@ -190,6 +191,16 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
   const lastProfileSignatureRef = useRef<string>("");
   const lastEventSignatureRef = useRef<string>("");
   const lastEventAtRef = useRef<number>(0);
+  const telegramInitDataRef = useRef<string>("");
+
+  const withMiniAppAuthHeaders = useCallback((headers?: HeadersInit): HeadersInit => {
+    const merged = new Headers(headers || {});
+    const initData = telegramInitDataRef.current.trim();
+    if (initData) {
+      merged.set(TELEGRAM_INIT_DATA_HEADER, initData);
+    }
+    return merged;
+  }, []);
 
   const syncProfileToCoreNow = useCallback(async (nextState: MiniAppState) => {
     if (!nextState.telegramUserId) {
@@ -215,7 +226,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
         "/api/reader/miniapp/profile",
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: withMiniAppAuthHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(payload),
         },
         CORE_SYNC_TIMEOUT_MS,
@@ -227,7 +238,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
     } catch {
       // Silent fallback to local state if core API is unavailable.
     }
-  }, []);
+  }, [withMiniAppAuthHeaders]);
 
   const scheduleProfileSync = useCallback(
     (nextState: MiniAppState, immediate: boolean = false) => {
@@ -282,7 +293,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
           "/api/reader/miniapp/event",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: withMiniAppAuthHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               telegram_user_id: telegramUserId,
               event_type: eventType,
@@ -299,7 +310,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
         // Keep UX non-blocking.
       }
     },
-    [],
+    [withMiniAppAuthHeaders],
   );
 
   useEffect(() => {
@@ -321,6 +332,10 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
       const raw = localStorage.getItem(STORAGE_KEY);
       const localState = raw ? sanitizeState(JSON.parse(raw) as unknown) : DEFAULT_STATE;
       const runtimeTelegramUserId = resolveTelegramUserIdFromRuntime();
+      const runtimeInitData = String((window as any)?.Telegram?.WebApp?.initData || "").trim();
+      if (runtimeInitData) {
+        telegramInitDataRef.current = runtimeInitData;
+      }
       const merged = {
         ...localState,
         telegramUserId: runtimeTelegramUserId ?? localState.telegramUserId,
@@ -363,7 +378,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
       try {
         const response = await fetchWithTimeout(
           `/api/reader/continue-state?telegram_user_id=${encodeURIComponent(String(state.telegramUserId))}`,
-          { cache: "no-store" },
+          { cache: "no-store", headers: withMiniAppAuthHeaders() },
           CONTINUE_STATE_TIMEOUT_MS,
         );
         if (!response.ok) {
@@ -375,7 +390,7 @@ export default function MiniAppStateProvider({ children }: { children: React.Rea
         // Keep local fallback when backend is unavailable.
       }
     })();
-  }, [ready, state.telegramUserId]);
+  }, [ready, state.telegramUserId, withMiniAppAuthHeaders]);
 
   const updateState = useCallback(
     (patch: Partial<MiniAppState>) => {

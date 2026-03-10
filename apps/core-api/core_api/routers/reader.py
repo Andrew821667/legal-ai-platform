@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, delete, func, inspect as sa_inspect, select
+from sqlalchemy import and_, func, inspect as sa_inspect, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 

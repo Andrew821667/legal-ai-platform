@@ -1,6 +1,9 @@
-.PHONY: lint test dev prod deploy integration-test smoke-bots seed backup logs
+.PHONY: lint lint-full test dev prod deploy integration-test smoke-bots seed backup logs
 
 lint:
+	uv run ruff check apps/ packages/ --select F,B904,B905,UP031
+
+lint-full:
 	uv run ruff check apps/ packages/
 	uv run ruff format --check apps/ packages/
 

@@ -23,3 +23,6 @@ htmlcov/
 *.dump
 apps/*/legacy/logs/
 apps/*/legacy/data/
+/data/*
+!/data/.gitkeep
+/chroma_data/

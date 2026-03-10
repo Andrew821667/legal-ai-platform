@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callReaderCore, ensureReaderKey } from "../../core";
+import { ensureTelegramUserMatch, verifyMiniAppRequest } from "@/lib/telegram-webapp-auth";
 
 export async function POST(request: NextRequest) {
   if (!ensureReaderKey()) {
@@ -7,6 +8,11 @@ export async function POST(request: NextRequest) {
       { detail: "CORE_API_BOT_KEY/API_KEY_BOT/API_KEY_NEWS is not configured on web server" },
       { status: 500 },
     );
+  }
+
+  const auth = verifyMiniAppRequest(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -19,6 +25,10 @@ export async function POST(request: NextRequest) {
     }
     if (!eventType) {
       return NextResponse.json({ detail: "event_type is required" }, { status: 400 });
+    }
+    const mismatch = ensureTelegramUserMatch(auth, telegramUserId);
+    if (mismatch) {
+      return mismatch;
     }
 
     const { response, data } = await callReaderCore("/api/v1/reader/miniapp/event", {

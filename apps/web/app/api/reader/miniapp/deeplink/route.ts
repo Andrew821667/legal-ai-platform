@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callReaderCore, ensureReaderKey } from "../../core";
+import { ensureTelegramUserMatch, verifyMiniAppRequest } from "@/lib/telegram-webapp-auth";
 
 export async function POST(request: NextRequest) {
   if (!ensureReaderKey()) {
@@ -9,11 +10,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const auth = verifyMiniAppRequest(request);
+  if (auth instanceof NextResponse) {
+    return auth;
+  }
+
   try {
     const payload = await request.json();
     const telegramUserId = Number(payload?.telegram_user_id);
     if (!Number.isFinite(telegramUserId) || telegramUserId <= 0) {
       return NextResponse.json({ detail: "telegram_user_id is required" }, { status: 400 });
+    }
+    const mismatch = ensureTelegramUserMatch(auth, telegramUserId);
+    if (mismatch) {
+      return mismatch;
     }
 
     const { response, data } = await callReaderCore("/api/v1/reader/miniapp/deeplink", {

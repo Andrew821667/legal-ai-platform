@@ -31,9 +31,9 @@ def create_scheduled_post(
     db.add(post)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Duplicate source_hash")
+        raise HTTPException(status_code=409, detail="Duplicate source_hash") from exc
     db.refresh(post)
     return post
 

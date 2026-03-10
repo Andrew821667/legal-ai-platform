@@ -31,9 +31,13 @@ docker compose -f infra/compose/docker-compose.dev.yml up --build
 ## Полезные команды
 ```bash
 make lint
+make lint-full
 make test
 make dev
 make prod
 make deploy
 make integration-test
 ```
+
+`make lint` теперь проверяет runtime-критичные правила Ruff (ошибки, влияющие на надежность/поведение).
+Полный технический аудит стиля и форматирования запускается отдельно через `make lint-full`.

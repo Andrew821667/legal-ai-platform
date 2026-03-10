@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireAdminSession } from '@/lib/admin-session';
+
 const CORE_API_URL = process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:8000';
 const CORE_API_ADMIN_KEY = process.env.CORE_API_ADMIN_KEY || process.env.API_KEY_ADMIN || '';
 
@@ -32,6 +34,11 @@ async function callCore(path: string, init?: RequestInit) {
 }
 
 export async function GET(request: NextRequest) {
+  const unauthorized = requireAdminSession(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     await callCore('/api/v1/automation-controls/bootstrap', { method: 'POST' });
 
@@ -54,6 +61,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const unauthorized = requireAdminSession(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const payload = await request.json();
     const key = String(payload?.key || '').trim();

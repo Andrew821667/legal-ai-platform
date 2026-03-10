@@ -1,4 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+
+import { requireAdminSession } from '@/lib/admin-session';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER = 'Andrew821667';
@@ -31,7 +33,12 @@ async function fetchGitHub(endpoint: string) {
   return response.json();
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const unauthorized = requireAdminSession(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     // Получаем данные параллельно
     const [workflowRuns, issues, seoIssues] = await Promise.all([

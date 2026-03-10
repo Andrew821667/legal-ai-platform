@@ -324,7 +324,7 @@ def select_cta_variant(
     bucket = int(digest[:12], 16) % total_weight
 
     cursor = 0
-    for variant, weight in zip(variants, weights):
+    for variant, weight in zip(variants, weights, strict=False):
         cursor += weight
         if bucket < cursor:
             return variant

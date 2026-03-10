@@ -33,6 +33,14 @@ const CORE_API_READ_CACHE_STALE_MS = (() => {
   return Math.round(parsed);
 })();
 
+const CORE_API_READ_CACHE_MAX_ENTRIES = (() => {
+  const parsed = Number(process.env.CORE_API_READ_CACHE_MAX_ENTRIES || "1500");
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1500;
+  }
+  return Math.round(parsed);
+})();
+
 type ReaderCoreCacheEntry = {
   expiresAt: number;
   staleUntil: number;
@@ -41,6 +49,7 @@ type ReaderCoreCacheEntry = {
 };
 
 const READER_CORE_GET_CACHE = new Map<string, ReaderCoreCacheEntry>();
+let cacheWriteCountSincePrune = 0;
 
 export type CoreCallResult = {
   response: Response;
@@ -103,6 +112,10 @@ export async function callReaderCore(path: string, init?: RequestInit): Promise<
 }
 
 function getCachedCoreResult(path: string, allowStale: boolean): CoreCallResult | null {
+  if (READER_CORE_GET_CACHE.size > CORE_API_READ_CACHE_MAX_ENTRIES) {
+    pruneReaderCoreCache();
+  }
+
   const row = READER_CORE_GET_CACHE.get(path);
   if (!row) {
     return null;
@@ -125,6 +138,10 @@ function getCachedCoreResult(path: string, allowStale: boolean): CoreCallResult 
 }
 
 function setCachedCoreResult(path: string, result: CoreCallResult, ttlMs: number, staleMs: number): void {
+  if (READER_CORE_GET_CACHE.size >= CORE_API_READ_CACHE_MAX_ENTRIES) {
+    pruneReaderCoreCache();
+  }
+
   const now = Date.now();
   READER_CORE_GET_CACHE.set(path, {
     expiresAt: now + Math.max(500, ttlMs),
@@ -132,6 +149,28 @@ function setCachedCoreResult(path: string, result: CoreCallResult, ttlMs: number
     status: result.response.status,
     data: result.data,
   });
+
+  cacheWriteCountSincePrune += 1;
+  if (cacheWriteCountSincePrune >= 200) {
+    pruneReaderCoreCache();
+    cacheWriteCountSincePrune = 0;
+  }
+}
+
+function pruneReaderCoreCache(): void {
+  const now = Date.now();
+  for (const [key, row] of READER_CORE_GET_CACHE) {
+    if (now > row.staleUntil) {
+      READER_CORE_GET_CACHE.delete(key);
+    }
+  }
+  while (READER_CORE_GET_CACHE.size > CORE_API_READ_CACHE_MAX_ENTRIES) {
+    const oldestKey = READER_CORE_GET_CACHE.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    READER_CORE_GET_CACHE.delete(oldestKey);
+  }
 }
 
 export async function callReaderCoreCached(

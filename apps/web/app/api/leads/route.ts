@@ -93,6 +93,11 @@ export async function POST(request: NextRequest) {
     "unknown";
   const userAgent = request.headers.get("user-agent") || "unknown";
   const landingPage = clean(payload.landing_page, 512);
+  const utmSource = clean(payload.utm_source, 255);
+  const utmMedium = clean(payload.utm_medium, 255);
+  const utmCampaign = clean(payload.utm_campaign, 255);
+  const utmContent = clean(payload.utm_content, 255);
+  const utmTerm = clean(payload.utm_term, 255);
 
   const notesParts = [
     `offer=${offer}`,
@@ -103,9 +108,29 @@ export async function POST(request: NextRequest) {
   ].filter(Boolean);
 
   const day = new Date().toISOString().slice(0, 10);
+  const idempotencyFingerprint = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        day,
+        contact: contact.toLowerCase(),
+        offer,
+        segment,
+        name: name || "",
+        message: message || "",
+        landing_page: landingPage || "",
+        utm_source: utmSource || "",
+        utm_medium: utmMedium || "",
+        utm_campaign: utmCampaign || "",
+        utm_content: utmContent || "",
+        utm_term: utmTerm || "",
+      }),
+    )
+    .digest("hex")
+    .slice(0, 48);
   const idempotencyKey = `web-lead-${crypto
     .createHash("sha256")
-    .update(`${contact}:${offer}:${day}`)
+    .update(`${day}:${idempotencyFingerprint}`)
     .digest("hex")
     .slice(0, 48)}`;
 
@@ -115,11 +140,11 @@ export async function POST(request: NextRequest) {
     contact,
     segment,
     notes: notesParts.join("\n"),
-    utm_source: clean(payload.utm_source, 255),
-    utm_medium: clean(payload.utm_medium, 255),
-    utm_campaign: clean(payload.utm_campaign, 255),
-    utm_content: clean(payload.utm_content, 255),
-    utm_term: clean(payload.utm_term, 255),
+    utm_source: utmSource,
+    utm_medium: utmMedium,
+    utm_campaign: utmCampaign,
+    utm_content: utmContent,
+    utm_term: utmTerm,
   };
 
   const response = await fetch(`${CORE_API_URL}/api/v1/leads`, {

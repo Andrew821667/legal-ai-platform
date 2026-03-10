@@ -61,6 +61,25 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    void (async () => {
+      try {
+        const response = await fetch('/api/admin/auth', { method: 'GET' });
+        if (!response.ok) {
+          setIsAuthenticated(false);
+          return;
+        }
+        const data = await response.json();
+        setIsAuthenticated(Boolean(data?.ok));
+      } catch {
+        setIsAuthenticated(false);
+      }
+    })();
+  }, [isOpen]);
+
   // Глобальный обработчик комбинации клавиш Ctrl+Shift+A (Windows/Linux) или Cmd+Shift+A (Mac)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -97,7 +116,16 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     setIsLoadingGithub(true);
     try {
       const response = await fetch('/api/github/stats');
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        setError('Сессия администратора истекла. Авторизуйтесь снова.');
+        setGithubData(null);
+        return;
+      }
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Failed to load GitHub data');
+      }
       setGithubData(data);
     } catch (error) {
       console.error('Failed to load GitHub data:', error);
@@ -110,7 +138,16 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     setIsLoadingAnalytics(true);
     try {
       const response = await fetch('/api/analytics/combined');
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        setError('Сессия администратора истекла. Авторизуйтесь снова.');
+        setAnalyticsData(null);
+        return;
+      }
       const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.detail || 'Failed to load Analytics data');
+      }
       setAnalyticsData(result);
     } catch (error) {
       console.error('Failed to load Analytics data:', error);
@@ -165,7 +202,12 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE' });
+    } catch {
+      // Ignore transport errors and reset local session state.
+    }
     setIsAuthenticated(false);
     setInputPassword('');
     setError('');
@@ -201,7 +243,7 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     sources: [],
   };
 
-  // Технические данные
+  // Технические данные (демо-заглушка до подключения реального telemetry backend)
   const technicalData = {
     performance: {
       lighthouse: 95,
@@ -521,6 +563,13 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-6"
                       >
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                          <p className="text-sm text-amber-200">
+                            Показаны демонстрационные метрики интерфейса. Они не отражают production-нагрузку и не
+                            используются для operational-решений.
+                          </p>
+                        </div>
+
                         {/* Performance Metrics */}
                         <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
                           <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
