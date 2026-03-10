@@ -25,14 +25,16 @@ jobs:
       matrix:
         include:
           - suite: core-api
+            package: core-api
             path: apps/core-api/tests/
           - suite: news
+            package: news
             path: apps/news/tests/
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest ${{ matrix.path }} -q
+      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.path }} -q
 
   test-lead-bot-legacy:
     runs-on: ubuntu-latest
@@ -40,7 +42,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: cd apps/lead-bot/legacy && uv run pytest tests -q
+      - run: python3 -m venv .venv-legacy
+      - run: .venv-legacy/bin/pip install -r apps/lead-bot/legacy/requirements.txt
+      - run: >-
+          cd apps/lead-bot/legacy &&
+          TELEGRAM_BOT_TOKEN=123456:ABCDEFghijklmnopqrstuvwxyz
+          OPENAI_API_KEY=sk-test-key
+          ADMIN_TELEGRAM_ID=1
+          CORE_API_SYNC_ENABLED=0
+          ../../.venv-legacy/bin/python -m pytest tests -q
 
   web-build:
     runs-on: ubuntu-latest
