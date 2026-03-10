@@ -48,23 +48,24 @@ export default function FileUpload({
     }
   })
 
+  const rootProps = getRootProps({
+    className: `
+      border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
+      transition-all duration-300
+      ${isDragActive && !isDragReject ? 'border-primary-500 bg-primary-50 scale-105' : ''}
+      ${isDragReject ? 'border-danger-500 bg-danger-50' : ''}
+      ${!isDragActive && !isDragReject ? 'border-gray-300 hover:border-primary-400 hover:bg-gray-50' : ''}
+      ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+    `
+  })
+
   return (
     <div>
-      <motion.div
-        {...getRootProps()}
-        whileHover={{ scale: disabled ? 1 : 1.01 }}
-        className={`
-          border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
-          transition-all duration-300
-          ${isDragActive && !isDragReject ? 'border-primary-500 bg-primary-50 scale-105' : ''}
-          ${isDragReject ? 'border-danger-500 bg-danger-50' : ''}
-          ${!isDragActive && !isDragReject ? 'border-gray-300 hover:border-primary-400 hover:bg-gray-50' : ''}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-        `}
-      >
+      <div {...rootProps}>
         <input {...getInputProps()} />
 
         <motion.div
+          whileHover={{ scale: disabled ? 1 : 1.01 }}
           animate={{
             y: isDragActive ? -10 : 0,
             scale: isDragActive ? 1.1 : 1
@@ -97,7 +98,7 @@ export default function FileUpload({
             </>
           )}
         </motion.div>
-      </motion.div>
+      </div>
 
       {error && (
         <motion.div

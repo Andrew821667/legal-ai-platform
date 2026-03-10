@@ -24,12 +24,16 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-COPY --from=builder /app/apps/web/.next ./.next
-COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder /app/apps/web/package.json ./package.json
-COPY --from=builder /app/apps/web/package-lock.json ./package-lock.json
-COPY --from=builder /app/apps/web/node_modules ./node_modules
-COPY --from=builder /app/apps/web/next.config.js ./next.config.js
+RUN mkdir -p /app/data && chown -R node:node /app
+
+COPY --from=builder --chown=node:node /app/apps/web/.next ./.next
+COPY --from=builder --chown=node:node /app/apps/web/public ./public
+COPY --from=builder --chown=node:node /app/apps/web/package.json ./package.json
+COPY --from=builder --chown=node:node /app/apps/web/package-lock.json ./package-lock.json
+COPY --from=builder --chown=node:node /app/apps/web/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/apps/web/next.config.js ./next.config.js
+
+USER node
 
 EXPOSE 3000
 

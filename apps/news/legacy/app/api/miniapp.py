@@ -3,7 +3,7 @@ Mini App API Router
 Endpoints for Telegram Mini App interface.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import select, func, desc, and_
@@ -47,17 +47,6 @@ async def verify_telegram_user(
     if not x_telegram_init_data:
         raise HTTPException(status_code=401, detail="Missing Telegram auth data")
 
-    # Check for development fallback data
-    try:
-        dev_data = json.loads(x_telegram_init_data)
-        if (isinstance(dev_data, dict) and
-            dev_data.get('user', {}).get('id') == 0 and
-            dev_data.get('user', {}).get('username') == 'dev_user'):
-            logger.info("development_fallback_auth_used")
-            return dev_data['user']
-    except (json.JSONDecodeError, KeyError):
-        pass  # Not development data, continue with normal verification
-
     try:
         # Parse init_data
         parsed_data = dict(parse_qsl(x_telegram_init_data))
@@ -65,6 +54,17 @@ async def verify_telegram_user(
 
         if not received_hash:
             raise HTTPException(status_code=401, detail="Missing signature hash")
+
+        auth_date_raw = parsed_data.get('auth_date')
+        try:
+            auth_date = int(str(auth_date_raw or "0"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=401, detail="Missing or invalid auth_date")
+
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        max_age = max(60, int(app_settings.miniapp_auth_max_age_seconds or 3600))
+        if auth_date > now_ts + 60 or now_ts - auth_date > max_age:
+            raise HTTPException(status_code=401, detail="Telegram auth data is expired")
 
         # Create data-check-string
         data_check_arr = sorted([f"{k}={v}" for k, v in parsed_data.items()])
@@ -109,6 +109,18 @@ async def verify_telegram_user(
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
+def require_admin_telegram_user(user: Dict[str, Any] = Depends(verify_telegram_user)) -> Dict[str, Any]:
+    """Allow only the configured Telegram admin to access moderation miniapp endpoints."""
+    try:
+        telegram_user_id = int(user.get("id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=403, detail="Telegram user id is invalid")
+
+    if not app_settings.telegram_admin_id or telegram_user_id != int(app_settings.telegram_admin_id):
+        raise HTTPException(status_code=403, detail="Admin Telegram account required")
+    return user
+
+
 # ====================
 # Dashboard
 # ====================
@@ -116,7 +128,7 @@ async def verify_telegram_user(
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
-    user: Dict = Depends(verify_telegram_user)
+    user: Dict = Depends(require_admin_telegram_user)
 ):
     """Get dashboard statistics."""
     try:
@@ -194,7 +206,7 @@ async def get_dashboard_stats(
 @router.get("/settings")
 async def get_settings(
     db: AsyncSession = Depends(get_db),
-    user: Dict = Depends(verify_telegram_user)
+    user: Dict = Depends(require_admin_telegram_user)
 ):
     """Get all system settings."""
     try:
@@ -291,7 +303,7 @@ async def get_settings(
 async def update_settings(
     settings_data: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user: Dict = Depends(verify_telegram_user)
+    user: Dict = Depends(require_admin_telegram_user)
 ):
     """Update system settings."""
     try:

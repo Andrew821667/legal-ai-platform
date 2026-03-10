@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import api from '@/services/api'
 import toast from 'react-hot-toast'
-import { getUserRole, getRolePermissions, getRoleColor, getRoleLabel } from '@/utils/roles'
+import { getRolePermissions, getRoleColor, getRoleLabel, type UserRole } from '@/utils/roles'
 import ChangePasswordModal from '@/components/ChangePasswordModal'
 
 interface User {
@@ -17,8 +17,6 @@ interface User {
   subscription_tier: string
   contracts_today: number
   llm_requests_today: number
-  max_contracts_per_day: number
-  max_llm_requests_per_day: number
 }
 
 interface Contract {
@@ -46,67 +44,55 @@ const itemVariants = {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showPasswordChange, setShowPasswordChange] = useState(false)
-  const userRole = getUserRole()
-  const permissions = getRolePermissions(userRole)
-  const roleColor = getRoleColor(userRole)
-  const roleLabel = getRoleLabel(userRole)
 
-  // Check authentication and default password
+  // Check authentication
   useEffect(() => {
     const token = localStorage.getItem('access_token')
-    console.log('🔍 Dashboard checking token:', token)
     if (!token) {
-      console.log('❌ No token found, redirecting to login')
       router.push('/login')
-    } else {
-      console.log('✅ Token found, user authenticated')
-      // Check if using default password
-      const passwordChanged = localStorage.getItem('passwordChanged')
-      const userStr = localStorage.getItem('user')
-
-      if (!passwordChanged && userStr) {
-        try {
-          const userData = JSON.parse(userStr)
-          // Check if using demo credentials (default passwords)
-          const defaultEmails = ['demo@example.com', 'admin@example.com', 'lawyer@example.com', 'junior@example.com']
-          if (defaultEmails.includes(userData.email)) {
-            // Show password change dialog after welcome
-            setTimeout(() => {
-              setShowPasswordChange(true)
-            }, 2000)
-          }
-        } catch (e) {
-          console.error('Error parsing user data:', e)
-        }
-      }
-
-      // Show welcome message on first visit
-      const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome')
-      if (!hasSeenWelcome) {
-        setShowWelcome(true)
-        sessionStorage.setItem('hasSeenWelcome', 'true')
-      }
+      return
     }
   }, [router])
 
   // Fetch current user
-  const { data: userData, isLoading: userLoading } = useQuery({
+  const { data: user, isLoading: userLoading, isError: userError } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
-      const response = await api.getCurrentUser()
-      setUser(response.data)
-      return response.data
-    }
+      return await api.getCurrentUser()
+    },
+    retry: false,
   })
+
+  useEffect(() => {
+    if (userLoading || userError || !user) {
+      return
+    }
+
+    const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome')
+    if (!hasSeenWelcome) {
+      setShowWelcome(true)
+      sessionStorage.setItem('hasSeenWelcome', 'true')
+    }
+  }, [user, userError, userLoading])
+
+  useEffect(() => {
+    if (!userError) {
+      return
+    }
+
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    router.replace('/login')
+  }, [router, userError])
 
   // Fetch recent contracts
   const { data: contractsData, isLoading: contractsLoading } = useQuery({
     queryKey: ['contracts', 'recent'],
     queryFn: async () => {
-      const response = await api.listContracts({ page: 1, page_size: 5 })
+      const response = await api.listContracts({ page: 1, limit: 5 })
       return response.data
     }
   })
@@ -133,8 +119,23 @@ export default function DashboardPage() {
     )
   }
 
-  const contractsUsagePercent = ((user?.contracts_today || 0) / (user?.max_contracts_per_day || 1)) * 100
-  const llmUsagePercent = ((user?.llm_requests_today || 0) / (user?.max_llm_requests_per_day || 1)) * 100
+  if (userError || !user) {
+    return null
+  }
+
+  const userRole = user.role as UserRole
+  const permissions = getRolePermissions(userRole)
+  const roleColor = getRoleColor(userRole)
+  const roleLabel = getRoleLabel(userRole)
+  const contractLimit = permissions.maxContractsPerDay
+  const llmLimit = permissions.maxLLMRequestsPerDay
+
+  const contractsUsagePercent = contractLimit === -1
+    ? 0
+    : ((user?.contracts_today || 0) / Math.max(contractLimit, 1)) * 100
+  const llmUsagePercent = llmLimit === -1
+    ? 0
+    : ((user?.llm_requests_today || 0) / Math.max(llmLimit, 1)) * 100
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -277,7 +278,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-gray-600 mb-1">Контракты сегодня</p>
                     <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                       {user?.contracts_today || 0}
-                      <span className="text-lg text-gray-400 font-normal"> / {user?.max_contracts_per_day}</span>
+                      <span className="text-lg text-gray-400 font-normal"> / {contractLimit === -1 ? '∞' : contractLimit}</span>
                     </p>
                   </div>
                   <motion.div
@@ -315,7 +316,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-gray-600 mb-1">LLM запросы</p>
                     <p className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       {user?.llm_requests_today || 0}
-                      <span className="text-lg text-gray-400 font-normal"> / {user?.max_llm_requests_per_day}</span>
+                      <span className="text-lg text-gray-400 font-normal"> / {llmLimit === -1 ? '∞' : llmLimit}</span>
                     </p>
                   </div>
                   <motion.div

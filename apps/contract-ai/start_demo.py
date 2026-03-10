@@ -8,6 +8,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+if os.getenv("CONTRACT_AI_ALLOW_INSECURE_DEMO") != "1":
+    raise SystemExit(
+        "Refusing to start insecure demo server. Set CONTRACT_AI_ALLOW_INSECURE_DEMO=1 only for isolated local demos."
+    )
+
 # Create app
 app = FastAPI(
     title="Contract AI System - DEMO",
@@ -18,7 +23,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

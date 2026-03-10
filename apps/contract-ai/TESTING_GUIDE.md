@@ -17,27 +17,21 @@
 
 ## Test Users & Credentials
 
-### Production Database Users
+Bootstrap users are created by `database/init_users.py`.
 
-| Email | Password | Role | Description |
-|-------|----------|------|-------------|
-| admin@contractai.local | Admin123! | admin | System Administrator - Full access |
-| senior@contractai.local | *Unknown* | senior_lawyer | Senior Lawyer - Advanced features |
-| lawyer@contractai.local | Lawyer123! | lawyer | Regular Lawyer - Standard access |
-| junior@contractai.local | Junior123! | junior_lawyer | Junior Lawyer - Limited access |
-| vip@contractai.local | *Unknown* | senior_lawyer | VIP Client |
-| demo1@example.com | *Unknown* | demo | Demo User 1 |
-| demo2@example.com | *Unknown* | demo | Demo User 2 |
-| trial@example.com | *Unknown* | junior_lawyer | Trial User |
+Passwords are generated randomly during initialization and written to:
+- `CREDENTIALS.txt` in the `apps/contract-ai` root
 
-### Frontend Demo Mode (Works without backend)
+Do not rely on fixed passwords in documentation. If you need fresh local credentials:
+```bash
+rm -f contract_ai.db CREDENTIALS.txt
+python3 database/init_users.py
+```
 
-| Email | Password | Description |
-|-------|----------|-------------|
-| demo@example.com | demo123 | Quick demo access |
-| admin@example.com | admin123 | Admin demo access |
-
-*Note: Demo mode stores fake token in localStorage and redirects to dashboard*
+For ad-hoc dev users, `setup_users.py` now requires explicit opt-in:
+```bash
+CONTRACT_AI_ALLOW_SETUP_USERS=1 python3 setup_users.py
+```
 
 ---
 
@@ -97,7 +91,7 @@
 **Status:** ✅ Configured
 
 ```
-OPENAI_API_KEY=sk-proj-ooeLD5fDT-YZk7RqbV37lVsGj...
+OPENAI_API_KEY=sk-proj-your-key
 ```
 
 **Models in use:**
@@ -134,7 +128,7 @@ python -c "from src.services.llm_gateway import LLMGateway; gw = LLMGateway(); p
 ### ✅ Implemented (Frontend)
 - Modern UI with gradients & animations
 - Landing page
-- Login/Register pages (with demo mode)
+- Login/Register pages
 - Dashboard
 - Pricing page
 - Contract upload (drag & drop)
@@ -173,11 +167,11 @@ python -c "from src.services.llm_gateway import LLMGateway; gw = LLMGateway(); p
 4. Click contract card to view details
 5. View risk badges and scores
 
-### Workflow 3: Demo Mode (No Backend Required)
-1. Go to http://localhost:3000/login
-2. Use demo@example.com / demo123
-3. Dashboard loads with mock data
-4. Explore UI without API calls
+### Workflow 3: Authentication Check
+1. Start backend and frontend.
+2. Open `CREDENTIALS.txt` and use one of the generated bootstrap users.
+3. Log in through `http://localhost:3000/login`.
+4. Confirm `/dashboard` loads only after backend authentication succeeds.
 
 ---
 
@@ -199,7 +193,7 @@ python -c "from src.services.llm_gateway import LLMGateway; gw = LLMGateway(); p
 1. ✅ **Desktop shortcut**: FIXED - теперь запускает Backend + Frontend корректно
 2. **Repository cleanup needed**: Old code artifacts present
 3. **LLM limiting strategy unclear**: Confusion between request count vs tokens/cost
-4. **Missing passwords**: Some test users have unknown passwords
+4. **Bootstrap credentials rotate**: use the generated `CREDENTIALS.txt`, not hardcoded passwords
 
 ---
 
@@ -210,7 +204,7 @@ python -c "from src.services.llm_gateway import LLMGateway; gw = LLMGateway(); p
 2. Add admin panel UI to frontend
 3. Implement contract generation UI
 4. Clean up repository artifacts
-5. Document all test user passwords
+5. Add integration tests for authenticated frontend flows
 
 ### Medium Priority
 1. Fix async/await blocking issues

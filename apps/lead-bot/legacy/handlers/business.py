@@ -31,6 +31,8 @@ from handlers.helpers import notify_admin_new_lead, extract_email
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
+_OPERATOR_CONSULTATION_COMMANDS = {"/operator_consultation", "/operator_handoff", "/handoff"}
+_OPERATOR_PERSONAL_COMMANDS = {"/operator_personal", "/operator_founder", "/personal_handoff"}
 
 
 def _button_text_equals(text: str | None, expected: str) -> bool:
@@ -87,6 +89,147 @@ def _extract_phone_candidate(text: str) -> str | None:
                 return digits
         return None
     return match.group(0)
+
+
+def parse_business_operator_command(text: str) -> tuple[str, str] | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    command, _, note = raw.partition(" ")
+    normalized = normalize_button_text(command).strip().lower()
+    if normalized in _OPERATOR_CONSULTATION_COMMANDS:
+        return "consultation", note.strip()
+    if normalized in _OPERATOR_PERSONAL_COMMANDS:
+        return "personal_request", note.strip()
+    return None
+
+
+def _resolve_business_chat_target(message) -> dict[str, str | int | None] | None:
+    chat = getattr(message, "chat", None)
+    chat_id = getattr(chat, "id", None)
+    if chat_id is None:
+        return None
+    return {
+        "telegram_id": int(chat_id),
+        "username": getattr(chat, "username", None),
+        "first_name": getattr(chat, "first_name", None) or getattr(chat, "title", None) or "клиент",
+        "last_name": getattr(chat, "last_name", None),
+    }
+
+
+def _operator_handoff_note(
+    *,
+    operator_user,
+    mode: str,
+    trigger: str,
+    note_text: str = "",
+) -> str:
+    operator_name = getattr(operator_user, "full_name", None) or getattr(operator_user, "first_name", None) or "operator"
+    operator_id = getattr(operator_user, "id", None)
+    base = (
+        f"[OPERATOR_HANDOFF] trigger={trigger}; mode={mode}; "
+        f"operator={operator_name}; operator_id={operator_id}"
+    )
+    if note_text:
+        return f"{base}\nКомментарий оператора: {note_text[:500]}"
+    return base
+
+
+async def handle_business_operator_handoff(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    message,
+    operator_user,
+    trigger: str,
+    mode: str = "consultation",
+    note_text: str = "",
+) -> int | None:
+    target = _resolve_business_chat_target(message)
+    if not target:
+        return None
+
+    user_db_id = database.db.create_or_update_user(
+        telegram_id=int(target["telegram_id"]),
+        username=target["username"],
+        first_name=target["first_name"],
+        last_name=target["last_name"],
+    )
+    existing_lead = database.db.get_lead_by_user_id(user_db_id) or {}
+
+    notes_parts = []
+    existing_notes = (existing_lead.get("notes") or "").strip()
+    if existing_notes:
+        notes_parts.append(existing_notes)
+    notes_parts.append(
+        _operator_handoff_note(
+            operator_user=operator_user,
+            mode=mode,
+            trigger=trigger,
+            note_text=note_text,
+        )
+    )
+    if mode == "consultation":
+        notes_parts.append("[CONTACT_MODE] Оператор инициировал консультацию без телефона, связь через Telegram/business")
+    else:
+        notes_parts.append("Оператор инициировал личное обращение к Андрею из business-чата")
+
+    lead_payload = {
+        "name": target["first_name"],
+        "email": existing_lead.get("email"),
+        "company": existing_lead.get("company"),
+        "pain_point": note_text[:1000] if note_text else existing_lead.get("pain_point"),
+        "temperature": "warm",
+        "status": "new",
+        "notification_sent": 0,
+        "lead_magnet_type": mode,
+        "lead_magnet_delivered": True,
+        "notes": "\n".join(part for part in notes_parts if part).strip(),
+    }
+    database.db.create_or_update_lead(user_db_id, lead_payload)
+    database.db.update_lead_last_message_time(user_db_id)
+
+    source = f"business_operator_{trigger}"
+    lead_id = await _send_business_handoff_and_notify(
+        context=context,
+        message=message,
+        user_db_id=user_db_id,
+        user_telegram_id=int(target["telegram_id"]),
+        username=str(target["username"] or "") or None,
+        first_name=str(target["first_name"] or "клиент"),
+        source=source,
+        is_update=bool(existing_lead),
+    )
+
+    try:
+        database.db.track_event(
+            user_db_id,
+            "operator_handoff_requested",
+            payload={
+                "trigger": trigger,
+                "mode": mode,
+                "operator_id": getattr(operator_user, "id", None),
+            },
+            lead_id=lead_id,
+        )
+    except (sqlite3.Error, KeyError) as analytics_error:
+        logger.warning(f"[Business] Failed to track operator_handoff_requested: {analytics_error}")
+
+    _clear_business_contact_state(context)
+
+    response_text = (
+        "Оператор передал диалог команде на консультацию. "
+        "Продолжим связь в этом чате."
+        if mode == "consultation"
+        else "Оператор передал диалог Андрею для личного обращения. Продолжим связь в этом чате."
+    )
+    await context.bot.send_message(
+        chat_id=message.chat.id,
+        text=response_text,
+        reply_markup=_business_menu_markup(),
+        business_connection_id=message.business_connection_id,
+    )
+    return lead_id
 
 
 def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> None:

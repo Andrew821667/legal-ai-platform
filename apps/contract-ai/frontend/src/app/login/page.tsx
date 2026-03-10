@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
 import api from '@/services/api'
 import toast from 'react-hot-toast'
@@ -15,58 +14,10 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('🔥 FORM SUBMITTED!')
-    console.log('Email:', email, 'Password:', password)
 
     setIsLoading(true)
 
     try {
-      // Demo credentials with roles
-      const demoCredentials = [
-        { email: 'demo@example.com', password: 'demo123', name: 'Demo User', role: 'demo' },
-        { email: 'admin@example.com', password: 'admin123', name: 'Admin User', role: 'admin' },
-        { email: 'lawyer@example.com', password: 'lawyer123', name: 'Lawyer User', role: 'lawyer' },
-        { email: 'junior@example.com', password: 'junior123', name: 'Junior Lawyer', role: 'junior_lawyer' },
-      ]
-
-      console.log('Looking for match...')
-      const demoUser = demoCredentials.find(
-        u => u.email === email && u.password === password
-      )
-
-      console.log('Match result:', demoUser)
-
-      if (demoUser) {
-        console.log('✅ DEMO USER FOUND! Setting localStorage...')
-        // Demo mode - bypass API
-        localStorage.setItem('access_token', 'demo_token_' + Date.now())
-        localStorage.setItem('user', JSON.stringify({
-          name: demoUser.name,
-          email: demoUser.email,
-          role: demoUser.role
-        }))
-
-        console.log('✅ LocalStorage set, showing toast...')
-        toast.success(`Добро пожаловать, ${demoUser.name}!`, {
-          icon: '🎉',
-          style: {
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #0ea5e9, #d946ef)',
-            color: '#fff',
-          },
-        })
-
-        console.log('✅ Redirecting to dashboard in 100ms...')
-        // Small delay to ensure localStorage is set before redirect
-        setTimeout(() => {
-          window.location.href = '/dashboard'
-        }, 100)
-        return
-      }
-
-      console.log('⚠️ No demo user found, trying API...')
-
-      // Try real API
       const response = await api.login({
         username: email,
         password: password,
@@ -255,31 +206,6 @@ export default function LoginPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-primary-400 to-secondary-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </motion.button>
             </form>
-
-            {/* Demo Credentials */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="mt-6 p-4 bg-white/10 rounded-xl border border-white/20 backdrop-blur-sm"
-            >
-              <p className="text-sm font-semibold text-white mb-2 flex items-center">
-                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Демо-аккаунты:
-              </p>
-              <div className="space-y-1.5 text-xs text-white/80">
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                  <span className="font-semibold">Demo:</span>
-                  <code className="bg-black/20 px-2 py-0.5 rounded">demo@example.com / demo123</code>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                  <span className="font-semibold">Admin:</span>
-                  <code className="bg-black/20 px-2 py-0.5 rounded">admin@example.com / admin123</code>
-                </div>
-              </div>
-            </motion.div>
           </motion.div>
 
           {/* Footer Links */}

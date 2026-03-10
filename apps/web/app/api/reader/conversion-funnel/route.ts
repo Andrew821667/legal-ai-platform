@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callReaderCoreCached, ensureReaderKey } from "../core";
+import { requireAdminSession } from "@/lib/admin-session";
 
 export async function GET(request: NextRequest) {
+  const unauthorized = requireAdminSession(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   if (!ensureReaderKey()) {
     return NextResponse.json(
       { detail: "CORE_API_BOT_KEY/API_KEY_BOT/API_KEY_NEWS is not configured on web server" },

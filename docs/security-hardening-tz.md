@@ -63,6 +63,11 @@ Excluded:
 - Add non-text limits:
   - allowed non-text events per hour
   - repeated unsupported payload suppression
+- Add attachment hardening for supported inbound files:
+  - document MIME allowlist
+  - document extension allowlist fallback
+  - document max size
+  - photo max size
 - Validate deep-link payloads by allowlist regex before state mutation or lead creation.
 
 ### Quarantine policy
@@ -150,6 +155,19 @@ Excluded:
 - Add revocable sessions with stable session IDs.
 - Audit successful login, failed login, logout, and forced revocation.
 
+## Stage 5. Repository Security Automation
+
+### Entry points
+- `.github/dependabot.yml`
+- `.github/workflows/security.yml`
+- `.gitleaks.toml`
+
+### Requirements
+- Enable scheduled dependency update PRs for `github-actions`, `npm`, `pip`, and tracked Dockerfiles.
+- Add automated secret scanning for pushes and pull requests.
+- Add CodeQL analysis for Python and JavaScript/TypeScript.
+- Add dependency review checks on pull requests.
+
 ## Non-Functional Requirements
 - All new controls must be feature-flag driven.
 - All thresholds must be configurable via env.
@@ -160,11 +178,16 @@ Excluded:
 ## Environment Variables
 
 Lead-bot:
+- `BUSINESS_OPERATOR_TELEGRAM_IDS`
 - `SECURITY_HUMAN_ONLY_ENABLED`
 - `SECURITY_CALLBACKS_PER_MINUTE`
 - `SECURITY_CALLBACK_DUPLICATE_WINDOW_SECONDS`
 - `SECURITY_CALLBACK_DUPLICATE_BURST`
 - `SECURITY_NON_TEXT_PER_HOUR`
+- `SECURITY_ALLOWED_DOCUMENT_MIME_PREFIXES`
+- `SECURITY_ALLOWED_DOCUMENT_EXTENSIONS`
+- `SECURITY_DOCUMENT_MAX_BYTES`
+- `SECURITY_PHOTO_MAX_BYTES`
 - `SECURITY_QUARANTINE_MINUTES`
 - `SECURITY_QUARANTINE_STRIKES`
 - `SECURITY_BLACKLIST_STRIKES`
@@ -194,6 +217,8 @@ Unit:
 - block invalid private sender/chat mapping
 - callback burst-limit
 - quarantine escalation
+- document MIME / extension filtering
+- document / photo size limits
 - deep-link allowlist validation
 
 Integration:
@@ -204,6 +229,7 @@ Integration:
 
 Smoke:
 - existing lead-bot smoke flows remain operational
+- repository security workflow files are present and valid YAML/TOML
 
 ## Acceptance Criteria
 - Telegram updates from bot actors do not reach business logic.

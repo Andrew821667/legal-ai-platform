@@ -1,0 +1,13 @@
+title = "Legal AI Platform gitleaks config"
+
+[allowlist]
+description = "Known placeholder secrets in examples and docs"
+regexes = [
+  '''1234567890:ABCdefGHIjklMNOpqrsTUVwxyz''',
+  '''123456789:ABCdefGHIjklMNOpqrsTUVwxyz''',
+  '''sk-proj-[A-Za-z0-9._-]*\.{3,}''',
+  '''ghp_(?:your_token_here|ваш_токен(?:_здесь)?)''',
+  '''y0_AgAAAAA\.{3,}''',
+  '''your-(?:app-password|bot-token|reader-bot-token|openai-api-key|deepseek-api-key|perplexity-api-key)''',
+  '''your_(?:app_password|bot_token|reader_bot_token|openai_api_key|deepseek_api_key|perplexity_api_key|secure_password(?:_here)?|redis_password|secret_key(?:_change_in_production)?|token(?:_here)?|api_key(?:_here)?)''',
+]

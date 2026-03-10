@@ -49,7 +49,13 @@ from handlers.admin import (
     unblacklist_command,
     view_conversation_command,
 )
-from handlers.business import build_business_menu_markup, handle_business_connection, handle_business_message
+from handlers.business import (
+    build_business_menu_markup,
+    handle_business_connection,
+    handle_business_message,
+    handle_business_operator_handoff,
+    parse_business_operator_command,
+)
 from handlers.callbacks import (
     handle_admin_panel_callback,
     handle_business_menu_callback,
@@ -177,6 +183,106 @@ def _business_skip_reason(message: Any, bot_id: int) -> str | None:
     return None
 
 
+def _is_trusted_business_operator_message(message: Any) -> bool:
+    if message is None:
+        return False
+    if getattr(message, "business_connection_id", None) in {None, ""}:
+        return False
+    from_user = getattr(message, "from_user", None)
+    chat = getattr(message, "chat", None)
+    user_id = getattr(from_user, "id", None)
+    chat_id = getattr(chat, "id", None)
+    chat_type = str(getattr(chat, "type", "")).lower()
+    if chat_type != "private":
+        return False
+    if not security.security_manager.is_trusted_business_operator(user_id):
+        return False
+    try:
+        return int(chat_id) != int(user_id)
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_trusted_business_operator_callback(query: Any) -> bool:
+    if query is None:
+        return False
+    message = getattr(query, "message", None)
+    from_user = getattr(query, "from_user", None)
+    return _is_trusted_business_operator_message(message) and security.security_manager.is_trusted_business_operator(
+        getattr(from_user, "id", None)
+    )
+
+
+async def _try_handle_business_operator_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    message = getattr(update, "business_message", None)
+    if not _is_trusted_business_operator_message(message):
+        return False
+
+    parsed = parse_business_operator_command(getattr(message, "text", "") or "")
+    if parsed is None:
+        return False
+
+    mode, note_text = parsed
+    lead_id = await handle_business_operator_handoff(
+        context=context,
+        message=message,
+        operator_user=getattr(message, "from_user", None),
+        trigger="command",
+        mode=mode,
+        note_text=note_text,
+    )
+    logger.info("Processed business operator command for update %s lead_id=%s", update.update_id, lead_id)
+    return True
+
+
+async def _try_handle_business_operator_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    query = update.callback_query
+    if not _is_trusted_business_operator_callback(query):
+        return False
+
+    callback_data = query.data or ""
+    mode: str | None = None
+    if callback_data in {"menu_consultation", "menu_leave_contact", "magnet_consultation"}:
+        mode = "consultation"
+    elif callback_data == "menu_personal_request":
+        mode = "personal_request"
+
+    if mode is None:
+        try:
+            await utils.safe_answer_callback(
+                query,
+                text=(
+                    "Операторский режим: для ручной передачи используйте "
+                    "кнопки консультации или команду /operator_consultation."
+                ),
+                show_alert=True,
+                action="business_operator_callback_hint",
+            )
+        except Exception as error:
+            logger.warning("Failed to answer operator hint callback: %s", error)
+        logger.info("Skip trusted operator callback %s with unsupported data %s", update.update_id, callback_data)
+        return True
+
+    lead_id = await handle_business_operator_handoff(
+        context=context,
+        message=getattr(query, "message", None),
+        operator_user=getattr(query, "from_user", None),
+        trigger=f"callback:{callback_data}",
+        mode=mode,
+    )
+    try:
+        await utils.safe_answer_callback(
+            query,
+            text="Операторский handoff отправлен",
+            show_alert=False,
+            action="business_operator_callback_ok",
+        )
+    except Exception as error:
+        logger.warning("Failed to answer operator callback success: %s", error)
+    logger.info("Processed business operator callback for update %s lead_id=%s", update.update_id, lead_id)
+    return True
+
+
 def _is_legacy_owner_intro_text(text: str) -> bool:
     normalized = (text or "").strip().lower()
     if not normalized:
@@ -217,6 +323,35 @@ def _classify_message_kind(message: Any) -> str:
     if getattr(message, "location", None) is not None:
         return "location"
     return "unknown"
+
+
+def _build_attachment_security_payload(message: Any, message_kind: str) -> dict[str, Any]:
+    if message_kind == "document":
+        document = getattr(message, "document", None)
+        if document is None:
+            return {}
+        return {
+            "file_name": getattr(document, "file_name", "") or "",
+            "mime_type": getattr(document, "mime_type", "") or "",
+            "file_size": getattr(document, "file_size", None),
+        }
+
+    if message_kind == "photo":
+        photo_sizes = getattr(message, "photo", None) or []
+        largest = None
+        for candidate in photo_sizes:
+            candidate_size = getattr(candidate, "file_size", 0) or 0
+            if largest is None or candidate_size > (getattr(largest, "file_size", 0) or 0):
+                largest = candidate
+        if largest is None:
+            return {}
+        return {
+            "file_size": getattr(largest, "file_size", None),
+            "width": getattr(largest, "width", None),
+            "height": getattr(largest, "height", None),
+        }
+
+    return {}
 
 
 def _security_alert_text(
@@ -358,6 +493,7 @@ async def _guard_message_update(update: Update, context: ContextTypes.DEFAULT_TY
             user_id=user_id,
             chat_id=chat_id,
             message_kind=message_kind,
+            attachment=_build_attachment_security_payload(message, message_kind),
             update_id=update.update_id,
         )
         if not decision.allowed:
@@ -385,16 +521,40 @@ async def _guard_callback_update(update: Update, context: ContextTypes.DEFAULT_T
     user_id = getattr(from_user, "id", None)
     chat_id = getattr(chat, "id", None)
     chat_type = str(getattr(chat, "type", "")).lower()
+    business_connection_id = getattr(message, "business_connection_id", None)
+    business_private_actor_mismatch = False
+    if business_connection_id and user_id is not None and chat_id is not None and chat_type == "private":
+        try:
+            business_private_actor_mismatch = int(chat_id) != int(user_id)
+        except (TypeError, ValueError):
+            business_private_actor_mismatch = False
 
     decision = security.security_manager.evaluate_human_actor(
         user_id=user_id,
         chat_id=chat_id,
         chat_type=chat_type,
         is_bot=bool(getattr(from_user, "is_bot", False)),
+        allow_private_sender_chat_mismatch=business_private_actor_mismatch,
         update_type="callback_query",
         update_id=update.update_id,
     )
     if not decision.allowed:
+        return await _apply_security_decision(
+            update,
+            context,
+            decision,
+            update_type="callback_query",
+            user_id=user_id,
+            chat_id=chat_id,
+        )
+
+    if business_private_actor_mismatch:
+        decision = security.security_manager.register_business_callback_actor_mismatch(
+            user_id=user_id,
+            chat_id=chat_id,
+            update_id=update.update_id,
+            business_connection_id=str(business_connection_id),
+        )
         return await _apply_security_decision(
             update,
             context,
@@ -432,6 +592,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if _is_business_update(update):
+        if await _try_handle_business_operator_message(update, context):
+            return
+
         reason = _business_skip_reason(message, context.bot.id)
         if reason:
             if reason == "owner_message":
@@ -489,6 +652,11 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             }:
                 actor = getattr(message, "from_user", None)
                 chat = getattr(message, "chat", None)
+                if reason == "outgoing_private_message" and security.security_manager.is_trusted_business_operator(
+                    getattr(actor, "id", None)
+                ):
+                    logger.info("Skip trusted business operator message %s without security penalty", update.update_id)
+                    return
                 decision = security.security_manager.register_actor_violation(
                     user_id=getattr(actor, "id", None),
                     reason_code=reason,
@@ -546,6 +714,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     query = update.callback_query
     if not query:
+        return
+
+    if await _try_handle_business_operator_callback(update, context):
         return
 
     if not await _guard_callback_update(update, context):

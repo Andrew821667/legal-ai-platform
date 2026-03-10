@@ -282,7 +282,9 @@ export default function ContractsListPage() {
                       </h3>
                       <p className="text-sm text-gray-500">{contract.type}</p>
                     </div>
-                    <Badge {...getStatusBadge(contract.status)} size="sm" />
+                    <Badge variant={getStatusBadge(contract.status).variant} size="sm">
+                      {getStatusBadge(contract.status).text}
+                    </Badge>
                   </div>
 
                   {/* Parties */}

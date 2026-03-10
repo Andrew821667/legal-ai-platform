@@ -77,10 +77,19 @@ class SecurityManager:
         self.CALLBACK_DUPLICATE_WINDOW_SECONDS = config.SECURITY_CALLBACK_DUPLICATE_WINDOW_SECONDS
         self.CALLBACK_DUPLICATE_BURST = config.SECURITY_CALLBACK_DUPLICATE_BURST
         self.NON_TEXT_PER_HOUR = config.SECURITY_NON_TEXT_PER_HOUR
+        self.ALLOWED_DOCUMENT_MIME_PREFIXES = tuple(config.SECURITY_ALLOWED_DOCUMENT_MIME_PREFIXES)
+        self.ALLOWED_DOCUMENT_EXTENSIONS = frozenset(config.SECURITY_ALLOWED_DOCUMENT_EXTENSIONS)
+        self.DOCUMENT_MAX_BYTES = config.SECURITY_DOCUMENT_MAX_BYTES
+        self.PHOTO_MAX_BYTES = config.SECURITY_PHOTO_MAX_BYTES
         self.QUARANTINE_MINUTES = config.SECURITY_QUARANTINE_MINUTES
         self.QUARANTINE_STRIKES = config.SECURITY_QUARANTINE_STRIKES
         self.BLACKLIST_STRIKES = config.SECURITY_BLACKLIST_STRIKES
         self.ALERT_BURST_THRESHOLD = config.SECURITY_ALERT_BURST_THRESHOLD
+        self.TRUSTED_BUSINESS_OPERATOR_IDS = frozenset(
+            int(user_id)
+            for user_id in [config.ADMIN_TELEGRAM_ID, *config.BUSINESS_OPERATOR_TELEGRAM_IDS]
+            if user_id is not None
+        )
 
         logger.info("Security Manager initialized")
 
@@ -118,6 +127,131 @@ class SecurityManager:
                 continue
             safe[key] = str(value)[:180]
         return safe
+
+    @staticmethod
+    def _extract_file_extension(file_name: str | None) -> str:
+        normalized = str(file_name or "").strip().lower()
+        if "." not in normalized:
+            return ""
+        return normalized.rsplit(".", 1)[-1]
+
+    def _is_allowed_document_mime(self, mime_type: str | None) -> bool:
+        normalized = str(mime_type or "").strip().lower()
+        if not normalized:
+            return False
+        return any(normalized.startswith(prefix) for prefix in self.ALLOWED_DOCUMENT_MIME_PREFIXES)
+
+    def _reject_attachment(
+        self,
+        *,
+        user_id: int,
+        chat_id: int | None,
+        update_id: int | None,
+        reason_code: str,
+        user_message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> SecurityDecision:
+        self._record_incident(
+            telegram_user_id=user_id,
+            chat_id=chat_id,
+            update_id=update_id,
+            update_type="message",
+            action="blocked_soft",
+            reason_code=reason_code,
+            severity="warning",
+            payload=payload,
+        )
+        return SecurityDecision(
+            allowed=False,
+            action="blocked_soft",
+            reason_code=reason_code,
+            user_message=user_message,
+            details=self._sanitize_payload(payload),
+        )
+
+    def _validate_document_attachment(
+        self,
+        *,
+        user_id: int,
+        chat_id: int | None,
+        update_id: int | None,
+        attachment: dict[str, Any],
+    ) -> SecurityDecision | None:
+        if not attachment:
+            return None
+
+        file_size = attachment.get("file_size")
+        if isinstance(file_size, (int, float)) and int(file_size) > self.DOCUMENT_MAX_BYTES:
+            max_megabytes = max(1, round(self.DOCUMENT_MAX_BYTES / (1024 * 1024)))
+            return self._reject_attachment(
+                user_id=user_id,
+                chat_id=chat_id,
+                update_id=update_id,
+                reason_code="document_too_large",
+                user_message=(
+                    "Документ слишком большой. "
+                    f"Отправьте файл до {max_megabytes} МБ или кратко опишите задачу текстом."
+                ),
+                payload={"file_size": int(file_size), "max_bytes": self.DOCUMENT_MAX_BYTES},
+            )
+
+        mime_type = str(attachment.get("mime_type") or "").strip().lower()
+        file_ext = self._extract_file_extension(str(attachment.get("file_name") or ""))
+
+        if not mime_type and not file_ext:
+            return None
+
+        if mime_type and self._is_allowed_document_mime(mime_type):
+            return None
+
+        if file_ext and file_ext in self.ALLOWED_DOCUMENT_EXTENSIONS:
+            return None
+
+        if mime_type:
+            return self._reject_attachment(
+                user_id=user_id,
+                chat_id=chat_id,
+                update_id=update_id,
+                reason_code="document_mime_not_allowed",
+                user_message="Формат документа не поддерживается. Отправьте PDF, DOCX, TXT или изображение-скриншот.",
+                payload={"mime_type": mime_type, "file_ext": file_ext or ""},
+            )
+
+        return self._reject_attachment(
+            user_id=user_id,
+            chat_id=chat_id,
+            update_id=update_id,
+            reason_code="document_extension_not_allowed",
+            user_message="Расширение файла не поддерживается. Отправьте PDF, DOCX, TXT или изображение-скриншот.",
+            payload={"file_ext": file_ext or "missing"},
+        )
+
+    def _validate_photo_attachment(
+        self,
+        *,
+        user_id: int,
+        chat_id: int | None,
+        update_id: int | None,
+        attachment: dict[str, Any],
+    ) -> SecurityDecision | None:
+        if not attachment:
+            return None
+
+        file_size = attachment.get("file_size")
+        if isinstance(file_size, (int, float)) and int(file_size) > self.PHOTO_MAX_BYTES:
+            max_megabytes = max(1, round(self.PHOTO_MAX_BYTES / (1024 * 1024)))
+            return self._reject_attachment(
+                user_id=user_id,
+                chat_id=chat_id,
+                update_id=update_id,
+                reason_code="photo_too_large",
+                user_message=(
+                    "Изображение слишком большое. "
+                    f"Сожмите файл до {max_megabytes} МБ или отправьте ключевой фрагмент."
+                ),
+                payload={"file_size": int(file_size), "max_bytes": self.PHOTO_MAX_BYTES},
+            )
+        return None
 
     def _quarantine_user_message(self, until_epoch: int | None) -> str:
         if until_epoch is None:
@@ -373,6 +507,50 @@ class SecurityManager:
             direct_quarantine=reason_code in self._DIRECT_QUARANTINE_REASONS,
         )
 
+    def register_business_callback_actor_mismatch(
+        self,
+        *,
+        user_id: int | None,
+        chat_id: int | None,
+        update_id: int | None = None,
+        business_connection_id: str | None = None,
+    ) -> SecurityDecision:
+        payload = {
+            "chat_id": chat_id,
+            "has_business_connection": bool(business_connection_id),
+        }
+        if business_connection_id:
+            payload["business_connection_hash"] = self._hash_value(str(business_connection_id))
+
+        self._record_incident(
+            telegram_user_id=user_id,
+            chat_id=chat_id,
+            update_id=update_id,
+            update_type="callback_query",
+            action="blocked_soft",
+            reason_code="business_callback_actor_mismatch",
+            severity="warning",
+            payload=payload,
+        )
+        return SecurityDecision(
+            allowed=False,
+            action="blocked_soft",
+            reason_code="business_callback_actor_mismatch",
+            user_message=(
+                "В business-чате кнопку должен нажимать сам клиент. "
+                "Операторское нажатие не запускает клиентский сценарий."
+            ),
+            details=self._sanitize_payload(payload),
+        )
+
+    def is_trusted_business_operator(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        try:
+            return int(user_id) in self.TRUSTED_BUSINESS_OPERATOR_IDS
+        except (TypeError, ValueError):
+            return False
+
     def evaluate_human_actor(
         self,
         *,
@@ -382,6 +560,7 @@ class SecurityManager:
         is_bot: bool = False,
         via_bot: bool = False,
         sender_business_bot: bool = False,
+        allow_private_sender_chat_mismatch: bool = False,
         update_type: str = "",
         update_id: int | None = None,
     ) -> SecurityDecision:
@@ -434,7 +613,7 @@ class SecurityManager:
 
         if chat_id is not None and str(chat_type).lower() == "private":
             try:
-                if int(chat_id) != int(user_id):
+                if not allow_private_sender_chat_mismatch and int(chat_id) != int(user_id):
                     return self.register_actor_violation(
                         user_id=user_id,
                         reason_code="private_sender_chat_mismatch",
@@ -544,6 +723,7 @@ class SecurityManager:
         user_id: int | None,
         chat_id: int | None,
         message_kind: str,
+        attachment: dict[str, Any] | None = None,
         update_id: int | None = None,
     ) -> SecurityDecision:
         if user_id is None:
@@ -612,6 +792,26 @@ class SecurityManager:
                 reason_code="unsupported_non_text",
                 user_message="Этот тип вложения сейчас не поддерживается. Отправьте текст, контакт или документ для демо.",
             )
+
+        attachment_data = attachment or {}
+        if message_kind == "document":
+            document_decision = self._validate_document_attachment(
+                user_id=user_id,
+                chat_id=chat_id,
+                update_id=update_id,
+                attachment=attachment_data,
+            )
+            if document_decision is not None:
+                return document_decision
+        if message_kind == "photo":
+            photo_decision = self._validate_photo_attachment(
+                user_id=user_id,
+                chat_id=chat_id,
+                update_id=update_id,
+                attachment=attachment_data,
+            )
+            if photo_decision is not None:
+                return photo_decision
 
         return SecurityDecision(allowed=True)
 

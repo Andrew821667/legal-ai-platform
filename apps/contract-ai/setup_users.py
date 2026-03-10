@@ -2,49 +2,53 @@
 """
 Create test users for Contract AI System
 """
+import os
+import secrets
 import requests
-import json
 
 BASE_URL = "http://localhost:8000"
+
+if os.getenv("CONTRACT_AI_ALLOW_SETUP_USERS") != "1":
+    raise SystemExit(
+        "Refusing to create test users. Set CONTRACT_AI_ALLOW_SETUP_USERS=1 if you really need this dev helper."
+    )
 
 # Test users with different roles
 TEST_USERS = [
     {
         "email": "demo@example.com",
         "name": "Demo User",
-        "password": "DemoPass123!",
         "role": "demo",
         "subscription_tier": "demo"
     },
     {
         "email": "user@example.com",
         "name": "Regular User",
-        "password": "UserPass123!",
         "role": "junior_lawyer",
         "subscription_tier": "basic"
     },
     {
         "email": "lawyer@example.com",
         "name": "Lawyer Pro",
-        "password": "LawyerPass123!",
         "role": "lawyer",
         "subscription_tier": "pro"
     },
     {
         "email": "senior@example.com",
         "name": "Senior Lawyer",
-        "password": "SeniorPass123!",
         "role": "senior_lawyer",
         "subscription_tier": "pro"
     },
     {
         "email": "admin@example.com",
         "name": "System Admin",
-        "password": "AdminPass123!",
         "role": "admin",
         "subscription_tier": "enterprise"
     }
 ]
+
+for user in TEST_USERS:
+    user["password"] = secrets.token_urlsafe(12)
 
 def create_user(user_data):
     """Create a single user"""

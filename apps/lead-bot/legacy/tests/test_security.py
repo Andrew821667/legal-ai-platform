@@ -4,6 +4,7 @@ import tempfile
 import pytest
 
 from database import Database
+from handlers.business import parse_business_operator_command
 import security
 
 
@@ -114,6 +115,68 @@ def test_callback_duplicate_burst_triggers_quarantine(isolated_security_db, monk
     assert incidents[0]["reason_code"] == "callback_duplicate_burst"
 
 
+def test_private_callback_mismatch_can_be_allowlisted_without_quarantine(isolated_security_db):
+    user_id = 901099
+    manager = security.SecurityManager()
+
+    decision = manager.evaluate_human_actor(
+        user_id=user_id,
+        chat_id=user_id + 1,
+        chat_type="private",
+        allow_private_sender_chat_mismatch=True,
+        update_type="callback_query",
+        update_id=15,
+    )
+
+    assert decision.allowed is True
+    quarantined, _reason, _entry = manager.is_quarantined(user_id)
+    assert quarantined is False
+
+
+def test_trusted_business_operator_ids_include_admin_and_configured_ids(isolated_security_db, monkeypatch):
+    monkeypatch.setattr(security.config, "ADMIN_TELEGRAM_ID", 901101)
+    monkeypatch.setattr(security.config, "BUSINESS_OPERATOR_TELEGRAM_IDS", [901102, 901103])
+    manager = security.SecurityManager()
+
+    assert manager.is_trusted_business_operator(901101) is True
+    assert manager.is_trusted_business_operator(901102) is True
+    assert manager.is_trusted_business_operator(901103) is True
+    assert manager.is_trusted_business_operator(999999) is False
+
+
+def test_parse_business_operator_command_supports_consultation_and_personal_modes():
+    assert parse_business_operator_command("/operator_consultation нужен созвон") == (
+        "consultation",
+        "нужен созвон",
+    )
+    assert parse_business_operator_command("/handoff") == ("consultation", "")
+    assert parse_business_operator_command("/operator_personal срочно") == ("personal_request", "срочно")
+    assert parse_business_operator_command("обычный текст") is None
+
+
+def test_business_callback_actor_mismatch_is_soft_block_only(isolated_security_db):
+    user_id = 901100
+    manager = security.SecurityManager()
+
+    decision = manager.register_business_callback_actor_mismatch(
+        user_id=user_id,
+        chat_id=user_id + 1,
+        update_id=16,
+        business_connection_id="bc-test-1",
+    )
+
+    assert decision.allowed is False
+    assert decision.action == "blocked_soft"
+    assert decision.reason_code == "business_callback_actor_mismatch"
+
+    quarantined, _reason, _entry = manager.is_quarantined(user_id)
+    assert quarantined is False
+
+    incidents = isolated_security_db.list_security_incidents(limit=5, telegram_user_id=user_id)
+    assert incidents
+    assert incidents[0]["reason_code"] == "business_callback_actor_mismatch"
+
+
 def test_supported_non_text_is_allowed_and_quarantine_blocks_text_security(isolated_security_db):
     user_id = 901012
     manager = security.SecurityManager()
@@ -138,3 +201,58 @@ def test_supported_non_text_is_allowed_and_quarantine_blocks_text_security(isola
     blocked, reason = manager.check_all_security(user_id, "Здравствуйте, нужен аудит договоров")
     assert blocked is False
     assert "подозрительная активность" in (reason or "").lower()
+
+
+def test_document_with_allowed_extension_passes_even_without_mime(isolated_security_db):
+    user_id = 901013
+    manager = security.SecurityManager()
+
+    decision = manager.check_non_text_gate(
+        user_id=user_id,
+        chat_id=user_id,
+        message_kind="document",
+        attachment={"file_name": "brief.docx", "file_size": 128_000},
+        update_id=30,
+    )
+
+    assert decision.allowed is True
+
+
+def test_document_with_disallowed_mime_is_blocked(isolated_security_db):
+    user_id = 901014
+    manager = security.SecurityManager()
+
+    decision = manager.check_non_text_gate(
+        user_id=user_id,
+        chat_id=user_id,
+        message_kind="document",
+        attachment={
+            "file_name": "payload.exe",
+            "mime_type": "application/x-msdownload",
+            "file_size": 32_768,
+        },
+        update_id=31,
+    )
+
+    assert decision.allowed is False
+    assert decision.reason_code == "document_mime_not_allowed"
+
+    incidents = isolated_security_db.list_security_incidents(limit=5, telegram_user_id=user_id)
+    assert incidents
+    assert incidents[0]["reason_code"] == "document_mime_not_allowed"
+
+
+def test_oversized_photo_is_blocked(isolated_security_db):
+    user_id = 901015
+    manager = security.SecurityManager()
+
+    decision = manager.check_non_text_gate(
+        user_id=user_id,
+        chat_id=user_id,
+        message_kind="photo",
+        attachment={"file_size": manager.PHOTO_MAX_BYTES + 1},
+        update_id=32,
+    )
+
+    assert decision.allowed is False
+    assert decision.reason_code == "photo_too_large"

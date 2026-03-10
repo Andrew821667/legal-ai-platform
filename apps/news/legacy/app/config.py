@@ -4,6 +4,7 @@ Loads settings from environment variables using pydantic-settings.
 """
 
 from typing import List, Optional
+from urllib.parse import urlparse
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -259,7 +260,8 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = Field(default="change-in-production")
     allowed_hosts: str = Field(default="localhost,127.0.0.1")
-    cors_origins: str = Field(default="http://localhost:8000")
+    cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000,https://legalaipro.ru")
+    miniapp_auth_max_age_seconds: int = Field(default=3600)
 
     # Monitoring
     healthcheck_enabled: bool = Field(default=True)
@@ -267,6 +269,25 @@ class Settings(BaseSettings):
 
     # Timezone
     tz: str = Field(default="Europe/Moscow")
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse and normalize allowed CORS origins."""
+        seen: set[str] = set()
+        result: List[str] = []
+        raw_values = [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+        for raw in raw_values:
+            parsed = urlparse(raw)
+            if parsed.scheme and parsed.netloc:
+                normalized = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                normalized = raw.rstrip("/")
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                result.append(normalized)
+
+        return result
 
 
 # Global settings instance

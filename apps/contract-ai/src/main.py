@@ -3,7 +3,6 @@
 FastAPI Main Application
 Contract AI System Backend Server
 """
-import os
 import sys
 from contextlib import asynccontextmanager
 from typing import Dict, Any
@@ -11,7 +10,6 @@ from typing import Dict, Any
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 # Configure logging
@@ -138,11 +136,6 @@ app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(contracts_router, prefix="/api/v1/contracts", tags=["Contracts"])
 app.include_router(websocket_router, prefix="/api/v1/ws", tags=["WebSocket"])
 app.include_router(payments_router, prefix="/api/v1/payments", tags=["Payments"])
-
-
-# Static files for uploaded documents (with authentication)
-if os.path.exists("data/contracts"):
-    app.mount("/static", StaticFiles(directory="data/contracts"), name="static")
 
 
 if __name__ == "__main__":

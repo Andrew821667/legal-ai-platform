@@ -55,6 +55,14 @@ class Config:
         if not admin_id:
             raise ValueError("ADMIN_TELEGRAM_ID не установлен в переменных окружения")
         self.ADMIN_TELEGRAM_ID: int = int(admin_id)
+        operator_ids_raw = os.getenv('BUSINESS_OPERATOR_TELEGRAM_IDS', '').strip()
+        self.BUSINESS_OPERATOR_TELEGRAM_IDS: list[int] = []
+        if operator_ids_raw:
+            self.BUSINESS_OPERATOR_TELEGRAM_IDS = [
+                int(item.strip())
+                for item in operator_ids_raw.split(',')
+                if item.strip()
+            ]
 
         # Настройки AI
         # Поддерживаем оба имени переменной для обратной совместимости:
@@ -157,6 +165,32 @@ class Config:
         self.SECURITY_NON_TEXT_PER_HOUR: int = max(
             1,
             int(os.getenv('SECURITY_NON_TEXT_PER_HOUR', '10')),
+        )
+        doc_mime_prefixes_raw = os.getenv(
+            'SECURITY_ALLOWED_DOCUMENT_MIME_PREFIXES',
+            'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/,image/',
+        )
+        self.SECURITY_ALLOWED_DOCUMENT_MIME_PREFIXES: list[str] = [
+            item.strip().lower()
+            for item in doc_mime_prefixes_raw.split(',')
+            if item.strip()
+        ]
+        doc_extensions_raw = os.getenv(
+            'SECURITY_ALLOWED_DOCUMENT_EXTENSIONS',
+            'pdf,doc,docx,txt,rtf,png,jpg,jpeg',
+        )
+        self.SECURITY_ALLOWED_DOCUMENT_EXTENSIONS: list[str] = [
+            item.strip().lower().lstrip('.')
+            for item in doc_extensions_raw.split(',')
+            if item.strip()
+        ]
+        self.SECURITY_DOCUMENT_MAX_BYTES: int = max(
+            1024,
+            int(os.getenv('SECURITY_DOCUMENT_MAX_BYTES', str(15 * 1024 * 1024))),
+        )
+        self.SECURITY_PHOTO_MAX_BYTES: int = max(
+            1024,
+            int(os.getenv('SECURITY_PHOTO_MAX_BYTES', str(10 * 1024 * 1024))),
         )
         self.SECURITY_QUARANTINE_MINUTES: int = max(
             1,

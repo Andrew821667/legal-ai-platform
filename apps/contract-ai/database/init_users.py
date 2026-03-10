@@ -7,6 +7,7 @@ Creates initial users and demo tokens for Contract AI System
 
 import sys
 import os
+import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -18,6 +19,16 @@ from src.models.database import engine, Base
 from src.models.auth_models import User, DemoToken
 from src.services.auth_service import AuthService
 from loguru import logger
+
+
+def _generate_bootstrap_password(length_bytes: int = 12) -> str:
+    """Generate a high-entropy bootstrap password for local setup."""
+    return secrets.token_urlsafe(length_bytes)
+
+
+def _generate_demo_token(prefix: str) -> str:
+    """Generate a non-predictable demo token."""
+    return f"{prefix}_{secrets.token_urlsafe(18)}"
 
 
 def create_initial_users(db: Session) -> dict:
@@ -35,7 +46,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "admin@contractai.local",
             "name": "System Administrator",
-            "password": "Admin123!",
             "role": "admin",
             "subscription_tier": "enterprise",
             "is_demo": False,
@@ -44,7 +54,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "demo1@example.com",
             "name": "Demo User 1",
-            "password": "Demo123!",
             "role": "demo",
             "subscription_tier": "demo",
             "is_demo": True,
@@ -54,7 +63,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "demo2@example.com",
             "name": "Demo User 2",
-            "password": "Demo123!",
             "role": "demo",
             "subscription_tier": "demo",
             "is_demo": True,
@@ -64,7 +72,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "trial@example.com",
             "name": "Trial User",
-            "password": "Trial123!",
             "role": "junior_lawyer",
             "subscription_tier": "basic",
             "is_demo": False,
@@ -74,7 +81,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "junior@contractai.local",
             "name": "Junior Lawyer",
-            "password": "Junior123!",
             "role": "junior_lawyer",
             "subscription_tier": "basic",
             "is_demo": False,
@@ -83,7 +89,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "lawyer@contractai.local",
             "name": "Regular Lawyer",
-            "password": "Lawyer123!",
             "role": "lawyer",
             "subscription_tier": "pro",
             "is_demo": False,
@@ -92,7 +97,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "senior@contractai.local",
             "name": "Senior Lawyer",
-            "password": "Senior123!",
             "role": "senior_lawyer",
             "subscription_tier": "pro",
             "is_demo": False,
@@ -101,7 +105,6 @@ def create_initial_users(db: Session) -> dict:
         {
             "email": "vip@contractai.local",
             "name": "VIP Client",
-            "password": "Vip123!",
             "role": "senior_lawyer",
             "subscription_tier": "enterprise",
             "is_demo": False,
@@ -121,7 +124,7 @@ def create_initial_users(db: Session) -> dict:
             continue
 
         # Hash password
-        password = user_data.pop("password")
+        password = _generate_bootstrap_password()
         description = user_data.pop("description")
         password_hash = auth_service.hash_password(password)
 
@@ -174,7 +177,7 @@ def create_demo_tokens(db: Session) -> list:
 
     tokens_to_create = [
         {
-            "token": f"demo_token_basic_{datetime.utcnow().strftime('%Y%m%d')}",
+            "token": _generate_demo_token("demo_basic"),
             "max_contracts": 3,
             "max_llm_requests": 10,
             "max_file_size_mb": 5,
@@ -184,7 +187,7 @@ def create_demo_tokens(db: Session) -> list:
             "description": "Basic demo: 3 contracts, 10 LLM requests, 24 hours"
         },
         {
-            "token": f"demo_token_medium_{datetime.utcnow().strftime('%Y%m%d')}",
+            "token": _generate_demo_token("demo_medium"),
             "max_contracts": 5,
             "max_llm_requests": 20,
             "max_file_size_mb": 10,
@@ -194,7 +197,7 @@ def create_demo_tokens(db: Session) -> list:
             "description": "Medium demo: 5 contracts, 20 LLM requests, 72 hours"
         },
         {
-            "token": f"demo_token_extended_{datetime.utcnow().strftime('%Y%m%d')}",
+            "token": _generate_demo_token("demo_extended"),
             "max_contracts": 10,
             "max_llm_requests": 50,
             "max_file_size_mb": 20,
@@ -287,6 +290,8 @@ def save_credentials_to_file(credentials: dict, tokens: list):
         f.write("3. API Documentation: http://localhost:8000/api/docs\n\n")
         f.write("⚠️  IMPORTANT: Change these passwords in production!\n")
         f.write("=" * 80 + "\n")
+
+    os.chmod(output_file, 0o600)
 
     logger.info(f"📄 Credentials saved to: {output_file}")
 

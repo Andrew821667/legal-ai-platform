@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -36,10 +36,11 @@ router = APIRouter()
 
 # Dependency: Get current user from token
 async def get_current_user(
-    authorization: str = Depends(lambda request: request.headers.get("Authorization")),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user"""
+    authorization = request.headers.get("Authorization")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -592,7 +593,6 @@ async def get_contract_details(
             'contract': {
                 'id': contract.id,
                 'file_name': contract.file_name,
-                'file_path': contract.file_path,
                 'status': contract.status,
                 'contract_type': contract.contract_type,
                 'created_at': contract.created_at.isoformat() if contract.created_at else None,

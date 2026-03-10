@@ -158,7 +158,7 @@ All pages tested and verified:
 4. Open http://localhost:3000
 5. Navigate through all pages:
    - `/` - Landing page
-   - `/login` - Login (use demo credentials)
+   - `/login` - Login
    - `/dashboard` - Dashboard
    - `/pricing` - Pricing plans
    - `/contracts` - Contracts list

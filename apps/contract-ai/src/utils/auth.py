@@ -5,8 +5,8 @@ Authentication and User Management System
 import streamlit as st
 from enum import Enum
 from typing import Optional, Dict, Any
-from datetime import datetime
-from src.models import SessionLocal, User
+from src.models import SessionLocal
+from src.services.auth_service import AuthService
 
 
 class UserRole(Enum):
@@ -108,35 +108,37 @@ def init_session_state():
 
 def login_user(email: str, password: str = None) -> Optional[Dict[str, Any]]:
     """
-    Вход пользователя (упрощённая версия без проверки пароля)
-    В продакшене нужно добавить хэширование паролей
+    Authenticate a user with real password verification.
     """
+    if not email or not password:
+        return None
+
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.email == email, User.active == True).first()
+        auth_service = AuthService(db)
+        login_data, error = auth_service.login_user(email=email, password=password)
+        if error or not login_data:
+            return None
 
-        if user:
-            # Определяем роль на основе поля role в БД
-            role_map = {
-                'admin': UserRole.ADMIN,
-                'senior_lawyer': UserRole.VIP,
-                'lawyer': UserRole.FULL,
-                'junior_lawyer': UserRole.DEMO,
-            }
-            role = role_map.get(user.role, UserRole.DEMO)
+        user_data = login_data.get("user", {})
+        role_map = {
+            'admin': UserRole.ADMIN,
+            'senior_lawyer': UserRole.VIP,
+            'lawyer': UserRole.FULL,
+            'junior_lawyer': UserRole.DEMO,
+            'demo': UserRole.DEMO,
+        }
+        role = role_map.get(user_data.get("role"), UserRole.DEMO)
 
-            st.session_state.user = {
-                'id': user.id,
-                'email': user.email,
-                'name': user.name,
-                'role': user.role
-            }
-            st.session_state.role = role
-            st.session_state.authenticated = True
-
-            return st.session_state.user
-
-        return None
+        st.session_state.user = {
+            'id': user_data.get('id'),
+            'email': user_data.get('email'),
+            'name': user_data.get('name'),
+            'role': user_data.get('role')
+        }
+        st.session_state.role = role
+        st.session_state.authenticated = True
+        return st.session_state.user
     finally:
         db.close()
 
@@ -186,36 +188,7 @@ def require_auth(role: Optional[UserRole] = None):
 def show_login_form():
     """Показать форму входа"""
     st.markdown("### 🔐 Вход в систему")
-
-    # Быстрый выбор демо-аккаунта
-    st.markdown("#### Быстрый вход")
-    st.markdown("Выберите аккаунт для входа:")
-
-    demo_accounts = [
-        {"email": "demo@example.com", "name": "Demo User", "role": "🔵 DEMO", "desc": "Ограниченный функционал (3 договора/день)"},
-        {"email": "user@example.com", "name": "Full User", "role": "🟢 FULL", "desc": "Полный функционал (50 договоров/день)"},
-        {"email": "vip@example.com", "name": "VIP User", "role": "🟡 VIP", "desc": "VIP функционал (1000 договоров/день, приоритет)"},
-        {"email": "admin@example.com", "name": "Admin User", "role": "🔴 ADMIN", "desc": "Администратор (безлимит, управление)"},
-    ]
-
-    cols = st.columns(2)
-    for idx, account in enumerate(demo_accounts):
-        with cols[idx % 2]:
-            if st.button(
-                f"{account['role']}\n{account['name']}",
-                key=f"quick_login_{idx}",
-                use_container_width=True,
-                help=account['desc']
-            ):
-                user = login_user(account['email'])
-                if user:
-                    st.success(f"✅ Добро пожаловать, {user['name']}!")
-                    st.rerun()
-                else:
-                    st.error("❌ Ошибка входа")
-
-    st.markdown("---")
-    st.markdown("#### Вход по email")
+    st.markdown("Введите email и пароль пользователя с правами доступа.")
 
     with st.form("login_form"):
         email = st.text_input("Email", placeholder="user@example.com")
@@ -232,32 +205,6 @@ def show_login_form():
                     st.error("❌ Неверный email или пароль")
             else:
                 st.error("❌ Введите email")
-
-    st.markdown("---")
-
-    # Таблица сравнения ролей
-    with st.expander("📊 Сравнение тарифов"):
-        st.markdown("""
-        | Функция | DEMO | FULL | VIP | ADMIN |
-        |---------|------|------|-----|-------|
-        | Договоров/день | 3 | 50 | 1000 | ♾️ |
-        | LLM запросов/день | 10 | 100 | 1000 | ♾️ |
-        | Генерация договоров | ✅ | ✅ | ✅ | ✅ |
-        | Анализ договоров | ✅ | ✅ | ✅ | ✅ |
-        | Обработка запросов | ❌ | ✅ | ✅ | ✅ |
-        | Возражения | ❌ | ✅ | ✅ | ✅ |
-        | Анализ изменений | ❌ | ✅ | ✅ | ✅ |
-        | Экспорт PDF | ❌ | ✅ | ✅ | ✅ |
-        | Экспорт XML | ❌ | ✅ | ✅ | ✅ |
-        | RAG поиск | ❌ | ✅ | ✅ | ✅ |
-        | Приоритет поддержки | ❌ | ❌ | ✅ | ✅ |
-        | Просмотр логов | ❌ | ❌ | ❌ | ✅ |
-        | Управление | ❌ | ❌ | ❌ | ✅ |
-        """)
-
-    st.info("""
-    💡 **Совет:** Для тестирования всех функций используйте аккаунт **admin@example.com**
-    """)
 
 
 def show_user_info():
@@ -344,29 +291,3 @@ def show_upgrade_message(feature: str):
     - **FULL** - полный функционал
     - **VIP** - приоритетная поддержка и безлимитный доступ
     """)
-
-
-# Создание демо-пользователей при первом запуске
-def create_demo_users():
-    """Создать демо-пользователей для тестирования"""
-    db = SessionLocal()
-    try:
-        demo_users = [
-            {"email": "demo@example.com", "name": "Demo User", "role": "junior_lawyer"},
-            {"email": "user@example.com", "name": "Full User", "role": "lawyer"},
-            {"email": "vip@example.com", "name": "VIP User", "role": "senior_lawyer"},
-            {"email": "admin@example.com", "name": "Admin User", "role": "admin"},
-        ]
-
-        for user_data in demo_users:
-            existing = db.query(User).filter(User.email == user_data["email"]).first()
-            if not existing:
-                user = User(**user_data, active=True)
-                db.add(user)
-
-        db.commit()
-    except Exception as e:
-        print(f"Error creating demo users: {e}")
-        db.rollback()
-    finally:
-        db.close()

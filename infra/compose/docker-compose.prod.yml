@@ -42,6 +42,10 @@ services:
         condition: service_healthy
     volumes:
       - web_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 20s
@@ -73,6 +77,10 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "${CORE_API_BIND_HOST:-127.0.0.1}:${CORE_API_PUBLISH_PORT:-8000}:8000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,6 +121,8 @@ services:
     volumes:
       - lead_bot_data:/app/data
       - lead_bot_logs:/app/logs
+    security_opt:
+      - no-new-privileges:true
     mem_limit: 256m
     memswap_limit: 256m
     restart: unless-stopped
