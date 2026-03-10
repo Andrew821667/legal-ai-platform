@@ -19,24 +19,38 @@ jobs:
       - run: uv sync
       - run: uv run ruff check apps/ packages/ --select F,B904,B905,UP031
 
-  test:
+  test-core-api:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - suite: core-api
-            package: core-api
-            path: apps/core-api/tests/
-            extra_args: --with httpx
-          - suite: news
-            package: news
-            path: apps/news/tests/
-            extra_args: ""
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: legalai
+          POSTGRES_USER: legalai
+          POSTGRES_PASSWORD: legalai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalai -d legalai"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://legalai:legalai@localhost:5432/legalai
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run ${{ matrix.extra_args }} --package ${{ matrix.package }} pytest ${{ matrix.path }} -q
+      - run: uv run --package core-api --with httpx --directory apps/core-api alembic upgrade head
+      - run: uv run --package core-api --with httpx pytest apps/core-api/tests/ -q
+
+  test-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run --package news pytest apps/news/tests/ -q
 
   test-lead-bot-legacy:
     runs-on: ubuntu-latest
@@ -79,7 +93,7 @@ jobs:
       - run: npm run lint --prefix apps/web
 
   build-and-push:
-    needs: [lint, test, test-lead-bot-legacy, web-build, web-lint]
+    needs: [lint, test-core-api, test-news, test-lead-bot-legacy, web-build, web-lint]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
