@@ -8,8 +8,8 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 
 const tools = [
   {
-    title: "Contract_AI_System",
-    description: "Анализ договора, подсветка рисков, рекомендации по правкам и подготовке согласования.",
+    title: "Проверка договора AI",
+    description: "Анализ договора, подсветка рисков и рекомендации по правкам перед согласованием.",
     href: ROUTES.contractAI,
     action: MINIAPP_ACTIONS.openContractAI,
   },

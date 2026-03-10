@@ -1,4 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+
+import { requireAdminSession } from '@/lib/admin-session';
+import { loadGoogleAnalyticsPayload, type GA4MetricData } from '../google/route';
+import { loadYandexAnalyticsPayload } from '../yandex/route';
 
 /**
  * API endpoint для получения объединенных данных из Google Analytics 4 и Yandex Metrika
@@ -7,41 +11,7 @@ import { NextResponse } from 'next/server';
  * и предоставляет единый интерфейс для админ-панели.
  */
 
-interface AnalyticsData {
-  today: {
-    visits: number;
-    pageviews: number;
-    uniqueVisitors: number;
-    bounceRate: number;
-    avgDuration: string;
-    conversions: number;
-  };
-  week: {
-    visits: number;
-    pageviews: number;
-    uniqueVisitors: number;
-    bounceRate: number;
-    avgDuration: string;
-    conversions: number;
-  };
-  month: {
-    visits: number;
-    pageviews: number;
-    uniqueVisitors: number;
-    bounceRate: number;
-    avgDuration: string;
-    conversions: number;
-  };
-  topPages: Array<{
-    page: string;
-    visits: number;
-    avgTime: string;
-  }>;
-  sources: Array<{
-    name: string;
-    percentage: number;
-  }>;
-}
+type AnalyticsData = GA4MetricData;
 
 /**
  * Получение данных из обеих систем аналитики
@@ -52,29 +22,23 @@ async function fetchCombinedAnalytics(): Promise<{
   combined: AnalyticsData;
   sources: string[];
 }> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-
   try {
     // Запрашиваем данные из обеих систем параллельно
     const [ga4Response, yandexResponse] = await Promise.allSettled([
-      fetch(`${baseUrl}/api/analytics/google`, {
-        next: { revalidate: 300 },
-      }),
-      fetch(`${baseUrl}/api/analytics/yandex`, {
-        next: { revalidate: 300 },
-      }),
+      loadGoogleAnalyticsPayload(),
+      loadYandexAnalyticsPayload(),
     ]);
 
-    // Получаем данные или используем fallback
+    // Получаем данные или используем fallback.
     const ga4Data =
-      ga4Response.status === 'fulfilled' && ga4Response.value.ok
-        ? await ga4Response.value.json()
-        : { success: false, data: null };
+      ga4Response.status === 'fulfilled'
+        ? ga4Response.value
+        : { success: false, configured: false, data: null };
 
     const yandexData =
-      yandexResponse.status === 'fulfilled' && yandexResponse.value.ok
-        ? await yandexResponse.value.json()
-        : { success: false, data: null };
+      yandexResponse.status === 'fulfilled'
+        ? yandexResponse.value
+        : { success: false, configured: false, data: null };
 
     // Определяем какие источники доступны
     const sources: string[] = [];
@@ -250,7 +214,12 @@ function getMockData(): AnalyticsData {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const unauthorized = requireAdminSession(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const result = await fetchCombinedAnalytics();
 

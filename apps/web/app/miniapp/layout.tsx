@@ -27,10 +27,10 @@ export default function MiniAppLayout({ children }: { children: React.ReactNode 
                 <h1 className="text-lg font-semibold text-white">Mini App</h1>
               </div>
               <Link
-                href={ROUTES.contractAI}
+                href={ROUTES.miniAppTools}
                 className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
               >
-                Contract_AI_System
+                Проверить договор
               </Link>
             </div>
           </div>

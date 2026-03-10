@@ -2,21 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Home, Newspaper, Settings2, UserRound, Wrench } from "lucide-react";
 import { ROUTES } from "@/lib/links";
 
 const tabs = [
-  { href: ROUTES.miniApp, label: "Главная", icon: "🏠" },
-  { href: ROUTES.miniAppContent, label: "Контент", icon: "📰" },
-  { href: ROUTES.miniAppTools, label: "Инструменты", icon: "🧰" },
-  { href: ROUTES.miniAppSolutions, label: "Решения", icon: "⚙️" },
-  { href: ROUTES.miniAppProfile, label: "Мое", icon: "👤" },
+  { href: ROUTES.miniApp, label: "Главная", icon: Home },
+  { href: ROUTES.miniAppContent, label: "Контент", icon: Newspaper },
+  { href: ROUTES.miniAppTools, label: "Инструменты", icon: Wrench },
+  { href: ROUTES.miniAppSolutions, label: "Решения", icon: Settings2 },
+  { href: ROUTES.miniAppProfile, label: "Профиль", icon: UserRound },
 ];
 
 export default function MiniAppNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
+    >
       <div className="mx-auto flex w-full max-w-md items-center justify-between px-3 py-2">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
@@ -31,7 +35,7 @@ export default function MiniAppNav() {
                   : "text-slate-400 hover:bg-slate-800/80 hover:text-slate-200"
               }`}
             >
-              <span className="text-base leading-none">{tab.icon}</span>
+              <tab.icon className="h-4 w-4" />
               <span>{tab.label}</span>
             </Link>
           );

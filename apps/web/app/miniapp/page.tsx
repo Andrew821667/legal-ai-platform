@@ -148,12 +148,12 @@ export default function MiniAppHomePage() {
             Открыть контент
           </MiniTrackedLink>
           <MiniTrackedLink
-            href={`${ROUTES.contractAI}#demo`}
-            action={MINIAPP_ACTIONS.openContractAI}
+            href={ROUTES.miniAppTools}
+            action={MINIAPP_ACTIONS.openMiniAppTools}
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
-            Проверить договор
+            Открыть инструменты
           </MiniTrackedLink>
           <MiniTrackedLink
             href={ROUTES.miniAppSolutions}
