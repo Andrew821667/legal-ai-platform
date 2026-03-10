@@ -12,21 +12,21 @@
 
 При нажатии откроется модальное окно с формой авторизации.
 
-**Пароль по умолчанию:** `admin123`
-
-> ⚠️ **Важно!** Измените пароль в production окружении через переменную окружения
+> ⚠️ **Важно!** Пароль по умолчанию отсутствует. Для входа нужны `ADMIN_PANEL_PASSWORD_HASH`, `ADMIN_PANEL_TOTP_SECRET` и `ADMIN_PANEL_SESSION_SECRET`.
 
 ---
 
 ## ⚙️ Настройка
 
-### Изменение пароля
+### Настройка доступа
 
 1. Создайте файл `.env.local` в корне проекта (если еще не создан)
 2. Добавьте переменную:
 
 ```env
-ADMIN_PANEL_PASSWORD=ваш_безопасный_пароль
+ADMIN_PANEL_PASSWORD_HASH=$2b$...
+ADMIN_PANEL_TOTP_SECRET=BASE32SECRET...
+ADMIN_PANEL_SESSION_SECRET=long_random_secret
 ```
 
 3. Перезапустите dev сервер
@@ -36,8 +36,14 @@ ADMIN_PANEL_PASSWORD=ваш_безопасный_пароль
 Для Vercel/Netlify добавьте переменные окружения в настройках проекта:
 
 ```env
-# Пароль админ-панели
-ADMIN_PANEL_PASSWORD=ваш_безопасный_пароль
+# bcrypt-хэш пароля админ-панели
+ADMIN_PANEL_PASSWORD_HASH=$2b$...
+
+# Base32 TOTP secret для второго фактора
+ADMIN_PANEL_TOTP_SECRET=BASE32SECRET...
+
+# Секрет подписи revocable admin-сессий
+ADMIN_PANEL_SESSION_SECRET=long_random_secret
 
 # GitHub Token (опционально, для приватных репозиториев)
 GITHUB_TOKEN=ghp_ваш_токен_здесь
@@ -259,55 +265,19 @@ NEXT_PUBLIC_SITE_URL=https://your-site.vercel.app
 
 ### Текущая реализация
 
-- Базовая аутентификация по паролю
-- Пароль хранится в переменных окружения
-- Client-side проверка (подходит для MVP)
+- `bcrypt`-проверка пароля на сервере
+- обязательный `TOTP` второй фактор
+- серверная revocable-сессия с подписанной `httpOnly` cookie
+- персистентный throttle и session-store
+- аудит login/logout/revoke событий
 
 ### Рекомендации для Production
 
-Для повышения безопасности рекомендуется:
-
-1. **Хэширование пароля**
-   ```typescript
-   // Используйте bcrypt или подобную библиотеку
-   import bcrypt from 'bcryptjs';
-   ```
-
-2. **Server-side аутентификация**
-   - Создать API route для авторизации
-   - Использовать JWT токены
-   - Добавить rate limiting
-
-3. **Двухфакторная аутентификация (2FA)**
-   - TOTP коды
-   - Email/SMS верификация
-
-4. **IP whitelist**
-   - Ограничить доступ по IP
-   - Настроить в Vercel/Cloudflare
-
-### Пример улучшенной аутентификации
-
-```typescript
-// app/api/admin/auth/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-
-export async function POST(req: NextRequest) {
-  const { password } = await req.json();
-  const hashedPassword = process.env.ADMIN_PASSWORD_HASH;
-
-  const isValid = await bcrypt.compare(password, hashedPassword || '');
-
-  if (isValid) {
-    // Генерация JWT токена
-    const token = generateJWT({ role: 'admin' });
-    return NextResponse.json({ success: true, token });
-  }
-
-  return NextResponse.json({ success: false }, { status: 401 });
-}
-```
+1. Хранить `ADMIN_PANEL_PASSWORD_HASH`, а не plain-text пароль.
+2. Генерировать отдельный `ADMIN_PANEL_SESSION_SECRET`, не равный паролю.
+3. Держать `ADMIN_PANEL_TOTP_SECRET` в защищенном secret-store.
+4. При инциденте использовать `DELETE /api/admin/auth` с `scope=all`, затем ротировать секреты.
+5. На edge дополнительно ограничить доступ по IP/VPN/WAF, если панель не нужна широкой команде.
 
 ---
 
@@ -410,10 +380,10 @@ useEffect(() => {
 2. Убедитесь, что JavaScript включен
 3. Попробуйте другую комбинацию клавиш (можно изменить в коде)
 
-### Неверный пароль
+### Неверные учетные данные
 
 1. Проверьте `.env.local` файл
-2. Убедитесь, что переменная называется `ADMIN_PANEL_PASSWORD`
+2. Убедитесь, что заданы `ADMIN_PANEL_PASSWORD_HASH`, `ADMIN_PANEL_TOTP_SECRET` и `ADMIN_PANEL_SESSION_SECRET`
 3. Перезапустите dev сервер после изменения .env
 
 ### Данные не отображаются

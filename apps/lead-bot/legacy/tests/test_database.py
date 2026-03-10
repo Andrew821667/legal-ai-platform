@@ -224,6 +224,53 @@ def test_security_cooldown_suspicious_and_reset(test_db):
     assert test_db.count_security_blacklist() == 0
 
 
+def test_security_action_events_incidents_and_quarantine(test_db):
+    telegram_user_id = 991003
+    now = int(time.time())
+
+    test_db.record_security_action_event(telegram_user_id, "callback:any", now - 2)
+    test_db.record_security_action_event(telegram_user_id, "callback:any", now - 1)
+    test_db.record_security_action_event(telegram_user_id, "non_text:document", now - 1)
+
+    assert test_db.count_security_action_events_since(telegram_user_id, "callback:any", now - 10) == 2
+    assert test_db.count_security_action_events_since(telegram_user_id, "non_text:document", now - 10) == 1
+
+    incident_id = test_db.record_security_incident(
+        telegram_user_id=telegram_user_id,
+        chat_id=telegram_user_id,
+        update_id=123,
+        update_type="callback_query",
+        action="blocked_soft",
+        reason_code="callback_rate_limited",
+        severity="warning",
+        payload={"callback_count": 12},
+        ts_epoch=now,
+    )
+    assert incident_id > 0
+
+    incidents = test_db.list_security_incidents(limit=5, telegram_user_id=telegram_user_id)
+    assert incidents
+    assert incidents[0]["reason_code"] == "callback_rate_limited"
+    assert incidents[0]["action"] == "blocked_soft"
+
+    test_db.upsert_security_quarantine(
+        telegram_user_id,
+        status="active",
+        reason_code="from_user_is_bot",
+        strikes=3,
+        quarantined_until_epoch=now + 3600,
+    )
+    entry = test_db.get_security_quarantine_entry(telegram_user_id)
+    assert entry is not None
+    assert entry["status"] == "active"
+    assert entry["reason_code"] == "from_user_is_bot"
+    assert test_db.count_security_quarantine() == 1
+
+    removed = test_db.clear_security_quarantine(telegram_user_id)
+    assert removed == 1
+    assert test_db.get_security_quarantine_entry(telegram_user_id) is None
+
+
 def test_consent_flow_and_data_export(test_db):
     """Проверка цикла согласия/экспорта/отзыва согласия."""
     user_id = test_db.create_or_update_user(

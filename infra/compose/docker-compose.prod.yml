@@ -35,10 +35,13 @@ services:
     environment:
       CORE_API_URL: http://core-api:8000
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
+      ADMIN_SECURITY_STORE_PATH: ${ADMIN_SECURITY_STORE_PATH:-/app/data/web-admin-security.json}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
       core-api:
         condition: service_healthy
+    volumes:
+      - web_data:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 20s
@@ -69,7 +72,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${CORE_API_PUBLISH_PORT:-8000}:8000"
+      - "${CORE_API_BIND_HOST:-127.0.0.1}:${CORE_API_PUBLISH_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -332,6 +335,7 @@ services:
 
 volumes:
   postgres_data:
+  web_data:
   caddy_data:
   caddy_config:
   lead_bot_data:

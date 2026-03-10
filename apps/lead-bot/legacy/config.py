@@ -138,6 +138,42 @@ class Config:
         self.MAX_MESSAGE_LENGTH: int = int(os.getenv('MAX_MESSAGE_LENGTH', '4096'))
         self.RATE_LIMIT_REQUESTS: int = int(os.getenv('RATE_LIMIT_REQUESTS', '10'))
         self.RATE_LIMIT_WINDOW: int = int(os.getenv('RATE_LIMIT_WINDOW', '60'))  # секунды
+        self.SECURITY_HUMAN_ONLY_ENABLED: bool = os.getenv(
+            'SECURITY_HUMAN_ONLY_ENABLED',
+            '1',
+        ).strip().lower() in {'1', 'true', 'yes'}
+        self.SECURITY_CALLBACKS_PER_MINUTE: int = max(
+            1,
+            int(os.getenv('SECURITY_CALLBACKS_PER_MINUTE', '12')),
+        )
+        self.SECURITY_CALLBACK_DUPLICATE_WINDOW_SECONDS: int = max(
+            1,
+            int(os.getenv('SECURITY_CALLBACK_DUPLICATE_WINDOW_SECONDS', '8')),
+        )
+        self.SECURITY_CALLBACK_DUPLICATE_BURST: int = max(
+            1,
+            int(os.getenv('SECURITY_CALLBACK_DUPLICATE_BURST', '2')),
+        )
+        self.SECURITY_NON_TEXT_PER_HOUR: int = max(
+            1,
+            int(os.getenv('SECURITY_NON_TEXT_PER_HOUR', '10')),
+        )
+        self.SECURITY_QUARANTINE_MINUTES: int = max(
+            1,
+            int(os.getenv('SECURITY_QUARANTINE_MINUTES', '60')),
+        )
+        self.SECURITY_QUARANTINE_STRIKES: int = max(
+            1,
+            int(os.getenv('SECURITY_QUARANTINE_STRIKES', '3')),
+        )
+        self.SECURITY_BLACKLIST_STRIKES: int = max(
+            self.SECURITY_QUARANTINE_STRIKES + 1,
+            int(os.getenv('SECURITY_BLACKLIST_STRIKES', '6')),
+        )
+        self.SECURITY_ALERT_BURST_THRESHOLD: int = max(
+            1,
+            int(os.getenv('SECURITY_ALERT_BURST_THRESHOLD', '5')),
+        )
 
         # Настройки email/SMTP
         self.SMTP_SERVER: str = os.getenv('SMTP_SERVER', 'smtp.gmail.com')

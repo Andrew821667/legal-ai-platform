@@ -7,6 +7,7 @@ import sqlite3
 import logging
 import json
 import os
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -408,6 +409,69 @@ class Database:
                 CREATE TABLE IF NOT EXISTS security_suspicious_users (
                     telegram_user_id INTEGER PRIMARY KEY,
                     strike_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            # Таблица action-событий для callback/non-text антиабуза.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_action_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_user_id INTEGER NOT NULL,
+                    action_key TEXT NOT NULL,
+                    ts_epoch INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_action_events_user_key_ts "
+                "ON security_action_events(telegram_user_id, action_key, ts_epoch)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_action_events_ts "
+                "ON security_action_events(ts_epoch)"
+            )
+
+            # Таблица security-инцидентов для аудита.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_incidents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_user_id INTEGER,
+                    chat_id INTEGER,
+                    update_id INTEGER,
+                    update_type TEXT,
+                    action TEXT NOT NULL,
+                    reason_code TEXT NOT NULL,
+                    severity TEXT NOT NULL DEFAULT 'warning',
+                    payload_json TEXT,
+                    ts_epoch INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_incidents_user_ts "
+                "ON security_incidents(telegram_user_id, ts_epoch DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_security_incidents_reason_ts "
+                "ON security_incidents(reason_code, ts_epoch DESC)"
+            )
+
+            # Таблица карантина пользователей.
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_quarantine (
+                    telegram_user_id INTEGER PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    reason_code TEXT NOT NULL,
+                    strikes INTEGER NOT NULL DEFAULT 1,
+                    quarantined_until_epoch INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -852,6 +916,245 @@ class Database:
         finally:
             conn.close()
 
+    def record_security_action_event(self, telegram_user_id: int, action_key: str, ts_epoch: int) -> None:
+        """Сохраняет action-событие для callback/non-text антиабуза."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_action_events (telegram_user_id, action_key, ts_epoch)
+                VALUES (?, ?, ?)
+                """,
+                (int(telegram_user_id), str(action_key), int(ts_epoch)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def prune_security_action_events(
+        self,
+        older_than_epoch: int,
+        telegram_user_id: int | None = None,
+        action_key: str | None = None,
+    ) -> int:
+        """Удаляет устаревшие action-события."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if telegram_user_id is None and action_key is None:
+                cursor.execute(
+                    "DELETE FROM security_action_events WHERE ts_epoch < ?",
+                    (int(older_than_epoch),),
+                )
+            elif telegram_user_id is not None and action_key is None:
+                cursor.execute(
+                    "DELETE FROM security_action_events WHERE telegram_user_id = ? AND ts_epoch < ?",
+                    (int(telegram_user_id), int(older_than_epoch)),
+                )
+            elif telegram_user_id is None and action_key is not None:
+                cursor.execute(
+                    "DELETE FROM security_action_events WHERE action_key = ? AND ts_epoch < ?",
+                    (str(action_key), int(older_than_epoch)),
+                )
+            else:
+                cursor.execute(
+                    """
+                    DELETE FROM security_action_events
+                    WHERE telegram_user_id = ? AND action_key = ? AND ts_epoch < ?
+                    """,
+                    (int(telegram_user_id), str(action_key), int(older_than_epoch)),
+                )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def count_security_action_events_since(self, telegram_user_id: int, action_key: str, since_epoch: int) -> int:
+        """Считает action-события пользователя по ключу за окно."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM security_action_events
+                WHERE telegram_user_id = ? AND action_key = ? AND ts_epoch > ?
+                """,
+                (int(telegram_user_id), str(action_key), int(since_epoch)),
+            )
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
+    def record_security_incident(
+        self,
+        *,
+        telegram_user_id: int | None = None,
+        chat_id: int | None = None,
+        update_id: int | None = None,
+        update_type: str = "",
+        action: str,
+        reason_code: str,
+        severity: str = "warning",
+        payload: dict | None = None,
+        ts_epoch: int | None = None,
+    ) -> int:
+        """Сохраняет security-инцидент для аудита."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            payload_text = json.dumps(payload or {}, ensure_ascii=False)[:4000]
+            cursor.execute(
+                """
+                INSERT INTO security_incidents (
+                    telegram_user_id,
+                    chat_id,
+                    update_id,
+                    update_type,
+                    action,
+                    reason_code,
+                    severity,
+                    payload_json,
+                    ts_epoch
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(telegram_user_id) if telegram_user_id is not None else None,
+                    int(chat_id) if chat_id is not None else None,
+                    int(update_id) if update_id is not None else None,
+                    str(update_type or ""),
+                    str(action),
+                    str(reason_code),
+                    str(severity or "warning"),
+                    payload_text,
+                    int(ts_epoch if ts_epoch is not None else time.time()),
+                ),
+            )
+            conn.commit()
+            return int(cursor.lastrowid or 0)
+        finally:
+            conn.close()
+
+    def list_security_incidents(self, limit: int = 100, telegram_user_id: int | None = None) -> List[Dict]:
+        """Возвращает свежие security-инциденты."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if telegram_user_id is None:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM security_incidents
+                    ORDER BY ts_epoch DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (max(1, int(limit)),),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM security_incidents
+                    WHERE telegram_user_id = ?
+                    ORDER BY ts_epoch DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (int(telegram_user_id), max(1, int(limit))),
+                )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def upsert_security_quarantine(
+        self,
+        telegram_user_id: int,
+        *,
+        status: str,
+        reason_code: str,
+        strikes: int,
+        quarantined_until_epoch: int | None,
+    ) -> None:
+        """Создает или обновляет карантин пользователя."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO security_quarantine (
+                    telegram_user_id,
+                    status,
+                    reason_code,
+                    strikes,
+                    quarantined_until_epoch,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                    status = excluded.status,
+                    reason_code = excluded.reason_code,
+                    strikes = excluded.strikes,
+                    quarantined_until_epoch = excluded.quarantined_until_epoch,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    int(telegram_user_id),
+                    str(status),
+                    str(reason_code),
+                    int(strikes),
+                    int(quarantined_until_epoch) if quarantined_until_epoch is not None else None,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_security_quarantine_entry(self, telegram_user_id: int) -> Optional[Dict]:
+        """Возвращает запись карантина пользователя."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT telegram_user_id, status, reason_code, strikes, quarantined_until_epoch, created_at, updated_at
+                FROM security_quarantine
+                WHERE telegram_user_id = ?
+                LIMIT 1
+                """,
+                (int(telegram_user_id),),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def clear_security_quarantine(self, telegram_user_id: int) -> int:
+        """Снимает карантин с пользователя."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "DELETE FROM security_quarantine WHERE telegram_user_id = ?",
+                (int(telegram_user_id),),
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+        finally:
+            conn.close()
+
+    def count_security_quarantine(self) -> int:
+        """Количество пользователей в активном карантине."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM security_quarantine")
+            row = cursor.fetchone()
+            return int(row[0] if row else 0)
+        finally:
+            conn.close()
+
     def reset_security_suspicious(self) -> int:
         """Очищает счетчик suspicious пользователей."""
         conn = self.get_connection()
@@ -880,9 +1183,11 @@ class Database:
         cursor = conn.cursor()
         try:
             cursor.execute("DELETE FROM security_message_events")
+            cursor.execute("DELETE FROM security_action_events")
             cursor.execute("DELETE FROM security_token_usage_daily")
             cursor.execute("DELETE FROM security_cooldowns")
             cursor.execute("DELETE FROM security_suspicious_users")
+            cursor.execute("DELETE FROM security_quarantine")
             if clear_blacklist:
                 cursor.execute("DELETE FROM security_blacklist")
             conn.commit()

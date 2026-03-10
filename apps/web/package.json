@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "admin:generate-security": "node --no-warnings --experimental-strip-types scripts/generate-admin-security.mjs",
+    "test:security": "node --no-warnings --test --experimental-strip-types lib/*.test.mjs"
   },
   "keywords": [],
   "author": "",

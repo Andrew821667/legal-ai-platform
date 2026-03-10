@@ -38,8 +38,10 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [inputPassword, setInputPassword] = useState('');
+  const [inputTotp, setInputTotp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
   const [activeTab, setActiveTab] = useState<'seo' | 'technical' | 'github' | 'automation'>('seo');
   const [githubData, setGithubData] = useState<any>(null);
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
@@ -176,6 +178,7 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
   const handleClose = () => {
     setIsOpen(false);
     setInputPassword('');
+    setInputTotp('');
     setError('');
     setShowPassword(false);
     // Не сбрасываем аутентификацию при закрытии
@@ -187,18 +190,20 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
       const response = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: inputPassword }),
+        body: JSON.stringify({ password: inputPassword, totp: inputTotp }),
       });
       const data = await response.json();
       if (!response.ok || !data?.ok) {
-        throw new Error(data?.detail || 'Неверный пароль');
+        throw new Error(data?.detail || 'Неверные учетные данные');
       }
       setIsAuthenticated(true);
       setError('');
       setInputPassword('');
+      setInputTotp('');
     } catch (err: any) {
-      setError(err?.message || 'Неверный пароль');
+      setError(err?.message || 'Неверные учетные данные');
       setInputPassword('');
+      setInputTotp('');
     }
   };
 
@@ -210,7 +215,28 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
     }
     setIsAuthenticated(false);
     setInputPassword('');
+    setInputTotp('');
     setError('');
+  };
+
+  const handleLogoutAll = async () => {
+    setIsRevokingAll(true);
+    try {
+      const response = await fetch('/api/admin/auth', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'all' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.detail || 'Не удалось завершить остальные сессии');
+      }
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось завершить остальные сессии');
+    } finally {
+      setIsRevokingAll(false);
+    }
   };
 
   // Данные для SEO - используем реальные данные из Analytics API или fallback на mock
@@ -310,12 +336,21 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                     </>
                   )}
                   {isAuthenticated && (
-                    <button
-                      onClick={handleLogout}
-                      className="text-sm text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition-colors"
-                    >
-                      Выйти
-                    </button>
+                    <>
+                      <button
+                        onClick={handleLogoutAll}
+                        disabled={isRevokingAll}
+                        className="text-sm text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isRevokingAll ? 'Завершаю...' : 'Выйти везде'}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="text-sm text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                      >
+                        Выйти
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={handleClose}
@@ -344,7 +379,7 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                           Авторизация
                         </h3>
                         <p className="text-slate-400 text-sm">
-                          Введите пароль для доступа к панели администратора
+                          Введите пароль и одноразовый код для доступа к панели администратора
                         </p>
                       </div>
 
@@ -386,6 +421,26 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                               {error}
                             </motion.p>
                           )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-2">
+                            TOTP код
+                          </label>
+                          <input
+                            type="text"
+                            value={inputTotp}
+                            onChange={(e) => {
+                              setInputTotp(e.target.value.replace(/\D/g, '').slice(0, 6));
+                              setError('');
+                            }}
+                            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                            placeholder="6 цифр из Authenticator"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                          />
                         </div>
 
                         <button

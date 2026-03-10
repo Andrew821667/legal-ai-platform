@@ -37,7 +37,9 @@ CORE_API_URL=http://127.0.0.1:8001
 NEXT_PUBLIC_CORE_API_URL=http://127.0.0.1:8001
 CORE_API_BOT_KEY=...
 CORE_API_ADMIN_KEY=...
-ADMIN_PANEL_PASSWORD=...
+ADMIN_PANEL_PASSWORD_HASH=...
+ADMIN_PANEL_TOTP_SECRET=...
+ADMIN_PANEL_SESSION_SECRET=...
 ```
 
 Запуск:
@@ -52,11 +54,17 @@ npm run dev
 npm run build
 ```
 
+Генерация admin security env:
+
+```bash
+npm run admin:generate-security
+```
+
 ## Интеграции
 
 - `POST /api/leads` проксирует лиды в `core-api`
 - `/api/admin/*` работает через server-side прокси и не должен светить admin credentials в клиент
-- `/admin` использует пароль из `ADMIN_PANEL_PASSWORD`
+- `/admin` использует `bcrypt`-хэш пароля, TOTP и серверную revocable-сессию
 
 ## Важные правила
 

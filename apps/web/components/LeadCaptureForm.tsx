@@ -3,8 +3,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+import TurnstileWidget from "@/components/TurnstileWidget";
+
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
+
+const HONEYPOT_FIELD_NAME =
+  (process.env.NEXT_PUBLIC_LEAD_FORM_HONEYPOT_FIELD || "company_website").trim() || "company_website";
+const TURNSTILE_SITE_KEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "").trim();
+const TURNSTILE_CHALLENGE_MODE = ((process.env.NEXT_PUBLIC_LEAD_FORM_CHALLENGE_MODE || "off").trim().toLowerCase());
 
 declare global {
   interface WindowEventMap {
@@ -30,6 +37,10 @@ export default function LeadCaptureForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [honeypotValue, setHoneypotValue] = useState("");
+  const [challengeRequired, setChallengeRequired] = useState(TURNSTILE_CHALLENGE_MODE === "always");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [startedAtMs] = useState(() => Date.now());
 
   useEffect(() => {
     const handler = (event: CustomEvent<{ offer: LeadOffer }>) => {
@@ -76,6 +87,14 @@ export default function LeadCaptureForm() {
       setError("Нужно согласие на обработку персональных данных.");
       return;
     }
+    if (challengeRequired && !TURNSTILE_SITE_KEY) {
+      setError("Форма временно требует дополнительную проверку, но challenge не настроен на сайте.");
+      return;
+    }
+    if (challengeRequired && TURNSTILE_SITE_KEY && !challengeToken) {
+      setError("Подтвердите, что заявку отправляет человек.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -88,15 +107,29 @@ export default function LeadCaptureForm() {
           segment,
           message,
           offer,
+          turnstile_token: challengeToken,
+          _started_at_ms: startedAtMs,
+          [HONEYPOT_FIELD_NAME]: honeypotValue,
           ...utm,
         }),
       });
-      const data = (await response.json()) as { detail?: string; message?: string };
+      const data = (await response.json()) as {
+        detail?: string;
+        message?: string;
+        challenge_required?: boolean;
+      };
       if (!response.ok) {
+        if (data.challenge_required) {
+          setChallengeRequired(true);
+        }
         throw new Error(data.detail || "Не удалось отправить заявку");
       }
       setSuccess(data.message || "Заявка отправлена.");
       setMessage("");
+      setChallengeToken("");
+      if (TURNSTILE_CHALLENGE_MODE !== "always") {
+        setChallengeRequired(false);
+      }
     } catch (e: unknown) {
       const text = e instanceof Error ? e.message : "Ошибка отправки заявки";
       setError(text);
@@ -118,6 +151,20 @@ export default function LeadCaptureForm() {
           </p>
 
           <form onSubmit={onSubmit} className="space-y-4">
+            <label
+              className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+              aria-hidden="true"
+            >
+              <span>{HONEYPOT_FIELD_NAME}</span>
+              <input
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypotValue}
+                onChange={(e) => setHoneypotValue(e.target.value)}
+              />
+            </label>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-1">Имя</span>
@@ -204,6 +251,12 @@ export default function LeadCaptureForm() {
                 .
               </span>
             </label>
+
+            <TurnstileWidget
+              siteKey={TURNSTILE_SITE_KEY}
+              enabled={challengeRequired && !!TURNSTILE_SITE_KEY}
+              onToken={setChallengeToken}
+            />
 
             {error && (
               <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">

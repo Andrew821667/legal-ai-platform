@@ -1,6 +1,16 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  evaluateLeadSubmission,
+  getLeadSecurityConfig,
+  normalizeLeadContact,
+  recordLeadAttempt,
+  rememberAcceptedLeadFingerprint,
+  resolveLeadClientIp,
+  verifyTurnstileToken,
+} from "@/lib/lead-security";
+
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
 const CORE_API_BOT_KEY =
@@ -25,6 +35,10 @@ interface LeadRequestBody {
   utm_content?: string;
   utm_term?: string;
   landing_page?: string;
+  turnstile_token?: string;
+  _started_at_ms?: number | string;
+  _honeypot?: string;
+  [key: string]: unknown;
 }
 
 function clean(input: unknown, maxLen = 512): string | undefined {
@@ -60,6 +74,8 @@ function parseCoreError(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const securityConfig = getLeadSecurityConfig();
+
   if (!CORE_API_BOT_KEY) {
     return NextResponse.json(
       { detail: "CORE_API_BOT_KEY/API_KEY_BOT is not configured on web server" },
@@ -79,6 +95,7 @@ export async function POST(request: NextRequest) {
   const message = clean(payload.message, 4000);
   const offer = toOffer(payload.offer);
   const segment = toSegment(payload.segment);
+  const turnstileToken = clean(payload.turnstile_token, 2048) || "";
 
   if (!contact) {
     return NextResponse.json(
@@ -87,10 +104,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
+  const normalizedContact = normalizeLeadContact(contact);
+  const ip = resolveLeadClientIp(request.headers);
   const userAgent = request.headers.get("user-agent") || "unknown";
   const landingPage = clean(payload.landing_page, 512);
   const utmSource = clean(payload.utm_source, 255);
@@ -98,41 +113,73 @@ export async function POST(request: NextRequest) {
   const utmCampaign = clean(payload.utm_campaign, 255);
   const utmContent = clean(payload.utm_content, 255);
   const utmTerm = clean(payload.utm_term, 255);
+  const nowMs = Date.now();
 
+  const leadProtection = evaluateLeadSubmission(
+    {
+      payload: payload as Record<string, unknown>,
+      normalizedContact,
+      ip,
+      userAgent,
+      nowMs,
+    },
+    securityConfig,
+  );
+
+  recordLeadAttempt(leadProtection, securityConfig, nowMs);
+
+  if (leadProtection.action === "silent_drop" || leadProtection.action === "duplicate") {
+    return NextResponse.json(
+      {
+        ok: true,
+        deduped: leadProtection.action === "duplicate",
+        message: leadProtection.detail,
+      },
+      { status: 200 },
+    );
+  }
+
+  if (leadProtection.action === "rate_limit") {
+    return NextResponse.json(
+      {
+        detail: leadProtection.detail,
+        reason_codes: leadProtection.reasonCodes,
+      },
+      { status: leadProtection.status },
+    );
+  }
+
+  if (leadProtection.requiresChallenge) {
+    if (!securityConfig.turnstileSecretKey) {
+      return NextResponse.json(
+        { detail: "Challenge protection is not configured on server" },
+        { status: 500 },
+      );
+    }
+
+    const isTurnstileValid = await verifyTurnstileToken(turnstileToken, ip, securityConfig.turnstileSecretKey);
+    if (!isTurnstileValid) {
+      return NextResponse.json(
+        {
+          detail: "Нужна дополнительная проверка формы. Подтвердите, что вы не бот, и отправьте заявку снова.",
+          challenge_required: true,
+          reason_codes: leadProtection.reasonCodes,
+        },
+        { status: 403 },
+      );
+    }
+  }
+
+  const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
+  const userAgentHash = crypto.createHash("sha256").update(userAgent).digest("hex").slice(0, 12);
   const notesParts = [
     `offer=${offer}`,
-    `ip=${ip}`,
-    `ua=${userAgent}`,
+    `ip_hash=${ipHash}`,
+    `ua_hash=${userAgentHash}`,
     landingPage ? `landing=${landingPage}` : undefined,
     message ? `message=${message}` : undefined,
+    leadProtection.reasonCodes.length > 0 ? `security_flags=${leadProtection.reasonCodes.join(",")}` : undefined,
   ].filter(Boolean);
-
-  const day = new Date().toISOString().slice(0, 10);
-  const idempotencyFingerprint = crypto
-    .createHash("sha256")
-    .update(
-      JSON.stringify({
-        day,
-        contact: contact.toLowerCase(),
-        offer,
-        segment,
-        name: name || "",
-        message: message || "",
-        landing_page: landingPage || "",
-        utm_source: utmSource || "",
-        utm_medium: utmMedium || "",
-        utm_campaign: utmCampaign || "",
-        utm_content: utmContent || "",
-        utm_term: utmTerm || "",
-      }),
-    )
-    .digest("hex")
-    .slice(0, 48);
-  const idempotencyKey = `web-lead-${crypto
-    .createHash("sha256")
-    .update(`${day}:${idempotencyFingerprint}`)
-    .digest("hex")
-    .slice(0, 48)}`;
 
   const corePayload = {
     source: "website_form",
@@ -152,7 +199,7 @@ export async function POST(request: NextRequest) {
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": CORE_API_BOT_KEY,
-      "Idempotency-Key": idempotencyKey,
+      "Idempotency-Key": leadProtection.idempotencyKey,
     },
     body: JSON.stringify(corePayload),
     cache: "no-store",
@@ -163,6 +210,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: parseCoreError(raw) }, { status: response.status });
   }
 
+  rememberAcceptedLeadFingerprint(leadProtection.fingerprint, nowMs);
   const data = raw ? JSON.parse(raw) : {};
   return NextResponse.json(
     {

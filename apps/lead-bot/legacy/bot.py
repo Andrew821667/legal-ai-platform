@@ -33,6 +33,8 @@ from telegram.ext import (
 
 import database
 import content
+import security
+import utils
 from config import Config
 from handlers.admin import (
     blacklist_command,
@@ -193,6 +195,234 @@ def _is_legacy_owner_intro_text(text: str) -> bool:
     return hits >= 3 and len(normalized) >= 180
 
 
+def _classify_message_kind(message: Any) -> str:
+    if getattr(message, "text", None):
+        return "text"
+    if getattr(message, "contact", None) is not None:
+        return "contact"
+    if getattr(message, "document", None) is not None:
+        return "document"
+    if getattr(message, "photo", None):
+        return "photo"
+    if getattr(message, "video", None) is not None:
+        return "video"
+    if getattr(message, "audio", None) is not None:
+        return "audio"
+    if getattr(message, "voice", None) is not None:
+        return "voice"
+    if getattr(message, "sticker", None) is not None:
+        return "sticker"
+    if getattr(message, "animation", None) is not None:
+        return "animation"
+    if getattr(message, "location", None) is not None:
+        return "location"
+    return "unknown"
+
+
+def _security_alert_text(
+    decision: security.SecurityDecision,
+    *,
+    update_type: str,
+    user_id: int | None,
+    chat_id: int | None,
+) -> str:
+    lines = [
+        "🛡️ Security alert",
+        f"Action: {decision.action}",
+        f"Reason: {decision.reason_code or 'unknown'}",
+        f"Update: {update_type}",
+        f"User ID: {user_id or 'n/a'}",
+        f"Chat ID: {chat_id or 'n/a'}",
+    ]
+    if decision.details:
+        details_text = ", ".join(f"{key}={value}" for key, value in sorted(decision.details.items()))
+        if details_text:
+            lines.append(f"Details: {details_text[:500]}")
+    return "\n".join(lines)
+
+
+async def _send_security_alert(
+    context: ContextTypes.DEFAULT_TYPE,
+    decision: security.SecurityDecision,
+    *,
+    update_type: str,
+    user_id: int | None,
+    chat_id: int | None,
+) -> None:
+    if not decision.alert_admin:
+        return
+    try:
+        await utils.telegram_call_with_retry(
+            lambda: context.bot.send_message(
+                chat_id=config.ADMIN_TELEGRAM_ID,
+                text=_security_alert_text(
+                    decision,
+                    update_type=update_type,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                ),
+            ),
+            action="security_alert",
+            max_retries=2,
+            base_delay=1.0,
+        )
+    except Exception as error:
+        logger.warning("Failed to send security alert: %s", error)
+
+
+async def _apply_security_decision(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    decision: security.SecurityDecision,
+    *,
+    update_type: str,
+    user_id: int | None,
+    chat_id: int | None,
+    notify_user: bool = True,
+) -> bool:
+    if decision.allowed:
+        return True
+
+    await _send_security_alert(
+        context,
+        decision,
+        update_type=update_type,
+        user_id=user_id,
+        chat_id=chat_id,
+    )
+
+    if not notify_user or not decision.user_message:
+        return False
+
+    query = update.callback_query
+    if query is not None:
+        try:
+            await utils.safe_answer_callback(
+                query,
+                text=decision.user_message,
+                show_alert=True,
+                action="security_callback_block",
+            )
+        except Exception as error:
+            logger.warning("Failed to answer blocked callback: %s", error)
+        return False
+
+    message = _extract_incoming_message(update)
+    if message is not None:
+        try:
+            await utils.safe_reply_text(
+                message,
+                decision.user_message,
+                action="security_message_block",
+            )
+        except Exception as error:
+            logger.warning("Failed to notify blocked user: %s", error)
+    return False
+
+
+async def _guard_message_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    message = _extract_incoming_message(update)
+    if message is None:
+        return True
+
+    from_user = getattr(message, "from_user", None)
+    chat = getattr(message, "chat", None)
+    user_id = getattr(from_user, "id", None)
+    chat_id = getattr(chat, "id", None)
+    chat_type = str(getattr(chat, "type", "")).lower()
+
+    decision = security.security_manager.evaluate_human_actor(
+        user_id=user_id,
+        chat_id=chat_id,
+        chat_type=chat_type,
+        is_bot=bool(getattr(from_user, "is_bot", False)),
+        via_bot=getattr(message, "via_bot", None) is not None,
+        sender_business_bot=getattr(message, "sender_business_bot", None) is not None,
+        update_type="business_message" if _is_business_update(update) else "message",
+        update_id=update.update_id,
+    )
+    if not decision.allowed:
+        return await _apply_security_decision(
+            update,
+            context,
+            decision,
+            update_type="business_message" if _is_business_update(update) else "message",
+            user_id=user_id,
+            chat_id=chat_id,
+            notify_user=not _is_business_update(update),
+        )
+
+    message_kind = _classify_message_kind(message)
+    if message_kind != "text":
+        decision = security.security_manager.check_non_text_gate(
+            user_id=user_id,
+            chat_id=chat_id,
+            message_kind=message_kind,
+            update_id=update.update_id,
+        )
+        if not decision.allowed:
+            return await _apply_security_decision(
+                update,
+                context,
+                decision,
+                update_type="business_message" if _is_business_update(update) else "message",
+                user_id=user_id,
+                chat_id=chat_id,
+                notify_user=not _is_business_update(update),
+            )
+
+    return True
+
+
+async def _guard_callback_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    query = update.callback_query
+    if query is None:
+        return True
+
+    from_user = getattr(query, "from_user", None)
+    message = getattr(query, "message", None)
+    chat = getattr(message, "chat", None)
+    user_id = getattr(from_user, "id", None)
+    chat_id = getattr(chat, "id", None)
+    chat_type = str(getattr(chat, "type", "")).lower()
+
+    decision = security.security_manager.evaluate_human_actor(
+        user_id=user_id,
+        chat_id=chat_id,
+        chat_type=chat_type,
+        is_bot=bool(getattr(from_user, "is_bot", False)),
+        update_type="callback_query",
+        update_id=update.update_id,
+    )
+    if not decision.allowed:
+        return await _apply_security_decision(
+            update,
+            context,
+            decision,
+            update_type="callback_query",
+            user_id=user_id,
+            chat_id=chat_id,
+        )
+
+    decision = security.security_manager.check_callback_gate(
+        user_id=user_id,
+        chat_id=chat_id,
+        callback_data=query.data or "",
+        update_id=update.update_id,
+    )
+    if not decision.allowed:
+        return await _apply_security_decision(
+            update,
+            context,
+            decision,
+            update_type="callback_query",
+            user_id=user_id,
+            chat_id=chat_id,
+        )
+
+    return True
+
+
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Общий роутер входящих сообщений.
@@ -250,7 +480,39 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                                 chat_id,
                                 send_error,
                             )
+            elif reason in {
+                "from_user_is_bot",
+                "sender_business_bot",
+                "via_bot_message",
+                "outgoing_private_message",
+                "invalid_sender_chat_ids",
+            }:
+                actor = getattr(message, "from_user", None)
+                chat = getattr(message, "chat", None)
+                decision = security.security_manager.register_actor_violation(
+                    user_id=getattr(actor, "id", None),
+                    reason_code=reason,
+                    payload={
+                        "chat_id": getattr(chat, "id", None),
+                        "chat_type": str(getattr(chat, "type", "")).lower(),
+                    },
+                    chat_id=getattr(chat, "id", None),
+                    update_id=update.update_id,
+                    update_type="business_message",
+                )
+                await _apply_security_decision(
+                    update,
+                    context,
+                    decision,
+                    update_type="business_message",
+                    user_id=getattr(actor, "id", None),
+                    chat_id=getattr(chat, "id", None),
+                    notify_user=False,
+                )
             logger.info("Skip business update %s: reason=%s", update.update_id, reason)
+            return
+
+        if not await _guard_message_update(update, context):
             return
 
         connection_id = getattr(message, "business_connection_id", None)
@@ -273,6 +535,8 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if from_user and from_user.id == context.bot.id:
             logger.info("Skip self message")
             return
+        if not await _guard_message_update(update, context):
+            return
         await handle_message(update, context)
 
 
@@ -282,6 +546,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     query = update.callback_query
     if not query:
+        return
+
+    if not await _guard_callback_update(update, context):
         return
 
     data = query.data or ""
