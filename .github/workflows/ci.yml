@@ -27,14 +27,16 @@ jobs:
           - suite: core-api
             package: core-api
             path: apps/core-api/tests/
+            extra_args: --with httpx
           - suite: news
             package: news
             path: apps/news/tests/
+            extra_args: ""
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.path }} -q
+      - run: uv run ${{ matrix.extra_args }} --package ${{ matrix.package }} pytest ${{ matrix.path }} -q
 
   test-lead-bot-legacy:
     runs-on: ubuntu-latest
@@ -50,7 +52,7 @@ jobs:
           OPENAI_API_KEY=sk-test-key
           ADMIN_TELEGRAM_ID=1
           CORE_API_SYNC_ENABLED=0
-          ../../.venv-legacy/bin/python -m pytest tests -q
+          ../../../.venv-legacy/bin/python -m pytest tests -q
 
   web-build:
     runs-on: ubuntu-latest
