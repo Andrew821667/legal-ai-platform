@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EXTERNAL_LINKS, ROUTES, leadBotDeepLink } from "@/lib/links";
+import LegalDisclaimer from "@/components/LegalDisclaimer";
 
 type NavItem = {
   name: string;
@@ -202,6 +203,7 @@ export default function Footer() {
               <strong className="text-slate-400">Legal AI PRO</strong>: внедрение AI в юридическую функцию,
               автоматизация договорных и типовых правовых процессов, проектирование legal ops контуров.
             </p>
+            <LegalDisclaimer className="mx-auto max-w-4xl text-slate-500" />
             <div className="pt-2 flex items-center justify-center gap-4 text-xs">
               <span className="text-emerald-400">
                 ✓ Обновлено:{" "}

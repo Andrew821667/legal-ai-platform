@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+import LegalDisclaimer from "@/components/LegalDisclaimer";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
@@ -149,6 +150,8 @@ export default function LeadCaptureForm() {
             Запрос: <span className="font-semibold">{offerLabels[offer]}</span>. Ответим в Telegram
             или по телефону.
           </p>
+
+          <LegalDisclaimer variant="panel" className="mb-6" />
 
           <form onSubmit={onSubmit} className="space-y-4">
             <label

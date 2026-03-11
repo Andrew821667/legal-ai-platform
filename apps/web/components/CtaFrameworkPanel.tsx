@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ROUTES, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
+import LegalDisclaimer from "@/components/LegalDisclaimer";
 
 type CtaFrameworkPanelProps = {
   leadStart: string;
@@ -80,6 +81,7 @@ export default function CtaFrameworkPanel({
           🧰 Reader: Решения
         </a>
       </div>
+      <LegalDisclaimer className="mt-4 text-slate-400" />
     </div>
   );
 }

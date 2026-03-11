@@ -23,8 +23,8 @@
 - `[x]` `core-api`: внешний perimeter ужесточен, лишняя экспозиция сокращена.
 - `[x]` Зависимости обновлены, открытые Dependabot alerts закрыты.
 - `[~]` Убрать остаточные слабые dev/default значения и legacy-упоминания из всех docs/examples.
-- `[ ]` Завести единый `secret inventory` по всем сервисам.
-- `[ ]` Завести `secret rotation checklist` с датой последней ротации.
+- `[x]` Заведен единый `secret inventory` по всем сервисам.
+- `[x]` Заведен `secret rotation checklist` с журналом и правилами ротации.
 - `[!]` Реально ротировать боевые токены/ключи по регламенту, не только держать код готовым.
 
 ## 2. Lead-bot
@@ -60,7 +60,7 @@
 - `[x]` `contract-ai`: включен в основной CI минимумом smoke/build/type-check.
 - `[x]` `web`: reader conversion funnel закрыт admin session.
 - `[~]` `contract-ai` пока в CI не покрыт полноценным test-matrix, только разумным базовым контуром.
-- `[~]` Явный legal disclaimer в web еще нужно поставить системно в нужные точки интерфейса.
+- `[x]` Явный legal disclaimer системно добавлен в web через CTA/lead/footer.
 
 ## 5. CI/CD и репозиторий
 - `[x]` GitHub Actions починены: `CI/CD` и `Security` проходят в текущей private-repo схеме.
@@ -92,7 +92,7 @@
 - `[ ]` Проверить фактические публичные URL политик и их актуальность.
 
 ## Осталось в первую очередь
-- `[ ]` Secret inventory + rotation checklist.
+- `[x]` Secret inventory + rotation checklist.
 - `[ ]` Web disclaimer в системных точках интерфейса.
 - `[ ]` Pricing/product sync между bot/web/contract-ai.
 - `[ ]` Legacy refactor: split files + remove wildcard imports + config singleton.
