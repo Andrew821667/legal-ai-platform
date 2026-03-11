@@ -38,6 +38,8 @@ def test_database_initialization(test_db):
     assert 'conversations' in tables, "Таблица conversations не создана"
     assert 'leads' in tables, "Таблица leads не создана"
     assert 'admin_notifications' in tables, "Таблица admin_notifications не создана"
+    assert 'chat_states' in tables, "Таблица chat_states не создана"
+    assert 'business_connection_states' in tables, "Таблица business_connection_states не создана"
 
     conn.close()
 
