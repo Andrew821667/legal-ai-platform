@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-legalai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
-      POSTGRES_DB: ${POSTGRES_DB:-legalai}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
     ports:
       - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
     volumes:
@@ -17,7 +17,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://legalaipro.ru}
     ports:

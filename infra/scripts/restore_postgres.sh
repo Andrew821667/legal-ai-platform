@@ -8,8 +8,8 @@ if [ -z "$DUMP_FILE" ]; then
 fi
 
 CONTAINER=${POSTGRES_CONTAINER:-legal-ai-postgres}
-PGUSER=${PGUSER:-legalai}
-PGDB=${PGDB:-legalai}
+PGUSER=${PGUSER:-legalai_app}
+PGDB=${PGDB:-legalai_platform}
 
 docker exec -i "$CONTAINER" pg_restore -U "$PGUSER" -d "$PGDB" --clean --if-exists < "$DUMP_FILE"
 echo "Restore completed from: $DUMP_FILE"

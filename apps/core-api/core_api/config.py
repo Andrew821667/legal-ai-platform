@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     app_name: str = "legal-ai-core-api"
     environment: str = "dev"
-    database_url: str = "postgresql+psycopg://legalai:legalai@localhost:5432/legalai"
+    database_url: str = "postgresql+psycopg://legalai_app:change_me_local_only@localhost:5432/legalai_platform"
     cors_origins: str = "http://localhost:3000"
     alert_bot_token: str | None = None
     alert_chat_id: str | None = None

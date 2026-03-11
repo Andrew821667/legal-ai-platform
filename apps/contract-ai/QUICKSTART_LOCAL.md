@@ -1,151 +1,99 @@
-# 🚀 Quick Start - Локальный запуск
+# Quick Start - Локальный запуск Contract AI
+
+Этот файл описывает только безопасный локальный запуск текущей версии. Старые demo-сценарии и предсказуемые токены больше не считаются штатным режимом.
+
+## Что считается актуальным
+
+- локальный запуск для разработки и smoke-проверки;
+- вход через реальные учетные записи, созданные локальным bootstrap-скриптом;
+- pilot-first модель без публичного self-serve billing по умолчанию.
 
 ## Предварительные требования
 
 - Python 3.11+
-- 4GB+ RAM
-- Установленные зависимости (requirements.txt)
+- Node.js 20+ для frontend
+- локальный `.env` на основе `.env.example`
 
-## Шаг 1: Настройка окружения
+## 1. Настройка окружения
 
-Файл `.env` уже создан с базовыми настройками для SQLite.
+Создайте локальный `.env` и добавьте только нужные ключи провайдеров:
 
-**Добавьте API ключи** (опционально, для работы с LLM):
 ```bash
-nano .env
-
-# Добавьте хотя бы один ключ:
-OPENAI_API_KEY=sk-...
-# или
-ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env
 ```
 
-## Шаг 2: Инициализация базы данных
+Минимально проверьте:
+
+```bash
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+DEEPSEEK_API_KEY=
+CONTRACT_AI_SELF_SERVE_BILLING_ENABLED=false
+```
+
+## 2. Инициализация БД
 
 ```bash
 python scripts/init_db.py
 ```
 
-Это создаст:
-- ✅ SQLite базу данных (`contract_ai.db`)
-- ✅ Все таблицы (пользователи, контракты, метрики, feedback и т.д.)
-- ✅ Admin пользователя (email: `admin@contract-ai.com`)
-- ✅ Demo пользователя (email: `demo@contract-ai.com`)
-- ✅ Demo токен
+Скрипт создаст локальную БД и выведет временные пароли для bootstrap-пользователей. Не рассчитывайте на фиксированные demo-токены или заранее известные пароли: они больше не являются частью штатного сценария.
 
-## Шаг 3: Запуск приложения
+## 3. Запуск
 
-### Вариант A: Простой запуск (рекомендуется)
-
-```bash
-./start.sh
-```
-
-Или вручную:
+Streamlit UI:
 
 ```bash
 streamlit run app.py
 ```
 
-Приложение откроется на **http://localhost:8501**
+Backend API:
 
-### Вариант B: С FastAPI backend (для API)
-
-Терминал 1 - Backend:
 ```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Терминал 2 - Frontend:
+Адреса:
+
+- UI: `http://localhost:8501`
+- API docs: `http://localhost:8000/docs`
+
+## 4. Что проверить после запуска
+
+1. Войти под локально созданным admin-аккаунтом.
+2. Сменить временный пароль.
+3. Проверить загрузку документа и базовый анализ.
+4. Убедиться, что self-serve billing не активирован, если он не нужен для теста.
+
+## 5. Важные ограничения
+
+- `start_demo.py` считается только аварийным insecure demo-режимом и не должен использоваться по умолчанию.
+- Документация со старыми публичными IP, предсказуемыми demo-токенами и “готовым сервером в фоне” считается устаревшей.
+- Для production нужен отдельный контур секретов, БД и деплоя.
+
+## 6. Диагностика
+
+Переинициализация локальной SQLite БД:
+
 ```bash
-streamlit run app.py
+rm -f contract_ai.db
+python scripts/init_db.py
 ```
 
-- **Streamlit UI**: http://localhost:8501
-- **FastAPI Docs**: http://localhost:8000/docs
+Установка зависимостей:
 
-## Учетные данные
-
-После инициализации БД вы получите:
-
-👤 **Admin User**:
-- Email: `admin@contract-ai.com`
-- Password: (см. вывод init_db.py)
-
-👤 **Demo User**:
-- Email: `demo@contract-ai.com`
-- Password: (см. вывод init_db.py)
-
-🎟️ **Demo Token**: `demo-local-dev-token-12345`
-
-## Возможности без API ключей
-
-Даже без LLM API ключей, вы можете:
-
-✅ Использовать демо режим
-✅ Просматривать интерфейс
-✅ Тестировать базовые функции
-✅ Загружать документы
-✅ Работать с базой знаний
-✅ Просматривать аналитику
-
-## Первые шаги
-
-1. **Откройте** http://localhost:8501
-2. **Войдите** с admin@contract-ai.com
-3. **Перейдите** в раздел "Настройки" → смените пароль
-4. **Исследуйте**:
-   - 📄 Генератор договоров
-   - 🔍 Анализатор договоров
-   - 📊 Аналитика
-   - 🔐 Админ-панель
-   - 📚 База знаний
-
-## Устранение неполадок
-
-### База данных не создается
-```bash
-rm contract_ai.db  # Удалить старую БД
-python scripts/init_db.py  # Создать заново
-```
-
-### Ошибки импорта
 ```bash
 pip install -r requirements.txt
 ```
 
-### Порт 8501 занят
-```bash
-streamlit run app.py --server.port 8502
-```
+Запуск тестов:
 
-## Дополнительно
-
-### Создание миграций (Alembic)
-```bash
-cd database/migrations
-alembic revision --autogenerate -m "migration name"
-alembic upgrade head
-```
-
-### Retraining ML модели
-```bash
-python scripts/retrain_risk_model.py
-```
-
-### Тестирование
 ```bash
 pytest tests/ -v
 ```
 
-## Docker (альтернатива)
+## Смежные документы
 
-```bash
-docker-compose up -d
-```
-
-См. `DOCKER_SETUP.md` для подробностей.
-
----
-
-**Готово к работе!** 🎉
+- `README.md` — обзор подсистемы
+- `DOCKER_SETUP.md` — контейнерный запуск
+- `TESTING_GUIDE.md` — ручные проверки и smoke

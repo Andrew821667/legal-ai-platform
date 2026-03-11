@@ -6,8 +6,8 @@ BACKUP_DIR=${BACKUP_DIR:-/var/backups/legal-ai}
 mkdir -p "$BACKUP_DIR"
 
 CONTAINER=${POSTGRES_CONTAINER:-legal-ai-postgres}
-PGUSER=${PGUSER:-legalai}
-PGDB=${PGDB:-legalai}
+PGUSER=${PGUSER:-legalai_app}
+PGDB=${PGDB:-legalai_platform}
 
 docker exec "$CONTAINER" pg_dump -U "$PGUSER" -Fc "$PGDB" > "$BACKUP_DIR/legal_ai_$TIMESTAMP.dump"
 find "$BACKUP_DIR" -name '*.dump' -mtime +7 -delete

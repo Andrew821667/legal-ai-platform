@@ -19,7 +19,7 @@ echo "Ensuring Postgres is running..."
 $COMPOSE up -d postgres
 
 echo "Waiting for Postgres..."
-until $COMPOSE exec -T postgres pg_isready -U "${POSTGRES_USER:-legalai}" -d "${POSTGRES_DB:-legalai}" -q; do
+until $COMPOSE exec -T postgres pg_isready -U "${POSTGRES_USER:-legalai_app}" -d "${POSTGRES_DB:-legalai_platform}" -q; do
   sleep 1
 done
 

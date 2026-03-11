@@ -22,7 +22,7 @@
 - `[x]` `web-admin`: hash password + TOTP + persistent throttling + revokeable sessions.
 - `[x]` `core-api`: внешний perimeter ужесточен, лишняя экспозиция сокращена.
 - `[x]` Зависимости обновлены, открытые Dependabot alerts закрыты.
-- `[~]` Убрать остаточные слабые dev/default значения и legacy-упоминания из всех docs/examples.
+- `[~]` Убрать остаточные слабые dev/default значения и legacy-упоминания из docs/examples; критичные dev defaults и основные stale contract-ai quickstart/demo файлы уже очищены.
 - `[x]` Заведен единый `secret inventory` по всем сервисам.
 - `[x]` Заведен `secret rotation checklist` с журналом и правилами ротации.
 - `[!]` Реально ротировать боевые токены/ключи по регламенту, не только держать код готовым.
@@ -70,7 +70,7 @@
 - `[x]` Dependabot PR приведены в стабильное состояние.
 - `[x]` Docker images получают immutable tag по `github.sha`, а не только `latest`.
 - `[x]` В `.gitignore` добавлен `venv/`.
-- `[~]` Нужен отдельный проход по README/docs, чтобы убрать все устаревшие dev/security инструкции.
+- `[~]` Нужен отдельный проход по README/docs, чтобы убрать все устаревшие dev/security инструкции; критичные quickstart/demo хвосты уже почищены.
 - `[ ]` При необходимости расширить CI на более глубокие тесты `contract-ai` и интеграционные сценарии.
 
 ## 6. Product / UX / позиционирование
