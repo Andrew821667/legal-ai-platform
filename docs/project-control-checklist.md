@@ -36,10 +36,11 @@
 - `[x]` Consent больше не стоит жесткой стеной до базовой ценности.
 - `[x]` Добавлен legal disclaimer и обновлены consent-тексты.
 - `[x]` Введена retention policy для `conversations`.
+- `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
 - `[ ]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули.
 - `[ ]` Убрать wildcard imports и почистить import graph.
-- `[ ]` Перевести legacy config/init на единый singleton/cache pattern.
+- `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
 - `[x]` Исправлена ошибка `workers_activity() takes 2 positional arguments but 4 were given`.

@@ -10,7 +10,7 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import Config
+from config import get_config
 from database import Database
 from ai_brain import AIBrain
 from lead_qualifier import LeadQualifier

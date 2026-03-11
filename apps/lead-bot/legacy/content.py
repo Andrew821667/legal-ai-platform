@@ -6,11 +6,11 @@
 
 from __future__ import annotations
 
-from config import Config
+from config import get_config
 from telegram_ui import normalize_button_text
 
 
-config = Config()
+config = get_config()
 
 
 CONTACTS = {

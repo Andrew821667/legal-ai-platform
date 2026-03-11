@@ -2,10 +2,10 @@
 Тесты для config.py - проверка корректности конфигурации
 """
 import pytest
-from config import Config
+from config import get_config
 
 # Создаем экземпляр конфигурации для тестов
-config = Config()
+config = get_config()
 
 
 def test_required_variables():

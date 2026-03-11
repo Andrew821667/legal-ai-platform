@@ -7,8 +7,8 @@ import pytest
 def test_import_config():
     """Тест импорта config модуля"""
     try:
-        from config import Config
-        config = Config()
+        from config import get_config
+        config = get_config()
         assert config.TELEGRAM_BOT_TOKEN is not None
         assert config.OPENAI_API_KEY is not None
         assert config.ADMIN_TELEGRAM_ID > 0

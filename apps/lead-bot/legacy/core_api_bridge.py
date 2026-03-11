@@ -14,11 +14,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from config import Config
+from config import get_config
 import utils
 
 logger = logging.getLogger(__name__)
-config = Config()
+config = get_config()
 
 
 def _score_from_temperature(temperature: str | None) -> int | None:

@@ -10,10 +10,10 @@ from typing import Any, Awaitable, Callable, TypeVar
 
 from telegram import Update
 
-from config import Config
+from config import get_config
 
 logger = logging.getLogger("lead_perf")
-config = Config()
+config = get_config()
 T = TypeVar("T")
 
 

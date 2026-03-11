@@ -22,8 +22,8 @@ from telegram_ui import normalize_button_text
 import database
 import ai_brain
 import lead_qualifier
-from config import Config
-config = Config()
+from config import get_config
+config = get_config()
 import utils
 import email_sender
 import security

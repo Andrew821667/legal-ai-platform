@@ -11,11 +11,11 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from typing import Any, Dict, Optional
 
-from config import Config
+from config import get_config
 import database
 
 logger = logging.getLogger(__name__)
-config = Config()
+config = get_config()
 
 
 @dataclass(frozen=True)

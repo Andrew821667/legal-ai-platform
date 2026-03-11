@@ -36,7 +36,7 @@ import content
 import security
 import utils
 from lead_perf import log_update_timing, perf_start
-from config import Config
+from config import get_config
 from handlers.admin import (
     blacklist_command,
     edit_pdn_command,
@@ -88,7 +88,7 @@ from handlers.user import (
     user_agreement_command,
 )
 
-config = Config()
+config = get_config()
 
 log_dir = os.path.dirname(config.LOG_FILE)
 if log_dir:

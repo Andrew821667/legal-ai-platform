@@ -12,10 +12,10 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
-from config import Config
+from config import get_config
 from lead_perf import log_span_timing, perf_start
 import utils
-config = Config()
+config = get_config()
 
 logger = logging.getLogger(__name__)
 

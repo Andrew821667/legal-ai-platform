@@ -17,8 +17,8 @@ import database
 import ai_brain
 import lead_qualifier
 import admin_interface
-from config import Config
-config = Config()
+from config import get_config
+config = get_config()
 import utils
 import email_sender
 import security

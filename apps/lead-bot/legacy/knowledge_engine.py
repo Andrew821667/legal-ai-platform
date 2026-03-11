@@ -10,9 +10,9 @@ import json
 import math
 from typing import List, Dict, Optional, Tuple
 from openai import OpenAI
-from config import Config
+from config import get_config
 
-config = Config()
+config = get_config()
 
 logger = logging.getLogger(__name__)
 

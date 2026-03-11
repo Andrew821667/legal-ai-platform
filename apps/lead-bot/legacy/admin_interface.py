@@ -10,10 +10,10 @@ import urllib.request
 import urllib.error
 from typing import Dict
 import database
-from config import Config
+from config import get_config
 from lead_perf import log_span_timing, perf_start
 
-config = Config()
+config = get_config()
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ import re
 from typing import Any, List, Dict, Optional, AsyncGenerator
 import json
 from openai import AsyncOpenAI, OpenAI
-from config import Config
-config = Config()
+from config import get_config
+config = get_config()
 import prompts
 import database
 import knowledge_engine
