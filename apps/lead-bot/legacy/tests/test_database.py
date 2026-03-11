@@ -169,6 +169,44 @@ def test_get_recent_users_with_offset_and_count(test_db):
     assert second_page[0]["telegram_id"] == 810001
 
 
+def test_user_offer_profile_and_consent_filters(test_db):
+    user_id = test_db.create_or_update_user(telegram_id=820001, username="offer", first_name="Offer")
+    revoked_id = test_db.create_or_update_user(telegram_id=820002, username="revoked", first_name="Revoked")
+
+    test_db.set_user_offer_profile(user_id, "business")
+    assert test_db.get_user_offer_profile(user_id) == "business"
+
+    test_db.grant_user_consent(user_id)
+    test_db.grant_user_consent(revoked_id)
+    summary = test_db.revoke_user_consent_and_delete_data(revoked_id)
+
+    without_consent = test_db.get_users_without_consent(limit=10)
+    revoked_users = test_db.get_users_with_revoked_consent(limit=10)
+
+    assert summary["users_updated"] == 1
+    assert all(row["telegram_id"] != 820001 for row in without_consent)
+    assert any(row["telegram_id"] == 820002 for row in revoked_users)
+
+
+def test_chat_and_business_connection_state_roundtrip(test_db):
+    chat_id = 930001
+    connection_id = "bc-test-1"
+
+    assert test_db.is_chat_enabled(chat_id) is True
+    assert test_db.get_chat_mode(chat_id) == "bot"
+
+    test_db.set_chat_enabled(chat_id, False)
+    assert test_db.is_chat_enabled(chat_id) is False
+    assert chat_id in test_db.get_disabled_chats()
+
+    test_db.set_chat_mode(chat_id, "personal")
+    assert test_db.get_chat_mode(chat_id) == "personal"
+
+    assert test_db.is_business_connection_enabled(connection_id) is True
+    test_db.set_business_connection_state(connection_id, user_chat_id=chat_id, is_enabled=False)
+    assert test_db.is_business_connection_enabled(connection_id) is False
+
+
 def test_security_message_events_count_and_prune(test_db):
     now = int(time.time())
     user_id = 555123

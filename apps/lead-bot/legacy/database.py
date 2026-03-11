@@ -22,6 +22,8 @@ import database_leads
 import database_reporting
 import database_knowledge
 import database_security
+import database_users
+import database_chat_state
 config = get_config()
 
 logger = logging.getLogger(__name__)
@@ -896,210 +898,82 @@ class Database:
 
     def is_chat_enabled(self, chat_id: int) -> bool:
         """Проверка, включен ли чат для автоответов."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT is_enabled FROM chat_states WHERE chat_id = ?", (chat_id,))
-            row = cursor.fetchone()
-            return bool(row[0]) if row else True
-        finally:
-            conn.close()
+        return database_chat_state.is_chat_enabled(
+            self.get_connection,
+            chat_id=chat_id,
+        )
 
     def set_chat_enabled(self, chat_id: int, enabled: bool):
         """Включение/отключение автоответов в конкретном чате."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO chat_states (chat_id, is_enabled, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(chat_id) DO UPDATE SET
-                    is_enabled = excluded.is_enabled,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (chat_id, 1 if enabled else 0),
-            )
-            conn.commit()
-            logger.info("Chat %s %s", chat_id, "enabled" if enabled else "disabled")
-        except Exception as e:
-            logger.error(f"Error setting chat enabled state: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_chat_state.set_chat_enabled(
+            self.get_connection,
+            chat_id=chat_id,
+            enabled=enabled,
+        )
 
     def get_chat_mode(self, chat_id: int) -> str:
         """Режим чата: bot | personal."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT mode FROM chat_states WHERE chat_id = ?", (chat_id,))
-            row = cursor.fetchone()
-            mode = (row[0] if row and row[0] else "bot").strip().lower()
-            return mode if mode in {"bot", "personal"} else "bot"
-        finally:
-            conn.close()
+        return database_chat_state.get_chat_mode(
+            self.get_connection,
+            chat_id=chat_id,
+        )
 
     def set_chat_mode(self, chat_id: int, mode: str) -> None:
         """Устанавливает режим чата."""
-        normalized_mode = (mode or "bot").strip().lower()
-        if normalized_mode not in {"bot", "personal"}:
-            normalized_mode = "bot"
-
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO chat_states (chat_id, is_enabled, mode, updated_at)
-                VALUES (?, 1, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(chat_id) DO UPDATE SET
-                    mode = excluded.mode,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (chat_id, normalized_mode),
-            )
-            conn.commit()
-            logger.info("Chat %s switched to mode=%s", chat_id, normalized_mode)
-        except Exception as e:
-            logger.error(f"Error setting chat mode: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_chat_state.set_chat_mode(
+            self.get_connection,
+            chat_id=chat_id,
+            mode=mode,
+        )
 
     def get_disabled_chats(self) -> list:
         """Получение списка отключенных чатов."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT chat_id FROM chat_states WHERE is_enabled = 0")
-            return [row[0] for row in cursor.fetchall()]
-        finally:
-            conn.close()
+        return database_chat_state.get_disabled_chats(self.get_connection)
 
     def set_business_connection_state(self, connection_id: str, user_chat_id: Optional[int], is_enabled: bool):
         """Сохраняет состояние business connection (вкл/выкл)."""
-        if not connection_id:
-            return
-        connection_key = str(connection_id)
-
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                INSERT INTO business_connection_states (connection_id, user_chat_id, is_enabled, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(connection_id) DO UPDATE SET
-                    user_chat_id = excluded.user_chat_id,
-                    is_enabled = excluded.is_enabled,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (connection_key, user_chat_id, 1 if is_enabled else 0),
-            )
-            conn.commit()
-            logger.info(
-                "Business connection %s for user_chat_id=%s set to %s",
-                connection_key,
-                user_chat_id,
-                "enabled" if is_enabled else "disabled",
-            )
-        except Exception as e:
-            logger.error(f"Error setting business connection state: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_chat_state.set_business_connection_state(
+            self.get_connection,
+            connection_id=connection_id,
+            user_chat_id=user_chat_id,
+            is_enabled=is_enabled,
+        )
 
     def is_business_connection_enabled(self, connection_id: Optional[str]) -> bool:
         """
         Проверяет включена ли business connection.
         Если состояние неизвестно, не блокируем (True по умолчанию).
         """
-        if not connection_id:
-            return True
-        connection_key = str(connection_id)
-
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "SELECT is_enabled FROM business_connection_states WHERE connection_id = ?",
-                (connection_key,),
-            )
-            row = cursor.fetchone()
-            return bool(row[0]) if row else True
-        finally:
-            conn.close()
+        return database_chat_state.is_business_connection_enabled(
+            self.get_connection,
+            connection_id=connection_id,
+        )
 
     def create_or_update_user(self, telegram_id: int, username: str = None,
                               first_name: str = None, last_name: str = None) -> int:
         """Создание или обновление пользователя"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                "SELECT id, username, first_name, last_name FROM users WHERE telegram_id = ?",
-                (telegram_id,),
-            )
-            existing_row = cursor.fetchone()
-            profile_changed = (
-                existing_row is None
-                or (existing_row["username"] or None) != (username or None)
-                or (existing_row["first_name"] or None) != (first_name or None)
-                or (existing_row["last_name"] or None) != (last_name or None)
-            )
-            cursor.execute("""
-                INSERT INTO users (telegram_id, username, first_name, last_name)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(telegram_id) DO UPDATE SET
-                    username = excluded.username,
-                    first_name = excluded.first_name,
-                    last_name = excluded.last_name,
-                    last_interaction = CURRENT_TIMESTAMP
-            """, (telegram_id, username, first_name, last_name))
-
-            conn.commit()
-
-            cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
-            user_id = cursor.fetchone()[0]
-
-            logger.info("User %s created/updated with id %s", utils.mask_telegram_id(telegram_id), user_id)
-            if profile_changed:
-                self._sync_user_to_core(user_id)
-            return user_id
-
-        except Exception as e:
-            logger.error(f"Error creating/updating user: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        return database_users.create_or_update_user(
+            self.get_connection,
+            self._sync_user_to_core,
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+        )
 
     def get_local_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
         """Возвращает локальную запись пользователя без merge с core-api."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        return database_users.get_local_user_by_telegram_id(
+            self.get_connection,
+            telegram_id=telegram_id,
+        )
 
     def get_local_user_by_id(self, user_id: int) -> Optional[Dict]:
         """Возвращает локальную запись пользователя без merge с core-api."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        return database_users.get_local_user_by_id(
+            self.get_connection,
+            user_id=user_id,
+        )
 
     def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
         """Получение пользователя по telegram_id"""
@@ -1117,103 +991,45 @@ class Database:
 
     def get_user_offer_profile(self, user_id: int) -> Optional[str]:
         """Возвращает ручной override профиля предложений пользователя."""
-        user = self.get_local_user_by_id(user_id)
-        if not user:
-            return None
-        value = user.get("offer_profile_override")
-        return str(value) if value else None
+        return database_users.get_user_offer_profile(
+            self.get_local_user_by_id,
+            user_id=user_id,
+        )
 
     def set_user_offer_profile(self, user_id: int, profile_key: Optional[str]) -> None:
         """Сохраняет ручной override профиля предложений (или сбрасывает в авто-режим)."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                UPDATE users
-                SET offer_profile_override = ?,
-                    last_interaction = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (profile_key, user_id),
-            )
-            conn.commit()
-            self._sync_user_to_core(user_id)
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_users.set_user_offer_profile(
+            self.get_connection,
+            self._sync_user_to_core,
+            user_id=user_id,
+            profile_key=profile_key,
+        )
 
     def get_recent_users(self, limit: int = 20, offset: int = 0) -> List[Dict]:
         """Получение последних активных пользователей."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT *
-                FROM users
-                ORDER BY COALESCE(last_interaction, created_at) DESC, id DESC
-                LIMIT ? OFFSET ?
-                """,
-                (max(1, int(limit)), max(0, int(offset))),
-            )
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        return database_users.get_recent_users(
+            self.get_connection,
+            limit=limit,
+            offset=offset,
+        )
 
     def count_users(self) -> int:
         """Возвращает общее число пользователей в локальной БД."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT COUNT(*) FROM users")
-            row = cursor.fetchone()
-            return int(row[0] if row else 0)
-        finally:
-            conn.close()
+        return database_users.count_users(self.get_connection)
 
     def get_users_without_consent(self, limit: int = 20) -> List[Dict]:
         """Пользователи без активного согласия на обработку ПД."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT *
-                FROM users
-                WHERE COALESCE(consent_given, 0) = 0
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        return database_users.get_users_without_consent(
+            self.get_connection,
+            limit=limit,
+        )
 
     def get_users_with_revoked_consent(self, limit: int = 20) -> List[Dict]:
         """Пользователи, которые отозвали согласие."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT *
-                FROM users
-                WHERE COALESCE(consent_revoked, 0) = 1
-                ORDER BY COALESCE(consent_revoked_at, last_interaction, created_at) DESC, id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            )
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        return database_users.get_users_with_revoked_consent(
+            self.get_connection,
+            limit=limit,
+        )
 
     def get_user_consent_state(self, user_id: int) -> Dict:
         """Получение статуса согласий пользователя."""
