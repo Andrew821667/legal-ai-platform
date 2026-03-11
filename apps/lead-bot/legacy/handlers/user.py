@@ -63,6 +63,15 @@ def _extract_start_payload(context: ContextTypes.DEFAULT_TYPE) -> str:
     return str(args[0]).strip()
 
 
+def _is_navigation_shortcut(message_text: str) -> bool:
+    raw = (message_text or "").strip()
+    if not raw:
+        return False
+    if _button_text_equals(raw, "🧭 Рабочий стол") or _button_text_equals(raw, "📋 Меню услуг"):
+        return True
+    return raw.lower() in ["/menu", "menu", "/меню", "меню"]
+
+
 def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("admin_lookup_action", None)
     context.user_data.pop("admin_lookup_field", None)
@@ -1090,7 +1099,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # В новой сессии всегда сначала показываем стартовый UX
         # (приветствие + рабочий стол), даже если пользователь сразу пишет вопрос.
         history_preview = database.db.get_conversation_history(user_data["id"], limit=1)
-        if message_text and not history_preview:
+        if message_text and not history_preview and not _is_navigation_shortcut(message_text):
             await utils.safe_reply_html(
                 original_message,
                 content.build_welcome_message(user.first_name),
@@ -1136,11 +1145,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("Workspace sent on greeting for user %s", user.id)
             return
 
-        if (
-            _button_text_equals(message_text, "🧭 Рабочий стол")
-            or _button_text_equals(message_text, "📋 Меню услуг")
-            or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]
-        ):
+        if _is_navigation_shortcut(message_text):
             await menu_command(update, context)
             return
 
@@ -1393,11 +1398,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("New lead %s created from new topic after handoff for user %s", new_lead_id, user.id)
 
         # Обработка кнопок reply-меню
-        if (
-            _button_text_equals(message_text, "🧭 Рабочий стол")
-            or _button_text_equals(message_text, "📋 Меню услуг")
-            or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]
-        ):
+        if _is_navigation_shortcut(message_text):
             await menu_command(update, context)
             return
 

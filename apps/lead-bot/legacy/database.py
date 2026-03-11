@@ -15,6 +15,7 @@ from typing import Optional, List, Dict, Tuple
 from config import get_config
 from lead_perf import log_span_timing, perf_start
 import utils
+import database_conversations
 config = get_config()
 
 logger = logging.getLogger(__name__)
@@ -2143,90 +2144,36 @@ class Database:
 
     def add_message(self, user_id: int, role: str, message: str):
         """Добавление сообщения в историю диалога"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute("""
-                INSERT INTO conversations (user_id, role, message)
-                VALUES (?, ?, ?)
-            """, (user_id, role, message))
-
-            conn.commit()
-            logger.debug(f"Message added for user {user_id}, role {role}")
-
-        except Exception as e:
-            logger.error(f"Error adding message: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_conversations.add_message(
+            self.get_connection,
+            user_id=user_id,
+            role=role,
+            message=message,
+        )
 
     def get_conversation_history(self, user_id: int, limit: int = None) -> List[Dict]:
         """Получение истории диалога"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        try:
-            limit = limit or config.MAX_HISTORY_MESSAGES
-
-            cursor.execute("""
-                SELECT role, message, timestamp
-                FROM conversations
-                WHERE user_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (user_id, limit))
-
-            rows = cursor.fetchall()
-            # Возвращаем в обратном порядке (от старых к новым)
-            return [dict(row) for row in reversed(rows)]
-
-        finally:
-            conn.close()
+        effective_limit = limit or config.MAX_HISTORY_MESSAGES
+        return database_conversations.get_conversation_history(
+            self.get_connection,
+            user_id=user_id,
+            limit=effective_limit,
+        )
 
     def clear_conversation_history(self, user_id: int):
         """Очистка истории диалога"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
-            conn.commit()
-            logger.info(f"Conversation history cleared for user {user_id}")
-
-        except Exception as e:
-            logger.error(f"Error clearing conversation: {e}")
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        database_conversations.clear_conversation_history(
+            self.get_connection,
+            user_id=user_id,
+        )
 
     def cleanup_conversations_by_retention(self, retention_days: int | None = None) -> int:
         """Удаляет сообщения диалогов старше заданного retention-порога."""
         days = max(1, int(retention_days or config.CONVERSATION_RETENTION_DAYS))
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                """
-                DELETE FROM conversations
-                WHERE timestamp < datetime('now', ?)
-                """,
-                (f"-{days} days",),
-            )
-            conn.commit()
-            deleted = int(cursor.rowcount or 0)
-            if deleted:
-                logger.info("Conversation retention cleanup removed %s rows (days=%s)", deleted, days)
-            return deleted
-        except Exception as error:
-            logger.error("Error cleaning conversations by retention: %s", error)
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        return database_conversations.cleanup_conversations_by_retention(
+            self.get_connection,
+            retention_days=days,
+        )
 
     # === LEADS ===
 

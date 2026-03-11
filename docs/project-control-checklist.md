@@ -40,8 +40,8 @@
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
 - `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
-- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py` и `handlers/start_payloads.py`, но основной разрез еще не завершен.
-- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, но модульная декомпозиция еще не закончена.
+- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `database_conversations.py`, но основной разрез еще не завершен.
+- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок вынесен из `callbacks.py`, но модульная декомпозиция еще не закончена.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
