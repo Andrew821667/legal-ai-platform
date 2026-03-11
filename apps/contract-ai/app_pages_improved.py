@@ -4,7 +4,7 @@ Improved pages for Contract AI System
 Use these to replace functions in app.py
 """
 import streamlit as st
-from src.utils.auth import get_current_user, check_feature_access, show_upgrade_message
+from src.utils.auth import get_current_user, check_feature_access, show_upgrade_message, show_login_form
 from src.utils.contract_types import get_all_contract_names, get_contract_type_code
 from src.utils.knowledge_base import KnowledgeBaseCategory
 from src.services.rag_system import RAGSystem
@@ -21,7 +21,11 @@ def page_generator_improved():
         return
 
     user = get_current_user()
-    user_id = user['id'] if user else 'demo_user'
+    if not st.session_state.get('authenticated', False) or not user:
+        st.warning("⚠️ Требуется авторизация")
+        show_login_form()
+        return
+    user_id = user['id']
 
     st.markdown("### Создание нового договора")
 

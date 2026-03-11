@@ -194,8 +194,7 @@ from src.utils.auth import (
     show_user_info,
     get_current_user,
     check_feature_access,
-    show_upgrade_message,
-    create_demo_users
+    show_upgrade_message
 )
 
 # В начале app.py
