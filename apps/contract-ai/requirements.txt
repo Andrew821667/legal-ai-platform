@@ -50,7 +50,7 @@ odfpy==1.4.1
 pypandoc==1.13
 
 # Template processing
-jinja2==3.1.3
+jinja2==3.1.6
 
 # Web framework
 streamlit==1.30.0
