@@ -10,21 +10,25 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && (github.event.repository.private == false || vars.ENABLE_DEPENDENCY_REVIEW == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4
 
   gitleaks:
+    if: github.event_name != 'pull_request' || github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   codeql:
+    if: github.event.repository.private == false || vars.ENABLE_CODEQL == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
