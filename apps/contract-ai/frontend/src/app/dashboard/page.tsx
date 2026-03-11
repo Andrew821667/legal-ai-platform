@@ -27,6 +27,14 @@ interface Contract {
   created_at: string
 }
 
+const accessModeLabelMap: Record<string, string> = {
+  demo: 'Демо-контур',
+  basic: 'Пилотный доступ',
+  pro: 'Рабочий контур',
+  professional: 'Рабочий контур',
+  enterprise: 'Enterprise-контур',
+}
+
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -127,6 +135,7 @@ export default function DashboardPage() {
   const permissions = getRolePermissions(userRole)
   const roleColor = getRoleColor(userRole)
   const roleLabel = getRoleLabel(userRole)
+  const accessModeLabel = accessModeLabelMap[user?.subscription_tier || 'demo'] || 'Доступ'
   const contractLimit = permissions.maxContractsPerDay
   const llmLimit = permissions.maxLLMRequestsPerDay
 
@@ -162,7 +171,7 @@ export default function DashboardPage() {
                 whileHover={{ scale: 1.05 }}
                 className="px-4 py-2 bg-gradient-primary text-white rounded-xl shadow-lg font-semibold text-sm"
               >
-                {user?.subscription_tier.toUpperCase()}
+                {accessModeLabel}
               </motion.div>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -351,9 +360,9 @@ export default function DashboardPage() {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-sm font-semibold text-gray-600 mb-1">Тарифный план</p>
+                    <p className="text-sm font-semibold text-gray-600 mb-1">Режим доступа</p>
                     <p className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent capitalize">
-                      {user?.subscription_tier}
+                      {accessModeLabel}
                     </p>
                   </div>
                   <motion.div
@@ -372,7 +381,7 @@ export default function DashboardPage() {
                   onClick={() => router.push('/pricing')}
                   className="w-full mt-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
-                  Улучшить тариф
+                  Форматы запуска
                 </motion.button>
               </div>
             </div>
@@ -392,7 +401,7 @@ export default function DashboardPage() {
               { icon: '📤', label: 'Загрузить договор', route: '/contracts/upload', gradient: 'from-blue-500 to-cyan-600', permission: 'canAnalyze' },
               { icon: '✨', label: 'Генерировать', route: '/contracts/generate', gradient: 'from-purple-500 to-pink-600', permission: 'canGenerate' },
               { icon: '📋', label: 'Все договоры', route: '/contracts', gradient: 'from-green-500 to-emerald-600', permission: null },
-              { icon: '💎', label: 'Тарифы', route: '/pricing', gradient: 'from-orange-500 to-amber-600', permission: null }
+              { icon: '💎', label: 'Форматы запуска', route: '/pricing', gradient: 'from-orange-500 to-amber-600', permission: null }
             ]
             .filter(action => !action.permission || permissions[action.permission as keyof typeof permissions])
             .map((action, idx) => (

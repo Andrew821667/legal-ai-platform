@@ -97,7 +97,7 @@ export default function Home() {
                 Вход
               </Button>
               <Button variant="primary" size="sm" onClick={() => router.push('/register')}>
-                Попробовать бесплатно
+                Открыть демо
               </Button>
             </motion.div>
           </div>
@@ -133,8 +133,8 @@ export default function Home() {
                 с договорами
               </h1>
               <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-                AI-система для анализа, генерации и управления юридическими договорами.
-                Экономьте время и снижайте риски с помощью искусственного интеллекта.
+                Contract AI System помогает быстро проверить договорный сценарий на реальных документах,
+                а затем перейти к пилоту и рабочему контуру без лишней архитектурной сложности.
               </p>
             </motion.div>
 
@@ -154,14 +154,14 @@ export default function Home() {
                   </svg>
                 }
               >
-                Начать бесплатно
+                Открыть демо-контур
               </Button>
               <Button
                 variant="outline"
                 size="lg"
                 onClick={() => router.push('/pricing')}
               >
-                Посмотреть тарифы
+                Форматы запуска
               </Button>
             </motion.div>
 
@@ -274,7 +274,8 @@ export default function Home() {
                   Готовы попробовать?
                 </h2>
                 <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-                  Начните бесплатно. Без кредитной карты. Отмените в любой момент.
+                  Начните с демо-контура. Если нужен следующий этап, обсудим пилот на ваших документах и
+                  только потом зафиксируем рабочий формат.
                 </p>
                 <Button
                   variant="primary"
@@ -286,8 +287,17 @@ export default function Home() {
                     </svg>
                   }
                 >
-                  Начать сейчас
+                  Открыть демо-контур
                 </Button>
+                <div className="mt-4">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => router.push('/pricing')}
+                  >
+                    Посмотреть форматы запуска
+                  </Button>
+                </div>
               </div>
             </Card>
           </motion.div>
@@ -314,7 +324,7 @@ export default function Home() {
               <h4 className="font-bold mb-4">Продукт</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><a href="/features" className="hover:text-primary-600">Возможности</a></li>
-                <li><a href="/pricing" className="hover:text-primary-600">Тарифы</a></li>
+                <li><a href="/pricing" className="hover:text-primary-600">Форматы запуска</a></li>
                 <li><a href="/demo" className="hover:text-primary-600">Демо</a></li>
               </ul>
             </div>

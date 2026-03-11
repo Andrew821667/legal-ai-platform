@@ -103,7 +103,7 @@
 - ✅ **Demo-доступ по ссылкам** - генерация уникальных ссылок для trial пользователей
 - ✅ **Админ-панель** (Streamlit) - управление пользователями, ролями, demo-токенами
 - ✅ **Роли**: admin, senior_lawyer, lawyer, junior_lawyer, demo
-- ✅ **Лимиты**: contracts/day, LLM requests/day по тарифам (demo, basic, pro, enterprise)
+- ✅ **Лимиты**: contracts/day, LLM requests/day по режимам доступа (demo, внутренние pilot/workspace tiers)
 - ✅ **Security**: Rate limiting, IP filtering, security headers, audit logs
 - ✅ **Email verification** & password reset (готово к интеграции)
 - ✅ **2FA support** (TOTP, backup codes)

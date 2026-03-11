@@ -135,7 +135,12 @@ async def root() -> Dict[str, Any]:
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(contracts_router, prefix="/api/v1/contracts", tags=["Contracts"])
 app.include_router(websocket_router, prefix="/api/v1/ws", tags=["WebSocket"])
-app.include_router(payments_router, prefix="/api/v1/payments", tags=["Payments"])
+
+if settings.contract_ai_self_serve_billing_enabled:
+    app.include_router(payments_router, prefix="/api/v1/payments", tags=["Payments"])
+    logger.info("💳 Self-serve billing router enabled")
+else:
+    logger.info("🧭 Self-serve billing router disabled; pilot-first product model is active")
 
 
 if __name__ == "__main__":

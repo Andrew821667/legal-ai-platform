@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
     debug: bool = True
+    contract_ai_self_serve_billing_enabled: bool = False
 
     # Streamlit
     streamlit_server_port: int = 8501

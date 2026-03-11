@@ -39,24 +39,22 @@
 - [apps/contract-ai/src/services/payment_service.py](/Users/andrew/Мои%20AI%20проекты/legal-ai-platform/apps/contract-ai/src/services/payment_service.py)
 
 Текущая модель:
-- SaaS-подписки:
-  - `Basic` `1 990 ₽/мес`
-  - `Professional` `4 990 ₽/мес`
-  - `Enterprise` `19 990 ₽/мес`
-- отдельный Stripe subscription-flow.
+- public-facing UI переведен в `demo -> pilot -> working contour`;
+- self-serve billing router выключен по умолчанию через feature flag;
+- внутренние tier/payment артефакты еще остаются как legacy-техдолг.
 
 ## 2. Главная проблема
 
-Сейчас в продукте одновременно живут две несовместимые модели:
+Главная исходная проблема была такой:
 
 1. `Lead-bot` и `web`
 - продают пилоты, внедрение и экспертную консультацию;
 - позиционируют продукт как B2B/legal ops/contract automation проект.
 
 2. `Contract AI`
-- выглядит как self-serve SaaS с ежемесячной подпиской на индивидуального пользователя.
+- выглядел как self-serve SaaS с ежемесячной подпиской на индивидуального пользователя.
 
-Это создает путаницу:
+Сейчас public-facing часть уже выровнена, но внутренние артефакты старой модели еще требуют cleanup. Исходный конфликт создавал путаницу:
 - для пользователя;
 - для текстов;
 - для будущих платежей;
@@ -112,8 +110,8 @@
 
 ## 5. Что считаем рассинхроном и должны убрать
 
-- `[ ]` Публичные SaaS pricing pages `1990/4990/19990 ₽/мес`, если текущая модель проекта не self-serve SaaS.
-- `[ ]` Старые Stripe subscription flows в `contract-ai`, если они не поддерживаются как реальный go-to-market.
+- `[x]` Публичные SaaS pricing pages `1990/4990/19990 ₽/мес` убраны из public-facing `contract-ai` UI.
+- `[x]` Старые Stripe subscription flows в `contract-ai` скрыты из runtime по умолчанию через feature flag.
 - `[ ]` Любые тексты, где `contract-ai` продается как отдельная подписка, а остальные каналы как проектное внедрение.
 - `[ ]` Разные обещания по бесплатной консультации и “следующему шагу”.
 - `[ ]` Разные названия флагманского продукта между `bot`, `web`, `contract-ai`.
@@ -130,7 +128,7 @@
 - self-serve monthly subscriptions в `contract-ai`.
 
 ### Что сделать следующим кодом
-- `[ ]` Привести `contract-ai` pricing/page/payment copy к pilot-first модели или скрыть их из основного продуктового контура.
+- `[x]` `contract-ai` pricing/page/payment copy приведены к pilot-first модели на публичном контуре.
 - `[ ]` Синхронизировать названия офферов в `lead-bot` и `web`.
 - `[ ]` Зафиксировать единый прайс-язык:
   - `бесплатная консультация`

@@ -59,6 +59,7 @@
 - `[x]` `contract-ai`: frontend снова проходит `type-check` и `build`.
 - `[x]` `contract-ai`: включен в основной CI минимумом smoke/build/type-check.
 - `[x]` `web`: reader conversion funnel закрыт admin session.
+- `[x]` `contract-ai`: self-serve pricing/subscription public contour выключен по умолчанию, public UI переведен в pilot-first модель.
 - `[~]` `contract-ai` пока в CI не покрыт полноценным test-matrix, только разумным базовым контуром.
 - `[x]` Явный legal disclaimer системно добавлен в web через CTA/lead/footer.
 
@@ -72,7 +73,7 @@
 
 ## 6. Product / UX / позиционирование
 - `[x]` Бесплатная консультация и специальные платные форматы концептуально разведены.
-- `[~]` Ценовая и продуктовая модель между `lead-bot`, `web`, `contract-ai` проаудирована и зафиксирована в отдельном sync-документе; copy/runtime cleanup еще впереди.
+- `[~]` Ценовая и продуктовая модель между `lead-bot`, `web`, `contract-ai` проаудирована; `contract-ai` public runtime уже переведен в pilot-first модель, но глубинная унификация текстов и внутренних tier-артефактов еще впереди.
 - `[~]` Якорные продукты зафиксированы на уровне target-модели; нужно довести до реальных текстов и маршрутов.
 - `[ ]` Подготовить продуктовый контур для специальных платных консультаций:
   - products
@@ -93,8 +94,8 @@
 
 ## Осталось в первую очередь
 - `[x]` Secret inventory + rotation checklist.
-- `[ ]` Web disclaimer в системных точках интерфейса.
-- `[ ]` Pricing/product sync между bot/web/contract-ai.
+- `[x]` Web disclaimer в системных точках интерфейса.
+- `[~]` Pricing/product sync между bot/web/contract-ai.
 - `[ ]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[ ]` Отдельный compliance-review по реальной операционной схеме.
 
