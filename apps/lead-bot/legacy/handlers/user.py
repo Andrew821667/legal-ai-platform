@@ -30,7 +30,20 @@ import security
 import prompts
 import content
 import funnel
-from handlers.constants import *
+from handlers.constants import (
+    ADMIN_MENU,
+    ADMIN_PANEL_MENU,
+    CONSENT_PDN_MENU,
+    CONSENT_TRANSBORDER_MENU,
+    CONSULTATION_CTA_MENU,
+    DOCUMENTS_MENU,
+    LEAD_MAGNET_MENU,
+    MAIN_MENU,
+    PERSONAL_MODE_RETURN_MENU,
+    QUICK_NAV_MENU,
+    WORKSPACE_INLINE_MENU,
+    append_inline_url_row,
+)
 from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin_new_lead
 
 logger = logging.getLogger(__name__)

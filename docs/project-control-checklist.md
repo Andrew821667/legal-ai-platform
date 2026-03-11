@@ -37,9 +37,10 @@
 - `[x]` Добавлен legal disclaimer и обновлены consent-тексты.
 - `[x]` Введена retention policy для `conversations`.
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
+- `[~]` Wildcard imports убраны из основных handler-модулей; дальнейшая чистка import graph legacy еще нужна.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
 - `[ ]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули.
-- `[ ]` Убрать wildcard imports и почистить import graph.
+- `[~]` Убрать wildcard imports и почистить import graph.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader

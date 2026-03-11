@@ -21,7 +21,6 @@ import utils
 import email_sender
 import security
 import prompts
-from handlers.constants import *
 
 logger = logging.getLogger(__name__)
 _LAST_TRANSIENT_POLLING_ERROR_LOG_TS = 0.0

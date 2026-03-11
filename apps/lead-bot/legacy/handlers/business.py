@@ -26,7 +26,14 @@ import security
 import prompts
 import content
 import funnel
-from handlers.constants import *
+from handlers.constants import (
+    BUSINESS_AWAITING_CONTACT_KEY,
+    BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
+    BUSINESS_PENDING_CONTACT_KEY,
+    LEAD_MAGNET_MENU,
+    PERSONAL_MODE_RETURN_MENU,
+    WORKSPACE_INLINE_MENU,
+)
 from handlers.helpers import notify_admin_new_lead, extract_email
 
 logger = logging.getLogger(__name__)

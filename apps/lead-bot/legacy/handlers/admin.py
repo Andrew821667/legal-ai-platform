@@ -20,7 +20,7 @@ import utils
 import email_sender
 import security
 import prompts
-from handlers.constants import *
+from handlers.constants import ADMIN_PANEL_MENU
 
 logger = logging.getLogger(__name__)
 
