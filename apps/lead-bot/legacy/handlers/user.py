@@ -7,11 +7,9 @@ import logging
 import sqlite3
 import time
 from typing import Optional, Dict
-from datetime import datetime
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from telegram_ui import normalize_button_text
 import database
 import ai_brain
 import lead_qualifier
@@ -23,22 +21,13 @@ import security
 import prompts
 import content
 import funnel
-from handlers.constants import (
-    ADMIN_PANEL_MENU,
-)
 from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin_new_lead
 from handlers.markup import (
-    consultation_contact_markup as _consultation_contact_markup,
     consultation_cta_markup as _consultation_cta_markup,
-    main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
-    personal_mode_markup as _personal_mode_markup,
-    profile_edit_cancel_markup as _profile_edit_cancel_markup,
     transborder_consent_markup as _transborder_consent_markup,
-    workspace_markup_for as _workspace_markup_for,
 )
 from handlers.user_commands import (
-    _format_profile_text,
     _is_pdn_consent_granted,
     _pdn_consent_prompt_text,
     _should_require_pdn_consent,
@@ -76,105 +65,16 @@ from handlers.user_message_helpers import (
     persist_fasttrack_contact as _persist_fasttrack_contact,
     schedule_typing_indicator as _schedule_typing_indicator,
 )
+from handlers.user_non_text import handle_non_text_input as _handle_non_text_input
+from handlers.user_profile_edit import handle_profile_edit_input
+from handlers.user_routing import (
+    maybe_handle_initial_entry,
+    maybe_handle_personal_mode,
+    maybe_handle_static_reply_action,
+)
 from handlers.start_payloads import process_pending_start_payload
 
 logger = logging.getLogger(__name__)
-
-
-def _button_text_equals(text: str | None, expected: str) -> bool:
-    return normalize_button_text(text).casefold() == normalize_button_text(expected).casefold()
-
-
-def _is_navigation_shortcut(message_text: str) -> bool:
-    raw = (message_text or "").strip()
-    if not raw:
-        return False
-    if _button_text_equals(raw, "🧭 Рабочий стол") or _button_text_equals(raw, "📋 Меню услуг"):
-        return True
-    return raw.lower() in ["/menu", "menu", "/меню", "меню"]
-
-
-
-async def _handle_non_text_input(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user_data: Dict,
-    lead: Optional[Dict],
-    allow_lead_processing: bool,
-) -> bool:
-    """
-    Обрабатывает non-text сообщения в сценарии lead magnet.
-    Возвращает True, если сообщение обработано и основной flow продолжать не нужно.
-    """
-    message = update.effective_message
-    if not message:
-        return True
-
-    if allow_lead_processing and getattr(message, "contact", None):
-        phone = message.contact.phone_number or ""
-        if phone and utils.validate_phone(phone):
-            formatted_phone = utils.format_phone(phone)
-            new_lead_id = database.db.create_new_lead(
-                user_data["id"],
-                _build_new_phone_lead_payload(
-                    lead,
-                    first_name=update.effective_user.first_name if update.effective_user else "",
-                    phone=formatted_phone,
-                    source="consultation_contact_telegram",
-                ),
-            )
-            await handle_handoff_request(
-                update,
-                context,
-                source="consultation_contact",
-                lead_id_override=new_lead_id,
-                is_update_override=False,
-            )
-            return True
-
-    if not lead or not lead.get("lead_magnet_type") or lead.get("lead_magnet_delivered"):
-        logger.warning(f"Skipping non-text message update type: {update.update_id}")
-        return True
-
-    magnet_type = _normalize_magnet_type(lead.get("lead_magnet_type"))
-    if magnet_type != lead.get("lead_magnet_type"):
-        database.db.create_or_update_lead(user_data["id"], {"lead_magnet_type": magnet_type})
-        lead = database.db.get_lead_by_user_id(user_data["id"])
-
-    caption_text = message.caption or ""
-    email = extract_email(caption_text)
-    if email:
-        await send_lead_magnet_email(update, user_data, lead, email)
-        return True
-
-    if magnet_type == "consultation":
-        await utils.safe_reply_text(
-            message,
-            "Для заявки на консультацию отправьте номер телефона кнопкой ниже.",
-            reply_markup=_consultation_contact_markup(),
-            action="consultation_phone_prompt_non_text",
-        )
-        return True
-
-    if magnet_type == "demo" and (message.document or message.photo):
-        file_marker = "photo"
-        if message.document:
-            file_marker = f"document:{message.document.file_name or message.document.file_id}"
-
-        existing_notes = (lead.get("notes") or "").strip()
-        notes = f"{existing_notes}\nДокумент для демо: {file_marker}".strip()
-        database.db.create_or_update_lead(user_data["id"], {"notes": notes})
-        await message.reply_text(
-            "Документ получил. Теперь укажите email, и мы отправим подтверждение и дальнейшие шаги."
-        )
-        return True
-
-    await message.reply_text(
-        "Чтобы продолжить, отправьте email в текстовом сообщении.\n"
-        "Для демонстрационного разбора можно приложить документ с подписью, где указан email."
-    )
-    return True
-
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик пользовательских сообщений."""
@@ -216,129 +116,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if handled_admin_lookup:
                 return
 
-        if _button_text_equals(message_text, "✉️ Личное обращение"):
-            database.db.set_chat_mode(chat_id, "personal")
-            await utils.safe_reply_text(
-                original_message,
-                "Чат переведен в личный режим.\n\n"
-                "Теперь можете писать Андрею напрямую: бот не будет отвечать и не будет "
-                "обрабатывать сообщения как лиды.\n\n"
-                "Когда захотите снова пользоваться ботом, нажмите «↩️ Вернуться к боту».",
-                reply_markup=_personal_mode_markup(),
-                action="personal_mode_enabled",
-            )
+        if await maybe_handle_personal_mode(
+            update=update,
+            context=context,
+            original_message=original_message,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+            lead=lead,
+            chat_id=chat_id,
+            chat_mode=chat_mode,
+        ):
             return
 
-        if chat_mode == "personal":
-            if _looks_like_return_to_bot(message_text):
-                database.db.set_chat_mode(chat_id, "bot")
-                database.db.reset_user_funnel_state(user_data["id"])
-                await utils.safe_reply_html(
-                    original_message,
-                    content.build_welcome_message(user.first_name),
-                    reply_markup=_main_menu_markup(user.id),
-                    action="personal_mode_return_text",
-                )
-            return
-
-        # В новой сессии всегда сначала показываем стартовый UX
-        # (приветствие + рабочий стол), даже если пользователь сразу пишет вопрос.
         history_preview = database.db.get_conversation_history(user_data["id"], limit=1)
-        if message_text and not history_preview and not _is_navigation_shortcut(message_text):
-            await utils.safe_reply_html(
-                original_message,
-                content.build_welcome_message(user.first_name),
-                reply_markup=_main_menu_markup(user.id),
-                action="forced_welcome_new_session",
-            )
-            selected_profile = database.db.get_user_offer_profile(user_data["id"])
-            workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
-            await utils.safe_reply_html(
-                original_message,
-                content.build_workspace_text(
-                    lead=lead,
-                    selected_profile=selected_profile,
-                    emphasize_profile_choice=True,
-                ),
-                reply_markup=workspace_markup,
-                action="forced_workspace_new_session",
-            )
-            logger.info("Workspace sent on new session for user %s", user.id)
+        if await maybe_handle_initial_entry(
+            original_message=original_message,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+            lead=lead,
+            history_exists=bool(history_preview),
+        ):
+            logger.info("Workspace entry UX sent for user %s", user.id)
             return
 
-        # На самом первом входящем сообщении-приветствии всегда отдаем
-        # фиксированное приветствие, а не LLM-генерацию.
-        if message_text and _looks_like_plain_greeting(message_text):
-            await utils.safe_reply_html(
-                original_message,
-                content.build_welcome_message(user.first_name),
-                reply_markup=_main_menu_markup(user.id),
-                action="fixed_welcome_on_greeting",
-            )
-            selected_profile = database.db.get_user_offer_profile(user_data["id"])
-            workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
-            await utils.safe_reply_html(
-                original_message,
-                content.build_workspace_text(
-                    lead=lead,
-                    selected_profile=selected_profile,
-                    emphasize_profile_choice=True,
-                ),
-                reply_markup=workspace_markup,
-                action="workspace_on_greeting",
-            )
-            logger.info("Workspace sent on greeting for user %s", user.id)
-            return
-
-        if _is_navigation_shortcut(message_text):
-            await menu_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "👤 Мой профиль"):
-            await profile_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "📚 Документы"):
-            await documents_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "🔄 Начать заново"):
-            await reset_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "⬅️ Отмена"):
-            await utils.safe_reply_text(
-                original_message,
-                "Ок, вернул основное меню.",
-                reply_markup=_main_menu_markup(user.id),
-                action="cancel_to_main_menu",
-            )
-            return
-
-        if _button_text_equals(message_text, "📞 Консультация") or _button_text_equals(message_text, "✉️ Заказать консультацию"):
-            if _should_require_pdn_consent(is_admin, consent_state):
-                await utils.safe_reply_text(
-                    original_message,
-                    _pdn_consent_prompt_text("Консультации"),
-                    reply_markup=_pdn_consent_markup(),
-                    action="consultation_requires_pdn",
-                )
-                return
-            if allow_lead_processing:
-                database.db.create_or_update_lead(
-                    user_data["id"],
-                    {
-                        "name": user.first_name,
-                        "lead_magnet_type": "consultation",
-                        "lead_magnet_delivered": False,
-                    },
-                )
-            await utils.safe_reply_text(
-                original_message,
-                "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
-                reply_markup=_consultation_contact_markup(),
-                action="consultation_phone_prompt",
-            )
+        if await maybe_handle_static_reply_action(
+            update=update,
+            context=context,
+            original_message=original_message,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+            consent_state=consent_state,
+            is_admin=is_admin,
+            allow_lead_processing=allow_lead_processing,
+            consultation_requires_pdn=True,
+            menu_handler=menu_command,
+            profile_handler=profile_command,
+            documents_handler=documents_command,
+            reset_handler=reset_command,
+        ):
             return
 
         # В non-text ветке поддерживаем сценарий демо (документ + email).
@@ -370,68 +188,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await original_message.reply_text(block_reason)
             return
 
-        profile_edit_field = context.user_data.get("profile_edit_field")
-        if profile_edit_field:
-            if _button_text_equals(message_text, "⬅️ Отмена"):
-                context.user_data.pop("profile_edit_field", None)
-                await utils.safe_reply_text(
-                    original_message,
-                    "Редактирование отменено.",
-                    reply_markup=_main_menu_markup(user.id),
-                    action="profile_edit_cancel",
-                )
-                return
-
-            if profile_edit_field == "name":
-                normalized_name = " ".join(message_text.split())
-                if len(normalized_name) < 2:
-                    await utils.safe_reply_text(
-                        original_message,
-                        "Введите корректные ФИО (минимум 2 символа) или нажмите «⬅️ Отмена».",
-                        reply_markup=_profile_edit_cancel_markup(),
-                        action="profile_edit_name_validation",
-                    )
-                    return
-
-                parts = normalized_name.split(maxsplit=1)
-                first_name = parts[0]
-                last_name = parts[1] if len(parts) > 1 else ""
-                database.db.create_or_update_user(
-                    telegram_id=user.id,
-                    username=user_data.get("username") or user.username,
-                    first_name=first_name,
-                    last_name=last_name,
-                )
-                database.db.create_or_update_lead(user_data["id"], {"name": normalized_name})
-                context.user_data.pop("profile_edit_field", None)
-                await utils.safe_reply_text(
-                    original_message,
-                    "✅ ФИО обновлены.",
-                    reply_markup=_main_menu_markup(user.id),
-                    action="profile_edit_name_success",
-                )
-                return
-
-            if profile_edit_field == "email":
-                new_email = message_text.strip()
-                if not utils.validate_email(new_email):
-                    await utils.safe_reply_text(
-                        original_message,
-                        "Email выглядит некорректно. Введите корректный email или нажмите «⬅️ Отмена».",
-                        reply_markup=_profile_edit_cancel_markup(),
-                        action="profile_edit_email_validation",
-                    )
-                    return
-
-                database.db.create_or_update_lead(user_data["id"], {"email": new_email})
-                context.user_data.pop("profile_edit_field", None)
-                await utils.safe_reply_text(
-                    original_message,
-                    "✅ Email обновлен.",
-                    reply_markup=_main_menu_markup(user.id),
-                    action="profile_edit_email_success",
-                )
-                return
+        if await handle_profile_edit_input(
+            update,
+            context,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+        ):
+            return
 
         # Проверяем есть ли pending lead magnet и email в сообщении
         if lead and lead.get("lead_magnet_type") and not lead.get("lead_magnet_delivered"):
@@ -543,60 +307,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("New lead %s created from new topic after handoff for user %s", new_lead_id, user.id)
 
         # Обработка кнопок reply-меню
-        if _is_navigation_shortcut(message_text):
-            await menu_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "📞 Консультация") or _button_text_equals(message_text, "✉️ Заказать консультацию"):
-            if allow_lead_processing:
-                database.db.create_or_update_lead(
-                    user_data["id"],
-                    {
-                        "name": user.first_name,
-                        "lead_magnet_type": "consultation",
-                        "lead_magnet_delivered": False,
-                    },
-                )
-            await utils.safe_reply_text(
-                original_message,
-                "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
-                reply_markup=_consultation_contact_markup(),
-                action="consultation_phone_prompt",
-            )
-            return
-
-        if _button_text_equals(message_text, "⬅️ Отмена"):
-            await utils.safe_reply_text(
-                original_message,
-                "Ок, вернул основное меню.",
-                reply_markup=_main_menu_markup(user.id),
-                action="cancel_to_main_menu",
-            )
-            return
-
-        if _button_text_equals(message_text, "👤 Мой профиль"):
-            await profile_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "📚 Документы"):
-            await documents_command(update, context)
-            return
-
-        if _button_text_equals(message_text, "🔄 Начать заново"):
-            await reset_command(update, context)
-            return
-
-        # Админ-панель (только для админа)
-        if _button_text_equals(message_text, "⚙️ Админ-панель"):
-            if user.id == config.ADMIN_TELEGRAM_ID:
-                await utils.safe_reply_text(
-                    original_message,
-                    "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
-                    reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
-                    action="open_admin_panel_from_user_flow",
-                )
-            else:
-                await original_message.reply_text("У вас нет доступа к этой функции")
+        if await maybe_handle_static_reply_action(
+            update=update,
+            context=context,
+            original_message=original_message,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+            consent_state=consent_state,
+            is_admin=is_admin,
+            allow_lead_processing=allow_lead_processing,
+            consultation_requires_pdn=False,
+            menu_handler=menu_command,
+            profile_handler=profile_command,
+            documents_handler=documents_command,
+            reset_handler=reset_command,
+        ):
             return
 
         # Проверяем триггеры передачи админу
