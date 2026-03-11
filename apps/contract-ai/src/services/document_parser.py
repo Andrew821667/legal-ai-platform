@@ -14,8 +14,8 @@ from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
 from docx.table import Table
 from docx.text.paragraph import Paragraph
-import PyPDF2
 import pdfplumber
+from pypdf import PdfReader
 from loguru import logger
 
 from ..utils.xml_security import parse_xml_safely, XMLSecurityError
@@ -177,10 +177,10 @@ class DocumentParser:
                     if page_text:
                         text_content.append(page_text)
         except Exception as e:
-            logger.warning(f"pdfplumber failed, trying PyPDF2: {e}")
-            # Fallback на PyPDF2
+            logger.warning(f"pdfplumber failed, trying pypdf: {e}")
+            # Fallback на pypdf
             with open(pdf_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
+                pdf_reader = PdfReader(file)
                 for page_num in range(len(pdf_reader.pages)):
                     page = pdf_reader.pages[page_num]
                     page_text = page.extract_text()
