@@ -149,7 +149,7 @@ export default function LoginPage() {
                     </svg>
                   </div>
                   <input
-                    type="text"
+                    type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder-white/50 focus:border-white focus:ring-4 focus:ring-white/20 transition-all duration-300 outline-none backdrop-blur-sm"
@@ -187,7 +187,6 @@ export default function LoginPage() {
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={isLoading}
-                onClick={() => console.log('🖱️ BUTTON CLICKED!')}
                 className="w-full py-4 bg-white text-primary-600 font-bold rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
               >
                 <span className="relative z-10">

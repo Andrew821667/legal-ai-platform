@@ -62,7 +62,7 @@ nano .env
 Заполните обязательные переменные в `.env`:
 ```env
 TELEGRAM_BOT_TOKEN=ваш_токен_от_BotFather
-OPENAI_API_KEY=sk-proj-ваш_ключ_openai
+OPENAI_API_KEY=ваш_llm_api_key
 ADMIN_TELEGRAM_ID=ваш_telegram_id
 ```
 
@@ -272,7 +272,7 @@ python lead_qualifier.py
 
 Проверьте:
 1. API ключ добавлен в `.env`
-2. Ключ начинается с `sk-proj-` или `sk-`
+2. Ключ соответствует выбранному провайдеру и не пустой
 3. На аккаунте OpenAI есть средства или активная подписка
 
 ### Бот не отвечает на сообщения

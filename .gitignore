@@ -10,6 +10,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+venv/
 node_modules/
 .next/
 .DS_Store
@@ -26,3 +27,4 @@ apps/*/legacy/data/
 /data/*
 !/data/.gitkeep
 /chroma_data/
+apps/contract-ai/CREDENTIALS.txt

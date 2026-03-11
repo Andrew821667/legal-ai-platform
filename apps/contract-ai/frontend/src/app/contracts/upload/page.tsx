@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import axios from 'axios'
+import toast from 'react-hot-toast'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import FileUpload from '@/components/forms/FileUpload'
@@ -39,23 +41,12 @@ export default function ContractUploadPage() {
 
   const handleUpload = async () => {
     if (!selectedFile || !formData.contractType) {
-      alert('Пожалуйста, загрузите файл и выберите тип договора')
+      toast.error('Пожалуйста, загрузите файл и выберите тип договора')
       return
     }
 
     setUploading(true)
     setUploadProgress(0)
-
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval)
-          return 90
-        }
-        return prev + 10
-      })
-    }, 200)
 
     try {
       const formDataToSend = new FormData()
@@ -65,27 +56,27 @@ export default function ContractUploadPage() {
       formDataToSend.append('partyB', formData.partyB)
       formDataToSend.append('description', formData.description)
 
-      const response = await fetch('/api/contracts/upload', {
-        method: 'POST',
-        body: formDataToSend
+      const response = await axios.post('/api/contracts/upload', formDataToSend, {
+        onUploadProgress: (event) => {
+          if (!event.total) {
+            return
+          }
+          const progress = Math.min(100, Math.round((event.loaded * 100) / event.total))
+          setUploadProgress(progress)
+        },
       })
 
-      if (!response.ok) throw new Error('Upload failed')
-
-      const result = await response.json()
-
       setUploadProgress(100)
-      clearInterval(interval)
+      toast.success('Файл загружен, открываю карточку договора')
 
       // Redirect to contract details page
       setTimeout(() => {
-        router.push(`/contracts/${result.contractId}`)
+        router.push(`/contracts/${response.data.contractId}`)
       }, 500)
 
     } catch (error) {
-      clearInterval(interval)
       console.error('Upload error:', error)
-      alert('Ошибка загрузки файла. Пожалуйста, попробуйте снова.')
+      toast.error('Ошибка загрузки файла. Пожалуйста, попробуйте снова.')
       setUploading(false)
       setUploadProgress(0)
     }

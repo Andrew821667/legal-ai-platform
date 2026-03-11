@@ -150,6 +150,17 @@ class Config:
             'https://legalaipro.ru/marketing-consent',
         )
         self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'privacy@legalaipro.ru')
+        self.OPERATOR_NAME: str = os.getenv('OPERATOR_NAME', 'Legal AI PRO').strip()
+        self.OPERATOR_INN: str = os.getenv('OPERATOR_INN', '').strip()
+        self.OPERATOR_DETAILS: str = os.getenv('OPERATOR_DETAILS', '').strip()
+        self.CONVERSATION_RETENTION_DAYS: int = max(
+            1,
+            int(os.getenv('CONVERSATION_RETENTION_DAYS', '90')),
+        )
+        self.CONVERSATION_CLEANUP_INTERVAL_HOURS: int = max(
+            1,
+            int(os.getenv('CONVERSATION_CLEANUP_INTERVAL_HOURS', '24')),
+        )
 
         # Настройки квалификации лидов
         self.LEAD_QUALIFICATION_THRESHOLD: float = float(os.getenv('LEAD_QUALIFICATION_THRESHOLD', '0.7'))
@@ -250,7 +261,7 @@ class Config:
         if ":" not in self.TELEGRAM_BOT_TOKEN:
             raise ValueError("Неверный формат TELEGRAM_BOT_TOKEN")
 
-        if not self.OPENAI_API_KEY.startswith(('sk-', 'sk-proj-')):
-            raise ValueError("Неверный формат OPENAI_API_KEY")
+        if len(self.OPENAI_API_KEY.strip()) < 8:
+            raise ValueError("OPENAI_API_KEY выглядит слишком коротким")
 
         return True

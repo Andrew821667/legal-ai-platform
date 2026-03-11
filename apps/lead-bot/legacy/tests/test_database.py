@@ -79,6 +79,36 @@ def test_add_message(test_db):
     assert history[0]['role'] == 'user'
 
 
+def test_cleanup_conversations_by_retention(test_db):
+    user_id = test_db.create_or_update_user(
+        telegram_id=987654321,
+        username="retention_user",
+        first_name="Retention",
+    )
+    test_db.add_message(user_id, 'user', 'Old message')
+    test_db.add_message(user_id, 'assistant', 'Fresh message')
+
+    conn = test_db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE conversations
+        SET timestamp = datetime('now', '-120 days')
+        WHERE user_id = ? AND role = 'user'
+        """,
+        (user_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    deleted = test_db.cleanup_conversations_by_retention(90)
+    history = test_db.get_conversation_history(user_id, limit=10)
+
+    assert deleted == 1
+    assert len(history) == 1
+    assert history[0]["message"] == "Fresh message"
+
+
 def test_create_lead(test_db):
     """Проверка создания лида"""
     # Создаем пользователя

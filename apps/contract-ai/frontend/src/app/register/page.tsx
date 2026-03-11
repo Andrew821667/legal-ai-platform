@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
+import toast from 'react-hot-toast'
 import Button from '@/components/ui/Button'
 
 interface RegisterFormData {
@@ -31,7 +32,7 @@ export default function RegisterPage() {
       router.push('/login?registered=true')
     } catch (error) {
       console.error('Registration error:', error)
-      alert('Ошибка регистрации. Попробуйте снова.')
+      toast.error('Ошибка регистрации. Попробуйте снова.')
     } finally {
       setIsLoading(false)
     }

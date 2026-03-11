@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: legal-ai-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-legalai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
-      POSTGRES_DB: ${POSTGRES_DB:-legalai}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
       TZ: ${TZ:-Europe/Moscow}
     command: >
       postgres
@@ -17,7 +17,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legalai} -d ${POSTGRES_DB:-legalai}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legalai_app} -d ${POSTGRES_DB:-legalai_platform}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -69,7 +69,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
       MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://legalaipro.ru}
       TZ: ${TZ:-Europe/Moscow}
@@ -243,12 +243,12 @@ services:
     env_file:
       - ../../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-legalai}
-      POSTGRES_USER: ${POSTGRES_USER:-legalai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
       CORE_API_URL: http://core-api:8000
@@ -276,12 +276,12 @@ services:
     env_file:
       - ../../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai}:${POSTGRES_PASSWORD:-legalai}@postgres:5432/${POSTGRES_DB:-legalai}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-legalai}
-      POSTGRES_USER: ${POSTGRES_USER:-legalai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legalai}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
       CORE_API_URL: http://core-api:8000

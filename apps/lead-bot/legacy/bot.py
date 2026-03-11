@@ -822,6 +822,21 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Error in pending leads job: %s", error, exc_info=True)
 
 
+async def cleanup_conversations_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Фоновая очистка истории диалогов по retention policy."""
+    _ = context
+    try:
+        deleted = database.db.cleanup_conversations_by_retention(config.CONVERSATION_RETENTION_DAYS)
+        if deleted:
+            logger.info(
+                "Conversation retention cleanup completed: deleted=%s days=%s",
+                deleted,
+                config.CONVERSATION_RETENTION_DAYS,
+            )
+    except Exception as error:
+        logger.error("Error in conversation retention job: %s", error, exc_info=True)
+
+
 def build_application() -> Application:
     request = HTTPXRequest(
         connect_timeout=8.0,
@@ -909,6 +924,22 @@ def build_application() -> Application:
             config.PENDING_LEADS_IDLE_MINUTES,
             config.PENDING_LEADS_JOB_MAX_BATCH,
             config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS,
+        )
+        application.job_queue.run_repeating(
+            cleanup_conversations_job,
+            interval=config.CONVERSATION_CLEANUP_INTERVAL_HOURS * 3600,
+            first=min(300, config.CONVERSATION_CLEANUP_INTERVAL_HOURS * 60),
+            name="conversation_retention_cleanup",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": 600,
+            },
+        )
+        logger.info(
+            "Conversation retention cleanup enabled: every=%sh retention=%sd",
+            config.CONVERSATION_CLEANUP_INTERVAL_HOURS,
+            config.CONVERSATION_RETENTION_DAYS,
         )
     else:
         logger.warning("JobQueue is not available, pending lead notifications disabled")

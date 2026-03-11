@@ -157,6 +157,11 @@ def _build_client_profile_text(user_row: dict, lead: dict | None, consent_state:
     )
 
 
+def _has_pdn_consent(consent_state: dict | None) -> bool:
+    consent_state = consent_state or {}
+    return bool(consent_state.get("consent_given")) and not bool(consent_state.get("consent_revoked"))
+
+
 def _admin_lookup_menu_markup(back_callback: str, back_label: str) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("🗂️ Карточка по ID", callback_data="admin_lookup_card_prompt")],
@@ -202,6 +207,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         user_db_id = None
         lead = None
         selected_profile = None
+        consent_state = {}
         if user:
             user_db_id = database.db.create_or_update_user(
                 telegram_id=user.id,
@@ -211,6 +217,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             )
             lead = database.db.get_local_lead_by_user_id(user_db_id) if user_db_id else None
             selected_profile = database.db.get_user_offer_profile(user_db_id)
+            consent_state = database.db.get_user_consent_state(user_db_id) if user_db_id else {}
         menu_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
         async def _send_business_menu_message(text: str, reply_markup: InlineKeyboardMarkup | None) -> None:
@@ -281,6 +288,20 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         contact_flow_actions = contact_actions | {"menu_contact_send_phone", "menu_contact_telegram_only"}
         if callback_data not in contact_flow_actions:
             _clear_business_contact_state(context)
+
+        if (
+            user
+            and user.id != config.ADMIN_TELEGRAM_ID
+            and callback_data in contact_flow_actions
+            and not _has_pdn_consent(consent_state)
+        ):
+            await utils.safe_reply_text(
+                query.message,
+                f"{content.pdn_consent_required_text('Консультации и передаче контакта')}\n\n{content.CONSENT_STEP_1_TEXT}",
+                reply_markup=InlineKeyboardMarkup(CONSENT_PDN_MENU),
+                action="menu_requires_pdn",
+            )
+            return
 
         if callback_data == "menu_restart":
             if user_db_id:
@@ -686,6 +707,15 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         await utils.safe_reply_text(query.message, "Ошибка. Попробуйте /start", action="lead_magnet_no_user")
         return
 
+    if user.id != config.ADMIN_TELEGRAM_ID and not _has_pdn_consent(database.db.get_user_consent_state(user_data["id"])):
+        await utils.safe_reply_text(
+            query.message,
+            f"{content.pdn_consent_required_text('получению материалов и фиксации заявки')}\n\n{content.CONSENT_STEP_1_TEXT}",
+            reply_markup=InlineKeyboardMarkup(CONSENT_PDN_MENU),
+            action="lead_magnet_requires_pdn",
+        )
+        return
+
     magnet_type = query.data.replace("magnet_", "")
     if magnet_type == "demo_analysis":
         magnet_type = "demo"
@@ -832,11 +862,11 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
 
     if action == "consent_pdn_yes":
         database.db.grant_user_consent(user_data["id"])
-        database.db.set_user_transborder_consent(user_data["id"], True)
         await utils.safe_edit_text(
             query.message,
-            "✅ Согласие на обработку ПД и трансграничную передачу сохранено.\n\n"
-            "AI-режим включен. Можно описать задачу в свободной форме.",
+            "✅ Согласие на обработку ПД сохранено.\n\n"
+            "Теперь можно оставить заявку, передать контакт и получать материалы.\n"
+            "Для AI-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
             action="consent_pdn_yes",
         )
 

@@ -728,6 +728,14 @@ def _is_pdn_consent_granted(consent_state: Dict) -> bool:
     return bool(consent_state.get("consent_given")) and not bool(consent_state.get("consent_revoked"))
 
 
+def _should_require_pdn_consent(is_admin: bool, consent_state: Dict) -> bool:
+    return not is_admin and not _is_pdn_consent_granted(consent_state)
+
+
+def _pdn_consent_prompt_text(action_label: str | None = None) -> str:
+    return f"{content.pdn_consent_required_text(action_label)}\n\n{content.CONSENT_STEP_1_TEXT}"
+
+
 def _format_profile_text(user_data: Dict, lead: Optional[Dict], consent_state: Dict, is_admin: bool) -> str:
     lead = lead or {}
     if is_admin:
@@ -928,32 +936,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat is not None:
             database.db.set_chat_mode(int(chat.id), "bot")
 
-        # Для пользователей (кроме админа) сначала обязателен сбор согласия на ПД.
-        if user.id != config.ADMIN_TELEGRAM_ID:
-            consent_state = database.db.get_user_consent_state(user_id)
-            if not _is_pdn_consent_granted(consent_state):
-                consent_text = content.CONSENT_STEP_1_TEXT
-                if _READER_START_PAYLOAD_RE.match(start_payload):
-                    consent_text = (
-                        f"{consent_text}\n\n"
-                        "После подтверждения согласия сразу подхвачу ваш запрос по материалу из ридер-бота."
-                    )
-                elif _CONTRACT_START_PAYLOAD_RE.match(start_payload):
-                    consent_text = (
-                        f"{consent_text}\n\n"
-                        "После подтверждения согласия сразу переведу вас в договорный контур Contract_AI_System."
-                    )
-                await utils.safe_reply_text(
-                    update.message,
-                    consent_text,
-                    reply_markup=_pdn_consent_markup(),
-                    action="start_consent_step_1",
-                )
-                return
-
         # Приветственное сообщение + рабочий стол
         lead = database.db.get_lead_by_user_id(user_id)
         selected_profile = database.db.get_user_offer_profile(user_id)
+        consent_state = database.db.get_user_consent_state(user_id)
+        needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
         welcome_message = content.build_welcome_message(user.first_name)
         reply_markup = _main_menu_markup(user.id)
         workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
@@ -977,12 +964,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Workspace sent on /start for user %s", user.id)
 
         user_data = database.db.get_user_by_id(user_id)
-        if user_data:
+        if user_data and not needs_pdn_consent:
             await process_pending_start_payload(
                 message=update.message,
                 context=context,
                 user_data=user_data,
                 user=user,
+            )
+        elif needs_pdn_consent and start_payload:
+            consent_text = _pdn_consent_prompt_text()
+            if _READER_START_PAYLOAD_RE.match(start_payload):
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения согласия сразу подхвачу ваш запрос по материалу из ридер-бота."
+                )
+            elif _CONTRACT_START_PAYLOAD_RE.match(start_payload):
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения согласия сразу переведу вас в договорный контур Contract_AI_System."
+                )
+            await utils.safe_reply_text(
+                update.message,
+                consent_text,
+                reply_markup=_pdn_consent_markup(),
+                action="start_consent_step_1",
             )
 
     except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
@@ -1405,13 +1410,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             return
 
-        if not is_admin and not has_pdn_consent:
-            await original_message.reply_text(
-                content.CONSENT_STEP_1_TEXT,
-                reply_markup=_pdn_consent_markup(),
-            )
-            return
-
         # В новой сессии всегда сначала показываем стартовый UX
         # (приветствие + рабочий стол), даже если пользователь сразу пишет вопрос.
         history_preview = database.db.get_conversation_history(user_data["id"], limit=1)
@@ -1461,9 +1459,81 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("Workspace sent on greeting for user %s", user.id)
             return
 
+        if (
+            _button_text_equals(message_text, "🧭 Рабочий стол")
+            or _button_text_equals(message_text, "📋 Меню услуг")
+            or message_text.strip().lower() in ["/menu", "menu", "/меню", "меню"]
+        ):
+            await menu_command(update, context)
+            return
+
+        if _button_text_equals(message_text, "👤 Мой профиль"):
+            await profile_command(update, context)
+            return
+
+        if _button_text_equals(message_text, "📚 Документы"):
+            await documents_command(update, context)
+            return
+
+        if _button_text_equals(message_text, "🔄 Начать заново"):
+            await reset_command(update, context)
+            return
+
+        if _button_text_equals(message_text, "⬅️ Отмена"):
+            await utils.safe_reply_text(
+                original_message,
+                "Ок, вернул основное меню.",
+                reply_markup=_main_menu_markup(user.id),
+                action="cancel_to_main_menu",
+            )
+            return
+
+        if _button_text_equals(message_text, "📞 Консультация") or _button_text_equals(message_text, "✉️ Заказать консультацию"):
+            if _should_require_pdn_consent(is_admin, consent_state):
+                await utils.safe_reply_text(
+                    original_message,
+                    _pdn_consent_prompt_text("Консультации"),
+                    reply_markup=_pdn_consent_markup(),
+                    action="consultation_requires_pdn",
+                )
+                return
+            if allow_lead_processing:
+                database.db.create_or_update_lead(
+                    user_data["id"],
+                    {
+                        "name": user.first_name,
+                        "lead_magnet_type": "consultation",
+                        "lead_magnet_delivered": False,
+                    },
+                )
+            await utils.safe_reply_text(
+                original_message,
+                "Оставьте номер телефона, и команда свяжется с вами в ближайшее рабочее время.",
+                reply_markup=_consultation_contact_markup(),
+                action="consultation_phone_prompt",
+            )
+            return
+
         # В non-text ветке поддерживаем сценарий демо (документ + email).
         if not message_text:
+            if _should_require_pdn_consent(is_admin, consent_state):
+                await utils.safe_reply_text(
+                    original_message,
+                    _pdn_consent_prompt_text("передаче контакта или материалов"),
+                    reply_markup=_pdn_consent_markup(),
+                    action="non_text_requires_pdn",
+                )
+                return
             await _handle_non_text_input(update, context, user_data, lead, allow_lead_processing)
+            return
+
+        if _should_require_pdn_consent(is_admin, consent_state):
+            await utils.safe_reply_text(
+                original_message,
+                _pdn_consent_prompt_text("AI-разбору кейса"),
+                reply_markup=_pdn_consent_markup(),
+                action="message_requires_pdn",
+            )
             return
 
         # 🛡️ ПРОВЕРКА БЕЗОПАСНОСТИ (только для текстовых сообщений)

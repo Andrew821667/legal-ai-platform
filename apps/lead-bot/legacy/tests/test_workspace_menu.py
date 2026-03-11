@@ -60,3 +60,9 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
         assert "канала Legal AI PRO" in response
     else:
         assert "канала Legal AI PRO" not in response
+
+
+def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
+    welcome = content.build_welcome_message("Андрей")
+    assert "Можно начать с кнопок ниже" in welcome
+    assert "информационный характер" in welcome

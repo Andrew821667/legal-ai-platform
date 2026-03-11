@@ -11,10 +11,12 @@ interface ExportButtonProps {
 
 export default function ExportButton({ data, filename = 'admin-data' }: ExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Экспорт в CSV
   const exportToCSV = () => {
     try {
+      setErrorMessage(null);
       let csvContent = '';
 
       // SEO Report
@@ -74,13 +76,14 @@ export default function ExportButton({ data, filename = 'admin-data' }: ExportBu
       setIsOpen(false);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Ошибка при экспорте данных');
+      setErrorMessage('Ошибка при экспорте данных в CSV');
     }
   };
 
   // Экспорт в JSON
   const exportToJSON = () => {
     try {
+      setErrorMessage(null);
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const link = document.createElement('a');
@@ -96,7 +99,7 @@ export default function ExportButton({ data, filename = 'admin-data' }: ExportBu
       setIsOpen(false);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Ошибка при экспорте данных');
+      setErrorMessage('Ошибка при экспорте данных в JSON');
     }
   };
 
@@ -184,12 +187,19 @@ export default function ExportButton({ data, filename = 'admin-data' }: ExportBu
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setErrorMessage(null);
+          setIsOpen(!isOpen);
+        }}
         className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
       >
         <Download className="w-4 h-4" />
         Экспорт
       </button>
+
+      {errorMessage && (
+        <p className="mt-2 max-w-64 text-sm text-amber-300">{errorMessage}</p>
+      )}
 
       {isOpen && (
         <>

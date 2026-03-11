@@ -2202,6 +2202,32 @@ class Database:
         finally:
             conn.close()
 
+    def cleanup_conversations_by_retention(self, retention_days: int | None = None) -> int:
+        """Удаляет сообщения диалогов старше заданного retention-порога."""
+        days = max(1, int(retention_days or config.CONVERSATION_RETENTION_DAYS))
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                """
+                DELETE FROM conversations
+                WHERE timestamp < datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            )
+            conn.commit()
+            deleted = int(cursor.rowcount or 0)
+            if deleted:
+                logger.info("Conversation retention cleanup removed %s rows (days=%s)", deleted, days)
+            return deleted
+        except Exception as error:
+            logger.error("Error cleaning conversations by retention: %s", error)
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     # === LEADS ===
 
     def create_or_update_lead(self, user_id: int, lead_data: Dict) -> int:
