@@ -948,10 +948,48 @@ def build_application() -> Application:
     return application
 
 
+def _log_runtime_disclosure_warnings() -> None:
+    missing_fields: list[str] = []
+    if not (config.OPERATOR_NAME or "").strip():
+        missing_fields.append("OPERATOR_NAME")
+    if not (config.OPERATOR_INN or "").strip():
+        missing_fields.append("OPERATOR_INN")
+    if not (config.OPERATOR_DETAILS or "").strip():
+        missing_fields.append("OPERATOR_DETAILS")
+    if not (config.PRIVACY_CONTACT_EMAIL or "").strip():
+        missing_fields.append("PRIVACY_CONTACT_EMAIL")
+
+    missing_urls = [
+        name
+        for name, value in (
+            ("PRIVACY_POLICY_URL", config.PRIVACY_POLICY_URL),
+            ("TRANSBORDER_CONSENT_URL", config.TRANSBORDER_CONSENT_URL),
+            ("USER_AGREEMENT_URL", config.USER_AGREEMENT_URL),
+            ("AI_POLICY_URL", config.AI_POLICY_URL),
+            ("MARKETING_CONSENT_URL", config.MARKETING_CONSENT_URL),
+        )
+        if not (value or "").strip()
+    ]
+
+    if missing_fields:
+        logger.warning(
+            "Operator runtime disclosure is incomplete. Missing fields: %s. "
+            "See docs/operator-runtime-disclosure-checklist.md",
+            ", ".join(missing_fields),
+        )
+    if missing_urls:
+        logger.warning(
+            "Public policy URL contour is incomplete. Missing URLs: %s. "
+            "See docs/operator-runtime-disclosure-checklist.md",
+            ", ".join(missing_urls),
+        )
+
+
 def main() -> None:
     try:
         _acquire_single_instance_lock()
         app = build_application()
+        _log_runtime_disclosure_warnings()
         logger.info("Legacy bot started")
         app.run_polling(
             timeout=30,

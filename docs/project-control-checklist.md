@@ -40,8 +40,8 @@
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
 - `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
-- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, `database_users.py`, `database_chat_state.py`, `database_schema.py`; основной разрез `database.py` по сути завершен, но `callbacks.py` и `user.py` еще не добиты.
-- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок вынесен из `callbacks.py`, `database.py` уже сокращен до ~1010 строк, но модульная декомпозиция legacy еще не закончена.
+- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `handlers/callback_flows.py`, `handlers/business_menu_callbacks.py`, `handlers/cleanup_callbacks.py`, `handlers/user_commands.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, `database_users.py`, `database_chat_state.py`, `database_schema.py`; основной разрез `database.py` по сути завершен, `callbacks.py` сокращен до ~25 строк как фасад, `business_menu_callbacks.py` — до ~540 строк, `user.py` — до ~1550 строк, но декомпозиция legacy еще не закончена.
+- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок, cleanup и secondary callback flows вынесены из `callbacks.py`, командный слой вынесен в `handlers/user_commands.py`, `database.py` уже сокращен до ~1010 строк, но модульная декомпозиция legacy еще не закончена.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
@@ -93,8 +93,8 @@
   - трансграничную передачу
   - реквизиты оператора
   - retention policy на уровне регламента, а не только кода
-- `[~]` Проверить фактические публичные URL политик и их актуальность.
-- `[~]` Привести `lead-bot` и `web` к одному public policy contour:
+- `[~]` Проверить фактические публичные URL политик и их актуальность; runtime-checklist оформлен в [operator-runtime-disclosure-checklist.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/operator-runtime-disclosure-checklist.md), но живая проверка после деплоя остается ручной.
+- `[x]` Привести `lead-bot` и `web` к одному public policy contour:
   - `privacy`
   - `transborder-consent`
   - `marketing-consent`
@@ -102,7 +102,7 @@
   - `ai-policy`
 - `[x]` Missing legal routes добавлены в `web`: `transborder-consent`, `marketing-consent`, `user-agreement`, `ai-policy`.
 - `[!]` Заполнить в runtime `OPERATOR_*` и `PRIVACY_CONTACT_EMAIL`, если публичный контур запускается с реальными пользователями.
-- `[!]` Завести отдельный incident/compliance runbook для утечек/инцидентов с ПД.
+- `[x]` Заведен отдельный incident/compliance runbook для утечек/инцидентов с ПД: [pd-incident-runbook.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/pd-incident-runbook.md)
 
 ## Осталось в первую очередь
 - `[x]` Secret inventory + rotation checklist.
@@ -110,7 +110,7 @@
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
 - `[~]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[x]` Отдельный compliance-review по реальной операционной схеме.
-- `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour.
+- `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour; runtime/startup warnings и отдельные checklists уже добавлены, ручной regulatory контур остается.
 
 ## Финальная сверка перед commit/push
 - `[ ]` `git status` понятен, нет случайных чужих правок.
