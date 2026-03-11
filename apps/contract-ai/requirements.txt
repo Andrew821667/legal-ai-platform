@@ -33,7 +33,7 @@ scipy==1.11.4
 
 # Document processing
 python-docx==1.1.0
-pypdf==5.0.0
+pypdf==6.8.0
 pdfplumber==0.10.3
 reportlab==4.0.9  # PDF generation
 lxml==5.1.0
@@ -44,7 +44,7 @@ pdf2docx>=0.5.6  # PDF → DOCX с сохранением форматирова
 # OCR and additional formats
 pytesseract==0.3.10
 pdf2image==1.17.0
-Pillow==10.3.0
+Pillow==12.1.1
 striprtf==0.0.26
 odfpy==1.4.1
 pypandoc==1.13
