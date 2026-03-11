@@ -198,7 +198,7 @@ export default function MiniAppProfilePage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_profile"
         sourceScreen="/miniapp/profile"
-        title="Персональный маршрут: Узнать -> Проверить -> Внедрить"
+        title="Персональный маршрут: Узнать -> Проверить -> Обсудить пилот"
       />
     </section>
   );

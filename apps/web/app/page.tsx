@@ -5,7 +5,7 @@ import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink
 export const metadata: Metadata = {
   title: "Платформа Legal AI PRO",
   description:
-    "Платформа для автоматизации юридической функции: отдельные сценарии для юристов и бизнеса, флагманский Contract_AI_System и прикладные решения внедрения.",
+    "Платформа для автоматизации юридической функции: бесплатный вход, флагманский Contract_AI_System для проверки договоров и этапные сценарии внедрения.",
   alternates: {
     canonical: "/",
   },
@@ -22,7 +22,7 @@ const audienceCards = [
   {
     title: "Для бизнеса",
     description:
-      "Выстраиваем управляемую юридическую функцию: быстрее согласования, прозрачные SLA, контроль рисков и прогнозируемая нагрузка команды.",
+      "Выстраиваем управляемую юридическую функцию: быстрее согласования, прозрачные сроки реакции, контроль рисков и прогнозируемая нагрузка команды.",
     href: ROUTES.forBusiness,
     cta: "Сценарии для бизнеса",
   },
@@ -45,9 +45,28 @@ const platformLayers = [
 
 const cases = [
   "Автоматизация входящих заявок и квалификации обращений",
-  "Сокращение цикла согласования договоров за счет AI-проверки",
+  "Сокращение цикла согласования договоров за счет ИИ-проверки",
   "Единый контур юридического контента и экспертных разборов",
-  "Поддержка legal ops: регламенты, шаблоны, контроль качества",
+  "Поддержка организации юридической работы: регламенты, шаблоны, контроль качества",
+];
+
+const launchPath = [
+  {
+    title: "1. Бесплатно познакомиться",
+    description: "Бесплатная консультация 30 минут, гайд или демонстрационный разбор договора.",
+  },
+  {
+    title: "2. Проверить гипотезу",
+    description: "Через Contract_AI_System на реальных документах и прикладном сценарии.",
+  },
+  {
+    title: "3. Запустить пилот",
+    description: "Ограниченный пилот на 2-4 недели. Обычно стартует от 150 000 ₽.",
+  },
+  {
+    title: "4. Развернуть рабочий контур",
+    description: "Рабочее решение с интеграциями — обычно от 300 000 ₽, масштабирование — от 500 000 ₽.",
+  },
 ];
 
 export default function Home() {
@@ -63,11 +82,12 @@ export default function Home() {
             Платформа автоматизации юридической работы
           </span>
           <h1 className="mt-6 max-w-4xl text-4xl md:text-5xl font-semibold leading-tight text-white">
-            Legal AI PRO: единая система для юридической функции, контента и внедрения AI-решений
+            Legal AI PRO: от бесплатной консультации и проверки договора к пилоту и рабочему внедрению
           </h1>
           <p className="mt-6 max-w-3xl text-lg text-slate-300 leading-relaxed">
-            Помогаем перейти от разрозненных AI-экспериментов к управляемой практике: выделяем приоритетные процессы,
-            внедряем Contract_AI_System и фиксируем бизнес-эффект на уровне KPI.
+            Помогаем перейти от разрозненных ИИ-экспериментов к управляемой практике: сначала бесплатно помогаем
+            понять задачу, затем проверяем гипотезу в Contract_AI_System и только после этого выходим в пилот и
+            рабочий контур.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {contractAIExternal ? (
@@ -77,14 +97,14 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
               >
-                Открыть Contract_AI_System
+                Открыть сервис проверки договоров
               </a>
             ) : (
               <Link
                 href={contractAIHref}
                 className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
               >
-                Попробовать Contract_AI_System
+                Открыть сервис проверки договоров
               </Link>
             )}
             <Link
@@ -99,9 +119,27 @@ export default function Home() {
               rel="noopener noreferrer"
               className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
             >
-              Написать в Ассистент Legal AI Pro
+              Бесплатная консультация в Telegram
             </a>
           </div>
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="max-w-3xl">
+          <h2 className="text-3xl md:text-4xl font-semibold text-white">Как обычно начинается работа</h2>
+          <p className="mt-4 text-slate-300">
+            Важный принцип платформы: не обещаем подписку и не продаем абстрактный сервис с первого клика. Сначала
+            бесплатный вход, затем проверка на реальном кейсе, потом пилот и только после этого рабочее внедрение.
+          </p>
+        </div>
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {launchPath.map((item) => (
+            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+              <h3 className="font-semibold text-amber-300">{item.title}</h3>
+              <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.description}</p>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -138,8 +176,8 @@ export default function Home() {
               <p className="mt-2 text-sm text-slate-400">Комментарий по нормам, альтернативные формулировки и план правок.</p>
             </div>
             <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-5">
-              <h3 className="font-semibold text-white">Внедрить</h3>
-              <p className="mt-2 text-sm text-slate-400">Интеграция в процесс согласования и матрицу юридического контроля.</p>
+              <h3 className="font-semibold text-white">Запустить пилот</h3>
+              <p className="mt-2 text-sm text-slate-400">Подтвердить эффект на ограниченном процессе и только потом масштабировать в рабочий контур.</p>
             </div>
           </div>
         </div>

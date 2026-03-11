@@ -13,7 +13,7 @@ type CtaFrameworkPanelProps = {
 export default function CtaFrameworkPanel({
   leadStart,
   miniAppHref = ROUTES.miniApp,
-  title = "Единый маршрут: Узнать -> Проверить -> Внедрить",
+  title = "Единый маршрут: Узнать -> Проверить -> Обсудить пилот",
   className = "",
   variant = "validate-first",
 }: CtaFrameworkPanelProps) {
@@ -62,7 +62,7 @@ export default function CtaFrameworkPanel({
           rel="noopener noreferrer"
           className={classFor("consult")}
         >
-          🛠 Внедрить
+          🛠 Обсудить пилот
         </a>
       </div>
       <div className="mt-4 flex flex-wrap gap-3 text-sm">

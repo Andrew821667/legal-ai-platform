@@ -64,7 +64,7 @@ export default function SolutionsPage() {
             <CtaFrameworkPanel
               leadStart="web_solutions_intro"
               miniAppHref={ROUTES.miniAppSolutions}
-              title="Единый маршрут решений: Узнать -> Проверить -> Внедрить"
+              title="Единый маршрут решений: Узнать -> Проверить -> Обсудить пилот"
               variant="consult-first"
             />
           </div>
@@ -121,7 +121,7 @@ export default function SolutionsPage() {
             <CtaFrameworkPanel
               leadStart="web_solutions_discuss"
               miniAppHref={ROUTES.miniAppSolutions}
-              title="Выбор следующего шага: Узнать -> Проверить -> Внедрить"
+              title="Выбор следующего шага: Узнать -> Проверить -> Обсудить пилот"
               variant="consult-first"
             />
           </div>

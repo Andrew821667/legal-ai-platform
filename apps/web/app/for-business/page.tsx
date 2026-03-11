@@ -75,7 +75,7 @@ export default function ForBusinessPage() {
             <CtaFrameworkPanel
               leadStart="web_for_business"
               miniAppHref={ROUTES.miniAppSolutions}
-              title="Единый маршрут для бизнеса: Узнать -> Проверить -> Внедрить"
+              title="Единый маршрут для бизнеса: Узнать -> Проверить -> Обсудить пилот"
               variant="consult-first"
             />
           </div>

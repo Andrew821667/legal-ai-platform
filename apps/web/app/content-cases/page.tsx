@@ -34,7 +34,7 @@ const conversionFlow = [
     description: "Протестировать гипотезу в Contract_AI_System на собственных документах и сценариях.",
   },
   {
-    title: "3. Внедрить",
+    title: "3. Запустить пилот",
     description: "Запустить пилот и поэтапно встроить рабочий сценарий в юридическую функцию.",
   },
 ];
@@ -56,7 +56,7 @@ export default function ContentCasesPage() {
             <CtaFrameworkPanel
               leadStart="web_cases_intro"
               miniAppHref={ROUTES.miniAppContent}
-              title="Маршрут по кейсам: Узнать -> Проверить -> Внедрить"
+              title="Маршрут по кейсам: Узнать -> Проверить -> Обсудить пилот"
               variant="discover-first"
             />
           </div>
@@ -89,7 +89,7 @@ export default function ContentCasesPage() {
             <CtaFrameworkPanel
               leadStart="web_cases_discuss"
               miniAppHref={ROUTES.miniAppContent}
-              title="Следующий шаг после кейса: Узнать -> Проверить -> Внедрить"
+              title="Следующий шаг после кейса: Узнать -> Проверить -> Обсудить пилот"
               variant="consult-first"
             />
           </div>

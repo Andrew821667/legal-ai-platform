@@ -58,7 +58,7 @@ export default function MiniAppToolsPage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_tools"
         sourceScreen="/miniapp/tools"
-        title="Маршрут инструментов: Узнать -> Проверить -> Внедрить"
+        title="Маршрут инструментов: Узнать -> Проверить -> Обсудить пилот"
       />
     </section>
   );

@@ -225,9 +225,8 @@ export default function MiniAppContentPage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_content"
         sourceScreen="/miniapp/content"
-        title="Следующий шаг по контенту: Узнать -> Проверить -> Внедрить"
+        title="Следующий шаг по контенту: Узнать -> Проверить -> Обсудить пилот"
       />
     </section>
   );
 }
-

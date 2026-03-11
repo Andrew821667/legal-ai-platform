@@ -6,7 +6,7 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 export const metadata: Metadata = {
   title: "Contract_AI_System",
   description:
-    "Флагманский продукт Legal AI PRO для проверки договоров: риски, рекомендации по правкам, контроль согласований и аудит юридических решений.",
+    "Флагманский внешний сервис Legal AI PRO для проверки договоров: бесплатный вход, демонстрационный разбор, пилот и рабочий контур.",
   alternates: { canonical: "/contract-ai-system" },
 };
 
@@ -41,7 +41,7 @@ const taskTracks = [
     items: [
       "Сокращаем цикл согласования сделки",
       "Делаем риски прозрачными для руководителей",
-      "Стабилизируем SLA юридической функции",
+      "Стабилизируем сроки реакции юридической функции",
     ],
   },
 ];
@@ -59,6 +59,13 @@ const integrationPoints = [
   "Поддержка внутренних регламентов и матриц ответственности",
 ];
 
+const launchFormats = [
+  "Бесплатный вход: консультация, демонстрационный разбор и пример отчета по договору.",
+  "Пилотный сценарий: ограниченный контур на 2-4 недели, обычно от 150 000 ₽.",
+  "Рабочий контур: расширение на процесс согласования и связанные задачи, обычно от 300 000 ₽.",
+  "Интеграции и масштабирование: отдельный следующий этап, обычно от 500 000 ₽.",
+];
+
 export default function ContractAISystemPage() {
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
@@ -71,14 +78,14 @@ export default function ContractAISystemPage() {
           </span>
           <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">Contract_AI_System</h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
-            Центральная точка входа в автоматизацию юридической функции: быстрый анализ договоров, выявление рисков,
-            рекомендации по правкам и подготовка решений для согласования.
+            Это флагманский внешний сервис проверки договоров. Через него удобно быстро проверить гипотезу на реальных
+            документах: увидеть риски, получить рекомендации по правкам и понять, стоит ли переходить к пилоту.
           </p>
           <div className="mt-8">
             <CtaFrameworkPanel
               leadStart="contract_demo"
               miniAppHref={ROUTES.miniAppTools}
-              title="Маршрут Contract_AI_System: Узнать -> Проверить -> Внедрить"
+              title="Маршрут Contract_AI_System: Узнать -> Проверить -> Обсудить пилот"
               variant="validate-first"
             />
           </div>
@@ -90,7 +97,7 @@ export default function ContractAISystemPage() {
                 rel="noopener noreferrer"
                 className="inline-flex rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:border-emerald-300"
               >
-                🖥 Открыть внешний модуль Contract_AI_System
+                🖥 Открыть внешний сервис проверки договоров
               </a>
             </div>
           ) : null}
@@ -145,6 +152,19 @@ export default function ContractAISystemPage() {
         </ol>
       </section>
 
+      <section className="border-y border-slate-800 bg-slate-900/40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+          <h2 className="text-3xl font-semibold text-white">Как устроен запуск</h2>
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {launchFormats.map((item) => (
+              <article key={item} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 text-slate-200">
+                {item}
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="integrations" className="border-y border-slate-800 bg-slate-900/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Интеграции и контроль</h2>
@@ -162,14 +182,14 @@ export default function ContractAISystemPage() {
         <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-7">
           <h2 className="text-2xl font-semibold text-white">Следующий шаг</h2>
           <p className="mt-3 max-w-3xl text-slate-200">
-            Если хотите разобрать ваш договорный процесс и проверить, где AI даст максимальный эффект, передайте кейс в
-            Ассистент Legal AI Pro. Получите понятный формат пилота без лишней архитектурной сложности.
+            Если хотите разобрать ваш договорный процесс и проверить, где ИИ даст максимальный эффект, передайте кейс в
+            Ассистент Legal AI PRO. Получите понятный формат пилота без лишней архитектурной сложности.
           </p>
           <div className="mt-6">
             <CtaFrameworkPanel
               leadStart="contract_consultation"
               miniAppHref={ROUTES.miniAppTools}
-              title="Следующий шаг: Узнать -> Проверить -> Внедрить"
+              title="Следующий шаг: Узнать -> Проверить -> Обсудить пилот"
               variant="consult-first"
             />
           </div>

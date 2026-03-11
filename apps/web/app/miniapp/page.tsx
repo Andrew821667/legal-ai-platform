@@ -44,7 +44,7 @@ const fallbackHighlights: Record<keyof typeof audienceHints, HighlightCard[]> = 
 const sectionLabel: Record<string, string> = {
   discover: "🧠 Узнать",
   validate: "🧪 Проверить",
-  solutions: "🛠 Внедрить",
+  solutions: "🛠 Обсудить пилот",
   profile: "👤 Профиль",
 };
 
@@ -203,7 +203,7 @@ export default function MiniAppHomePage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_home"
         sourceScreen="/miniapp"
-        title="Единый маршрут в mini-app: Узнать -> Проверить -> Внедрить"
+        title="Единый маршрут в mini-app: Узнать -> Проверить -> Обсудить пилот"
       />
     </section>
   );

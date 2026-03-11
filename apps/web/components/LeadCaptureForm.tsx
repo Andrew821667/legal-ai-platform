@@ -22,9 +22,9 @@ declare global {
 
 const offerLabels: Record<LeadOffer, string> = {
   consultation: "Бесплатная консультация",
-  checklist: "Гайд по внедрению AI",
-  demo: "Демо-анализ договора",
-  sample_report: "Образец AI-отчета",
+  checklist: "Гайд по внедрению ИИ",
+  demo: "Демонстрационный разбор договора",
+  sample_report: "Пример отчета по договору",
   unknown: "Общий запрос",
 };
 
@@ -204,7 +204,7 @@ export default function LeadCaptureForm() {
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 >
                   <option value="other">Другое</option>
-                  <option value="inhouse">In-house команда</option>
+                  <option value="inhouse">Юридический отдел компании</option>
                   <option value="law_firm">Юридическая фирма</option>
                   <option value="entrepreneur">Предприниматель</option>
                 </select>
@@ -219,8 +219,8 @@ export default function LeadCaptureForm() {
                 >
                   <option value="consultation">Консультация</option>
                   <option value="checklist">Гайд</option>
-                  <option value="demo">Демо-анализ</option>
-                  <option value="sample_report">Образец AI-отчета</option>
+                  <option value="demo">Демонстрационный разбор договора</option>
+                  <option value="sample_report">Пример отчета по договору</option>
                   <option value="unknown">Общий запрос</option>
                 </select>
               </label>

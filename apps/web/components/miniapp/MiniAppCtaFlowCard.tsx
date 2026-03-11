@@ -13,7 +13,7 @@ type MiniAppCtaFlowCardProps = {
 export default function MiniAppCtaFlowCard({
   leadStart,
   sourceScreen,
-  title = "Маршрут: Узнать -> Проверить -> Внедрить",
+  title = "Маршрут: Узнать -> Проверить -> Обсудить пилот",
 }: MiniAppCtaFlowCardProps) {
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
@@ -66,7 +66,7 @@ export default function MiniAppCtaFlowCard({
           rel="noopener noreferrer"
           className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-medium text-sky-200 hover:border-sky-300 transition-colors"
         >
-          🛠 Внедрить через Ассистент Legal AI Pro
+          🛠 Обсудить пилот через Ассистент Legal AI PRO
         </MiniTrackedLink>
       </div>
     </article>

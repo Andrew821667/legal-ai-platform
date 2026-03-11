@@ -32,7 +32,7 @@ export default function MiniAppSolutionsPage() {
     <section className="space-y-4">
       <MiniAppGuideCard
         title="Как использовать экран"
-        description="Выберите ваш контур, откройте соответствующий маршрут и переходите к внедрению только после проверки гипотезы в продукте."
+        description="Выберите ваш контур, откройте соответствующий маршрут и переходите к пилоту только после проверки гипотезы в продукте."
       />
 
       {blocks.map((block) => (
@@ -57,7 +57,7 @@ export default function MiniAppSolutionsPage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_solutions"
         sourceScreen="/miniapp/solutions"
-        title="Маршрут решений: Узнать -> Проверить -> Внедрить"
+        title="Маршрут решений: Узнать -> Проверить -> Обсудить пилот"
       />
     </section>
   );

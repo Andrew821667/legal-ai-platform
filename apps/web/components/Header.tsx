@@ -139,14 +139,14 @@ export default function Header() {
                 rel="noopener noreferrer"
                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Открыть модуль →
+                Открыть сервис проверки договоров →
               </a>
             ) : (
               <Link
                 href={contractAIActionHref}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Попробовать продукт →
+                Открыть сервис проверки договоров →
               </Link>
             )}
           </div>
@@ -213,7 +213,7 @@ export default function Header() {
                   className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Открыть модуль →
+                  Открыть сервис проверки договоров →
                 </a>
               ) : (
                 <Link
@@ -221,7 +221,7 @@ export default function Header() {
                   className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Попробовать продукт →
+                  Открыть сервис проверки договоров →
                 </Link>
               )}
               <div className="mt-4 border-t border-slate-700 pt-3">

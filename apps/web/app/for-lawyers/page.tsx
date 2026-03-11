@@ -74,7 +74,7 @@ export default function ForLawyersPage() {
             <CtaFrameworkPanel
               leadStart="web_for_lawyers"
               miniAppHref={ROUTES.miniAppTools}
-              title="Единый маршрут для юристов: Узнать -> Проверить -> Внедрить"
+              title="Единый маршрут для юристов: Узнать -> Проверить -> Обсудить пилот"
               variant="validate-first"
             />
           </div>
