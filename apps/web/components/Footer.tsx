@@ -234,6 +234,12 @@ export default function Footer() {
             <Link href="/terms" className="text-slate-500 hover:text-amber-500 transition-colors">
               Условия использования
             </Link>
+            <Link href="/user-agreement" className="text-slate-500 hover:text-amber-500 transition-colors">
+              Соглашение
+            </Link>
+            <Link href="/ai-policy" className="text-slate-500 hover:text-amber-500 transition-colors">
+              AI policy
+            </Link>
           </div>
         </div>
       </div>

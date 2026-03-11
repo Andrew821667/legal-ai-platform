@@ -150,7 +150,7 @@ export default function PrivacyPolicy() {
             
             <ul className="list-disc pl-6 mb-4 text-slate-700 space-y-2">
               <li>Сохранения ваших предпочтений</li>
-              <li>Аналитики посещаемости через Google Analytics и Yandex Metrika</li>
+              <li>Аналитики посещаемости через Google Analytics и/или Yandex Metrika, если счетчики включены в текущей конфигурации сайта</li>
               <li>Улучшения функциональности Сайта</li>
               <li>Маркетинговых целей (ретаргетинг)</li>
             </ul>
@@ -193,6 +193,7 @@ export default function PrivacyPolicy() {
               <li><strong>Google (Analytics):</strong> веб-аналитика</li>
               <li><strong>Yandex (Metrika):</strong> веб-аналитика (Россия)</li>
               <li><strong>Telegram:</strong> коммуникация через бот</li>
+              <li><strong>OpenAI-compatible AI providers:</strong> обработка текста запроса в AI-режиме, если пользователь явно включает такой сценарий</li>
             </ul>
           </section>
 
@@ -207,6 +208,7 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-6 mb-4 text-slate-700 space-y-2">
               <li><strong>Клиенты:</strong> в течение срока действия договора + 5 лет после его окончания</li>
               <li><strong>Потенциальные клиенты:</strong> до момента отзыва согласия, но не более 3 лет</li>
+              <li><strong>История диалога в ботах:</strong> до 90 дней, если более короткий срок не требуется для отзыва согласия или удаления данных</li>
               <li><strong>Техническая информация:</strong> не более 2 лет с момента последнего посещения</li>
             </ul>
             

@@ -40,8 +40,8 @@
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
 - `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
-- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `database_conversations.py`, но основной разрез еще не завершен.
-- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок вынесен из `callbacks.py`, но модульная декомпозиция еще не закончена.
+- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, но основной разрез еще не завершен.
+- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок вынесен из `callbacks.py`, `database.py` уже сокращен до ~1610 строк, но модульная декомпозиция еще не закончена.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
@@ -87,20 +87,30 @@
 
 ## 7. Compliance и операционная модель
 - `[x]` Тексты consent/disclaimer стали ближе к реальной модели обработки данных.
-- `[ ]` Провести отдельный compliance-review не по коду, а по реальной операционной модели.
-- `[ ]` Проверить и при необходимости обновить:
+- `[x]` Проведен отдельный compliance-review по реальной операционной модели: [compliance-operating-model-review-2026-03-11.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/compliance-operating-model-review-2026-03-11.md)
+- `[~]` Проверить и при необходимости обновить:
   - уведомление/позицию по 152-ФЗ
   - трансграничную передачу
   - реквизиты оператора
   - retention policy на уровне регламента, а не только кода
-- `[ ]` Проверить фактические публичные URL политик и их актуальность.
+- `[~]` Проверить фактические публичные URL политик и их актуальность.
+- `[~]` Привести `lead-bot` и `web` к одному public policy contour:
+  - `privacy`
+  - `transborder-consent`
+  - `marketing-consent`
+  - `user-agreement`
+  - `ai-policy`
+- `[x]` Missing legal routes добавлены в `web`: `transborder-consent`, `marketing-consent`, `user-agreement`, `ai-policy`.
+- `[!]` Заполнить в runtime `OPERATOR_*` и `PRIVACY_CONTACT_EMAIL`, если публичный контур запускается с реальными пользователями.
+- `[!]` Завести отдельный incident/compliance runbook для утечек/инцидентов с ПД.
 
 ## Осталось в первую очередь
 - `[x]` Secret inventory + rotation checklist.
 - `[x]` Web disclaimer в системных точках интерфейса.
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
 - `[~]` Legacy refactor: split files + remove wildcard imports + config singleton.
-- `[ ]` Отдельный compliance-review по реальной операционной схеме.
+- `[x]` Отдельный compliance-review по реальной операционной схеме.
+- `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour.
 
 ## Финальная сверка перед commit/push
 - `[ ]` `git status` понятен, нет случайных чужих правок.

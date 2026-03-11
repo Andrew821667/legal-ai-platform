@@ -126,6 +126,32 @@ def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("admin_lookup_field", None)
 
 
+def _resolve_local_callback_user(user) -> tuple[int | None, dict | None]:
+    """Avoid a blind upsert on every callback when Telegram profile fields did not change."""
+    if not user:
+        return None, None
+
+    local_user = database.db.get_local_user_by_telegram_id(user.id)
+    if local_user:
+        username = local_user.get("username") or None
+        first_name = local_user.get("first_name") or None
+        last_name = local_user.get("last_name") or None
+        if (
+            username == (user.username or None)
+            and first_name == (user.first_name or None)
+            and last_name == (user.last_name or None)
+        ):
+            return int(local_user["id"]), local_user
+
+    user_db_id = database.db.create_or_update_user(
+        telegram_id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+    )
+    return user_db_id, (database.db.get_local_user_by_id(user_db_id) if user_db_id else None)
+
+
 async def handle_business_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обработчик inline кнопок меню для бизнес-чатов
@@ -150,19 +176,14 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
 
         user = query.from_user
         user_db_id = None
+        local_user = None
         lead = None
         selected_profile = None
-        consent_state = {}
+        consent_state = None
         if user:
-            user_db_id = database.db.create_or_update_user(
-                telegram_id=user.id,
-                username=user.username,
-                first_name=user.first_name,
-                last_name=user.last_name,
-            )
+            user_db_id, local_user = _resolve_local_callback_user(user)
             lead = database.db.get_local_lead_by_user_id(user_db_id) if user_db_id else None
-            selected_profile = database.db.get_user_offer_profile(user_db_id)
-            consent_state = database.db.get_user_consent_state(user_db_id) if user_db_id else {}
+            selected_profile = (local_user or {}).get("offer_profile_override") or None
         menu_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
         async def _send_business_menu_message(text: str, reply_markup: InlineKeyboardMarkup | None) -> None:
@@ -239,7 +260,11 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             user
             and user.id != config.ADMIN_TELEGRAM_ID
             and callback_data in contact_flow_actions
-            and not _has_pdn_consent(consent_state)
+            and not _has_pdn_consent(
+                consent_state
+                if consent_state is not None
+                else (database.db.get_user_consent_state(user_db_id) if user_db_id else {})
+            )
         ):
             await utils.safe_reply_html(
                 query.message,
@@ -313,7 +338,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     action="menu_profile_no_user",
                 )
                 return
-            user_row = database.db.get_local_user_by_id(user_db_id) or {}
+            user_row = local_user or database.db.get_local_user_by_id(user_db_id) or {}
             lead = database.db.get_local_lead_by_user_id(user_db_id)
             consent_state = database.db.get_user_consent_state(user_db_id)
             response_text = _build_client_profile_text(user_row, lead, consent_state)
