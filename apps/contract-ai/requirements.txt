@@ -1,7 +1,7 @@
 # LangChain and LangGraph
-langchain>=0.2.5
-langgraph>=1.0.10
-langchain-community>=0.3.27
+langchain==0.2.5
+langgraph==1.0.10
+langchain-community==0.3.27
 
 # LLM APIs
 anthropic==0.18.1
@@ -27,42 +27,42 @@ chromadb>=0.5.0
 sentence-transformers>=2.7.0
 
 # Machine Learning
-scikit-learn>=1.5.0
+scikit-learn==1.5.0
 numpy==1.26.3
 scipy==1.11.4
 
 # Document processing
 python-docx==1.1.0
-pypdf>=5.0.0
+pypdf==5.0.0
 pdfplumber==0.10.3
 reportlab==4.0.9  # PDF generation
 lxml==5.1.0
-mammoth>=1.11.0
+mammoth==1.11.0
 python-magic==0.4.27
 pdf2docx>=0.5.6  # PDF → DOCX с сохранением форматирования
 
 # OCR and additional formats
 pytesseract==0.3.10
 pdf2image==1.17.0
-Pillow>=10.3.0
+Pillow==10.3.0
 striprtf==0.0.26
 odfpy==1.4.1
 pypandoc==1.13
 
 # Template processing
-jinja2>=3.1.6
+jinja2==3.1.6
 
 # Web framework
-streamlit>=1.37.0
+streamlit==1.37.0
 fastapi==0.109.2
 uvicorn[standard]==0.27.0
-python-multipart>=0.0.22  # For FastAPI form data
+python-multipart==0.0.22  # For FastAPI form data
 websockets==12.0  # WebSocket support
 
 # Authentication & Security
 bcrypt==4.1.2
 pyjwt==2.8.0
-python-jose[cryptography]>=3.4.0
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 qrcode[pil]==7.4.2  # For demo link QR codes
 
@@ -74,7 +74,7 @@ stripe==7.9.0  # Stripe payment integration
 
 # Utilities
 python-dotenv==1.0.0
-requests>=2.32.4
+requests==2.32.4
 tenacity==8.2.3
 python-dateutil==2.8.2
 
@@ -93,7 +93,7 @@ pytest-cov==4.1.0
 pytest-benchmark==4.0.0  # Performance benchmarks
 
 # Code quality
-black>=24.3.0
+black==24.3.0
 flake8==7.0.0
 mypy==1.8.0
 
