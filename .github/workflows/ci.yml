@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: uv run ruff check apps/ packages/ --select F,B904,B905,UP031
 
@@ -38,7 +38,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://legalai:legalai@localhost:5432/legalai
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: uv run --package core-api --with httpx --directory apps/core-api alembic upgrade head
       - run: uv run --package core-api --with httpx pytest apps/core-api/tests/ -q
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: uv run --package news pytest apps/news/tests/ -q
 
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: python3 -m venv .venv-legacy
       - run: .venv-legacy/bin/pip install -r apps/lead-bot/legacy/requirements.txt
