@@ -247,6 +247,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 action=f"business_menu:{callback_data or 'unknown'}",
                 chat_id=query.message.chat.id,
                 text=text,
+                parse_mode="HTML",
                 business_connection_id=query.message.business_connection_id,
                 reply_markup=reply_markup,
             )
@@ -278,7 +279,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
-                await utils.safe_edit_text(
+                await utils.safe_edit_html(
                     query.message,
                     _clip_for_edit(response_text),
                     reply_markup=response_markup,
@@ -292,7 +293,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
-                await utils.safe_edit_text(
+                await utils.safe_edit_html(
                     query.message,
                     _clip_for_edit(response_text),
                     reply_markup=response_markup,
@@ -316,7 +317,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             and callback_data in contact_flow_actions
             and not _has_pdn_consent(consent_state)
         ):
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 query.message,
                 f"{content.pdn_consent_required_text('Консультации и передаче контакта')}\n\n{content.CONSENT_STEP_1_TEXT}",
                 reply_markup=InlineKeyboardMarkup(CONSENT_PDN_MENU),
@@ -356,7 +357,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, menu_markup)
             else:
-                await utils.safe_reply_text(
+                await utils.safe_reply_html(
                     query.message,
                     response_text,
                     action="menu_return_to_bot",
@@ -372,7 +373,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, menu_markup)
             else:
-                await utils.safe_edit_text(
+                await utils.safe_edit_html(
                     query.message,
                     response_text,
                     reply_markup=menu_markup,
@@ -409,7 +410,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, docs_markup)
             else:
-                await utils.safe_edit_text(
+                await utils.safe_edit_html(
                     query.message,
                     response_text,
                     reply_markup=docs_markup,
@@ -432,7 +433,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
-                await utils.safe_edit_text(
+                await utils.safe_edit_html(
                     query.message,
                     _clip_for_edit(response_text),
                     reply_markup=response_markup,
@@ -648,7 +649,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 if callback_data in {"menu_services", "menu_prices", "menu_help"}
                 else menu_markup
             )
-            await utils.safe_edit_text(
+            await utils.safe_edit_html(
                 query.message,
                 response_text,
                 reply_markup=reply_markup,
@@ -876,22 +877,22 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     action = query.data or ""
 
     if action == "consent_doc_privacy":
-        await utils.safe_reply_text(query.message, content.privacy_policy_text(), action="consent_doc_privacy")
+        await utils.safe_reply_html(query.message, content.privacy_policy_text(), action="consent_doc_privacy")
         return
 
     if action == "consent_doc_transborder":
-        await utils.safe_reply_text(query.message, content.transborder_policy_text(), action="consent_doc_transborder")
+        await utils.safe_reply_html(query.message, content.transborder_policy_text(), action="consent_doc_transborder")
         return
 
     if action == "consent_pdn_no":
-        await utils.safe_edit_text(query.message, content.CONSENT_DENIED_TEXT, action="consent_pdn_no")
+        await utils.safe_edit_html(query.message, content.CONSENT_DENIED_TEXT, action="consent_pdn_no")
         return
 
     if action == "consent_pdn_yes":
         database.db.grant_user_consent(user_data["id"])
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
-            "✅ Согласие на обработку ПД сохранено.\n\n"
+            "<b>✅ Согласие на обработку ПД сохранено.</b>\n\n"
             "Теперь можно оставить заявку, передать контакт и получать материалы.\n"
             "Для ИИ-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
             action="consent_pdn_yes",
@@ -902,13 +903,13 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             query.message,
             welcome_message,
             reply_markup=reply_markup,
             action="consent_welcome_after_yes",
         )
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             query.message,
             content.build_workspace_text(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
@@ -933,16 +934,16 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         transborder_enabled = action == "consent_transborder_yes"
         database.db.set_user_transborder_consent(user_data["id"], transborder_enabled)
         if transborder_enabled:
-            await utils.safe_edit_text(
+            await utils.safe_edit_html(
                 query.message,
-                "✅ Согласия сохранены. ИИ-режим включен.\n\n"
+                "<b>✅ Согласия сохранены.</b> ИИ-режим включен.\n\n"
                 "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг.",
                 action="consent_transborder_yes",
             )
         else:
-            await utils.safe_edit_text(
+            await utils.safe_edit_html(
                 query.message,
-                "✅ Согласие на обработку ПД сохранено.\n"
+                "<b>✅ Согласие на обработку ПД сохранено.</b>\n"
                 "ИИ-режим отключен до вашего разрешения на трансграничную передачу.\n\n"
                 "Можно пользоваться меню и оставить заявку на консультацию.",
                 action="consent_transborder_no",
@@ -953,13 +954,13 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
         else:
             reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             query.message,
             welcome_message,
             reply_markup=reply_markup,
             action="consent_welcome_after_transborder",
         )
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             query.message,
             content.build_workspace_text(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
@@ -989,15 +990,15 @@ def _documents_panel_markup() -> InlineKeyboardMarkup:
 
 def _documents_panel_text(selected_title: str | None = None, selected_body: str | None = None) -> str:
     base = (
-        "📚 Документы и права пользователя\n\n"
+        "<b>📚 Документы и права пользователя</b>\n\n"
         "Выберите пункт в меню ниже."
     )
     if not selected_title:
         return base
     return (
         f"{base}\n\n"
-        f"━━━━━━━━━━━━━━\n"
-        f"{selected_title}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        f"<b>{selected_title}</b>\n\n"
         f"{selected_body or ''}"
     ).strip()
 
@@ -1156,7 +1157,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
     action = query.data or ""
 
     if action == "doc_menu":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _documents_panel_text(),
             reply_markup=_documents_panel_markup(),
@@ -1165,7 +1166,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     if action == "doc_privacy":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📄 Политика ПД", content.privacy_policy_text())),
             reply_markup=_documents_panel_markup(),
@@ -1173,7 +1174,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_transborder":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("🌍 Трансграничная передача", content.transborder_policy_text())),
             reply_markup=_documents_panel_markup(),
@@ -1181,7 +1182,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_user_agreement":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📜 Пользовательское соглашение", content.user_agreement_text())),
             reply_markup=_documents_panel_markup(),
@@ -1189,7 +1190,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_ai_policy":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("🤖 Политика ИИ", content.ai_policy_text())),
             reply_markup=_documents_panel_markup(),
@@ -1197,7 +1198,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_marketing_consent":
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(
                 _documents_panel_text(
@@ -1213,7 +1214,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     if not user_data:
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _documents_panel_text("⚠️ Ошибка", "Сначала выполните /start."),
             reply_markup=_documents_panel_markup(),
@@ -1225,7 +1226,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         consent_state = database.db.get_user_consent_state(user_data["id"])
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         status_text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
-        await utils.safe_edit_text(
+        await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📑 Статус согласий", status_text)),
             reply_markup=_documents_panel_markup(),
@@ -1242,7 +1243,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
 
-    await utils.safe_edit_text(
+    await utils.safe_edit_html(
         query.message,
         _documents_panel_text("⚠️ Неизвестное действие", "Используйте /documents."),
         reply_markup=_documents_panel_markup(),

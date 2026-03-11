@@ -140,24 +140,30 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
 
             # Подтверждение пользователю
             base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
-            await update.message.reply_text(
+            await utils.safe_reply_html(
+                update.message,
                 f"{content.with_channel_nurture(base_message, after_contact=True)}\n\n"
-                f"Контакт для отправки: {email}"
+                f"<b>Контакт для отправки:</b> {email}",
+                action="lead_magnet_email_sent",
             )
             logger.info("Lead magnet %s sent to %s", magnet_type, utils.mask_email(email))
         else:
             # Ошибка отправки
-            await update.message.reply_text(
+            await utils.safe_reply_html(
+                update.message,
                 "Произошла ошибка при отправке email.\n\n"
-                f"{content.DIRECT_CONTACTS_TEXT}"
+                f"{content.DIRECT_CONTACTS_TEXT}",
+                action="lead_magnet_email_error",
             )
             logger.error("Failed to send lead magnet %s to %s", magnet_type, utils.mask_email(email))
 
     except (smtplib.SMTPException, sqlite3.Error, TelegramError, KeyError, OSError) as e:
         logger.error(f"Error in send_lead_magnet_email: {e}")
-        await update.message.reply_text(
+        await utils.safe_reply_html(
+            update.message,
             "Произошла ошибка.\n\n"
-            f"{content.DIRECT_CONTACTS_TEXT}"
+            f"{content.DIRECT_CONTACTS_TEXT}",
+            action="lead_magnet_email_exception",
         )
 
 

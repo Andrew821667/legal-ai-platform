@@ -33,6 +33,7 @@ import funnel
 from handlers.constants import (
     ADMIN_MENU,
     ADMIN_PANEL_MENU,
+    build_workspace_inline_menu,
     CONSENT_PDN_MENU,
     CONSENT_TRANSBORDER_MENU,
     CONSULTATION_CTA_MENU,
@@ -958,13 +959,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = _main_menu_markup(user.id)
         workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             update.message,
             welcome_message,
             reply_markup=reply_markup,
             action="start_welcome",
         )
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             update.message,
             content.build_workspace_text(
                 lead=lead,
@@ -996,7 +997,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{consent_text}\n\n"
                     "После подтверждения согласия сразу переведу вас в сервис проверки договоров Contract_AI_System."
                 )
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 update.message,
                 consent_text,
                 reply_markup=_pdn_consent_markup(),
@@ -1019,7 +1020,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_row:
             lead = database.db.get_lead_by_user_id(user_row["id"])
             selected_profile = database.db.get_user_offer_profile(user_row["id"])
-    await utils.safe_reply_text(
+    await utils.safe_reply_html(
         update.message,
         content.HELP_MESSAGE,
         reply_markup=_quick_nav_markup_for(lead=lead, selected_profile=selected_profile),
@@ -1053,7 +1054,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /documents - список документов и действий по данным."""
     _ = context
-    await utils.safe_reply_text(
+    await utils.safe_reply_html(
         update.message,
         content.documents_list_text(),
         reply_markup=_documents_markup(),
@@ -1065,19 +1066,19 @@ async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /privacy - политика обработки ПД."""
     _ = context
-    await utils.safe_reply_text(update.message, content.privacy_policy_text(), action="privacy_command")
+    await utils.safe_reply_html(update.message, content.privacy_policy_text(), action="privacy_command")
 
 
 async def user_agreement_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /user_agreement - пользовательское соглашение."""
     _ = context
-    await utils.safe_reply_text(update.message, content.user_agreement_text(), action="user_agreement_command")
+    await utils.safe_reply_html(update.message, content.user_agreement_text(), action="user_agreement_command")
 
 
 async def ai_policy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /ai_policy - политика использования ИИ."""
     _ = context
-    await utils.safe_reply_text(update.message, content.ai_policy_text(), action="ai_policy_command")
+    await utils.safe_reply_html(update.message, content.ai_policy_text(), action="ai_policy_command")
 
 
 async def marketing_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1085,7 +1086,7 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
     _ = context
     user = update.effective_user
     user_data = database.db.get_user_by_telegram_id(user.id)
-    await utils.safe_reply_text(update.message, content.marketing_consent_text(), action="marketing_consent_command")
+    await utils.safe_reply_html(update.message, content.marketing_consent_text(), action="marketing_consent_command")
     if user_data:
         database.db.set_user_marketing_consent(user_data["id"], True)
 
@@ -1101,15 +1102,15 @@ async def transborder_consent_command(update: Update, context: ContextTypes.DEFA
     consent_state = database.db.get_user_consent_state(user_data["id"])
     message = content.transborder_policy_text()
     if bool(consent_state.get("transborder_consent")):
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             update.message,
-            f"{message}\n\nСтатус: ✅ согласие активно.",
+            f"{message}\n\n<b>Статус:</b> ✅ согласие активно.",
             action="transborder_status_active",
         )
         return
-    await utils.safe_reply_text(
+    await utils.safe_reply_html(
         update.message,
-        f"{message}\n\nСтатус: ❌ согласие не дано.",
+        f"{message}\n\n<b>Статус:</b> ❌ согласие не дано.",
         reply_markup=_transborder_consent_markup(),
         action="transborder_status_missing",
     )
@@ -1126,7 +1127,7 @@ async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_T
     consent_state = database.db.get_user_consent_state(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
     text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
-    await utils.safe_reply_text(
+    await utils.safe_reply_html(
         update.message,
         text,
         action="consent_status_command",
@@ -1166,13 +1167,13 @@ async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    await utils.safe_reply_text(
+    await utils.safe_reply_html(
         update.message,
         (
             f"{content.CONSENT_REVOKED_TEXT}\n\n"
-            f"Изменено профилей: {result.get('users_updated', 0)}\n"
-            f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
-            f"Удалено сообщений диалога: {result.get('messages_deleted', 0)}"
+            f"<b>Изменено профилей:</b> {result.get('users_updated', 0)}\n"
+            f"<b>Анонимизировано анкет:</b> {result.get('leads_anonymized', 0)}\n"
+            f"<b>Удалено сообщений диалога:</b> {result.get('messages_deleted', 0)}"
         ),
         action="revoke_consent_command",
     )
@@ -1253,9 +1254,11 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Используем effective_message вместо message (может быть None)
         message = update.effective_message
         if message:
-            await message.reply_text(
+            await utils.safe_reply_html(
+                message,
                 content.build_workspace_text(lead=lead, selected_profile=selected_profile),
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                action="menu_command_workspace",
             )
             logger.info(f"Menu shown to user {update.effective_user.id}")
         
@@ -1415,7 +1418,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _looks_like_return_to_bot(message_text):
                 database.db.set_chat_mode(chat_id, "bot")
                 database.db.reset_user_funnel_state(user_data["id"])
-                await utils.safe_reply_text(
+                await utils.safe_reply_html(
                     original_message,
                     content.build_welcome_message(user.first_name),
                     reply_markup=_main_menu_markup(user.id),
@@ -1427,7 +1430,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # (приветствие + рабочий стол), даже если пользователь сразу пишет вопрос.
         history_preview = database.db.get_conversation_history(user_data["id"], limit=1)
         if message_text and not history_preview:
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 original_message,
                 content.build_welcome_message(user.first_name),
                 reply_markup=_main_menu_markup(user.id),
@@ -1435,7 +1438,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             selected_profile = database.db.get_user_offer_profile(user_data["id"])
             workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 original_message,
                 content.build_workspace_text(
                     lead=lead,
@@ -1451,7 +1454,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # На самом первом входящем сообщении-приветствии всегда отдаем
         # фиксированное приветствие, а не LLM-генерацию.
         if message_text and _looks_like_plain_greeting(message_text):
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 original_message,
                 content.build_welcome_message(user.first_name),
                 reply_markup=_main_menu_markup(user.id),
@@ -1459,7 +1462,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             selected_profile = database.db.get_user_offer_profile(user_data["id"])
             workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
-            await utils.safe_reply_text(
+            await utils.safe_reply_html(
                 original_message,
                 content.build_workspace_text(
                     lead=lead,
@@ -1803,9 +1806,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if not is_admin and not has_transborder_consent:
-            await original_message.reply_text(
+            await utils.safe_reply_html(
+                original_message,
                 content.TRANSBORDER_REQUIRED_TEXT,
                 reply_markup=_transborder_consent_markup(),
+                action="transborder_required_message",
             )
             return
 
@@ -1823,7 +1828,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     current_time = datetime.datetime.now()
                     time_elapsed = (current_time - first_message_time).total_seconds() / 60
                     if time_elapsed > 30:
-                        await original_message.reply_text(content.REPEAT_LOOP_FALLBACK_TEXT)
+                        await utils.safe_reply_html(
+                            original_message,
+                            content.REPEAT_LOOP_FALLBACK_TEXT,
+                            action="repeat_loop_fallback",
+                        )
                         return
 
         # Сохраняем сообщение пользователя
@@ -2123,7 +2132,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
         lead=lead,
         selected_profile=selected_profile,
     )
-    await update.message.reply_text(response)
+    await utils.safe_reply_html(update.message, response, action="menu_button_response")
 
 
 
@@ -2131,9 +2140,11 @@ async def offer_lead_magnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Предложение lead magnet"""
     _ = context
     reply_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
-    await update.message.reply_text(
+    await utils.safe_reply_html(
+        update.message,
         content.with_channel_nurture(content.LEAD_MAGNET_OFFER_TEXT),
         reply_markup=reply_markup,
+        action="lead_magnet_offer",
     )
 
 
@@ -2155,7 +2166,7 @@ async def handle_handoff_request(
             return
 
         # Уведомляем пользователя
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             update.message,
             content.with_channel_nurture(content.HANDOFF_ACK_TEXT, after_contact=True),
             reply_markup=_main_menu_markup(user.id),

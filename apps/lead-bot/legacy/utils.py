@@ -320,6 +320,13 @@ async def safe_reply_text(message, text: str, action: str = "reply_text", **kwar
     return sent_message
 
 
+async def safe_reply_html(message, text: str, action: str = "reply_html", **kwargs):
+    """Безопасно отправляет статический HTML-текст в Telegram."""
+    html_kwargs = dict(kwargs)
+    html_kwargs.setdefault("parse_mode", "HTML")
+    return await safe_reply_text(message, text, action=action, **html_kwargs)
+
+
 async def safe_edit_text(message, text: str, action: str = "edit_text", **kwargs):
     """
     Безопасно редактирует сообщение с retry.
@@ -336,6 +343,13 @@ async def safe_edit_text(message, text: str, action: str = "edit_text", **kwargs
             logger.debug("Skipped edit for %s: message not modified", action)
             return None
         raise
+
+
+async def safe_edit_html(message, text: str, action: str = "edit_html", **kwargs):
+    """Безопасно редактирует статический HTML-текст в Telegram."""
+    html_kwargs = dict(kwargs)
+    html_kwargs.setdefault("parse_mode", "HTML")
+    return await safe_edit_text(message, text, action=action, **html_kwargs)
 
 
 def format_ai_text_as_plain_symbols(text: str) -> str:

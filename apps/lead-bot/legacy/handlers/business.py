@@ -565,6 +565,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=welcome_message,
+                parse_mode="HTML",
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )
@@ -584,6 +585,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+                parse_mode="HTML",
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )
@@ -631,6 +633,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 await context.bot.send_message(
                     chat_id=message.chat.id,
                     text=content.build_business_welcome_message(message.from_user.first_name),
+                    parse_mode="HTML",
                     reply_markup=_business_menu_markup(),
                     business_connection_id=message.business_connection_id,
                 )
@@ -647,6 +650,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.build_business_welcome_message(message.from_user.first_name),
+                parse_mode="HTML",
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
@@ -661,6 +665,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.build_business_welcome_message(message.from_user.first_name),
+                parse_mode="HTML",
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
@@ -844,6 +849,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.HANDOFF_ACK_TEXT,
+                parse_mode="HTML",
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id
             )
@@ -866,6 +872,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.HANDOFF_ACK_TEXT,
+                parse_mode="HTML",
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
@@ -922,6 +929,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                     await context.bot.send_message(
                         chat_id=message.chat.id,
                         text=f"Произошла ошибка при отправке email.\n\n{content.DIRECT_CONTACTS_TEXT}",
+                        parse_mode="HTML",
                         business_connection_id=message.business_connection_id,
                     )
                 return
@@ -1208,6 +1216,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                         await context.bot.send_message(
                             chat_id=message.chat.id,
                             text=content.LEAD_MAGNET_OFFER_TEXT,
+                            parse_mode="HTML",
                             reply_markup=reply_markup,
                             business_connection_id=message.business_connection_id,
                         )

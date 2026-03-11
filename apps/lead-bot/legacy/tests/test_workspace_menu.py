@@ -6,7 +6,7 @@ from handlers.constants import build_workspace_inline_menu
 
 def test_workspace_button_maps_to_dashboard() -> None:
     response = content.menu_response_by_button("🧭 Рабочий стол", selected_profile="business")
-    assert "РАБОЧИЙ СТОЛ" in response
+    assert "Рабочий стол" in response
     assert "Собственник / руководитель бизнеса" in response
 
 
@@ -27,14 +27,14 @@ def test_workspace_inline_menu_contains_profile_and_documents() -> None:
 def test_profile_and_documents_buttons_resolve_menu_keys() -> None:
     profile_response = content.menu_response_by_button("👤 Профиль")
     documents_response = content.menu_response_by_button("📚 Документы")
-    assert "ПРОФИЛЬ" in profile_response
-    assert "ДОКУМЕНТЫ" in documents_response
+    assert "Профиль" in profile_response
+    assert "Документы" in documents_response
 
 
 def test_offer_profile_button_and_override() -> None:
     selector_response = content.menu_response_by_button("🧩 Сменить профиль")
     business_services = content.menu_response_by_key("menu_services", selected_profile="business")
-    assert "СМЕНА ПРОФИЛЯ" in selector_response
+    assert "Смена профиля" in selector_response
     assert "Собственник / руководитель бизнеса" in business_services
 
 
@@ -56,9 +56,9 @@ def test_offer_profile_labels_are_clear_for_new_user() -> None:
 def test_workspace_onboarding_text_emphasizes_profile_choice() -> None:
     onboarding_text = content.build_workspace_text(selected_profile="business", emphasize_profile_choice=True)
     regular_text = content.build_workspace_text(selected_profile="business")
-    assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." in onboarding_text
+    assert "Начните с верхней кнопки «🎯 Профиль услуг»." in onboarding_text
     assert "Так я быстрее покажу именно те услуги и цены" in onboarding_text
-    assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." not in regular_text
+    assert "Начните с верхней кнопки «🎯 Профиль услуг»." not in regular_text
 
 
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
@@ -71,14 +71,15 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "мы помогаем юристам и бизнесу быстрее работать" in welcome
+    assert "помогает юристам и бизнесу" in welcome
     assert "долго согласуются договоры" in welcome
     assert "Если вы только знакомитесь с темой, это нормально" in welcome
     assert "информационный характер" in welcome
+    assert "<b>" in welcome
 
 
 def test_contract_module_text_is_clear_for_new_user() -> None:
     response = content.menu_response_by_key("menu_contract_ai")
-    assert "ПРОВЕРКА ДОГОВОРА" in response
+    assert "Проверка договора" in response
     assert "это наш отдельный сервис для работы с договорами" in response
     assert "демонстрационный разбор договора" in response

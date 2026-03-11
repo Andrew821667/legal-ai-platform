@@ -633,6 +633,7 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                                 await context.bot.send_message(
                                     chat_id=chat_id,
                                     text=content.build_business_welcome_message(client_name),
+                                    parse_mode="HTML",
                                     reply_markup=build_business_menu_markup(),
                                     business_connection_id=str(connection_id),
                                 )
