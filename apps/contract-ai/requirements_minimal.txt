@@ -1,6 +1,6 @@
 fastapi==0.109.2
 uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+python-multipart==0.0.22
 bcrypt==4.1.2
 pyjwt==2.8.0
 python-jose[cryptography]==3.3.0
