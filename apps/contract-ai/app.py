@@ -48,8 +48,7 @@ from src.utils.auth import (
     show_login_form,
     get_current_user,
     check_feature_access,
-    show_upgrade_message,
-    create_demo_users
+    show_upgrade_message
 )
 from src.utils.contract_types import (
     get_all_contract_names,
@@ -120,12 +119,6 @@ def init_session_state():
     if 'kb_manager' not in st.session_state:
         st.session_state.kb_manager = initialize_knowledge_base()
 
-    # Create demo users on first run
-    if 'demo_users_created' not in st.session_state:
-        create_demo_users()
-        st.session_state.demo_users_created = True
-
-
 def sidebar_navigation():
     """Sidebar navigation"""
     st.sidebar.title("📄 Contract AI System")
@@ -191,6 +184,17 @@ def page_home():
     st.markdown("**Статус системы:** ✅ Все агенты активны")
 
 
+def require_authenticated_user() -> Optional[dict]:
+    """Return the current user or force an explicit login flow."""
+    user = get_current_user()
+    if st.session_state.get('authenticated', False) and user:
+        return user
+
+    st.warning("⚠️ Требуется авторизация")
+    show_login_form()
+    return None
+
+
 def page_onboarding():
     """Onboarding Agent page"""
     st.title("📥 Обработка входящих запросов")
@@ -200,8 +204,10 @@ def page_onboarding():
         show_upgrade_message('Обработка запросов')
         return
 
-    user = get_current_user()
-    user_id = user['id'] if user else 'demo_user'
+    user = require_authenticated_user()
+    if not user:
+        return
+    user_id = user['id']
 
     st.markdown("### Введите запрос пользователя")
     user_query = st.text_area(
@@ -326,8 +332,10 @@ def page_analyzer():
         show_upgrade_message('Анализ договоров')
         return
 
-    user = get_current_user()
-    user_id = user['id'] if user else 'demo_user'
+    user = require_authenticated_user()
+    if not user:
+        return
+    user_id = user['id']
 
     st.markdown("### Анализ договора контрагента")
 
@@ -1101,8 +1109,10 @@ def page_disagreements():
         show_upgrade_message('Генерация возражений')
         return
 
-    user = get_current_user()
-    user_id = user['id'] if user else 'demo_user'
+    user = require_authenticated_user()
+    if not user:
+        return
+    user_id = user['id']
 
     st.markdown("### Создание документа с возражениями")
 
@@ -1223,8 +1233,10 @@ def page_export():
     st.title("📤 Быстрый экспорт")
 
     # Check access
-    user = get_current_user()
-    user_id = user['id'] if user else 'demo_user'
+    user = require_authenticated_user()
+    if not user:
+        return
+    user_id = user['id']
 
     st.markdown("### Экспорт договора")
 
@@ -1445,6 +1457,11 @@ def main():
 
     # Route to page
     page = st.session_state.current_page
+
+    if page != 'login' and not st.session_state.get('authenticated', False):
+        st.session_state.current_page = 'login'
+        page_login()
+        return
 
     if page == 'login':
         page_login()
