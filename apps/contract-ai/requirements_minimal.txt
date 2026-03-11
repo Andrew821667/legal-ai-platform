@@ -24,5 +24,5 @@ openai==1.12.0
 anthropic==0.18.1
 langchain==0.1.20
 langgraph==0.0.40
-langchain-community==0.0.38
+langchain-community==0.3.27
 jinja2==3.1.3
