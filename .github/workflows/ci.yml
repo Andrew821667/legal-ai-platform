@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/legal-ai
 
 jobs:
   lint:
@@ -19,20 +18,38 @@ jobs:
       - run: uv sync
       - run: uv run ruff check apps/ packages/ --select F,B904,B905,UP031
 
-  test:
+  test-core-api:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - suite: core-api
-            path: apps/core-api/tests/
-          - suite: news
-            path: apps/news/tests/
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: legalai
+          POSTGRES_USER: legalai
+          POSTGRES_PASSWORD: legalai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalai -d legalai"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://legalai:legalai@localhost:5432/legalai
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest ${{ matrix.path }} -q
+      - run: uv run --package core-api --with httpx --directory apps/core-api alembic upgrade head
+      - run: uv run --package core-api --with httpx pytest apps/core-api/tests/ -q
+
+  test-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run --package news pytest apps/news/tests/ -q
 
   test-lead-bot-legacy:
     runs-on: ubuntu-latest
@@ -40,7 +57,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: cd apps/lead-bot/legacy && uv run pytest tests -q
+      - run: python3 -m venv .venv-legacy
+      - run: .venv-legacy/bin/pip install -r apps/lead-bot/legacy/requirements.txt
+      - run: >-
+          cd apps/lead-bot/legacy &&
+          TELEGRAM_BOT_TOKEN=123456:ABCDEFghijklmnopqrstuvwxyz
+          OPENAI_API_KEY=sk-test-key
+          ADMIN_TELEGRAM_ID=1
+          CORE_API_SYNC_ENABLED=0
+          ../../../.venv-legacy/bin/python -m pytest tests -q
 
   web-build:
     runs-on: ubuntu-latest
@@ -67,7 +92,7 @@ jobs:
       - run: npm run lint --prefix apps/web
 
   build-and-push:
-    needs: [lint, test, test-lead-bot-legacy, web-build, web-lint]
+    needs: [lint, test-core-api, test-news, test-lead-bot-legacy, web-build, web-lint]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -82,6 +107,8 @@ jobs:
             dockerfile: apps/lead-bot/legacy/Dockerfile
     steps:
       - uses: actions/checkout@v4
+      - id: image_owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -92,4 +119,4 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image_name }}:latest
+          tags: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-${{ matrix.image_name }}:latest
