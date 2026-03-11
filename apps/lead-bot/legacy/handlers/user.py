@@ -227,7 +227,7 @@ async def _handle_contract_start_payload(
         "email": previous_lead.get("email"),
         "phone": previous_lead.get("phone"),
         "company": previous_lead.get("company"),
-        "pain_point": previous_lead.get("pain_point") or "Интерес к Contract_AI_System и договорному контуру.",
+        "pain_point": previous_lead.get("pain_point") or "Интерес к модулю проверки договоров и автоматизации договорной работы.",
         "temperature": "warm",
         "status": "new",
         "notification_sent": 0,
@@ -251,9 +251,9 @@ async def _handle_contract_start_payload(
         await utils.safe_reply_text(
             message,
             (
-                "🖥 Запрос на доступ к кабинету Contract_AI_System принят.\n\n"
-                "Сейчас контур работает на локальном Docker-стенде. "
-                "Оставьте контакт для выдачи доступа и согласования следующего шага."
+                "🖥 Запрос на доступ к модулю Contract_AI_System принят.\n\n"
+                "Это отдельный сервис для проверки договоров. "
+                "Оставьте контакт, и мы согласуем следующий шаг и формат доступа."
             ),
             reply_markup=_consultation_contact_markup(),
             action="contract_start_cabinet",
@@ -994,7 +994,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif _CONTRACT_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (
                     f"{consent_text}\n\n"
-                    "После подтверждения согласия сразу переведу вас в договорный контур Contract_AI_System."
+                    "После подтверждения согласия сразу переведу вас в сервис проверки договоров Contract_AI_System."
                 )
             await utils.safe_reply_text(
                 update.message,
@@ -1353,7 +1353,7 @@ async def _handle_non_text_input(
 
     await message.reply_text(
         "Чтобы продолжить, отправьте email в текстовом сообщении.\n"
-        "Для демо-анализа можно приложить документ с подписью, где указан email."
+        "Для демонстрационного разбора можно приложить документ с подписью, где указан email."
     )
     return True
 
@@ -1543,7 +1543,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if _should_require_pdn_consent(is_admin, consent_state):
             await utils.safe_reply_text(
                 original_message,
-                _pdn_consent_prompt_text("AI-разбору кейса"),
+                _pdn_consent_prompt_text("ИИ-разбору кейса"),
                 reply_markup=_pdn_consent_markup(),
                 action="message_requires_pdn",
             )

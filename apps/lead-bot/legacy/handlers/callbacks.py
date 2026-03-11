@@ -117,12 +117,12 @@ def _offer_profile_markup(selected_profile: str | None = None) -> InlineKeyboard
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(_label("🏢 Инхаус", active=selected_profile == "inhouse"), callback_data="menu_offer_set_inhouse"),
+                InlineKeyboardButton(_label("🏢 Юр. отдел", active=selected_profile == "inhouse"), callback_data="menu_offer_set_inhouse"),
                 InlineKeyboardButton(_label("⚖️ Юрфирма", active=selected_profile == "law_firm"), callback_data="menu_offer_set_law_firm"),
             ],
             [
                 InlineKeyboardButton(_label("📈 Бизнес", active=selected_profile == "business"), callback_data="menu_offer_set_business"),
-                InlineKeyboardButton(_label("📦 Базовый", active=selected_profile == "universal"), callback_data="menu_offer_set_universal"),
+                InlineKeyboardButton(_label("📦 Общий", active=selected_profile == "universal"), callback_data="menu_offer_set_universal"),
             ],
             [InlineKeyboardButton(_label("🧭 Автоопределение", active=selected_profile is None), callback_data="menu_offer_set_auto")],
             [InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard")],
@@ -893,7 +893,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             query.message,
             "✅ Согласие на обработку ПД сохранено.\n\n"
             "Теперь можно оставить заявку, передать контакт и получать материалы.\n"
-            "Для AI-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
+            "Для ИИ-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
             action="consent_pdn_yes",
         )
 
@@ -935,7 +935,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         if transborder_enabled:
             await utils.safe_edit_text(
                 query.message,
-                "✅ Согласия сохранены. AI-режим включен.\n\n"
+                "✅ Согласия сохранены. ИИ-режим включен.\n\n"
                 "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг.",
                 action="consent_transborder_yes",
             )
