@@ -38,10 +38,10 @@
 - `[x]` Стартовые и меню-тексты бота переписаны понятнее для нового пользователя, англицизмы в пользовательском copy сокращены.
 - `[x]` Введена retention policy для `conversations`.
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
-- `[~]` Wildcard imports убраны из основных handler-модулей; дальнейшая чистка import graph legacy еще нужна.
+- `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
-- `[ ]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули.
-- `[~]` Убрать wildcard imports и почистить import graph.
+- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py` и `handlers/start_payloads.py`, но основной разрез еще не завершен.
+- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, но модульная декомпозиция еще не закончена.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
@@ -99,7 +99,7 @@
 - `[x]` Secret inventory + rotation checklist.
 - `[x]` Web disclaimer в системных точках интерфейса.
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
-- `[ ]` Legacy refactor: split files + remove wildcard imports + config singleton.
+- `[~]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[ ]` Отдельный compliance-review по реальной операционной схеме.
 
 ## Финальная сверка перед commit/push

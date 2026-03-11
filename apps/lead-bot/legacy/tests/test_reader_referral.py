@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from handlers import start_payloads
 from handlers import user as user_handlers
 
 
@@ -21,8 +22,8 @@ async def test_process_pending_start_payload_creates_new_lead(monkeypatch: pytes
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
-        user_handlers,
-        "_fetch_post_context",
+        start_payloads,
+        "fetch_post_context",
         lambda post_id: {"title": "Пилот automation", "source_url": "https://example.com/news"},
     )
 
@@ -51,7 +52,7 @@ async def test_process_pending_start_payload_creates_new_lead(monkeypatch: pytes
 
     monkeypatch.setattr(user_handlers.database.db, "create_new_lead", _fake_create_new_lead)
     monkeypatch.setattr(user_handlers.database.db, "track_event", _fake_track_event)
-    monkeypatch.setattr(user_handlers, "notify_admin_new_lead", _fake_notify)
+    monkeypatch.setattr(start_payloads, "notify_admin_new_lead", _fake_notify)
     monkeypatch.setattr(user_handlers.utils, "safe_reply_text", _fake_reply)
 
     processed = await user_handlers.process_pending_start_payload(

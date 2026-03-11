@@ -8,16 +8,11 @@ import sqlite3
 import time
 import re
 import asyncio
-import json
-import urllib.error
-import urllib.request
 from typing import Optional, Dict
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from telegram_ui import inline_button as InlineKeyboardButton
-from telegram_ui import reply_button as KeyboardButton
 from telegram_ui import normalize_button_text
 import database
 import ai_brain
@@ -31,31 +26,30 @@ import prompts
 import content
 import funnel
 from handlers.constants import (
-    ADMIN_MENU,
     ADMIN_PANEL_MENU,
-    build_workspace_inline_menu,
-    CONSENT_PDN_MENU,
-    CONSENT_TRANSBORDER_MENU,
-    CONSULTATION_CTA_MENU,
-    DOCUMENTS_MENU,
     LEAD_MAGNET_MENU,
-    MAIN_MENU,
-    PERSONAL_MODE_RETURN_MENU,
-    QUICK_NAV_MENU,
-    WORKSPACE_INLINE_MENU,
-    append_inline_url_row,
 )
 from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin_new_lead
+from handlers.markup import (
+    consultation_contact_markup as _consultation_contact_markup,
+    consultation_cta_markup as _consultation_cta_markup,
+    documents_markup as _documents_markup,
+    main_menu_markup as _main_menu_markup,
+    pdn_consent_markup as _pdn_consent_markup,
+    personal_mode_markup as _personal_mode_markup,
+    profile_edit_cancel_markup as _profile_edit_cancel_markup,
+    profile_panel_markup as _profile_panel_markup,
+    quick_nav_markup_for as _quick_nav_markup_for,
+    transborder_consent_markup as _transborder_consent_markup,
+    with_channel_button as _with_channel_button,
+    workspace_markup_for as _workspace_markup_for,
+)
+from handlers.start_payloads import process_pending_start_payload
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
-_READER_START_PAYLOAD_RE = re.compile(r"^readerq_(?P<post_id>[0-9a-fA-F-]{36})$")
-_CONTRACT_START_PAYLOAD_RE = re.compile(
-    r"^contract_(?P<entry>demo|checklist|sample_report|consultation|cabinet)$"
-)
 _EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
 _EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
-_PENDING_START_PAYLOAD_KEY = "pending_start_payload"
 
 
 def _button_text_equals(text: str | None, expected: str) -> bool:
@@ -67,339 +61,6 @@ def _extract_start_payload(context: ContextTypes.DEFAULT_TYPE) -> str:
     if not args:
         return ""
     return str(args[0]).strip()
-
-
-def _news_api_key() -> str:
-    return (config.API_KEY_NEWS or config.API_KEY_ADMIN or config.API_KEY_BOT or "").strip()
-
-
-def _fetch_post_context(post_id: str) -> Dict[str, str]:
-    base_url = (config.CORE_API_URL or "").rstrip("/")
-    api_key = _news_api_key()
-    if not base_url or not api_key:
-        return {}
-
-    request = urllib.request.Request(
-        url=f"{base_url}/api/v1/scheduled-posts/{post_id}",
-        headers={"X-API-Key": api_key, "Content-Type": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
-            raw = response.read().decode("utf-8", errors="ignore")
-            payload = json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as error:
-        logger.warning("reader referral post fetch failed (%s): %s", error.code, post_id)
-        return {}
-    except Exception as error:
-        logger.warning("reader referral post fetch error for %s: %s", post_id, error)
-        return {}
-
-    return {
-        "title": str(payload.get("title") or "").strip(),
-        "text": str(payload.get("text") or "").strip(),
-        "source_url": str(payload.get("source_url") or "").strip(),
-        "rubric": str(payload.get("rubric") or "").strip(),
-        "format_type": str(payload.get("format_type") or "").strip(),
-    }
-
-
-def _build_reader_referral_lead_payload(
-    *,
-    user_first_name: str,
-    post_id: str,
-    post_context: Dict[str, str],
-) -> Dict:
-    title = (post_context.get("title") or "").strip()
-    source_url = (post_context.get("source_url") or "").strip()
-    rubric = (post_context.get("rubric") or "").strip()
-    notes_parts = ["[READER_REFERRAL]", f"post_id={post_id}"]
-    if title:
-        notes_parts.append(f"title={title}")
-    if source_url:
-        notes_parts.append(f"source_url={source_url}")
-    if rubric:
-        notes_parts.append(f"rubric={rubric}")
-
-    pain_point = (
-        f"Нужно разобрать материал «{title}» и понять, как применить в юрфункции."
-        if title
-        else "Нужно разобрать материал из канала и применить в юридической работе."
-    )
-    return {
-        "name": user_first_name or "Клиент из Reader",
-        "pain_point": pain_point,
-        "temperature": "warm",
-        "status": "new",
-        "service_category": "ai_legal_consulting",
-        "specific_need": "Разбор публикации и план внедрения",
-        "lead_magnet_type": "consultation",
-        "lead_magnet_delivered": 0,
-        "notification_sent": 0,
-        "conversation_stage": "qualify",
-        "cta_variant": "reader_referral",
-        "cta_shown": 1,
-        "notes": "\n".join(notes_parts)[:3500],
-    }
-
-
-async def _handle_reader_referral_start(
-    *,
-    message,
-    context: ContextTypes.DEFAULT_TYPE,
-    user_data: Dict,
-    user,
-    post_id: str,
-) -> bool:
-    post_context = _fetch_post_context(post_id)
-    lead_payload = _build_reader_referral_lead_payload(
-        user_first_name=user.first_name or "",
-        post_id=post_id,
-        post_context=post_context,
-    )
-
-    lead_id = database.db.create_new_lead(user_data["id"], lead_payload)
-    database.db.track_event(
-        user_data["id"],
-        "reader_referral_start",
-        payload={
-            "post_id": post_id,
-            "post_title": post_context.get("title") or "",
-            "source_url": post_context.get("source_url") or "",
-        },
-        lead_id=lead_id,
-    )
-    await notify_admin_new_lead(
-        context,
-        lead_id,
-        lead_payload,
-        user_data,
-        is_update=False,
-    )
-
-    title = (post_context.get("title") or "").strip()
-    title_block = f"Материал: {title}\n\n" if title else ""
-    await utils.safe_reply_text(
-        message,
-        (
-            "✅ Переход из ридер-бота принят, заявка создана.\n\n"
-            f"{title_block}"
-            "Можете сразу описать ваш вопрос по внедрению в 1-2 предложениях "
-            "или отправить телефон кнопкой ниже."
-        ),
-        reply_markup=_consultation_contact_markup(),
-        action="reader_referral_start",
-    )
-    return True
-
-
-def _contract_payload_magnet(entry: str) -> str:
-    mapping = {
-        "demo": "demo",
-        "checklist": "checklist",
-        "sample_report": "sample_report",
-        "consultation": "consultation",
-        "cabinet": "consultation",
-    }
-    return mapping.get(entry, "consultation")
-
-
-async def _handle_contract_start_payload(
-    *,
-    message,
-    context: ContextTypes.DEFAULT_TYPE,
-    user_data: Dict,
-    user,
-    payload: str,
-) -> bool:
-    match = _CONTRACT_START_PAYLOAD_RE.match(payload)
-    if not match:
-        return False
-
-    entry = match.group("entry")
-    magnet_type = _contract_payload_magnet(entry)
-    previous_lead = database.db.get_lead_by_user_id(user_data["id"]) or {}
-    is_update = bool(previous_lead)
-    notes = (previous_lead.get("notes") or "").strip()
-    marker = f"[CONTRACT_ENTRY] start={payload}"
-    notes = f"{notes}\n{marker}".strip() if notes else marker
-    lead_payload = {
-        "name": previous_lead.get("name") or user.first_name,
-        "email": previous_lead.get("email"),
-        "phone": previous_lead.get("phone"),
-        "company": previous_lead.get("company"),
-        "pain_point": previous_lead.get("pain_point") or "Интерес к модулю проверки договоров и автоматизации договорной работы.",
-        "temperature": "warm",
-        "status": "new",
-        "notification_sent": 0,
-        "lead_magnet_type": magnet_type,
-        "lead_magnet_delivered": 0,
-        "service_category": previous_lead.get("service_category") or "contract_automation",
-        "specific_need": previous_lead.get("specific_need") or "Contract AI",
-        "notes": notes,
-    }
-    lead_id = database.db.create_or_update_lead(user_data["id"], lead_payload)
-    lead_snapshot = database.db.get_lead_by_id(lead_id) or lead_payload
-    await notify_admin_new_lead(
-        context=context,
-        lead_id=lead_id,
-        lead_data=lead_snapshot,
-        user_data=user_data,
-        is_update=is_update,
-    )
-
-    if entry == "cabinet":
-        await utils.safe_reply_text(
-            message,
-            (
-                "🖥 Запрос на доступ к модулю Contract_AI_System принят.\n\n"
-                "Это отдельный сервис для проверки договоров. "
-                "Оставьте контакт, и мы согласуем следующий шаг и формат доступа."
-            ),
-            reply_markup=_consultation_contact_markup(),
-            action="contract_start_cabinet",
-        )
-        return True
-
-    selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо! Продолжаем.")
-    if entry == "demo":
-        selection_text = (
-            f"{selection_text}\n\n"
-            "Можно сразу отправить договор (файл/фото), затем укажите email."
-        )
-    reply_markup = _consultation_contact_markup() if magnet_type == "consultation" else None
-    await utils.safe_reply_text(
-        message,
-        selection_text,
-        reply_markup=reply_markup,
-        action=f"contract_start_{entry}",
-    )
-    return True
-
-
-async def process_pending_start_payload(
-    *,
-    message,
-    context: ContextTypes.DEFAULT_TYPE,
-    user_data: Dict,
-    user,
-) -> bool:
-    payload = str((context.user_data or {}).pop(_PENDING_START_PAYLOAD_KEY, "") or "").strip()
-    if not payload:
-        return False
-
-    match = _READER_START_PAYLOAD_RE.match(payload)
-    if not match:
-        return await _handle_contract_start_payload(
-            message=message,
-            context=context,
-            user_data=user_data,
-            user=user,
-            payload=payload,
-        )
-
-    return await _handle_reader_referral_start(
-        message=message,
-        context=context,
-        user_data=user_data,
-        user=user,
-        post_id=match.group("post_id"),
-    )
-
-
-def _pdn_consent_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSENT_PDN_MENU)
-
-
-def _transborder_consent_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
-
-
-def _consultation_cta_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSULTATION_CTA_MENU)
-
-
-def _documents_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(DOCUMENTS_MENU)
-
-
-def _consultation_contact_markup() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📲 Отправить телефон", request_contact=True)],
-            [KeyboardButton("⬅️ Отмена")],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
-
-
-def _services_inline_menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
-
-
-def _workspace_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        build_workspace_inline_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
-    )
-
-
-def _quick_nav_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(QUICK_NAV_MENU)
-
-
-def _quick_nav_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        build_quick_nav_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
-    )
-
-
-def _with_channel_button(markup: InlineKeyboardMarkup, *, prepend: bool = False) -> InlineKeyboardMarkup:
-    return append_inline_url_row(
-        markup,
-        content.CHANNEL_BUTTON_TEXT,
-        content.public_channel_url(),
-        prepend=prepend,
-    )
-
-
-def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU, resize_keyboard=True)
-
-
-def _profile_edit_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("✏️ Исправить ФИО", callback_data="profile_edit_name"),
-                InlineKeyboardButton("✉️ Исправить Email", callback_data="profile_edit_email"),
-            ]
-        ]
-    )
-
-
-def _profile_panel_markup(
-    is_admin: bool,
-    lead: dict | None = None,
-    selected_profile: str | None = None,
-) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if not is_admin:
-        rows.extend(_profile_edit_markup().inline_keyboard)
-    rows.extend(build_quick_nav_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile)))
-    return InlineKeyboardMarkup(rows)
-
-
-def _personal_mode_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
-
-
-def _profile_edit_cancel_markup() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton("⬅️ Отмена")]],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
 
 
 def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:

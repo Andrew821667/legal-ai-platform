@@ -9,11 +9,9 @@ import time
 import re
 import asyncio
 from datetime import datetime, timedelta
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from telegram_ui import inline_button as InlineKeyboardButton
-from telegram_ui import reply_button as KeyboardButton
 from telegram_ui import normalize_button_text
 import database
 import ai_brain
@@ -31,10 +29,15 @@ from handlers.constants import (
     BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
     BUSINESS_PENDING_CONTACT_KEY,
     LEAD_MAGNET_MENU,
-    PERSONAL_MODE_RETURN_MENU,
-    WORKSPACE_INLINE_MENU,
 )
 from handlers.helpers import notify_admin_new_lead, extract_email
+from handlers.markup import (
+    business_phone_format_text as _business_phone_format_text,
+    clear_business_contact_state as _clear_business_contact_state,
+    contact_visibility_choice_markup as _contact_visibility_choice_markup,
+    personal_mode_markup as _personal_mode_markup,
+    workspace_markup_for as _workspace_markup_for,
+)
 
 logger = logging.getLogger(__name__)
 PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
@@ -255,46 +258,16 @@ def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> N
 
 
 def _business_menu_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
+    return _workspace_markup_for()
 
 
 def _business_menu_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        build_workspace_inline_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
-    )
+    return _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
 
 def build_business_menu_markup(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
     """Публичный доступ к business-меню для роутера в bot.py."""
     return _business_menu_markup_for(lead=lead, selected_profile=selected_profile)
-
-
-def _personal_mode_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
-
-
-def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("📲 Оставить номер телефона", callback_data="menu_contact_send_phone")],
-            [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
-        ]
-    )
-
-
-def _clear_business_contact_state(context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data.pop(BUSINESS_AWAITING_CONTACT_KEY, None)
-    context.user_data.pop(BUSINESS_AWAITING_CONTACT_SOURCE_KEY, None)
-    context.user_data.pop(BUSINESS_PENDING_CONTACT_KEY, None)
-
-
-def _business_phone_format_text() -> str:
-    return (
-        "Отправьте номер одним сообщением в одном из форматов:\n"
-        "• +7 999 123-45-67\n"
-        "• 8 999 123-45-67\n"
-        "• 89991234567"
-    )
 
 
 def _parse_conversation_timestamp(raw_value) -> datetime | None:
