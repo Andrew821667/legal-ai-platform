@@ -102,6 +102,13 @@ OFFER_PROFILE_LABELS = {
     "universal": "Базовый профиль (уточняется)",
 }
 
+OFFER_PROFILE_SHORT_LABELS = {
+    "inhouse": "Инхаус",
+    "law_firm": "Юрфирма",
+    "business": "Бизнес",
+    "universal": "Базовый",
+}
+
 
 def _build_service_cards() -> list[str]:
     cards: list[str] = []
@@ -140,7 +147,7 @@ def _platform_services_text(platform_key: str) -> str:
         f"Профиль клиента: {platform['title']}\n\n"
         "Формат оказания услуг на платформе:\n"
         f"{bullets}\n\n"
-        "Если профиль определился неточно, используйте кнопку «🧩 Сменить профиль»."
+        "Если профиль определился неточно, переключите верхнюю кнопку «🎯 Профиль услуг»."
     )
 
 
@@ -153,7 +160,7 @@ def _platform_prices_text(platform_key: str) -> str:
         "Ориентиры по стоимости:\n"
         f"{bullets}\n\n"
         "Точный расчет зависит от объема, интеграций и SLA. Для персонального расчета нажмите «📞 Консультация».\n"
-        "Для просмотра цен в другом сценарии используйте кнопку «🧩 Сменить профиль»."
+        "Для просмотра цен в другом сценарии переключите верхнюю кнопку «🎯 Профиль услуг»."
     )
 
 
@@ -163,19 +170,28 @@ def _resolve_client_platform(lead: dict | None, selected_profile: str | None) ->
     return _detect_client_platform(lead)
 
 
-def offer_profile_panel_text(lead: dict | None = None, selected_profile: str | None = None) -> str:
+def _active_offer_profile_state(lead: dict | None = None, selected_profile: str | None = None) -> tuple[str, str, str]:
     if selected_profile and selected_profile in OFFER_PROFILE_LABELS:
-        current = OFFER_PROFILE_LABELS[selected_profile]
-        mode = "ручной выбор"
-    else:
-        auto_key = _detect_client_platform(lead)
-        current = OFFER_PROFILE_LABELS.get(auto_key, OFFER_PROFILE_LABELS["universal"])
-        mode = "автоопределение"
+        return selected_profile, OFFER_PROFILE_LABELS[selected_profile], "ручной выбор"
+    auto_key = _detect_client_platform(lead)
+    return auto_key, OFFER_PROFILE_LABELS.get(auto_key, OFFER_PROFILE_LABELS["universal"]), "автоопределение"
+
+
+def offer_profile_cta_label(lead: dict | None = None, selected_profile: str | None = None) -> str:
+    profile_key, _, mode = _active_offer_profile_state(lead=lead, selected_profile=selected_profile)
+    short_label = OFFER_PROFILE_SHORT_LABELS.get(profile_key, OFFER_PROFILE_SHORT_LABELS["universal"])
+    suffix = "вручную" if mode == "ручной выбор" else "авто"
+    return f"🎯 Профиль услуг: {short_label} ({suffix})"
+
+
+def offer_profile_panel_text(lead: dict | None = None, selected_profile: str | None = None) -> str:
+    _, current, mode = _active_offer_profile_state(lead=lead, selected_profile=selected_profile)
     return (
         "🧩 СМЕНА ПРОФИЛЯ ПРЕДЛОЖЕНИЙ\n\n"
-        "Вы можете переключать профиль и смотреть услуги/цены для разных ролей.\n\n"
+        "Сначала выберите профиль услуг. От него зависят направления, ориентиры по бюджету и сценарий консультации.\n\n"
         f"Текущий режим: {mode}\n"
         f"Активный профиль: {current}\n\n"
+        "Если услуги или цены выглядят нерелевантно, начните именно с этого экрана.\n\n"
         "Выберите профиль кнопками ниже."
     )
 
@@ -247,15 +263,26 @@ HELP_MESSAGE = (
 )
 
 
-WORKSPACE_TEXT = (
-    "🧭 РАБОЧИЙ СТОЛ\n\n"
-    "Здесь можно быстро:\n"
-    "• выбрать сценарий под ваш кейс\n"
-    "• посмотреть услуги и ориентиры по бюджету\n"
-    "• оставить контакт для связи с командой\n"
-    "• открыть профиль и документы\n\n"
-    "Выберите нужный раздел кнопками ниже."
-)
+def build_workspace_text(
+    lead: dict | None = None,
+    selected_profile: str | None = None,
+) -> str:
+    _, active_profile_label, mode = _active_offer_profile_state(lead=lead, selected_profile=selected_profile)
+    return (
+        "🧭 РАБОЧИЙ СТОЛ\n\n"
+        "Сначала проверьте профиль услуг в верхней кнопке. Это важно: от него зависят услуги, цены и маршрут консультации.\n\n"
+        f"Сейчас активен: {active_profile_label}\n"
+        f"Режим: {mode}\n\n"
+        "Здесь можно быстро:\n"
+        "• выбрать сценарий под ваш кейс\n"
+        "• посмотреть услуги и ориентиры по бюджету\n"
+        "• оставить контакт для связи с командой\n"
+        "• открыть профиль и документы\n\n"
+        "Выберите нужный раздел кнопками ниже."
+    )
+
+
+WORKSPACE_TEXT = build_workspace_text()
 
 
 MENU_HEADER_TEXT = WORKSPACE_TEXT
@@ -348,6 +375,8 @@ def menu_response_by_key(
         return _platform_prices_text(_resolve_client_platform(lead, selected_profile))
     if key == "menu_offer_profile":
         return offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
+    if key == "menu_dashboard":
+        return build_workspace_text(lead=lead, selected_profile=selected_profile)
     return MENU_RESPONSES.get(key, "Выберите пункт меню.")
 
 

@@ -14,42 +14,51 @@ ADMIN_MENU = [
     [KeyboardButton("🧭 Рабочий стол")],
 ]
 
-WORKSPACE_INLINE_MENU = [
-    [
-        InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
-        InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
-    ],
-    [
-        InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
-        InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
-    ],
-    [
-        InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact"),
-        InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
-    ],
-    [
-        InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
-        InlineKeyboardButton("🧩 Сменить профиль", callback_data="menu_offer_profile"),
-    ],
-    [
-        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
-        InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
-    ],
-]
+DEFAULT_PROFILE_CTA_LABEL = "🎯 Профиль услуг: выбрать и проверить"
 
-QUICK_NAV_MENU = [
-    [
-        InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
-        InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
-    ],
-    [
-        InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
-        InlineKeyboardButton("🧩 Сменить профиль", callback_data="menu_offer_profile"),
-    ],
-    [
-        InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
-    ],
-]
+
+def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
+    return [
+        [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
+        [
+            InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
+            InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
+        ],
+        [
+            InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
+            InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+        ],
+        [
+            InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact"),
+            InlineKeyboardButton("✉️ Личное обращение", callback_data="menu_personal_request"),
+        ],
+        [
+            InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+            InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+        ],
+        [
+            InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
+        ],
+    ]
+
+
+def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
+    return [
+        [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
+        [
+            InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
+            InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
+        ],
+        [
+            InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),
+            InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+        ],
+    ]
+
+
+WORKSPACE_INLINE_MENU = build_workspace_inline_menu()
+
+QUICK_NAV_MENU = build_quick_nav_menu()
 
 LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("📞 Консультация 30 мин", callback_data="magnet_consultation")],

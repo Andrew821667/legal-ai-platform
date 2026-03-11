@@ -324,8 +324,20 @@ def _services_inline_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
+def _workspace_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        build_workspace_inline_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
+    )
+
+
 def _quick_nav_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(QUICK_NAV_MENU)
+
+
+def _quick_nav_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        build_quick_nav_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
+    )
 
 
 def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
@@ -343,11 +355,15 @@ def _profile_edit_markup() -> InlineKeyboardMarkup:
     )
 
 
-def _profile_panel_markup(is_admin: bool) -> InlineKeyboardMarkup:
+def _profile_panel_markup(
+    is_admin: bool,
+    lead: dict | None = None,
+    selected_profile: str | None = None,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if not is_admin:
         rows.extend(_profile_edit_markup().inline_keyboard)
-    rows.extend(QUICK_NAV_MENU)
+    rows.extend(build_quick_nav_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile)))
     return InlineKeyboardMarkup(rows)
 
 
@@ -927,9 +943,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         # Приветственное сообщение + рабочий стол
+        lead = database.db.get_lead_by_user_id(user_id)
+        selected_profile = database.db.get_user_offer_profile(user_id)
         welcome_message = content.build_welcome_message(user.first_name)
         reply_markup = _main_menu_markup(user.id)
-        workspace_markup = _services_inline_menu_markup()
+        workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
         await utils.safe_reply_text(
             update.message,
@@ -939,7 +957,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await utils.safe_reply_text(
             update.message,
-            content.WORKSPACE_TEXT,
+            content.build_workspace_text(lead=lead, selected_profile=selected_profile),
             reply_markup=workspace_markup,
             action="start_workspace",
         )
@@ -962,10 +980,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
+    lead = None
+    selected_profile = None
+    user = update.effective_user
+    if user:
+        user_row = database.db.get_user_by_telegram_id(user.id)
+        if user_row:
+            lead = database.db.get_lead_by_user_id(user_row["id"])
+            selected_profile = database.db.get_user_offer_profile(user_row["id"])
     await utils.safe_reply_text(
         update.message,
         content.HELP_MESSAGE,
-        reply_markup=_quick_nav_markup(),
+        reply_markup=_quick_nav_markup_for(lead=lead, selected_profile=selected_profile),
         action="help_command",
     )
 
@@ -982,8 +1008,9 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     local_user = database.db.get_local_user_by_id(user_data["id"]) or user_data
     lead = database.db.get_local_lead_by_user_id(user_data["id"])
     consent_state = database.db.get_user_consent_state(user_data["id"])
+    selected_profile = database.db.get_user_offer_profile(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
-    reply_markup = _profile_panel_markup(is_admin)
+    reply_markup = _profile_panel_markup(is_admin, lead=lead, selected_profile=selected_profile)
     await utils.safe_reply_text(
         update.message,
         _format_profile_text(local_user, lead, consent_state, is_admin),
@@ -1182,13 +1209,21 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /menu - открывает рабочий стол."""
     try:
-        reply_markup = _services_inline_menu_markup()
+        lead = None
+        selected_profile = None
+        user = update.effective_user
+        if user:
+            user_row = database.db.get_user_by_telegram_id(user.id)
+            if user_row:
+                lead = database.db.get_lead_by_user_id(user_row["id"])
+                selected_profile = database.db.get_user_offer_profile(user_row["id"])
+        reply_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
         
         # Используем effective_message вместо message (может быть None)
         message = update.effective_message
         if message:
             await message.reply_text(
-                content.MENU_HEADER_TEXT,
+                content.build_workspace_text(lead=lead, selected_profile=selected_profile),
                 reply_markup=reply_markup
             )
             logger.info(f"Menu shown to user {update.effective_user.id}")
@@ -1374,10 +1409,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=_main_menu_markup(user.id),
                 action="forced_welcome_new_session",
             )
+            selected_profile = database.db.get_user_offer_profile(user_data["id"])
+            workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
             await utils.safe_reply_text(
                 original_message,
-                content.WORKSPACE_TEXT,
-                reply_markup=_services_inline_menu_markup(),
+                content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+                reply_markup=workspace_markup,
                 action="forced_workspace_new_session",
             )
             logger.info("Workspace sent on new session for user %s", user.id)
@@ -1392,10 +1429,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=_main_menu_markup(user.id),
                 action="fixed_welcome_on_greeting",
             )
+            selected_profile = database.db.get_user_offer_profile(user_data["id"])
+            workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
             await utils.safe_reply_text(
                 original_message,
-                content.WORKSPACE_TEXT,
-                reply_markup=_services_inline_menu_markup(),
+                content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+                reply_markup=workspace_markup,
                 action="workspace_on_greeting",
             )
             logger.info("Workspace sent on greeting for user %s", user.id)
@@ -2018,7 +2057,10 @@ async def handle_handoff_request(
         await utils.safe_reply_text(
             update.message,
             "Навигация:",
-            reply_markup=_quick_nav_markup(),
+            reply_markup=_quick_nav_markup_for(
+                lead=database.db.get_lead_by_user_id(user_data["id"]),
+                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            ),
             action="handoff_quick_nav",
         )
 

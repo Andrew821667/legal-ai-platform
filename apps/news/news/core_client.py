@@ -59,12 +59,15 @@ class CoreClient:
         limit: int = 20,
         status: str | None = None,
         newest_first: bool = False,
+        offset: int = 0,
     ) -> requests.Response:
         params: dict[str, Any] = {"limit": limit}
         if status:
             params["status"] = status
         if newest_first:
             params["newest_first"] = True
+        if offset > 0:
+            params["offset"] = offset
         return self._request("GET", "/api/v1/scheduled-posts", params=params)
 
     def list_automation_controls(self, scope: str | None = None) -> requests.Response:

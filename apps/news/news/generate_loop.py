@@ -17,38 +17,107 @@ from news.core_client import CoreClient
 from news.generate import run_generation
 from news.logging_config import setup_logging
 from news.settings import settings
+from news.strategy import publication_kind_from_format_type
 
 setup_logging()
 logger = logging.getLogger(__name__)
 _WORKER_ID = "news-generate"
 _TICK_HEARTBEAT_SECONDS = 600
 _BLOCKED_BY_WORKERS = ("news-telegram-ingest", "news-reader-digest")
+_STALE_EDITORIAL_STATUSES = ("draft", "review")
+_CLEANUP_BATCH_SIZE = 100
 
 
-def _cleanup_expired_review_posts(client: CoreClient, retention_days: int) -> int:
-    response = client.list_posts(limit=100, status="review", newest_first=False)
-    response.raise_for_status()
-    cutoff = datetime.now(ZoneInfo(settings.tz_name)) - timedelta(days=max(1, retention_days))
+def _parse_post_datetime(value: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(ZoneInfo(settings.tz_name))
+    except ValueError:
+        return None
+
+
+def _weekly_review_retention_days(retention_days: int) -> int:
+    return max(1, retention_days, settings.news_weekly_review_min_retention_days)
+
+
+def _retention_days_for_post(row: dict[str, object], retention_days: int) -> int:
+    format_type = str(row.get("format_type") or "").strip()
+    if publication_kind_from_format_type(format_type) == "weekly_review":
+        return _weekly_review_retention_days(retention_days)
+    return max(1, retention_days)
+
+
+def _cleanup_reason_for_post(row: dict[str, object]) -> str:
+    format_type = str(row.get("format_type") or "").strip()
+    if publication_kind_from_format_type(format_type) == "weekly_review":
+        return "expired_weekly_review_cleanup"
+    return "expired_editorial_cleanup"
+
+
+def _collect_expired_editorial_posts(
+    client: CoreClient,
+    *,
+    status: str,
+    retention_days: int,
+) -> list[tuple[str, str]]:
+    now_local = datetime.now(ZoneInfo(settings.tz_name))
+    expired: list[tuple[str, str]] = []
+    offset = 0
+    while True:
+        response = client.list_posts(
+            limit=_CLEANUP_BATCH_SIZE,
+            status=status,
+            newest_first=False,
+            offset=offset,
+        )
+        response.raise_for_status()
+        rows = response.json()
+        if not rows:
+            break
+        for row in rows:
+            post_id = str(row.get("id") or "").strip()
+            created_at = _parse_post_datetime(str(row.get("created_at") or ""))
+            if not post_id or created_at is None:
+                continue
+            cutoff = now_local - timedelta(days=_retention_days_for_post(row, retention_days))
+            if created_at > cutoff:
+                continue
+            expired.append((post_id, _cleanup_reason_for_post(row)))
+        if len(rows) < _CLEANUP_BATCH_SIZE:
+            break
+        offset += _CLEANUP_BATCH_SIZE
+    return expired
+
+
+def _cleanup_expired_editorial_posts(client: CoreClient, retention_days: int) -> int:
+    expired_posts: list[tuple[str, str]] = []
+    for status in _STALE_EDITORIAL_STATUSES:
+        expired_posts.extend(_collect_expired_editorial_posts(client, status=status, retention_days=retention_days))
+
     cleaned = 0
-    for row in response.json():
-        created_raw = str(row.get("created_at") or "").strip()
-        post_id = str(row.get("id") or "").strip()
-        if not created_raw or not post_id:
-            continue
-        try:
-            created_at = datetime.fromisoformat(created_raw.replace("Z", "+00:00")).astimezone(ZoneInfo(settings.tz_name))
-        except ValueError:
-            continue
-        if created_at > cutoff:
-            continue
-        patch = {
-            "status": "failed",
-            "last_error": "expired_review_cleanup",
-        }
-        client.patch_post(post_id, patch).raise_for_status()
+    reason_counts: dict[str, int] = {}
+    for post_id, reason in expired_posts:
+        client.patch_post(
+            post_id,
+            {
+                "status": "failed",
+                "last_error": reason,
+            },
+        ).raise_for_status()
         cleaned += 1
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
     if cleaned:
-        logger.info("expired_review_posts_cleaned", extra={"count": cleaned, "retention_days": retention_days})
+        logger.info(
+            "expired_editorial_posts_cleaned",
+            extra={
+                "count": cleaned,
+                "retention_days": retention_days,
+                "weekly_review_retention_days": _weekly_review_retention_days(retention_days),
+                "reasons": reason_counts,
+            },
+        )
     return cleaned
 
 
@@ -125,7 +194,7 @@ def main() -> int:
             now_local = datetime.now(ZoneInfo(settings.tz_name))
             today_key = now_local.date().isoformat()
             if today_key != last_cleanup_date:
-                _cleanup_expired_review_posts(client, retention_days)
+                _cleanup_expired_editorial_posts(client, retention_days)
                 last_cleanup_date = today_key
             if controls.get("news.generate.enabled", True):
                 for slot in generate_schedule_times(rows):

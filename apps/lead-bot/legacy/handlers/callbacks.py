@@ -55,6 +55,12 @@ def _services_inline_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
+def _workspace_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        build_workspace_inline_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
+    )
+
+
 def _personal_mode_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
@@ -74,18 +80,21 @@ def _contact_visibility_choice_markup() -> InlineKeyboardMarkup:
     )
 
 
-def _offer_profile_markup() -> InlineKeyboardMarkup:
+def _offer_profile_markup(selected_profile: str | None = None) -> InlineKeyboardMarkup:
+    def _label(text: str, *, active: bool) -> str:
+        return f"✅ {text}" if active else text
+
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("🏢 Инхаус", callback_data="menu_offer_set_inhouse"),
-                InlineKeyboardButton("⚖️ Юрфирма", callback_data="menu_offer_set_law_firm"),
+                InlineKeyboardButton(_label("🏢 Инхаус", active=selected_profile == "inhouse"), callback_data="menu_offer_set_inhouse"),
+                InlineKeyboardButton(_label("⚖️ Юрфирма", active=selected_profile == "law_firm"), callback_data="menu_offer_set_law_firm"),
             ],
             [
-                InlineKeyboardButton("📈 Бизнес", callback_data="menu_offer_set_business"),
-                InlineKeyboardButton("📦 Базовый", callback_data="menu_offer_set_universal"),
+                InlineKeyboardButton(_label("📈 Бизнес", active=selected_profile == "business"), callback_data="menu_offer_set_business"),
+                InlineKeyboardButton(_label("📦 Базовый", active=selected_profile == "universal"), callback_data="menu_offer_set_universal"),
             ],
-            [InlineKeyboardButton("🧭 Автоопределение", callback_data="menu_offer_set_auto")],
+            [InlineKeyboardButton(_label("🧭 Автоопределение", active=selected_profile is None), callback_data="menu_offer_set_auto")],
             [InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard")],
         ]
     )
@@ -172,7 +181,6 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             logger.warning(f"Failed to answer business menu callback: {answer_error}")
         
         callback_data = query.data or ""
-        menu_markup = _services_inline_menu_markup()
         contact_actions = {"menu_consultation", "menu_leave_contact"}
 
         is_business = bool(
@@ -194,6 +202,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             )
             lead = database.db.get_local_lead_by_user_id(user_db_id) if user_db_id else None
             selected_profile = database.db.get_user_offer_profile(user_db_id)
+        menu_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 
         async def _send_business_menu_message(text: str, reply_markup: InlineKeyboardMarkup | None) -> None:
             await utils.safe_send_message(
@@ -228,7 +237,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 f"{response_text}\n\n"
                 f"{content.offer_profile_panel_text(lead=lead, selected_profile=new_profile)}"
             )
-            response_markup = _offer_profile_markup()
+            response_markup = _offer_profile_markup(new_profile)
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
@@ -242,7 +251,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
 
         if callback_data == "menu_offer_profile":
             response_text = content.offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
-            response_markup = _offer_profile_markup()
+            response_markup = _offer_profile_markup(selected_profile)
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
@@ -308,7 +317,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             return
 
         if callback_data == "menu_dashboard":
-            response_text = content.WORKSPACE_TEXT
+            response_text = content.build_workspace_text(lead=lead, selected_profile=selected_profile)
             if is_business:
                 await _send_business_menu_message(response_text, menu_markup)
             else:
@@ -824,8 +833,14 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         )
         await utils.safe_reply_text(
             query.message,
-            content.WORKSPACE_TEXT,
-            reply_markup=_services_inline_menu_markup(),
+            content.build_workspace_text(
+                lead=database.db.get_local_lead_by_user_id(user_data["id"]),
+                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            ),
+            reply_markup=_workspace_markup_for(
+                lead=database.db.get_local_lead_by_user_id(user_data["id"]),
+                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            ),
             action="consent_workspace_after_yes",
         )
         await process_pending_start_payload(
@@ -868,8 +883,14 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         )
         await utils.safe_reply_text(
             query.message,
-            content.WORKSPACE_TEXT,
-            reply_markup=_services_inline_menu_markup(),
+            content.build_workspace_text(
+                lead=database.db.get_local_lead_by_user_id(user_data["id"]),
+                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            ),
+            reply_markup=_workspace_markup_for(
+                lead=database.db.get_local_lead_by_user_id(user_data["id"]),
+                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            ),
             action="consent_workspace_after_transborder",
         )
         await process_pending_start_payload(

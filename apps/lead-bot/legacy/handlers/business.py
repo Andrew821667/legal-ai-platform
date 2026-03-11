@@ -251,9 +251,15 @@ def _business_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(WORKSPACE_INLINE_MENU)
 
 
-def build_business_menu_markup() -> InlineKeyboardMarkup:
+def _business_menu_markup_for(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        build_workspace_inline_menu(content.offer_profile_cta_label(lead=lead, selected_profile=selected_profile))
+    )
+
+
+def build_business_menu_markup(lead: dict | None = None, selected_profile: str | None = None) -> InlineKeyboardMarkup:
     """Публичный доступ к business-меню для роутера в bot.py."""
-    return _business_menu_markup()
+    return _business_menu_markup_for(lead=lead, selected_profile=selected_profile)
 
 
 def _personal_mode_markup() -> InlineKeyboardMarkup:
@@ -563,11 +569,14 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         
         # Обработка команды /menu для бизнес-чата
         if text.strip().lower() in ['/menu', 'menu', '/меню', 'меню', 'рабочий стол', '/desk', 'desk']:
-            reply_markup = _business_menu_markup()
+            user_row = database.db.get_user_by_telegram_id(user_id)
+            lead = database.db.get_lead_by_user_id(user_row["id"]) if user_row else None
+            selected_profile = database.db.get_user_offer_profile(user_row["id"]) if user_row else None
+            reply_markup = _business_menu_markup_for(lead=lead, selected_profile=selected_profile)
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
-                text=content.MENU_HEADER_TEXT,
+                text=content.build_workspace_text(lead=lead, selected_profile=selected_profile),
                 reply_markup=reply_markup,
                 business_connection_id=message.business_connection_id
             )

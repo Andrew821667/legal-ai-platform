@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     news_generate_evening_options: str = "16:00,16:30,17:00,17:30,18:00"
     news_review_retention_days: int = 3
     news_review_retention_options: str = "1,2,3,5,7"
+    news_weekly_review_min_retention_days: int = 8
     news_similarity_threshold: float = 0.48
     news_priority_domains: str = ""
     news_history_scan_limit: int = 120

@@ -516,7 +516,18 @@ _FOOTER_VARIANT_HINTS = (
 
 def _is_hidden_deleted_post(row: dict[str, Any]) -> bool:
     last_error = str(row.get("last_error") or "").strip().lower()
-    return last_error.startswith("deleted_irrelevant") or last_error.startswith("expired_review_cleanup")
+    return last_error.startswith(
+        ("deleted_irrelevant", "expired_review_cleanup", "expired_editorial_cleanup", "expired_weekly_review_cleanup")
+    )
+
+
+def _weekly_review_retention_days(retention_days: int) -> int:
+    return max(1, retention_days, settings.news_weekly_review_min_retention_days)
+
+
+def _retention_summary_text(retention_days: int) -> str:
+    weekly_days = _weekly_review_retention_days(retention_days)
+    return f"Обычные черновики и «На проверке»: {retention_days} дн.; обзор недели: {weekly_days} дн."
 
 
 def _status_label(status: str) -> str:
@@ -1935,7 +1946,7 @@ class NewsAdminBot:
             f"Публикация: {_humanize_interval(publish_interval)}",
             f"Reader-дайджест: {'🟢' if reader_digest_enabled else '🔴'} {reader_digest_slot}; лимит {reader_digest_limit}",
             f"Reader CTA A/B: {'🟢' if reader_cta_state.get('enabled', True) else '🔴'} | {reader_cta_split_text} | seed {reader_cta_seed}",
-            f"Хранение драфтов На проверке: {retention_days} дн.",
+            f"Хранение очереди: {_retention_summary_text(retention_days)}",
             f"Broad-AI лимит в цикле: {broad_ai_limit}",
             f"Активных контент-тем: {len(enabled_themes)}/{len(GENERATION_THEME_DEFS)}",
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
@@ -2866,7 +2877,7 @@ class NewsAdminBot:
             f"Интервал автопубликации: {_humanize_interval(publish_interval)}\n"
             f"Лимит генерации за цикл: {generate_limit}\n"
             f"Broad-AI лимит за цикл: {broad_ai_limit}\n"
-            f"Хранение в «На проверке»: {retention_days} дн.\n"
+            f"Хранение очереди: {_retention_summary_text(retention_days)}\n"
             f"Источников RSS/search: {source_count}\n"
             f"Telegram-каналов: {telegram_channel_count}\n"
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}\n"
@@ -3214,7 +3225,7 @@ class NewsAdminBot:
             f"Telegram-парсер: {telegram_morning} и {telegram_evening}",
             f"Автогенерация: {generate_morning} и {generate_evening}; лимит {generate_limit}",
             f"Автопубликация: {_humanize_interval(publish_interval)}",
-            f"Хранение На проверке: {retention_days} дн.",
+            f"Хранение очереди: {_retention_summary_text(retention_days)}",
             f"Сбор feedback: {'🟢' if control_map.get('news.feedback.collect.enabled', True) else '🔴'}",
             f"Защита по feedback: {'🟢' if control_map.get('news.feedback.guard.enabled', True) else '🔴'}",
             "",
@@ -3400,7 +3411,7 @@ class NewsAdminBot:
             f"• Генерация: {generate_morning} и {generate_evening}",
             f"• Публикация: {_humanize_interval(publish_interval)}",
             f"• Лимит за цикл: {generate_limit}",
-            f"• Хранение драфтов: {retention_days} дн.",
+            f"• Хранение очереди: {_retention_summary_text(retention_days)}",
             "",
         ]
         if overdue_count:
@@ -3902,7 +3913,7 @@ class NewsAdminBot:
             f"• Автопубликация: {_humanize_interval(publish_interval)}\n"
             f"• Лимит генерации за цикл: {generate_limit}\n\n"
             f"• Reader-дайджест: {reader_digest_slot} (до {reader_digest_limit} пользователей)\n"
-            f"• Хранение драфтов На проверке: {retention_days} дн.\n\n"
+            f"• Хранение очереди: {_retention_summary_text(retention_days)}\n\n"
             f"• Broad-AI в одном цикле: {broad_ai_limit}\n\n"
             "Генератор просыпается часто, но реально создает новые драфты только в указанные слоты."
         )
@@ -3962,7 +3973,7 @@ class NewsAdminBot:
         elif kind == "retention":
             current = self._configured_review_retention_days()
             options = settings.news_review_retention_options_list
-            label = "Хранение драфтов На проверке"
+            label = "Хранение обычных черновиков и «На проверке»"
         elif kind == "broad_ai":
             current = self._configured_broad_ai_limit()
             options = self._configured_broad_ai_options()
@@ -3979,7 +3990,7 @@ class NewsAdminBot:
             for item in options
         )
         current_label = _humanize_interval(current) if kind == "publish" else (f"{current} дн." if kind == "retention" else str(current))
-        return (
+        text = (
             f"{label}\n\n"
             + _screen_guide(
                 "Точечная настройка выбранного интервала/лимита.",
@@ -3992,6 +4003,12 @@ class NewsAdminBot:
             f"Текущее значение: {current_label}\n"
             f"Доступные варианты: {options_line}"
         )
+        if kind == "retention":
+            text += (
+                f"\n\nОбзор недели живет минимум {_weekly_review_retention_days(current)} дн., "
+                "чтобы недельная агрегация не срезалась раньше публикации."
+            )
+        return text
 
     def _interval_detail_keyboard(self, kind: str) -> InlineKeyboardMarkup:
         if kind == "generate_morning":

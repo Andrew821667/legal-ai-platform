@@ -43,13 +43,14 @@ def list_scheduled_posts(
     due: bool = Query(default=False),
     status: ScheduledPostStatus | None = Query(default=None),
     newest_first: bool = Query(default=False),
+    offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.news, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> list[ScheduledPost]:
     _ = identity
     order_by = ScheduledPost.publish_at.desc() if newest_first else ScheduledPost.publish_at.asc()
-    stmt = select(ScheduledPost).order_by(order_by).limit(limit)
+    stmt = select(ScheduledPost).order_by(order_by).offset(offset).limit(limit)
     if status is not None:
         stmt = stmt.where(ScheduledPost.status == status)
     if due:
