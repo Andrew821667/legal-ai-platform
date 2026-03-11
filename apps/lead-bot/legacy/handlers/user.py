@@ -6,15 +6,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-import re
-import asyncio
 from typing import Optional, Dict
 from datetime import datetime
-from telegram import Update, InlineKeyboardMarkup
+from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import normalize_button_text
-import admin_interface
 import database
 import ai_brain
 import lead_qualifier
@@ -28,21 +25,16 @@ import content
 import funnel
 from handlers.constants import (
     ADMIN_PANEL_MENU,
-    LEAD_MAGNET_MENU,
 )
 from handlers.helpers import extract_email, send_lead_magnet_email, notify_admin_new_lead
 from handlers.markup import (
     consultation_contact_markup as _consultation_contact_markup,
     consultation_cta_markup as _consultation_cta_markup,
-    documents_markup as _documents_markup,
     main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     personal_mode_markup as _personal_mode_markup,
     profile_edit_cancel_markup as _profile_edit_cancel_markup,
-    profile_panel_markup as _profile_panel_markup,
-    quick_nav_markup_for as _quick_nav_markup_for,
     transborder_consent_markup as _transborder_consent_markup,
-    with_channel_button as _with_channel_button,
     workspace_markup_for as _workspace_markup_for,
 )
 from handlers.user_commands import (
@@ -67,12 +59,26 @@ from handlers.user_commands import (
     transborder_consent_command,
     user_agreement_command,
 )
+from handlers.user_admin_lookup import handle_admin_lookup_input
+from handlers.user_cta_actions import (
+    handle_handoff_request,
+    handle_menu_button,
+    offer_lead_magnet,
+)
+from handlers.user_message_helpers import (
+    append_profile_name_context as _append_profile_name_context,
+    build_new_phone_lead_payload as _build_new_phone_lead_payload,
+    extract_phone_candidate as _extract_phone_candidate,
+    looks_like_new_topic_after_handoff as _looks_like_new_topic_after_handoff,
+    looks_like_plain_greeting as _looks_like_plain_greeting,
+    looks_like_return_to_bot as _looks_like_return_to_bot,
+    normalize_magnet_type as _normalize_magnet_type,
+    persist_fasttrack_contact as _persist_fasttrack_contact,
+    schedule_typing_indicator as _schedule_typing_indicator,
+)
 from handlers.start_payloads import process_pending_start_payload
 
 logger = logging.getLogger(__name__)
-PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
-_EDITABLE_USER_FIELDS = {"first_name", "last_name", "username"}
-_EDITABLE_LEAD_FIELDS = {"name", "email", "phone", "company"}
 
 
 def _button_text_equals(text: str | None, expected: str) -> bool:
@@ -87,494 +93,6 @@ def _is_navigation_shortcut(message_text: str) -> bool:
         return True
     return raw.lower() in ["/menu", "menu", "/меню", "меню"]
 
-
-def _clear_admin_lookup_state(context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data.pop("admin_lookup_action", None)
-    context.user_data.pop("admin_lookup_field", None)
-
-
-async def _handle_admin_lookup_input(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    message_text: str,
-) -> bool:
-    action = context.user_data.get("admin_lookup_action")
-    if not action:
-        return False
-
-    message = update.effective_message
-    if not message:
-        return True
-
-    if message_text == "⬅️ Отмена":
-        _clear_admin_lookup_state(context)
-        await utils.safe_reply_text(
-            message,
-            "Ок, режим поиска/редактирования закрыт.",
-            reply_markup=_main_menu_markup(config.ADMIN_TELEGRAM_ID),
-            action="admin_lookup_cancel",
-        )
-        return True
-
-    def _parse_id(raw: str) -> int | None:
-        try:
-            return int(raw.strip())
-        except (TypeError, ValueError):
-            return None
-
-    if action == "card":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_lookup_card_invalid_id",
-            )
-            return True
-
-        snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id)
-        if not snapshot:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_card_not_found",
-            )
-            return True
-
-        target_user = snapshot["user"]
-        lead = snapshot.get("lead") or {}
-        consent = snapshot.get("consent") or {}
-        text = (
-            f"🗂️ Карточка пользователя {telegram_id}\n\n"
-            f"Username: @{target_user.get('username') or '—'}\n"
-            f"Имя: {target_user.get('first_name') or '—'} {target_user.get('last_name') or ''}\n"
-            f"Регистрация: {target_user.get('created_at') or '—'}\n"
-            f"Последняя активность: {target_user.get('last_interaction') or '—'}\n\n"
-            "Lead:\n"
-            f"• Имя: {lead.get('name') or '—'}\n"
-            f"• Email: {lead.get('email') or '—'}\n"
-            f"• Телефон: {lead.get('phone') or '—'}\n"
-            f"• Компания: {lead.get('company') or '—'}\n"
-            f"• Статус: {lead.get('status') or '—'}\n\n"
-            "Согласия:\n"
-            f"• ПД: {'✅' if consent.get('consent_given') else '❌'}\n"
-            f"• Трансграничная передача: {'✅' if consent.get('transborder_consent') else '❌'}\n"
-            f"• Отозвано: {'✅' if consent.get('consent_revoked') else '❌'}"
-        )
-        await utils.safe_reply_text(message, text, action="admin_lookup_card_result")
-        return True
-
-    if action == "dialog":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_lookup_dialog_invalid_id",
-            )
-            return True
-
-        target_user = database.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_dialog_not_found",
-            )
-            return True
-
-        history = database.db.get_conversation_history(target_user["id"], limit=100)
-        if not history:
-            await utils.safe_reply_text(
-                message,
-                f"📝 История диалога ({telegram_id})\n\nДиалогов пока нет.",
-                action="admin_lookup_dialog_empty",
-            )
-            return True
-
-        lines = [f"📝 История диалога ({telegram_id})", ""]
-        for item in history:
-            role = "👤 Клиент" if item.get("role") == "user" else "🤖 Бот"
-            ts = item.get("timestamp", "")
-            text_part = item.get("message") or item.get("content") or ""
-            lines.append(f"{role} [{ts}]:")
-            lines.append(text_part)
-            lines.append("")
-        await utils.safe_reply_text(
-            message,
-            "\n".join(lines).strip(),
-            action="admin_lookup_dialog_result",
-        )
-        return True
-
-    if action == "revoke":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_lookup_revoke_invalid_id",
-            )
-            return True
-
-        result = admin_interface.admin_interface.clear_user_data_by_telegram_id(telegram_id)
-        if result is None:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_revoke_not_found",
-            )
-            return True
-
-        await utils.safe_reply_text(
-            message,
-            (
-                f"✅ Данные пользователя ID {telegram_id} очищены.\n\n"
-                f"Изменено профилей: {result.get('users_updated', 0)}\n"
-                f"Анонимизировано анкет: {result.get('leads_anonymized', 0)}\n"
-                f"Удалено сообщений: {result.get('messages_deleted', 0)}"
-            ),
-            action="admin_lookup_revoke_done",
-        )
-        return True
-
-    if action == "reset_new":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_lookup_reset_new_invalid_id",
-            )
-            return True
-
-        result = admin_interface.admin_interface.reset_user_to_new_by_telegram_id(telegram_id)
-        if result is None:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_reset_new_not_found",
-            )
-            return True
-
-        await utils.safe_reply_text(
-            message,
-            (
-                f"♻️ Пользователь ID {telegram_id} сброшен в состояние «как новый».\n\n"
-                f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
-                f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
-                f"Аналитика очищена: {result.get('events_deleted', 0)}"
-            ),
-            action="admin_lookup_reset_new_done",
-        )
-        return True
-
-    if action == "delete_user":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_lookup_delete_user_invalid_id",
-            )
-            return True
-
-        result = admin_interface.admin_interface.delete_user_by_telegram_id(telegram_id)
-        if result is None:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_delete_user_not_found",
-            )
-            return True
-
-        await utils.safe_reply_text(
-            message,
-            (
-                f"🧨 Пользователь ID {telegram_id} полностью удален.\n\n"
-                f"Профиль удален: {result.get('users_deleted', 0)}\n"
-                f"Лиды удалены: {result.get('leads_deleted', 0)}\n"
-                f"Сообщения удалены: {result.get('messages_deleted', 0)}\n"
-                f"Аналитика удалена: {result.get('events_deleted', 0)}"
-            ),
-            action="admin_lookup_delete_user_done",
-        )
-        return True
-
-    if action == "blacklist_add":
-        parts = message_text.strip().split(maxsplit=1)
-        telegram_id = _parse_id(parts[0]) if parts else None
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Формат: <telegram_id> [причина]\nНапример: 321681061 Спам/флуд",
-                action="admin_blacklist_add_invalid",
-            )
-            return True
-
-        reason = parts[1].strip() if len(parts) > 1 else "Заблокирован администратором через панель"
-        security.security_manager.add_to_blacklist(telegram_id, reason)
-        total_blocked = security.security_manager.get_stats().get("blacklisted_users", 0)
-        await utils.safe_reply_text(
-            message,
-            (
-                f"🚫 Пользователь {telegram_id} добавлен в черный список.\n"
-                f"Причина: {reason}\n"
-                f"Всего в списке: {total_blocked}"
-            ),
-            action="admin_blacklist_add_done",
-        )
-        return True
-
-    if action == "blacklist_remove":
-        telegram_id = _parse_id(message_text)
-        if telegram_id is None:
-            await utils.safe_reply_text(
-                message,
-                "Введите корректный Telegram ID числом.\nНапример: 321681061",
-                action="admin_blacklist_remove_invalid",
-            )
-            return True
-
-        is_blocked, _ = security.security_manager.is_blacklisted(telegram_id)
-        if not is_blocked:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь {telegram_id} не найден в черном списке.",
-                action="admin_blacklist_remove_not_found",
-            )
-            return True
-
-        security.security_manager.remove_from_blacklist(telegram_id)
-        total_blocked = security.security_manager.get_stats().get("blacklisted_users", 0)
-        await utils.safe_reply_text(
-            message,
-            (
-                f"✅ Пользователь {telegram_id} удален из черного списка.\n"
-                f"Всего в списке: {total_blocked}"
-            ),
-            action="admin_blacklist_remove_done",
-        )
-        return True
-
-    if action == "edit":
-        field = context.user_data.get("admin_lookup_field")
-        if not field:
-            await utils.safe_reply_text(
-                message,
-                "Сначала выберите поле редактирования кнопкой в админ-панели.",
-                action="admin_lookup_edit_no_field",
-            )
-            return True
-
-        parts = message_text.strip().split(maxsplit=1)
-        if len(parts) < 2:
-            await utils.safe_reply_text(
-                message,
-                "Формат: <telegram_id> <новое значение>\nНапример: 321681061 new@email.com",
-                action="admin_lookup_edit_bad_format",
-            )
-            return True
-
-        telegram_id = _parse_id(parts[0])
-        value = parts[1].strip()
-        if telegram_id is None or not value:
-            await utils.safe_reply_text(
-                message,
-                "Нужен корректный ID и новое значение.\nПример: 321681061 ООО Ромашка",
-                action="admin_lookup_edit_bad_values",
-            )
-            return True
-
-        target_user = database.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
-            await utils.safe_reply_text(
-                message,
-                f"Пользователь с ID {telegram_id} не найден.\nВведите другой ID или нажмите «⬅️ Отмена».",
-                action="admin_lookup_edit_not_found",
-            )
-            return True
-
-        if field in _EDITABLE_USER_FIELDS:
-            updated = database.db.update_user_fields(target_user["id"], {field: value})
-            if not updated:
-                await utils.safe_reply_text(
-                    message,
-                    "Профиль пользователя не обновлен.",
-                    action="admin_lookup_edit_user_not_updated",
-                )
-                return True
-        elif field in _EDITABLE_LEAD_FIELDS:
-            database.db.create_or_update_lead(target_user["id"], {field: value})
-        else:
-            await utils.safe_reply_text(
-                message,
-                f"Поле {field} недоступно для редактирования.",
-                action="admin_lookup_edit_bad_field",
-            )
-            return True
-
-        await utils.safe_reply_text(
-            message,
-            f"✅ Поле `{field}` обновлено для пользователя {telegram_id}.",
-            action="admin_lookup_edit_done",
-        )
-        return True
-
-    return False
-
-
-def _schedule_typing_indicator(chat, user_telegram_id: int) -> None:
-    """Неблокирующий typing, чтобы сетевые лаги Telegram не тормозили ответ."""
-
-    async def _send_typing() -> None:
-        try:
-            await asyncio.wait_for(chat.send_action(action="typing"), timeout=1.5)
-            logger.info("Typing indicator sent for user %s", utils.mask_telegram_id(user_telegram_id))
-        except (asyncio.TimeoutError, TelegramError, OSError) as error:
-            logger.debug(
-                "Typing indicator skipped for user %s: %s",
-                utils.mask_telegram_id(user_telegram_id),
-                error,
-            )
-
-    asyncio.create_task(_send_typing())
-
-
-def _append_profile_name_context(base_context: str, profile_first_name: Optional[str]) -> str:
-    name = (profile_first_name or "").strip()
-    if name:
-        return (
-            f"{base_context}\n"
-            f"Имя пользователя в профиле Telegram: {name}.\n"
-            "Если обращаешься по имени, используй только это имя профиля Telegram. "
-            "Не извлекай имя из текста сообщения клиента."
-        )
-    return (
-        f"{base_context}\n"
-        "Если обращаешься к пользователю, используй нейтральную форму без имени. "
-        "Не извлекай имя из текста сообщения клиента."
-    )
-
-
-def _extract_phone_candidate(text: str) -> Optional[str]:
-    raw = (text or "").strip()
-    if not raw:
-        return None
-
-    match = PHONE_RE.search(raw)
-    if not match:
-        if re.fullmatch(r"[\d\s()+\-]{10,20}", raw):
-            digits = re.sub(r"\D", "", raw)
-            if 10 <= len(digits) <= 12:
-                return digits
-        return None
-    return match.group(0)
-
-
-def _persist_fasttrack_contact(user_db_id: int, user, message_text: str) -> None:
-    payload: Dict[str, str] = {}
-    email = extract_email(message_text)
-    if email:
-        payload["email"] = email
-
-    phone = _extract_phone_candidate(message_text)
-    if phone and utils.validate_phone(phone):
-        payload["phone"] = utils.format_phone(phone)
-
-    if payload:
-        payload.setdefault("name", user.first_name)
-        database.db.create_or_update_lead(user_db_id, payload)
-
-
-def _looks_like_ack_only(text: str) -> bool:
-    normalized = (text or "").strip().lower()
-    if not normalized:
-        return True
-    return normalized in {
-        "ок", "окей", "понял", "принял", "ясно", "спасибо", "благодарю",
-        "хорошо", "договорились", "супер", "круто",
-    }
-
-
-def _looks_like_plain_greeting(text: str) -> bool:
-    normalized = normalize_button_text(text).strip().lower()
-    if not normalized:
-        return False
-    compact = normalized.replace("!", "").replace(".", "").replace(",", "").strip()
-    greeting_prefixes = (
-        "привет",
-        "здравств",
-        "добрый день",
-        "добрый вечер",
-        "доброе утро",
-        "hello",
-        "hi",
-    )
-    return any(compact.startswith(prefix) for prefix in greeting_prefixes)
-
-
-def _looks_like_return_to_bot(text: str) -> bool:
-    normalized = normalize_button_text(text).strip().lower()
-    return normalized in {
-        "↩️ вернуться к боту",
-        "вернуться к боту",
-        "вернуться",
-        "/bot",
-        "бот",
-    }
-
-
-def _looks_like_new_topic_after_handoff(text: str) -> bool:
-    normalized = normalize_button_text(text).strip().lower()
-    if not normalized:
-        return False
-    if _looks_like_ack_only(normalized):
-        return False
-    if _extract_phone_candidate(normalized):
-        return False
-    if normalized in {
-        "/menu", "menu", "/меню", "меню",
-        "/reset", "reset", "сброс",
-        "меню услуг", "консультация", "заказать консультацию",
-        "рабочий стол",
-        "личное обращение", "мой профиль", "документы",
-        "начать заново", "админ-панель",
-    }:
-        return False
-    return len(normalized) >= 3
-
-
-def _build_new_phone_lead_payload(
-    previous_lead: Optional[Dict],
-    *,
-    first_name: str,
-    phone: str,
-    source: str,
-) -> Dict:
-    lead = previous_lead or {}
-    notes = (lead.get("notes") or "").strip()
-    notes = f"{notes}\n[PHONE_CAPTURE] source={source}".strip()
-    return {
-        "name": first_name,
-        "email": lead.get("email"),
-        "phone": phone,
-        "company": lead.get("company"),
-        "pain_point": lead.get("pain_point"),
-        "temperature": "warm",
-        "status": "new",
-        "lead_magnet_type": "consultation",
-        "lead_magnet_delivered": True,
-        "notification_sent": 0,
-        "notes": notes,
-    }
-
-def _normalize_magnet_type(value: Optional[str]) -> str:
-    if value == "demo_analysis":
-        return "demo"
-    if value == "report_sample":
-        return "sample_report"
-    return value or ""
 
 
 async def _handle_non_text_input(
@@ -694,7 +212,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_mode = database.db.get_chat_mode(chat_id)
 
         if is_admin:
-            handled_admin_lookup = await _handle_admin_lookup_input(update, context, message_text)
+            handled_admin_lookup = await handle_admin_lookup_input(update, context, message_text)
             if handled_admin_lookup:
                 return
 
@@ -1402,149 +920,3 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError, OSError) as e:
         if "Peer_id_invalid" not in str(e):
             logger.error(f"Error in handle_message: {e}")
-
-
-
-async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, button_text: str):
-    """Обработчик кнопок меню"""
-    _ = context
-    user = update.effective_user
-    lead = None
-    selected_profile = None
-    if user:
-        user_row = database.db.get_user_by_telegram_id(user.id)
-        if user_row:
-            lead = database.db.get_lead_by_user_id(user_row["id"])
-            selected_profile = database.db.get_user_offer_profile(user_row["id"])
-    response = content.menu_response_by_button(
-        button_text,
-        lead=lead,
-        selected_profile=selected_profile,
-    )
-    await utils.safe_reply_html(update.message, response, action="menu_button_response")
-
-
-
-async def offer_lead_magnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Предложение lead magnet"""
-    _ = context
-    reply_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
-    await utils.safe_reply_html(
-        update.message,
-        content.with_channel_nurture(content.LEAD_MAGNET_OFFER_TEXT),
-        reply_markup=reply_markup,
-        action="lead_magnet_offer",
-    )
-
-
-
-async def handle_handoff_request(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    source: str = "trigger",
-    lead_id_override: Optional[int] = None,
-    is_update_override: Optional[bool] = None,
-):
-    """Обработка запроса на передачу админу"""
-    try:
-        user = update.effective_user
-        user_data = database.db.get_user_by_telegram_id(user.id)
-
-        if not user_data:
-            await update.message.reply_text("Ошибка. Попробуйте /start")
-            return
-
-        # Уведомляем пользователя
-        await utils.safe_reply_html(
-            update.message,
-            content.with_channel_nurture(content.HANDOFF_ACK_TEXT, after_contact=True),
-            reply_markup=_main_menu_markup(user.id),
-            action="handoff_ack",
-        )
-        await utils.safe_reply_text(
-            update.message,
-            "Навигация:",
-            reply_markup=_with_channel_button(
-                _quick_nav_markup_for(
-                    lead=database.db.get_lead_by_user_id(user_data["id"]),
-                    selected_profile=database.db.get_user_offer_profile(user_data["id"]),
-                ),
-                prepend=True,
-            ),
-            action="handoff_quick_nav",
-        )
-
-        # Создаем лид только если его нет, либо используем явно переданный lead_id.
-        lead = database.db.get_lead_by_user_id(user_data['id'])
-        if lead_id_override is not None:
-            lead_id = lead_id_override
-            lead_payload_override = database.db.get_lead_by_id(lead_id)
-            if lead_payload_override:
-                lead = lead_payload_override
-            is_update = bool(is_update_override) if is_update_override is not None else False
-        else:
-            if not lead:
-                lead_id = database.db.create_or_update_lead(user_data['id'], {
-                    'name': user.first_name
-                })
-                is_update = bool(is_update_override) if is_update_override is not None else False
-            else:
-                lead_id = lead['id']
-                is_update = bool(is_update_override) if is_update_override is not None else True
-
-        funnel_state = database.db.get_user_funnel_state(user_data['id'])
-        previous_stage = funnel_state.get('conversation_stage') or 'discover'
-        cta_variant = funnel_state.get('cta_variant') or funnel.choose_cta_variant(user_data['id'])
-
-        database.db.update_user_funnel_state(
-            user_data['id'],
-            conversation_stage='handoff',
-            cta_variant=cta_variant
-        )
-        if lead_id_override is not None:
-            database.db.update_lead_funnel_state_by_id(
-                lead_id,
-                conversation_stage='handoff',
-                cta_variant=cta_variant
-            )
-        else:
-            database.db.update_lead_funnel_state(
-                user_data['id'],
-                conversation_stage='handoff',
-                cta_variant=cta_variant
-            )
-
-        if previous_stage != 'handoff':
-            try:
-                database.db.track_event(
-                    user_data['id'],
-                    "stage_changed",
-                    payload={"from": previous_stage, "to": "handoff"},
-                    lead_id=lead_id
-                )
-            except (sqlite3.Error, KeyError) as analytics_error:
-                logger.warning(f"Failed to track handoff stage change: {analytics_error}")
-
-        lead_payload = database.db.get_lead_by_id(lead_id) or {}
-        await notify_admin_new_lead(
-            context=context,
-            lead_id=lead_id,
-            lead_data=lead_payload,
-            user_data=user_data,
-            is_update=is_update,
-        )
-
-        try:
-            database.db.track_event(
-                user_data['id'],
-                "handoff_done",
-                payload={"source": source, "cta_variant": cta_variant},
-                lead_id=lead_id
-            )
-        except (sqlite3.Error, KeyError) as analytics_error:
-            logger.warning(f"Failed to track handoff_done event: {analytics_error}")
-
-        logger.info(f"Handoff request from user {user.id}")
-
-    except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
-        logger.error(f"Error in handle_handoff_request: {e}")
