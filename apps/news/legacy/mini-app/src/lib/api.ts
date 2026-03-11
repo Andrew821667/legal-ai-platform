@@ -15,9 +15,6 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
   },
 })
 
@@ -48,30 +45,17 @@ api.interceptors.request.use((config) => {
       console.log('[API Request] Using full Telegram initData with signature')
       console.log('[API Request] User ID:', initDataUnsafe?.user?.id)
     } else {
-      // Fallback: send minimal data for development
-      console.warn('[Mini App] No Telegram initData available, using fallback')
-      config.headers['X-Telegram-Init-Data'] = JSON.stringify({
-        user: {
-          id: 0,
-          first_name: 'Dev',
-          username: 'dev_user'
-        }
-      })
+      console.warn('[Mini App] No Telegram initData available; request will be unauthenticated')
+      delete config.headers['X-Telegram-Init-Data']
     }
   } else {
-    console.warn('[API Request] No Telegram WebApp available, using fallback auth')
+    console.warn('[API Request] No Telegram WebApp available; request will be unauthenticated')
     console.log('[API Request] Telegram object:', typeof window !== 'undefined' ? (window.Telegram ? 'present' : 'undefined') : 'window undefined')
-    config.headers['X-Telegram-Init-Data'] = JSON.stringify({
-      user: {
-        id: 0,
-        first_name: 'Dev',
-        username: 'dev_user'
-      }
-    })
+    delete config.headers['X-Telegram-Init-Data']
   }
 
   console.log('[API Request] Final URL:', config.url)
-  console.log('[API Request] Final Headers:', JSON.stringify(config.headers, null, 2))
+  console.log('[API Request] Auth header present:', Boolean(config.headers['X-Telegram-Init-Data']))
 
   return config
 })
