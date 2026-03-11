@@ -123,6 +123,10 @@ class Config:
             os.getenv('LEAD_PUBLIC_CHANNEL_URL')
             or os.getenv('TELEGRAM_CHANNEL_URL', '')
         ).strip()
+        self.CONTRACT_AI_SYSTEM_URL: str = (
+            os.getenv('CONTRACT_AI_SYSTEM_URL')
+            or os.getenv('READER_CONTRACT_AI_URL', '')
+        ).strip()
         self.TELEGRAM_CHANNEL_USERNAME: str = (
             os.getenv('LEAD_PUBLIC_CHANNEL_USERNAME')
             or os.getenv('TELEGRAM_CHANNEL_USERNAME', '')

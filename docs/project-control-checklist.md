@@ -54,15 +54,15 @@
 - `[x]` `weekly_review` живет отдельно и не режется как обычная новость.
 - `[~]` Проверить, что для всех старых публикаций есть backfill данных на `source_url/channel_post_url`, если нужны кнопки открытия оригинала.
 
-## 4. Web / Contract AI
-- `[x]` `contract-ai`: закрыт frontend auth bypass.
-- `[x]` `contract-ai`: закрыта неавторизованная раздача договоров как static files.
-- `[x]` `contract-ai`: убраны insecure dev/demo helper flows.
-- `[x]` `contract-ai`: frontend снова проходит `type-check` и `build`.
-- `[x]` `contract-ai`: включен в основной CI минимумом smoke/build/type-check.
+## 4. Web / Contract AI Integration Boundary
+- `[x]` Зафиксировано, что реальный `Contract_AI_System` — отдельный репозиторий и внешний модуль относительно `legal-ai-platform`.
+- `[x]` Граница ответственности между платформой и внешним контрактным модулем задокументирована.
 - `[x]` `web`: reader conversion funnel закрыт admin session.
-- `[x]` `contract-ai`: self-serve pricing/subscription public contour выключен по умолчанию, public UI переведен в pilot-first модель.
-- `[~]` `contract-ai` пока в CI не покрыт полноценным test-matrix, только разумным базовым контуром.
+- `[~]` `web` и `lead-bot` должны говорить о `Contract_AI_System` как о внешнем модуле/флагманском направлении без обещаний, которые живут только в отдельном репозитории.
+- `[x]` Инвентаризированы основные точки перехода из `web` и `lead-bot` в `Contract_AI_System`, заведён отдельный список entrypoints.
+- `[x]` Зафиксирован канонический URL/entrypoint внешнего `Contract_AI_System` для `web`, `lead-bot` и docs.
+- `[ ]` Проверить живой внешний entrypoint `Contract_AI_System` на реальном устройстве и убедиться, что CTA не ведут в тупик.
+- `[!]` Полноценный аудит frontend/admin/auth/billing/test-matrix самого `Contract_AI_System` вести отдельно в репозитории `Contract-AI-System-`.
 - `[x]` Явный legal disclaimer системно добавлен в web через CTA/lead/footer.
 
 ## 5. CI/CD и репозиторий
@@ -71,11 +71,11 @@
 - `[x]` Docker images получают immutable tag по `github.sha`, а не только `latest`.
 - `[x]` В `.gitignore` добавлен `venv/`.
 - `[~]` Нужен отдельный проход по README/docs, чтобы убрать все устаревшие dev/security инструкции; критичные quickstart/demo хвосты уже почищены.
-- `[ ]` При необходимости расширить CI на более глубокие тесты `contract-ai` и интеграционные сценарии.
+- `[ ]` При необходимости расширить CI на интеграционные проверки внешнего контрактного контура, не подменяя этим отдельный CI репозитория `Contract-AI-System-`.
 
 ## 6. Product / UX / позиционирование
 - `[x]` Бесплатная консультация и специальные платные форматы концептуально разведены.
-- `[~]` Ценовая и продуктовая модель между `lead-bot`, `web`, `contract-ai` проаудирована; `contract-ai` public runtime уже переведен в pilot-first модель, но глубинная унификация текстов и внутренних tier-артефактов еще впереди.
+- `[~]` Ценовая и продуктовая модель между `lead-bot`, `web` и внешним `Contract_AI_System` проаудирована на уровне integration boundary; полная унификация самого модуля должна вестись в отдельном репозитории.
 - `[~]` Якорные продукты зафиксированы на уровне target-модели; нужно довести до реальных текстов и маршрутов.
 - `[ ]` Подготовить продуктовый контур для специальных платных консультаций:
   - products
@@ -97,7 +97,7 @@
 ## Осталось в первую очередь
 - `[x]` Secret inventory + rotation checklist.
 - `[x]` Web disclaimer в системных точках интерфейса.
-- `[~]` Pricing/product sync между bot/web/contract-ai.
+- `[~]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
 - `[ ]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[ ]` Отдельный compliance-review по реальной операционной схеме.
 

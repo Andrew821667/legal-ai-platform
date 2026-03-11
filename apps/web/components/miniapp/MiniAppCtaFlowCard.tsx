@@ -1,6 +1,6 @@
 "use client";
 
-import { leadBotDeepLink, readerBotDeepLink, ROUTES } from "@/lib/links";
+import { contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES } from "@/lib/reader-events";
 
@@ -15,6 +15,8 @@ export default function MiniAppCtaFlowCard({
   sourceScreen,
   title = "Маршрут: Узнать -> Проверить -> Внедрить",
 }: MiniAppCtaFlowCardProps) {
+  const contractAIHref = contractAIEntryHref("demo");
+  const contractAIExternal = contractAIEntryIsExternal();
   return (
     <article className="rounded-xl border border-amber-500/35 bg-slate-900/70 p-4">
       <h2 className="text-sm font-semibold text-amber-300">{title}</h2>
@@ -36,7 +38,7 @@ export default function MiniAppCtaFlowCard({
         </MiniTrackedLink>
 
         <MiniTrackedLink
-          href={ROUTES.contractAI}
+          href={contractAIHref}
           action={MINIAPP_ACTIONS.flowValidate}
           meta={{
             eventType: MINIAPP_EVENT_TYPES.ctaClick,
@@ -44,6 +46,8 @@ export default function MiniAppCtaFlowCard({
             screen: sourceScreen,
             payload: { cta: "validate" },
           }}
+          target={contractAIExternal ? "_blank" : undefined}
+          rel={contractAIExternal ? "noopener noreferrer" : undefined}
           className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
         >
           🧪 Проверить в Contract_AI_System

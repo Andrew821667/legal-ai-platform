@@ -4,8 +4,16 @@
 
 Цель:
 - зафиксировать единую продуктовую и ценовую модель;
-- не допускать расхождений между `lead-bot`, `web`, `contract-ai`;
+- не допускать расхождений между `lead-bot`, `web` и внешним `Contract_AI_System`;
 - иметь reference-документ перед любыми copy/UI/payment-изменениями.
+
+## Важная оговорка
+
+Реальный `Contract_AI_System` живет в отдельном репозитории:
+
+- `https://github.com/Andrew821667/Contract-AI-System-`
+
+Этот документ нужен для integration boundary основного проекта. Он не заменяет backlog и source of truth отдельного репозитория.
 
 ## 1. Текущее состояние
 
@@ -33,15 +41,13 @@
 - в FAQ и части copy говорится, что типовые решения начинаются от `300 000 ₽`.
 
 ### Contract AI
-Источники:
-- [apps/contract-ai/frontend/src/app/pricing/page.tsx](/Users/andrew/Мои%20AI%20проекты/legal-ai-platform/apps/contract-ai/frontend/src/app/pricing/page.tsx)
-- [apps/contract-ai/src/api/payments/routes.py](/Users/andrew/Мои%20AI%20проекты/legal-ai-platform/apps/contract-ai/src/api/payments/routes.py)
-- [apps/contract-ai/src/services/payment_service.py](/Users/andrew/Мои%20AI%20проекты/legal-ai-platform/apps/contract-ai/src/services/payment_service.py)
+Источник истины:
+- отдельный репозиторий `Contract-AI-System-`
 
 Текущая модель:
-- public-facing UI переведен в `demo -> pilot -> working contour`;
-- self-serve billing router выключен по умолчанию через feature flag;
-- внутренние tier/payment артефакты еще остаются как legacy-техдолг.
+- модуль работает отдельно на MacBook;
+- для основной платформы это внешний контрактный контур;
+- глубокая проверка frontend/admin/auth/billing этого модуля должна идти отдельно.
 
 ## 2. Главная проблема
 
@@ -52,9 +58,9 @@
 - позиционируют продукт как B2B/legal ops/contract automation проект.
 
 2. `Contract AI`
-- выглядел как self-serve SaaS с ежемесячной подпиской на индивидуального пользователя.
+- исторически мог выглядеть как self-serve SaaS с ежемесячной подпиской на индивидуального пользователя.
 
-Сейчас public-facing часть уже выровнена, но внутренние артефакты старой модели еще требуют cleanup. Исходный конфликт создавал путаницу:
+Сейчас для `legal-ai-platform` важно не повторять старую путаницу на integration boundary. Исходный конфликт создавал путаницу:
 - для пользователя;
 - для текстов;
 - для будущих платежей;
@@ -102,7 +108,7 @@
 
 ### Contract AI
 - либо:
-  - временно репозиционируется как `demo/pilot interface` внутри общей платформы;
+  - подается как внешний `demo/pilot/workspace interface` внутри общей платформы;
 - либо:
   - позже выделяется в отдельный реальный SaaS-продукт с собственной go-to-market моделью.
 
@@ -110,11 +116,9 @@
 
 ## 5. Что считаем рассинхроном и должны убрать
 
-- `[x]` Публичные SaaS pricing pages `1990/4990/19990 ₽/мес` убраны из public-facing `contract-ai` UI.
-- `[x]` Старые Stripe subscription flows в `contract-ai` скрыты из runtime по умолчанию через feature flag.
-- `[ ]` Любые тексты, где `contract-ai` продается как отдельная подписка, а остальные каналы как проектное внедрение.
+- `[ ]` Любые тексты, где `Contract_AI_System` продается как отдельная подписка, а остальные каналы как проектное внедрение.
 - `[ ]` Разные обещания по бесплатной консультации и “следующему шагу”.
-- `[ ]` Разные названия флагманского продукта между `bot`, `web`, `contract-ai`.
+- `[ ]` Разные названия флагманского продукта между `bot`, `web`, внешним `Contract_AI_System`.
 
 ## 6. Решение на ближайший этап
 
@@ -125,11 +129,10 @@
 - `Contract_AI_System` как флагман.
 
 ### Не продвигаем активно
-- self-serve monthly subscriptions в `contract-ai`.
+- self-serve monthly subscriptions на стороне внешнего `Contract_AI_System`, пока основная платформа живет в pilot-first модели.
 
 ### Что сделать следующим кодом
-- `[x]` `contract-ai` pricing/page/payment copy приведены к pilot-first модели на публичном контуре.
-- `[ ]` Синхронизировать названия офферов в `lead-bot` и `web`.
+- `[ ]` Синхронизировать названия офферов в `lead-bot` и `web` с тем, как внешний модуль реально называется и продается.
 - `[ ]` Зафиксировать единый прайс-язык:
   - `бесплатная консультация`
   - `пилот`
@@ -137,6 +140,7 @@
   - `интеграции`
   - `special paid consultation`
 - `[ ]` Привязать будущую платежную систему к special paid consultation и/или pilot orders, а не к старой SaaS-подписке по умолчанию.
+- `[!]` Завести отдельный backlog по самому `Contract-AI-System-` и не смешивать его с checklist этого монорепо.
 
 ## 7. Источник истины на сейчас
 

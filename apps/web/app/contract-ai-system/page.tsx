@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ROUTES } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
@@ -60,6 +60,8 @@ const integrationPoints = [
 ];
 
 export default function ContractAISystemPage() {
+  const contractAIHref = contractAIEntryHref("demo");
+  const contractAIExternal = contractAIEntryIsExternal();
   return (
     <main className="bg-slate-950 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
@@ -80,6 +82,18 @@ export default function ContractAISystemPage() {
               variant="validate-first"
             />
           </div>
+          {contractAIExternal ? (
+            <div className="mt-4">
+              <a
+                href={contractAIHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:border-emerald-300"
+              >
+                🖥 Открыть внешний модуль Contract_AI_System
+              </a>
+            </div>
+          ) : null}
         </div>
       </section>
 

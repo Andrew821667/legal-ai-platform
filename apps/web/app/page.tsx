@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ROUTES, leadBotDeepLink } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Платформа Legal AI PRO",
@@ -51,6 +51,8 @@ const cases = [
 ];
 
 export default function Home() {
+  const contractAIHref = contractAIEntryHref("demo");
+  const contractAIExternal = contractAIEntryIsExternal();
   return (
     <main className="bg-slate-950 text-slate-100">
       <section className="relative overflow-hidden border-b border-slate-800">
@@ -68,12 +70,23 @@ export default function Home() {
             внедряем Contract_AI_System и фиксируем бизнес-эффект на уровне KPI.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
+            {contractAIExternal ? (
+              <a
+                href={contractAIHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+              >
+                Открыть Contract_AI_System
+              </a>
+            ) : (
               <Link
-              href={ROUTES.contractAI}
-              className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
-            >
-              Попробовать Contract_AI_System
-            </Link>
+                href={contractAIHref}
+                className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+              >
+                Попробовать Contract_AI_System
+              </Link>
+            )}
             <Link
               href={ROUTES.solutions}
               className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"

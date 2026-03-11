@@ -22,6 +22,7 @@ CONTACTS = {
 }
 
 CHANNEL_BUTTON_TEXT = "📰 Канал Legal AI PRO"
+CONTRACT_AI_BUTTON_TEXT = "🖥 Открыть Contract_AI_System"
 
 
 MODULE_CATALOG = {
@@ -235,6 +236,15 @@ def public_channel_url() -> str | None:
     return None
 
 
+def contract_ai_public_url() -> str | None:
+    direct_url = (config.CONTRACT_AI_SYSTEM_URL or "").strip()
+    if not direct_url:
+        return None
+    if direct_url.startswith(("http://", "https://")):
+        return direct_url
+    return f"https://{direct_url.lstrip('/')}"
+
+
 def channel_nurture_text() -> str:
     if not public_channel_url():
         return ""
@@ -258,6 +268,12 @@ def with_channel_nurture(text: str, *, after_contact: bool = False) -> str:
     if not extra:
         return text
     return f"{text}\n\n{extra}"
+
+
+def contract_ai_entry_hint() -> str:
+    if not contract_ai_public_url():
+        return ""
+    return "Если доступ уже согласован, можно сразу открыть внешний модуль кнопкой ниже."
 
 
 def legal_disclaimer_short_text() -> str:
@@ -455,6 +471,10 @@ def menu_response_by_key(
         return build_workspace_text(lead=lead, selected_profile=selected_profile)
     response = MENU_RESPONSES.get(key, "Выберите пункт меню.")
     if key in {"menu_help", "menu_contract_ai"}:
+        if key == "menu_contract_ai":
+            hint = contract_ai_entry_hint()
+            if hint:
+                response = f"{response}\n\n{hint}"
         return with_channel_nurture(response)
     return response
 

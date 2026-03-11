@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -29,6 +30,8 @@ export default function Header() {
     { name: "Для бизнеса", href: "/for-business" },
     { name: "Команда", href: "/team" },
   ];
+  const contractAIActionHref = contractAIEntryHref("demo");
+  const contractAIActionExternal = contractAIEntryIsExternal();
 
   return (
     <header
@@ -129,12 +132,23 @@ export default function Header() {
 
           {/* Desktop CTA Button */}
           <div className="hidden md:block">
-            <Link
-              href="/contract-ai-system"
-              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
-            >
-              Попробовать продукт →
-            </Link>
+            {contractAIActionExternal ? (
+              <a
+                href={contractAIActionHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
+              >
+                Открыть модуль →
+              </a>
+            ) : (
+              <Link
+                href={contractAIActionHref}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
+              >
+                Попробовать продукт →
+              </Link>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -191,13 +205,25 @@ export default function Header() {
                   {item.name}
                 </Link>
               ))}
-              <Link
-                href="/contract-ai-system"
-                className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Попробовать продукт →
-              </Link>
+              {contractAIActionExternal ? (
+                <a
+                  href={contractAIActionHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Открыть модуль →
+                </a>
+              ) : (
+                <Link
+                  href={contractAIActionHref}
+                  className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Попробовать продукт →
+                </Link>
+              )}
               <div className="mt-4 border-t border-slate-700 pt-3">
                 <p className="px-4 pb-2 text-xs uppercase tracking-wide text-slate-400">Еще</p>
                 {secondaryNavigation.map((item) => (

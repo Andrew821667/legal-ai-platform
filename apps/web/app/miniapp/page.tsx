@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROUTES } from "@/lib/links";
+import { ROUTES, contractAIEntryHref } from "@/lib/links";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
@@ -103,7 +103,7 @@ export default function MiniAppHomePage() {
 
   const recommendedHref = useMemo(() => {
     if (state.recommendedSection === "validate") {
-      return `${ROUTES.contractAI}#demo`;
+      return contractAIEntryHref("demo");
     }
     if (state.recommendedSection === "solutions") {
       return ROUTES.miniAppSolutions;

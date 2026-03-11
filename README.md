@@ -8,7 +8,7 @@
 - `apps/news` — генератор, паблишер и admin-бот новостей
 - `apps/news/legacy` — reader-бот канала (персонализация/поиск/сохранённое)
 - `apps/contract-worker` — воркер анализа договоров (MacBook)
-- `apps/contract-ai` — отдельный исследовательский контур (не интегрирован в текущий production pipeline)
+- `apps/contract-ai` — локальный reference-контур; реальный `Contract_AI_System` ведется отдельно в `https://github.com/Andrew821667/Contract-AI-System-` и не является частью текущего production pipeline этого монорепо
 - `apps/web` — сайт
 - `packages/shared` — общие схемы/типы
 

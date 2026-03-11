@@ -1,6 +1,6 @@
 "use client";
 
-import { ROUTES } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
@@ -10,20 +10,23 @@ const tools = [
   {
     title: "Проверка договора AI",
     description: "Анализ договора, подсветка рисков и рекомендации по правкам перед согласованием.",
-    href: ROUTES.contractAI,
+    href: contractAIEntryHref("demo"),
     action: MINIAPP_ACTIONS.openContractAI,
+    external: contractAIEntryIsExternal(),
   },
   {
     title: "История анализов",
     description: "Продолжение предыдущих проверок и контроль результата пилота.",
     href: ROUTES.miniAppProfile,
     action: MINIAPP_ACTIONS.openHistory,
+    external: false,
   },
   {
     title: "Будущие инструменты",
     description: "Сценарии для претензионной, комплаенса и внутренних legal ops процессов.",
     href: ROUTES.solutions,
     action: MINIAPP_ACTIONS.openFutureTools,
+    external: false,
   },
 ];
 
@@ -43,6 +46,8 @@ export default function MiniAppToolsPage() {
             href={tool.href}
             action={tool.action}
             meta={{ eventType: MINIAPP_EVENT_TYPES.toolOpen, source: MINIAPP_EVENT_SOURCES.tools, screen: MINIAPP_SCREENS.tools }}
+            target={tool.external ? "_blank" : undefined}
+            rel={tool.external ? "noopener noreferrer" : undefined}
             className="mt-4 inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
           >
             Открыть

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EXTERNAL_LINKS, ROUTES, leadBotDeepLink } from "@/lib/links";
+import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 
 type NavItem = {
@@ -29,7 +29,11 @@ export default function Footer() {
     resources: [
       { name: "Контент / Кейсы", href: ROUTES.contentCases },
       { name: "Практические разборы", href: "/content-cases#practical" },
-      { name: "Проверить договор", href: "/contract-ai-system#demo" },
+      {
+        name: "Проверить договор",
+        href: contractAIEntryHref("demo"),
+        external: contractAIEntryIsExternal(),
+      },
       {
         name: "Обсудить внедрение",
         href: leadBotDeepLink("web_footer_consult"),

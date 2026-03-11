@@ -423,6 +423,12 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 f"{content.LEAD_MAGNET_OFFER_TEXT}"
             )
             response_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
+            response_markup = append_inline_url_row(
+                response_markup,
+                content.CONTRACT_AI_BUTTON_TEXT,
+                content.contract_ai_public_url(),
+                prepend=True,
+            )
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:

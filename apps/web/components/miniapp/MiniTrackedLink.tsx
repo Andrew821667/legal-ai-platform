@@ -23,6 +23,15 @@ export default function MiniTrackedLink({
   meta,
 }: MiniTrackedLinkProps) {
   const { recordAction } = useMiniAppState();
+  const isExternal = /^https?:\/\//i.test(href);
+
+  if (isExternal) {
+    return (
+      <a href={href} className={className} target={target} rel={rel} onClick={() => recordAction(action, meta)}>
+        {children}
+      </a>
+    );
+  }
 
   return (
     <Link href={href} className={className} target={target} rel={rel} onClick={() => recordAction(action, meta)}>

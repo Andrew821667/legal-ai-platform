@@ -16,12 +16,31 @@ export const ROUTES = {
 const LEAD_BOT_USERNAME = "legal_ai_helper_new_bot";
 const READER_BOT_USERNAME = "legal_ai_news_reader_bot";
 const CHANNEL_USERNAME = "legal_ai_pro";
+const CONTRACT_AI_SYSTEM_URL = (process.env.NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL || "").trim();
 
 export const EXTERNAL_LINKS = {
   leadBot: `https://t.me/${LEAD_BOT_USERNAME}`,
   readerBot: `https://t.me/${READER_BOT_USERNAME}`,
   channel: `https://t.me/${CHANNEL_USERNAME}`,
+  contractAI: CONTRACT_AI_SYSTEM_URL,
 } as const;
+
+function appendHash(href: string, hash?: string): string {
+  if (!hash) {
+    return href;
+  }
+  const normalized = hash.startsWith("#") ? hash : `#${hash}`;
+  return `${href}${normalized}`;
+}
+
+export function contractAIEntryHref(hash?: string): string {
+  const base = EXTERNAL_LINKS.contractAI || ROUTES.contractAI;
+  return appendHash(base, hash);
+}
+
+export function contractAIEntryIsExternal(): boolean {
+  return Boolean(EXTERNAL_LINKS.contractAI);
+}
 
 export function leadBotDeepLink(start?: string): string {
   if (!start) {
