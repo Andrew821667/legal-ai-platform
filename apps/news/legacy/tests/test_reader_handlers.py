@@ -1,0 +1,61 @@
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from app.bot.reader_handlers import (
+    _build_article_detail_text,
+    _normalize_reader_text,
+    get_article_keyboard,
+)
+from app.models.reader_publications import ReaderPublication
+
+
+def _publication(**overrides) -> ReaderPublication:
+    payload = {
+        "id": uuid4(),
+        "title": '«Тестовый» заголовок',
+        "text": "Первый абзац — с цитатой…",
+        "source_url": "https://example.com/article",
+        "channel_username": "legal_ai_pro",
+        "telegram_message_id": 321,
+        "publish_at": datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc),
+        "status": "posted",
+    }
+    payload.update(overrides)
+    return ReaderPublication(**payload)
+
+
+def test_normalize_reader_text_removes_special_symbols_and_markup() -> None:
+    cleaned = _normalize_reader_text(
+        '«Цитата» — это тест…<br><ul><li>Пункт</li></ul>\n> markdown quote',
+        multiline=True,
+    )
+
+    assert cleaned == '"Цитата" - это тест...\n- Пункт\nmarkdown quote'
+
+
+def test_get_article_keyboard_includes_source_links() -> None:
+    keyboard = get_article_keyboard(
+        "pub-1",
+        source_url="https://example.com/original",
+        channel_post_url="https://t.me/legal_ai_pro/42",
+    )
+
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+    assert any(button.text == "🌐 Статья" and button.url == "https://example.com/original" for button in buttons)
+    assert any(button.text == "📣 Пост в канале" and button.url == "https://t.me/legal_ai_pro/42" for button in buttons)
+
+
+def test_build_article_detail_text_truncates_and_sanitizes() -> None:
+    article = _publication(text=("«Очень длинный» текст… " * 400))
+
+    detail_text = _build_article_detail_text(article)
+
+    assert '«' not in detail_text
+    assert '»' not in detail_text
+    assert "..." in detail_text
+    assert "Текст сокращен из-за лимита Telegram" in detail_text
+
+
+def test_reader_publication_channel_post_url() -> None:
+    article = _publication(channel_username="@legal_ai_pro", telegram_message_id=777)
+    assert article.channel_post_url == "https://t.me/legal_ai_pro/777"

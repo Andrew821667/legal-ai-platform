@@ -10,8 +10,8 @@ Handles user interactions:
 
 import asyncio
 import re
-from html import escape
-from typing import Optional
+from html import escape, unescape as html_unescape
+from typing import Any, Awaitable, Optional
 from uuid import UUID
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
@@ -50,7 +50,7 @@ from app.services.reader_service import (
 from app.models.reader_publications import ReaderPublication
 from app.services.core_feedback import push_reader_feedback, reader_post_deeplink
 from app.services.core_reader_bridge import (
-    build_reader_miniapp_deeplink,
+    build_reader_miniapp_url,
     fetch_reader_continue_state,
     push_reader_cta_click,
     push_reader_lead_intent,
@@ -62,10 +62,43 @@ from app.services.reader_metrics import (
     READER_EVENT_SOURCES,
     READER_INTENT_TYPES,
 )
+from app.services.reader_perf import measure_async
 from app.config import settings
 
 
 router = Router()
+_READER_HTML_BREAK_RE = re.compile(r"<\s*br\s*/?\s*>", re.IGNORECASE)
+_READER_HTML_BLOCK_RE = re.compile(r"</?\s*(?:p|div|section|article|blockquote|pre|ul|ol)\b[^>]*>", re.IGNORECASE)
+_READER_HTML_LI_OPEN_RE = re.compile(r"<\s*li\b[^>]*>", re.IGNORECASE)
+_READER_HTML_LI_CLOSE_RE = re.compile(r"</\s*li\s*>", re.IGNORECASE)
+_READER_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_READER_MARKDOWN_QUOTES_RE = re.compile(r"(?m)^\s*>\s?")
+_MAX_TELEGRAM_ARTICLE_TEXT = 3600
+_SPECIAL_CHAR_REPLACEMENTS = {
+    "\u00a0": " ",
+    "\u200b": "",
+    "\u200c": "",
+    "\u200d": "",
+    "\ufeff": "",
+    "«": '"',
+    "»": '"',
+    "“": '"',
+    "”": '"',
+    "„": '"',
+    "‟": '"',
+    "’": "'",
+    "‘": "'",
+    "—": "-",
+    "–": "-",
+    "…": "...",
+    "•": "- ",
+    "◦": "- ",
+    "▪": "- ",
+    "●": "- ",
+    "►": "- ",
+    "→": "->",
+    "←": "<-",
+}
 
 
 # ==================== FSM States ====================
@@ -106,6 +139,87 @@ async def _safe_get_saved_articles(user_id: int, db: AsyncSession, limit: int = 
         return []
 
 
+def _spawn_background_task(coro: Awaitable[Any], *, name: str, **context: object) -> None:
+    task = asyncio.create_task(coro)
+
+    def _done_callback(done_task: asyncio.Task) -> None:
+        try:
+            done_task.result()
+        except Exception:
+            logger.exception("reader_background_task_failed", task=name, **context)
+
+    task.add_done_callback(_done_callback)
+
+
+def _normalize_reader_text(text: str | None, *, multiline: bool = True) -> str:
+    value = html_unescape(str(text or ""))
+    for source, target in _SPECIAL_CHAR_REPLACEMENTS.items():
+        value = value.replace(source, target)
+    value = _READER_HTML_BREAK_RE.sub("\n", value)
+    value = _READER_HTML_BLOCK_RE.sub("\n", value)
+    value = _READER_HTML_LI_OPEN_RE.sub("\n- ", value)
+    value = _READER_HTML_LI_CLOSE_RE.sub("", value)
+    value = _READER_HTML_TAG_RE.sub("", value)
+    value = value.replace("**", "").replace("__", "").replace("`", "").replace("~~", "")
+    value = _READER_MARKDOWN_QUOTES_RE.sub("", value)
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    if multiline:
+        lines = [" ".join(line.split()) for line in value.split("\n")]
+        value = "\n".join(lines)
+        value = re.sub(r"\n{2,}(?=- )", "\n", value)
+        value = re.sub(r"\n{3,}", "\n\n", value)
+    else:
+        value = " ".join(value.split())
+    return value.strip()
+
+
+def _safe_html_text(text: str | None, *, limit: int | None = None, multiline: bool = True) -> str:
+    cleaned = _normalize_reader_text(text, multiline=multiline)
+    if limit is not None and len(cleaned) > limit:
+        cleaned = cleaned[:limit].rstrip() + "..."
+    return escape(cleaned)
+
+
+def _article_source_url(article: ReaderPublication) -> str | None:
+    source_url = str(getattr(article, "source_url", "") or "").strip()
+    if not source_url or source_url.startswith("internal://") or source_url.startswith("manual://"):
+        return None
+    if not re.match(r"^https?://", source_url, flags=re.IGNORECASE):
+        return None
+    return source_url
+
+
+def _article_channel_post_url(article: ReaderPublication) -> str | None:
+    channel_post_url = str(getattr(article, "channel_post_url", "") or "").strip()
+    return channel_post_url or None
+
+
+def _markup_has_callback(reply_markup: InlineKeyboardMarkup | None, callback_data: str) -> bool:
+    if reply_markup is None:
+        return False
+    return any(
+        button.callback_data == callback_data
+        for row in reply_markup.inline_keyboard
+        for button in row
+        if button.callback_data
+    )
+
+
+def _build_article_detail_text(article: ReaderPublication) -> str:
+    published_date = article.published_at.strftime("%d.%m.%Y")
+    title_html = _safe_html_text(article.draft.title, limit=220, multiline=False)
+    body = _normalize_reader_text(article.draft.content, multiline=True)
+    header = (
+        f"📰 <b>{title_html}</b>\n\n"
+        f"👁 {article.views or 0} | 📅 {published_date}\n\n"
+    )
+    footer = ""
+    if len(body) > _MAX_TELEGRAM_ARTICLE_TEXT:
+        body = body[:_MAX_TELEGRAM_ARTICLE_TEXT].rstrip() + "..."
+        footer = "\n\n<i>Текст сокращен из-за лимита Telegram. Для оригинала используйте кнопки ниже.</i>"
+    return f"{header}{escape(body)}{footer}"
+
+
 def format_article_message(article: ReaderPublication, index: Optional[int] = None) -> str:
     """Format article for display."""
     if not article.draft:
@@ -119,9 +233,10 @@ def format_article_message(article: ReaderPublication, index: Optional[int] = No
     published_date = article.published_at.strftime('%d.%m.%Y')
 
     prefix = f"{'📰 ' + str(index) + '. ' if index else '📰 '}"
+    title_html = _safe_html_text(article.draft.title, limit=180, multiline=False)
 
     return (
-        f"{prefix}<b>{article.draft.title}</b>\n\n"
+        f"{prefix}<b>{title_html}</b>\n\n"
         f"👁 {article.views:,} просмотров • "
         f"💬 {reactions_count} реакций • "
         f"📈 {engagement_rate:.1f}%\n"
@@ -130,7 +245,7 @@ def format_article_message(article: ReaderPublication, index: Optional[int] = No
 
 
 def _trim_text(text: str, limit: int = 360) -> str:
-    cleaned = " ".join((text or "").split())
+    cleaned = _normalize_reader_text(text, multiline=False)
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[:limit].rstrip() + "..."
@@ -184,7 +299,7 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
             ),
             timeout=timeout_seconds,
         )
-        digest_text = " ".join((digest or "").split()).strip()
+        digest_text = _normalize_reader_text(digest or "", multiline=True)
         if digest_text:
             return (
                 "📆 <b>Недельный дайджест для вас</b>\n\n"
@@ -314,12 +429,11 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
             saved_count_core = -1
     saved_count_display = saved_count_core if saved_count_core >= 0 else len(saved_articles)
 
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user.id,
         source=READER_EVENT_SOURCES["home"],
         screen=_guess_miniapp_screen(miniapp_last_action),
         action=READER_EVENT_ACTIONS["open_miniapp_resume"],
-        payload={"entry": "home_screen"},
     )
 
     nav_markup = _build_reader_nav_keyboard(
@@ -388,12 +502,11 @@ async def _show_search_prompt(target: Message) -> None:
 
 async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> None:
     """Show discovery section with clear steps."""
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user_id,
         source=READER_EVENT_SOURCES["discover"],
         screen="content",
         action=READER_EVENT_ACTIONS["open_miniapp_content"],
-        payload={"entry": "discover"},
     )
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -431,12 +544,11 @@ async def _show_validate(target: Message, user_id: int) -> None:
     sample_report_link = _build_helper_link("contract_sample_report")
     pilot_link = _build_helper_link("contract_consultation")
     cabinet_link = _build_helper_link("contract_cabinet")
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user_id,
         source=READER_EVENT_SOURCES["validate"],
         screen="tools",
         action=READER_EVENT_ACTIONS["open_miniapp_tools"],
-        payload={"entry": "validate"},
     )
     rows: list[list[InlineKeyboardButton]] = []
     contract_url = (settings.reader_contract_ai_url or "").strip()
@@ -473,7 +585,7 @@ async def _show_validate(target: Message, user_id: int) -> None:
         "Как использовать:\n"
         "1. Выберите «Демо-анализ» или «Образец отчета».\n"
         "2. Если нужен live-доступ, откройте кабинет или Mini App.\n"
-        "3. Для внедрения в процесс нажмите «Обсудить пилот».",
+        "3. Если захотите перейти к пилоту, воспользуйтесь кнопкой ниже.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -482,12 +594,11 @@ async def _show_validate(target: Message, user_id: int) -> None:
 async def _show_solutions(target: Message, user_id: int) -> None:
     """Show solutions section with audience split."""
     helper_link = _build_helper_link("reader_solutions")
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user_id,
         source=READER_EVENT_SOURCES["solutions"],
         screen="solutions",
         action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
-        payload={"entry": "solutions"},
     )
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -500,7 +611,7 @@ async def _show_solutions(target: Message, user_id: int) -> None:
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", callback_data="rnav:miniapp_solutions")])
     if helper_link:
-        rows.append([InlineKeyboardButton(text="✉️ Подобрать решение", url=helper_link)])
+        rows.append([InlineKeyboardButton(text="✉️ Отправить задачу", url=helper_link)])
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
@@ -511,7 +622,7 @@ async def _show_solutions(target: Message, user_id: int) -> None:
         "Как использовать:\n"
         "1. Выберите свой контур: «Для юристов» или «Для бизнеса».\n"
         "2. Посмотрите подходящие сценарии и кейсы.\n"
-        "3. Отправьте задачу через «Подобрать решение».",
+        "3. Ниже можно отправить задачу на подбор сценария.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -521,12 +632,11 @@ async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> 
     """Show personal hub with clear navigation to saved/settings/lead magnet."""
     lead_profile = await get_lead_profile(user_id, db)
     saved_articles = await _safe_get_saved_articles(user_id, db=db)
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user_id,
         source=READER_EVENT_SOURCES["profile"],
         screen="profile",
         action=READER_EVENT_ACTIONS["open_miniapp_profile"],
-        payload={"entry": "profile"},
     )
     lead_magnet_done = bool(lead_profile and lead_profile.lead_magnet_completed)
     lead_magnet_text = "✅ Персональный дайджест активен" if lead_magnet_done else "🎯 Персональный дайджест не активирован"
@@ -567,6 +677,8 @@ def get_article_keyboard(
     show_read_button: bool = True,
     *,
     expanded: bool = False,
+    source_url: str | None = None,
+    channel_post_url: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Compact keyboard for article card with optional expanded actions."""
     save_text = "❌ Удалить из сохранённых" if user_saved else "🔖 Сохранить"
@@ -577,6 +689,14 @@ def get_article_keyboard(
         keyboard.append([
             InlineKeyboardButton(text="📖 Читать полностью", callback_data=f"view:{publication_id}")
         ])
+
+    external_links = []
+    if source_url:
+        external_links.append(InlineKeyboardButton(text="🌐 Статья", url=source_url))
+    if channel_post_url:
+        external_links.append(InlineKeyboardButton(text="📣 Пост в канале", url=channel_post_url))
+    if external_links:
+        keyboard.append(external_links[:2])
 
     keyboard.append([
         InlineKeyboardButton(text="👍 Полезно", callback_data=f"feedback:like:{publication_id}"),
@@ -614,6 +734,23 @@ def get_article_keyboard(
     keyboard.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def _article_keyboard(
+    article: ReaderPublication,
+    *,
+    user_saved: bool = False,
+    show_read_button: bool = True,
+    expanded: bool = False,
+) -> InlineKeyboardMarkup:
+    return get_article_keyboard(
+        str(article.id),
+        user_saved=user_saved,
+        show_read_button=show_read_button,
+        expanded=expanded,
+        source_url=_article_source_url(article),
+        channel_post_url=_article_channel_post_url(article),
+    )
 
 
 # ==================== /start - Onboarding ====================
@@ -724,7 +861,7 @@ async def _handle_start(
                 + format_article_message(article)
                 + source_line,
                 parse_mode="HTML",
-                reply_markup=get_article_keyboard(str(article.id)),
+                reply_markup=_article_keyboard(article),
             )
             await target.answer(
                 "Открыт материал из канала. Дальше можно продолжить через навигацию:",
@@ -741,13 +878,24 @@ async def _handle_start(
 
     start_section = _extract_start_section(raw_text)
     if start_section:
-        await _open_start_section(target, user, state, db, start_section)
+        await measure_async(
+            "reader.start_section",
+            _open_start_section(target, user, state, db, start_section),
+            user_id=user_id,
+            section=start_section,
+            entrypoint="start",
+        )
         return
 
     profile = await get_user_profile(user_id, db)
 
     if profile:
-        await _show_home_screen(target, user, db)
+        await measure_async(
+            "reader.screen.home",
+            _show_home_screen(target, user, db),
+            user_id=user_id,
+            entrypoint="start",
+        )
     else:
         await start_onboarding(target, state, db)
 
@@ -763,11 +911,38 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
     """Navigate across reader sections using inline buttons."""
     action = (callback.data or "").split(":", 1)[1]
     user_id = callback.from_user.id
+    known_actions = {
+        "start",
+        "home",
+        "discover",
+        "validate",
+        "solutions",
+        "profile",
+        "today",
+        "weekly",
+        "search",
+        "saved",
+        "settings",
+        "miniapp",
+        "miniapp_content",
+        "miniapp_tools",
+        "miniapp_solutions",
+        "miniapp_profile",
+        "lead_magnet",
+    }
+
+    if callback.message is None:
+        await callback.answer("Откройте раздел заново", show_alert=True)
+        return
+
+    if action not in known_actions:
+        await callback.answer("Неизвестный раздел", show_alert=True)
+        return
 
     if action == "start":
+        await callback.answer()
         await state.clear()
         await _handle_start(callback.message, callback.from_user, state, db, raw_text="/start")
-        await callback.answer()
         return
 
     profile = await get_user_profile(user_id, db)
@@ -776,74 +951,100 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
         await _handle_start(callback.message, callback.from_user, state, db, raw_text="/start")
         return
 
+    await callback.answer()
     await state.clear()
     if action == "home":
-        await _show_home_screen(callback.message, callback.from_user, db)
+        await measure_async("reader.screen.home", _show_home_screen(callback.message, callback.from_user, db), user_id=user_id, action=action)
     elif action == "discover":
-        await _show_discover(callback.message, user_id, db)
+        await measure_async("reader.screen.discover", _show_discover(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "validate":
-        await _show_validate(callback.message, user_id)
+        await measure_async("reader.screen.validate", _show_validate(callback.message, user_id), user_id=user_id, action=action)
     elif action == "solutions":
-        await _show_solutions(callback.message, user_id)
+        await measure_async("reader.screen.solutions", _show_solutions(callback.message, user_id), user_id=user_id, action=action)
     elif action == "profile":
-        await _show_profile_hub(callback.message, user_id, db)
+        await measure_async("reader.screen.profile", _show_profile_hub(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "today":
-        await _show_today(callback.message, user_id, db)
+        await measure_async("reader.screen.today", _show_today(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "weekly":
-        await _show_weekly(callback.message, user_id, db)
+        await measure_async("reader.screen.weekly", _show_weekly(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "search":
-        await _show_search(callback.message, user_id, None, db)
+        await measure_async("reader.screen.search", _show_search(callback.message, user_id, None, db), user_id=user_id, action=action)
     elif action == "saved":
-        await _show_saved(callback.message, user_id, db)
+        await measure_async("reader.screen.saved", _show_saved(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "settings":
-        await _show_settings(callback.message, user_id, db)
+        await measure_async("reader.screen.settings", _show_settings(callback.message, user_id, db), user_id=user_id, action=action)
     elif action == "miniapp":
-        await _open_miniapp(
-            callback.message,
-            user_id,
+        await measure_async(
+            "reader.miniapp.open",
+            _open_miniapp(
+                callback.message,
+                user_id,
+                screen="home",
+                action=READER_EVENT_ACTIONS["open_miniapp_home"],
+                source=READER_EVENT_SOURCES["nav"],
+            ),
+            user_id=user_id,
+            action=action,
             screen="home",
-            action=READER_EVENT_ACTIONS["open_miniapp_home"],
-            source=READER_EVENT_SOURCES["nav"],
         )
     elif action == "miniapp_content":
-        await _open_miniapp(
-            callback.message,
-            user_id,
+        await measure_async(
+            "reader.miniapp.open",
+            _open_miniapp(
+                callback.message,
+                user_id,
+                screen="content",
+                action=READER_EVENT_ACTIONS["open_miniapp_content"],
+                source=READER_EVENT_SOURCES["discover"],
+            ),
+            user_id=user_id,
+            action=action,
             screen="content",
-            action=READER_EVENT_ACTIONS["open_miniapp_content"],
-            source=READER_EVENT_SOURCES["discover"],
         )
     elif action == "miniapp_tools":
-        await _open_miniapp(
-            callback.message,
-            user_id,
+        await measure_async(
+            "reader.miniapp.open",
+            _open_miniapp(
+                callback.message,
+                user_id,
+                screen="tools",
+                action=READER_EVENT_ACTIONS["open_miniapp_tools"],
+                source=READER_EVENT_SOURCES["validate"],
+            ),
+            user_id=user_id,
+            action=action,
             screen="tools",
-            action=READER_EVENT_ACTIONS["open_miniapp_tools"],
-            source=READER_EVENT_SOURCES["validate"],
         )
     elif action == "miniapp_solutions":
-        await _open_miniapp(
-            callback.message,
-            user_id,
+        await measure_async(
+            "reader.miniapp.open",
+            _open_miniapp(
+                callback.message,
+                user_id,
+                screen="solutions",
+                action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
+                source=READER_EVENT_SOURCES["solutions"],
+            ),
+            user_id=user_id,
+            action=action,
             screen="solutions",
-            action=READER_EVENT_ACTIONS["open_miniapp_solutions"],
-            source=READER_EVENT_SOURCES["solutions"],
         )
     elif action == "miniapp_profile":
-        await _open_miniapp(
-            callback.message,
-            user_id,
+        await measure_async(
+            "reader.miniapp.open",
+            _open_miniapp(
+                callback.message,
+                user_id,
+                screen="profile",
+                action=READER_EVENT_ACTIONS["open_miniapp_profile"],
+                source=READER_EVENT_SOURCES["profile"],
+            ),
+            user_id=user_id,
+            action=action,
             screen="profile",
-            action=READER_EVENT_ACTIONS["open_miniapp_profile"],
-            source=READER_EVENT_SOURCES["profile"],
         )
     elif action == "lead_magnet":
-        await _open_lead_magnet(callback.message, user_id, state, db)
-    else:
-        await callback.answer("Неизвестный раздел", show_alert=True)
-        return
-
-    await callback.answer()
+        await measure_async("reader.screen.lead_magnet", _open_lead_magnet(callback.message, user_id, state, db), user_id=user_id, action=action)
 
 
 async def _open_lead_magnet(target: Message, user_id: int, state: FSMContext, db: AsyncSession) -> None:
@@ -881,13 +1082,12 @@ async def _open_miniapp(
     post_id: str | None = None,
 ) -> None:
     """Open mini-app from reader bot with tracked deeplink."""
-    miniapp_url = await build_reader_miniapp_deeplink(
+    miniapp_url = build_reader_miniapp_url(
         user_id=user_id,
         source=source,
         screen=screen,
         action=action,
         post_id=post_id,
-        payload={"entry": source},
     )
     if not miniapp_url:
         await target.answer(
@@ -896,12 +1096,18 @@ async def _open_miniapp(
         )
         return
 
-    await push_reader_cta_click(
+    _spawn_background_task(
+        push_reader_cta_click(
+            user_id=user_id,
+            publication_id=post_id,
+            cta_type=READER_CTA_TYPES["miniapp_open"],
+            context=source,
+            payload={"screen": screen, "action": action, "post_id": post_id},
+        ),
+        name="reader_cta_click",
         user_id=user_id,
         publication_id=post_id,
-        cta_type=READER_CTA_TYPES["miniapp_open"],
-        context=source,
-        payload={"screen": screen, "action": action, "post_id": post_id},
+        action=action,
     )
 
     await target.answer(
@@ -921,18 +1127,24 @@ async def _open_miniapp(
 @router.message(Command("lead_magnet"))
 async def cmd_lead_magnet(message: Message, state: FSMContext, db: AsyncSession):
     """Handle /lead_magnet command - start lead magnet flow."""
-    await _open_lead_magnet(message, message.from_user.id, state, db)
+    await measure_async("reader.screen.lead_magnet", _open_lead_magnet(message, message.from_user.id, state, db), user_id=message.from_user.id, action="/lead_magnet")
 
 
 @router.message(Command("miniapp"))
 async def cmd_miniapp(message: Message):
     """Open web mini-app."""
-    await _open_miniapp(
-        message,
-        message.from_user.id,
+    await measure_async(
+        "reader.miniapp.open",
+        _open_miniapp(
+            message,
+            message.from_user.id,
+            screen="home",
+            action=READER_EVENT_ACTIONS["open_miniapp_home"],
+            source=READER_EVENT_SOURCES["command"],
+        ),
+        user_id=message.from_user.id,
+        action="/miniapp",
         screen="home",
-        action=READER_EVENT_ACTIONS["open_miniapp_home"],
-        source=READER_EVENT_SOURCES["command"],
     )
 
 
@@ -946,15 +1158,22 @@ async def open_miniapp_from_article(callback: CallbackQuery, db: AsyncSession):
     post_id = raw_post_id if raw_post_id else None
     if post_id:
         _ = await get_publication_by_id(post_id, db)
-    await _open_miniapp(
-        callback.message,
-        callback.from_user.id,
+    await callback.answer()
+    await measure_async(
+        "reader.miniapp.open",
+        _open_miniapp(
+            callback.message,
+            callback.from_user.id,
+            screen="content",
+            action=READER_EVENT_ACTIONS["open_miniapp_content"],
+            source=READER_EVENT_SOURCES["article"],
+            post_id=post_id,
+        ),
+        user_id=callback.from_user.id,
+        action="mini:article",
         screen="content",
-        action=READER_EVENT_ACTIONS["open_miniapp_content"],
-        source=READER_EVENT_SOURCES["article"],
         post_id=post_id,
     )
-    await callback.answer()
 
 
 @router.message(Command("ask_question"))
@@ -1248,19 +1467,18 @@ async def _show_today(target: Message, user_id: int, db: AsyncSession) -> None:
     # Send each article with keyboard
     for i, article in enumerate(articles, 1):
         text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(str(article.id))
 
         await target.answer(
             text,
             parse_mode="HTML",
-            reply_markup=keyboard
+            reply_markup=_article_keyboard(article)
         )
 
 
 @router.message(Command("today"))
 async def cmd_today(message: Message, db: AsyncSession):
     """Show personalized feed for today."""
-    await _show_today(message, message.from_user.id, db)
+    await measure_async("reader.screen.today", _show_today(message, message.from_user.id, db), user_id=message.from_user.id, action="/today")
 
 
 async def _show_weekly(target: Message, user_id: int, db: AsyncSession) -> None:
@@ -1298,24 +1516,30 @@ async def _show_weekly(target: Message, user_id: int, db: AsyncSession) -> None:
         await target.answer(
             format_article_message(article, index=i),
             parse_mode="HTML",
-            reply_markup=get_article_keyboard(str(article.id)),
+            reply_markup=_article_keyboard(article),
         )
 
-    await push_reader_feedback(
-        publication_id=str(articles[0].id),
+    _spawn_background_task(
+        push_reader_feedback(
+            publication_id=str(articles[0].id),
+            user_id=user_id,
+            source="reaction",
+            signal_key="reader.weekly.opened",
+            signal_value=1,
+            text="Reader opened weekly digest",
+            payload={"articles_count": len(articles)},
+        ),
+        name="reader_feedback",
         user_id=user_id,
-        source="reaction",
-        signal_key="reader.weekly.opened",
-        signal_value=1,
-        text="Reader opened weekly digest",
-        payload={"articles_count": len(articles)},
+        publication_id=str(articles[0].id),
+        action="reader.weekly.opened",
     )
 
 
 @router.message(Command("weekly"))
 async def cmd_weekly(message: Message, db: AsyncSession):
     """Show weekly digest tailored to user interests."""
-    await _show_weekly(message, message.from_user.id, db)
+    await measure_async("reader.screen.weekly", _show_weekly(message, message.from_user.id, db), user_id=message.from_user.id, action="/weekly")
 
 
 # ==================== /search - Search ====================
@@ -1333,10 +1557,11 @@ async def _show_search(target: Message, user_id: int, query: str | None, db: Asy
         await _show_search_prompt(target)
         return
 
+    cleaned_query = _safe_html_text(query, limit=120, multiline=False)
     results = await search_publications(query, user_id=user_id, limit=10, db=db)
     if not results:
         await target.answer(
-            f"По запросу '<b>{escape(query)}</b>' ничего не найдено 😔\n\n"
+            f"По запросу '<b>{cleaned_query}</b>' ничего не найдено 😔\n\n"
             "Попробуйте другой запрос или раздел «Узнать».",
             parse_mode="HTML",
             reply_markup=_build_reader_nav_keyboard(profile_ready=profile_ready),
@@ -1344,7 +1569,7 @@ async def _show_search(target: Message, user_id: int, query: str | None, db: Asy
         return
 
     await target.answer(
-        f"🔍 Найдено <b>{len(results)}</b> статей по запросу '<b>{escape(query)}</b>':",
+        f"🔍 Найдено <b>{len(results)}</b> статей по запросу '<b>{cleaned_query}</b>':",
         parse_mode="HTML",
         reply_markup=_build_reader_nav_keyboard(profile_ready=profile_ready),
     )
@@ -1353,7 +1578,7 @@ async def _show_search(target: Message, user_id: int, query: str | None, db: Asy
         await target.answer(
             format_article_message(article, index=i),
             parse_mode="HTML",
-            reply_markup=get_article_keyboard(str(article.id)),
+            reply_markup=_article_keyboard(article),
         )
 
 
@@ -1361,7 +1586,7 @@ async def _show_search(target: Message, user_id: int, query: str | None, db: Asy
 async def cmd_search(message: Message, db: AsyncSession):
     """Search articles."""
     query = message.text.replace("/search", "").strip()
-    await _show_search(message, message.from_user.id, query, db)
+    await measure_async("reader.screen.search", _show_search(message, message.from_user.id, query, db), user_id=message.from_user.id, action="/search")
 
 
 @router.message(F.reply_to_message, F.text)
@@ -1408,19 +1633,18 @@ async def _show_saved(target: Message, user_id: int, db: AsyncSession) -> None:
 
     for i, article in enumerate(saved, 1):
         text = format_article_message(article, index=i)
-        keyboard = get_article_keyboard(str(article.id), user_saved=True)
 
         await target.answer(
             text,
             parse_mode="HTML",
-            reply_markup=keyboard
+            reply_markup=_article_keyboard(article, user_saved=True)
         )
 
 
 @router.message(Command("saved"))
 async def cmd_saved(message: Message, db: AsyncSession):
     """Show saved articles."""
-    await _show_saved(message, message.from_user.id, db)
+    await measure_async("reader.screen.saved", _show_saved(message, message.from_user.id, db), user_id=message.from_user.id, action="/saved")
 
 
 # ==================== Feedback Callbacks ====================
@@ -1517,6 +1741,10 @@ async def save_feedback_type(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("save:"))
 async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Save article to bookmarks."""
+    if callback.message is None:
+        await callback.answer("Откройте карточку статьи заново", show_alert=True)
+        return
+
     article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
@@ -1525,11 +1753,23 @@ async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
     except ValueError:
         await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
-    await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=True)
-
-    # Update keyboard
-    keyboard = get_article_keyboard(str(article_id), user_saved=True)
-    await callback.message.edit_reply_markup(reply_markup=keyboard)
+    article = await get_publication_by_id(article_id, db)
+    if article:
+        await callback.message.edit_reply_markup(
+            reply_markup=_article_keyboard(
+                article,
+                user_saved=True,
+                show_read_button=_markup_has_callback(callback.message.reply_markup, f"view:{article_id}"),
+                expanded=_markup_has_callback(callback.message.reply_markup, f"less:{article_id}"),
+            )
+        )
+    _spawn_background_task(
+        push_reader_save_state(user_id=user_id, publication_id=article_id, saved=True),
+        name="reader_save_state",
+        user_id=user_id,
+        publication_id=article_id,
+        saved=True,
+    )
 
     await callback.answer("✅ Сохранено!")
 
@@ -1537,6 +1777,10 @@ async def save_article_callback(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("unsave:"))
 async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Remove article from bookmarks."""
+    if callback.message is None:
+        await callback.answer("Откройте карточку статьи заново", show_alert=True)
+        return
+
     article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
@@ -1545,11 +1789,23 @@ async def unsave_article_callback(callback: CallbackQuery, db: AsyncSession):
     except ValueError:
         await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
         return
-    await push_reader_save_state(user_id=user_id, publication_id=article_id, saved=False)
-
-    # Update keyboard
-    keyboard = get_article_keyboard(str(article_id), user_saved=False)
-    await callback.message.edit_reply_markup(reply_markup=keyboard)
+    article = await get_publication_by_id(article_id, db)
+    if article:
+        await callback.message.edit_reply_markup(
+            reply_markup=_article_keyboard(
+                article,
+                user_saved=False,
+                show_read_button=_markup_has_callback(callback.message.reply_markup, f"view:{article_id}"),
+                expanded=_markup_has_callback(callback.message.reply_markup, f"less:{article_id}"),
+            )
+        )
+    _spawn_background_task(
+        push_reader_save_state(user_id=user_id, publication_id=article_id, saved=False),
+        name="reader_save_state",
+        user_id=user_id,
+        publication_id=article_id,
+        saved=False,
+    )
 
     await callback.answer("❌ Удалено из сохранённых")
 
@@ -1562,22 +1818,17 @@ async def expand_article_actions(callback: CallbackQuery, db: AsyncSession):
         return
     article_id = callback.data.split(":", 1)[1]
     user_id = callback.from_user.id
+    article = await get_publication_by_id(article_id, db)
+    if not article:
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
+        return
     saved_articles = await _safe_get_saved_articles(user_id, db=db)
     user_saved = any(str(item.id) == article_id for item in saved_articles)
-    show_read_button = bool(
-        callback.message
-        and callback.message.reply_markup
-        and any(
-            button.callback_data == f"view:{article_id}"
-            for row in callback.message.reply_markup.inline_keyboard
-            for button in row
-            if button.callback_data
-        )
-    )
+    show_read_button = _markup_has_callback(callback.message.reply_markup, f"view:{article_id}")
     try:
         await callback.message.edit_reply_markup(
-            reply_markup=get_article_keyboard(
-                article_id,
+            reply_markup=_article_keyboard(
+                article,
                 user_saved=user_saved,
                 show_read_button=show_read_button,
                 expanded=True,
@@ -1597,22 +1848,17 @@ async def collapse_article_actions(callback: CallbackQuery, db: AsyncSession):
         return
     article_id = callback.data.split(":", 1)[1]
     user_id = callback.from_user.id
+    article = await get_publication_by_id(article_id, db)
+    if not article:
+        await callback.answer("Статья устарела, откройте новую в разделе «Узнать».", show_alert=True)
+        return
     saved_articles = await _safe_get_saved_articles(user_id, db=db)
     user_saved = any(str(item.id) == article_id for item in saved_articles)
-    show_read_button = bool(
-        callback.message
-        and callback.message.reply_markup
-        and any(
-            button.callback_data == f"view:{article_id}"
-            for row in callback.message.reply_markup.inline_keyboard
-            for button in row
-            if button.callback_data
-        )
-    )
+    show_read_button = _markup_has_callback(callback.message.reply_markup, f"view:{article_id}")
     try:
         await callback.message.edit_reply_markup(
-            reply_markup=get_article_keyboard(
-                article_id,
+            reply_markup=_article_keyboard(
+                article,
                 user_saved=user_saved,
                 show_read_button=show_read_button,
                 expanded=False,
@@ -1627,6 +1873,10 @@ async def collapse_article_actions(callback: CallbackQuery, db: AsyncSession):
 @router.callback_query(F.data.startswith("view:"))
 async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
     """Show full article text."""
+    if callback.message is None:
+        await callback.answer("Откройте карточку статьи заново", show_alert=True)
+        return
+
     article_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
@@ -1636,10 +1886,7 @@ async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
         await callback.answer("❌ Некорректный ID статьи", show_alert=True)
         return
 
-    result = await db.execute(
-        select(ReaderPublication).where(ReaderPublication.id == article_uuid)
-    )
-    article = result.scalar_one_or_none()
+    article = await get_publication_by_id(article_uuid, db)
 
     if not article or not article.draft:
         await callback.answer("❌ Статья не найдена", show_alert=True)
@@ -1649,22 +1896,11 @@ async def view_article_callback(callback: CallbackQuery, db: AsyncSession):
     saved_articles = await _safe_get_saved_articles(user_id, db=db)
     user_saved = any(str(s.id) == str(article_uuid) for s in saved_articles)
 
-    # Format full article
-    published_date = article.published_at.strftime("%d.%m.%Y")
-
-    full_text = (
-        f"📰 <b>{article.draft.title}</b>\n\n"
-        f"{article.draft.content}\n\n"
-        f"👁 {article.views or 0} | 📅 {published_date}"
-    )
-
-    # Show full text with keyboard (without "Read more" button)
-    keyboard = get_article_keyboard(str(article_uuid), user_saved=user_saved, show_read_button=False)
-
     await callback.message.edit_text(
-        full_text,
+        _build_article_detail_text(article),
         parse_mode="HTML",
-        reply_markup=keyboard
+        reply_markup=_article_keyboard(article, user_saved=user_saved, show_read_button=False, expanded=True),
+        disable_web_page_preview=True,
     )
 
     await callback.answer()
@@ -1735,14 +1971,14 @@ async def generate_automation_idea_callback(callback: CallbackQuery, db: AsyncSe
     helper_line = ""
     if helper_username:
         helper_line = (
-            f"\n\nЕсли хотите разобрать внедрение под ваш кейс, "
-            f"напишите в <a href=\"https://t.me/{helper_username}\">Ассистент Legal AI PRO</a>."
+            f"\n\nНужен разбор под ваш кейс? "
+            f"Открыть диалог можно через <a href=\"https://t.me/{helper_username}\">Ассистент Legal AI PRO</a>."
         )
 
     await callback.message.answer(
         f"💡 <b>Идея внедрения по материалу:</b>\n"
-        f"<b>{escape(article.draft.title[:120])}</b>\n\n"
-        f"{escape(llm_text)}"
+        f"<b>{_safe_html_text(article.draft.title, limit=120, multiline=False)}</b>\n\n"
+        f"{_safe_html_text(llm_text, limit=1200, multiline=True)}"
         f"{helper_line}",
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -1787,12 +2023,18 @@ async def start_article_question_flow(callback: CallbackQuery, state: FSMContext
         parse_mode="HTML",
         reply_markup=keyboard,
     )
-    await push_reader_cta_click(
+    _spawn_background_task(
+        push_reader_cta_click(
+            user_id=callback.from_user.id,
+            publication_id=str(article.id),
+            cta_type=READER_CTA_TYPES["article_question"],
+            context=READER_EVENT_SOURCES["article_card"],
+            payload={"screen": "article_q_start", "action": "cta.article_question"},
+        ),
+        name="reader_cta_click",
         user_id=callback.from_user.id,
         publication_id=str(article.id),
-        cta_type=READER_CTA_TYPES["article_question"],
-        context=READER_EVENT_SOURCES["article_card"],
-        payload={"screen": "article_q_start", "action": "cta.article_question"},
+        action="cta.article_question",
     )
     await callback.answer("Готово, жду ваш вопрос")
 
@@ -1869,7 +2111,7 @@ async def handle_article_question_text(message: Message, state: FSMContext, db: 
     keyboard_rows = []
     if helper_link:
         keyboard_rows.append(
-            [InlineKeyboardButton(text="✉️ Написать в Ассистент Legal AI PRO", url=helper_link)]
+            [InlineKeyboardButton(text="✉️ Открыть диалог", url=helper_link)]
         )
     keyboard_rows.append(
         [InlineKeyboardButton(text="🔁 Сформулировать заново", callback_data=f"article_q:{article_id}")]
@@ -1887,26 +2129,38 @@ async def handle_article_question_text(message: Message, state: FSMContext, db: 
     )
 
     if article_id:
-        await push_reader_feedback(
-            publication_id=article_id,
+        _spawn_background_task(
+            push_reader_feedback(
+                publication_id=article_id,
+                user_id=user_id,
+                source="comment",
+                signal_key="reader.consultation.intent",
+                signal_value=1,
+                text=user_question,
+                payload={"article_title": article_title},
+            ),
+            name="reader_feedback",
             user_id=user_id,
-            source="comment",
-            signal_key="reader.consultation.intent",
-            signal_value=1,
-            text=user_question,
-            payload={"article_title": article_title},
+            publication_id=article_id,
+            action="reader.consultation.intent",
         )
-        await push_reader_lead_intent(
+        _spawn_background_task(
+            push_reader_lead_intent(
+                user_id=user_id,
+                publication_id=article_id,
+                intent_type=READER_INTENT_TYPES["article_question"],
+                message=user_question,
+                name=(message.from_user.full_name if message.from_user else None),
+                payload={
+                    "article_title": article_title,
+                    "source": READER_EVENT_SOURCES["article_card"],
+                    "action": "lead.article_question",
+                },
+            ),
+            name="reader_lead_intent",
             user_id=user_id,
             publication_id=article_id,
-            intent_type=READER_INTENT_TYPES["article_question"],
-            message=user_question,
-            name=(message.from_user.full_name if message.from_user else None),
-            payload={
-                "article_title": article_title,
-                "source": READER_EVENT_SOURCES["article_card"],
-                "action": "lead.article_question",
-            },
+            action="lead.article_question",
         )
 
     await state.clear()
@@ -2182,18 +2436,20 @@ async def provide_personalized_digest(callback: CallbackQuery, db: AsyncSession)
         personalized_articles = await get_recent_publications(limit=3, db=db)
 
     # Format digest
-    digest_text = (
-        "🎉 <b>Поздравляем! Лид-магнит выполнен!</b>\n\n"
-        f"📊 Ваш lead score: <b>{lead_profile.lead_score}/100</b>\n\n"
-        "📬 <b>Ваш персональный дайджест новостей:</b>\n\n"
-    )
+    digest_blocks = [
+        "🎉 <b>Поздравляем! Лид-магнит выполнен!</b>",
+        f"📊 Ваш lead score: <b>{lead_profile.lead_score}/100</b>",
+        "📬 <b>Ваш персональный дайджест новостей:</b>",
+    ]
 
     for i, article in enumerate(personalized_articles[:3], 1):
         if article.draft:
-            digest_text += f"{i}. <b>{article.draft.title[:60]}{'...' if len(article.draft.title) > 60 else ''}</b>\n"
-            digest_text += f"   {article.draft.content[:100]}{'...' if len(article.draft.content) > 100 else ''}\n\n"
+            digest_blocks.append(
+                f"{i}. <b>{_safe_html_text(article.draft.title, limit=60, multiline=False)}</b>\n"
+                f"   {_safe_html_text(article.draft.content, limit=100, multiline=False)}"
+            )
 
-    digest_text += (
+    digest_blocks.append(
         "🤖 <b>Теперь вы можете задавать вопросы!</b>\n\n"
         "У вас есть возможность задать <b>3 вопроса</b> по темам:\n"
         "• ИИ в юриспруденции\n"
@@ -2204,7 +2460,7 @@ async def provide_personalized_digest(callback: CallbackQuery, db: AsyncSession)
     )
 
     await callback.message.edit_text(
-        digest_text,
+        "\n\n".join(digest_blocks),
         parse_mode="HTML"
     )
 
@@ -2270,10 +2526,12 @@ async def handle_question(message: Message, state: FSMContext, db: AsyncSession)
 
         questions_left = 3 - (lead_profile.questions_asked or 0)
 
+        question_html = _safe_html_text(question, limit=260, multiline=True)
+        answer_html = _safe_html_text(ai_response, limit=1800, multiline=True)
         response_text = (
             f"🤖 <b>Ответ на ваш вопрос:</b>\n\n"
-            f"<i>Вопрос:</i> {question}\n\n"
-            f"{ai_response}\n\n"
+            f"<i>Вопрос:</i> {question_html}\n\n"
+            f"{answer_html}\n\n"
             f"📊 Осталось вопросов: <b>{questions_left}</b>\n\n"
         )
 
@@ -2337,7 +2595,7 @@ async def fallback_text_message(message: Message, db: AsyncSession):
         return
 
     await message.answer(
-        f"Найдено {len(results)} статей по запросу: <b>{text}</b>",
+        f"Найдено {len(results)} статей по запросу: <b>{_safe_html_text(text, limit=120, multiline=False)}</b>",
         parse_mode="HTML",
         reply_markup=_build_reader_nav_keyboard(profile_ready=True),
     )
@@ -2345,7 +2603,7 @@ async def fallback_text_message(message: Message, db: AsyncSession):
         await message.answer(
             format_article_message(article, index=i),
             parse_mode="HTML",
-            reply_markup=get_article_keyboard(str(article.id)),
+            reply_markup=_article_keyboard(article),
         )
 # ==================== Deep-Link Helpers ====================
 

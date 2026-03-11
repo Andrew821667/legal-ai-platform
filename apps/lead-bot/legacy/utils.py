@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
+from lead_perf import log_span_timing, perf_start
 
 logger = logging.getLogger(__name__)
 
@@ -214,12 +215,30 @@ async def telegram_call_with_retry(
     """
     Выполняет Telegram API-вызов с ограниченным retry для временных сбоев сети.
     """
+    started_at = perf_start()
     attempt = 0
     while True:
         try:
-            return await call()
+            result = await call()
+            log_span_timing(
+                "telegram_api_call",
+                started_at,
+                ok=True,
+                action=action,
+                attempts=attempt + 1,
+            )
+            return result
         except RetryAfter as error:
             if attempt >= max_retries:
+                log_span_timing(
+                    "telegram_api_call",
+                    started_at,
+                    ok=False,
+                    error=type(error).__name__,
+                    force=True,
+                    action=action,
+                    attempts=attempt + 1,
+                )
                 raise
             retry_after = float(getattr(error, "retry_after", base_delay))
             delay = max(retry_after, base_delay)
@@ -234,6 +253,15 @@ async def telegram_call_with_retry(
             await asyncio.sleep(delay)
         except (TimedOut, NetworkError) as error:
             if attempt >= max_retries:
+                log_span_timing(
+                    "telegram_api_call",
+                    started_at,
+                    ok=False,
+                    error=type(error).__name__,
+                    force=True,
+                    action=action,
+                    attempts=attempt + 1,
+                )
                 raise
             delay = base_delay * (2 ** attempt)
             attempt += 1
@@ -252,6 +280,14 @@ async def safe_answer_callback(query, action: str = "callback_answer", **kwargs)
     """Безопасно отвечает на callback query с retry."""
     return await telegram_call_with_retry(
         lambda: query.answer(**kwargs),
+        action=action,
+    )
+
+
+async def safe_send_message(bot, action: str = "send_message", **kwargs):
+    """Безопасно отправляет bot.send_message с retry и perf-таймингом."""
+    return await telegram_call_with_retry(
+        lambda: bot.send_message(**kwargs),
         action=action,
     )
 

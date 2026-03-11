@@ -13,6 +13,7 @@ import urllib.request
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 from config import Config
+from lead_perf import log_span_timing, perf_start
 import utils
 config = Config()
 
@@ -76,6 +77,7 @@ class Database:
     def _core_get_json(self, path: str, params: dict | None = None):
         if not (config.CORE_API_SYNC_ENABLED and config.CORE_API_URL and config.API_KEY_BOT):
             return None
+        started_at = perf_start()
 
         query = ""
         if params:
@@ -91,8 +93,17 @@ class Database:
         try:
             with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8")
+                log_span_timing("lead_db_core_get", started_at, ok=True, path=path)
                 return json.loads(raw) if raw else None
         except Exception as error:
+            log_span_timing(
+                "lead_db_core_get",
+                started_at,
+                ok=False,
+                error=type(error).__name__,
+                force=True,
+                path=path,
+            )
             logger.debug("Core API getter fallback to SQLite for %s: %s", path, error)
             return None
 
@@ -1345,6 +1356,17 @@ class Database:
         cursor = conn.cursor()
 
         try:
+            cursor.execute(
+                "SELECT id, username, first_name, last_name FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            )
+            existing_row = cursor.fetchone()
+            profile_changed = (
+                existing_row is None
+                or (existing_row["username"] or None) != (username or None)
+                or (existing_row["first_name"] or None) != (first_name or None)
+                or (existing_row["last_name"] or None) != (last_name or None)
+            )
             cursor.execute("""
                 INSERT INTO users (telegram_id, username, first_name, last_name)
                 VALUES (?, ?, ?, ?)
@@ -1361,7 +1383,8 @@ class Database:
             user_id = cursor.fetchone()[0]
 
             logger.info("User %s created/updated with id %s", utils.mask_telegram_id(telegram_id), user_id)
-            self._sync_user_to_core(user_id)
+            if profile_changed:
+                self._sync_user_to_core(user_id)
             return user_id
 
         except Exception as e:
@@ -1371,41 +1394,45 @@ class Database:
         finally:
             conn.close()
 
-    def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
-        """Получение пользователя по telegram_id"""
+    def get_local_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
+        """Возвращает локальную запись пользователя без merge с core-api."""
         conn = self.get_connection()
         cursor = conn.cursor()
-
         try:
             cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
             row = cursor.fetchone()
-
-            if row:
-                return self._merge_user_row_with_core(dict(row))
-            return None
-
+            return dict(row) if row else None
         finally:
             conn.close()
-    
-    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
-        """Получение пользователя по user_id"""
+
+    def get_local_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Возвращает локальную запись пользователя без merge с core-api."""
         conn = self.get_connection()
         cursor = conn.cursor()
-
         try:
             cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
             row = cursor.fetchone()
-
-            if row:
-                return self._merge_user_row_with_core(dict(row))
-            return None
-
+            return dict(row) if row else None
         finally:
             conn.close()
 
+    def get_user_by_telegram_id(self, telegram_id: int) -> Optional[Dict]:
+        """Получение пользователя по telegram_id"""
+        user = self.get_local_user_by_telegram_id(telegram_id)
+        if user:
+            return self._merge_user_row_with_core(user)
+        return None
+
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Получение пользователя по user_id"""
+        user = self.get_local_user_by_id(user_id)
+        if user:
+            return self._merge_user_row_with_core(user)
+        return None
+
     def get_user_offer_profile(self, user_id: int) -> Optional[str]:
         """Возвращает ручной override профиля предложений пользователя."""
-        user = self.get_user_by_id(user_id)
+        user = self.get_local_user_by_id(user_id)
         if not user:
             return None
         value = user.get("offer_profile_override")
@@ -1505,7 +1532,7 @@ class Database:
 
     def get_user_consent_state(self, user_id: int) -> Dict:
         """Получение статуса согласий пользователя."""
-        user = self.get_user_by_id(user_id)
+        user = self.get_local_user_by_id(user_id)
         if not user:
             return {}
         return {
@@ -2267,6 +2294,15 @@ class Database:
 
     def get_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
         """Получение последнего лида по user_id"""
+        lead = self.get_local_lead_by_user_id(user_id)
+        if lead:
+            user = self.get_local_user_by_id(user_id)
+            telegram_user_id = (user or {}).get("telegram_id")
+            return self._merge_lead_row_with_core(lead, telegram_user_id=telegram_user_id)
+        return None
+
+    def get_local_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
+        """Получение последнего лида по user_id без merge с core-api."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -2282,12 +2318,7 @@ class Database:
                 (user_id,),
             )
             row = cursor.fetchone()
-
-            if row:
-                user = self.get_user_by_id(user_id)
-                telegram_user_id = (user or {}).get("telegram_id")
-                return self._merge_lead_row_with_core(dict(row), telegram_user_id=telegram_user_id)
-            return None
+            return dict(row) if row else None
 
         finally:
             conn.close()

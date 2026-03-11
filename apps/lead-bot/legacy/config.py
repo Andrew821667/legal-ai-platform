@@ -122,6 +122,10 @@ class Config:
         self.API_KEY_ADMIN: str = os.getenv('API_KEY_ADMIN', '').strip()
         self.CORE_API_SYNC_ENABLED: bool = os.getenv('CORE_API_SYNC_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_TIMEOUT_SECONDS: float = float(os.getenv('CORE_API_TIMEOUT_SECONDS', '5'))
+        self.LEAD_PERF_LOGGING_ENABLED: bool = os.getenv('LEAD_PERF_LOGGING_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
+        self.LEAD_PERF_LOG_ALL_UPDATES: bool = os.getenv('LEAD_PERF_LOG_ALL_UPDATES', '0').strip().lower() in {'1', 'true', 'yes'}
+        self.LEAD_PERF_SLOW_UPDATE_MS: int = max(50, int(os.getenv('LEAD_PERF_SLOW_UPDATE_MS', '1200')))
+        self.LEAD_PERF_SLOW_SPAN_MS: int = max(20, int(os.getenv('LEAD_PERF_SLOW_SPAN_MS', '250')))
         modules_raw = os.getenv('AVAILABLE_SERVICE_MODULES', '').strip()
         self.AVAILABLE_SERVICE_MODULES: list[str] = [item.strip() for item in modules_raw.split(',') if item.strip()]
 

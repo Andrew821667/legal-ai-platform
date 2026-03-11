@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,6 +33,9 @@ class ReaderPublication(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    channel_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     publish_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -58,3 +61,11 @@ class ReaderPublication(Base):
     def reactions(self) -> dict:
         """Reader feed currently does not store reaction stats."""
         return {}
+
+    @property
+    def channel_post_url(self) -> str | None:
+        """Public Telegram URL for the published channel post when available."""
+        username = (self.channel_username or "").strip().lstrip("@")
+        if not username or not self.telegram_message_id:
+            return None
+        return f"https://t.me/{username}/{int(self.telegram_message_id)}"

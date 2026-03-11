@@ -7,17 +7,29 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import re
 import threading
 import time
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 import requests
 from requests.adapters import HTTPAdapter
 
 from app.config import settings
+from app.services.reader_perf import log_span_timing, perf_start
 
 logger = logging.getLogger(__name__)
+
+_MINIAPP_SCREEN_PATHS: dict[str, str] = {
+    "home": "/miniapp",
+    "content": "/miniapp/content",
+    "tools": "/miniapp/tools",
+    "solutions": "/miniapp/solutions",
+    "profile": "/miniapp/profile",
+}
+_SAFE_QUERY_TOKEN_RE = re.compile(r"[^a-z0-9._-]+")
 
 _SESSION: requests.Session | None = None
 _SESSION_LOCK = threading.Lock()
@@ -41,6 +53,62 @@ def _headers() -> dict[str, str]:
         "X-API-Key": settings.api_key_news,
         "Content-Type": "application/json",
     }
+
+
+def _normalize_query_token(value: str | None, *, default: str, max_len: int = 64) -> str:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return default
+    normalized = normalized.replace("/", ".").replace(":", ".").replace(" ", "_")
+    normalized = _SAFE_QUERY_TOKEN_RE.sub("_", normalized).strip("._-")
+    if not normalized:
+        return default
+    return normalized[:max_len]
+
+
+def _normalize_screen(screen: str | None) -> str:
+    normalized = _normalize_query_token(screen, default="home", max_len=32)
+    if normalized in _MINIAPP_SCREEN_PATHS:
+        return normalized
+    if "content" in normalized or "discover" in normalized:
+        return "content"
+    if "tool" in normalized or "validate" in normalized:
+        return "tools"
+    if "solution" in normalized:
+        return "solutions"
+    if "profile" in normalized:
+        return "profile"
+    return "home"
+
+
+def build_reader_miniapp_url(
+    *,
+    user_id: int,
+    source: str = "reader.bot",
+    screen: str | None = None,
+    action: str | None = None,
+    post_id: str | UUID | None = None,
+) -> str | None:
+    """Build a fast local mini-app URL without waiting for core-api."""
+    base_url = (settings.reader_miniapp_base_url or "").strip().rstrip("/")
+    if not base_url:
+        return None
+
+    normalized_screen = _normalize_screen(screen)
+    path = _MINIAPP_SCREEN_PATHS.get(normalized_screen, _MINIAPP_SCREEN_PATHS["home"])
+    query: dict[str, str] = {
+        "tg": str(int(user_id)),
+        "src": _normalize_query_token(source, default="reader.bot", max_len=80),
+        "screen": normalized_screen,
+    }
+    normalized_action = _normalize_query_token(action, default="", max_len=64)
+    if normalized_action:
+        query["act"] = normalized_action
+    if post_id is not None:
+        query["post_id"] = str(post_id)
+
+    query_string = urlencode(query)
+    return f"{base_url}{path}" if not query_string else f"{base_url}{path}?{query_string}"
 
 
 def _core_url(path: str) -> str:
@@ -130,7 +198,18 @@ def _request_sync(
     params: dict[str, Any] | None = None,
     json: dict[str, Any] | None = None,
 ) -> requests.Response:
+    started_at = perf_start()
+    response: requests.Response | None = None
     if _is_fail_fast_active():
+        log_span_timing(
+            "core_api_request",
+            started_at,
+            ok=False,
+            error="fail_fast_active",
+            force=True,
+            method=method.upper(),
+            path=path,
+        )
         raise RuntimeError("core_api_fail_fast_active")
 
     session = _get_session()
@@ -145,10 +224,28 @@ def _request_sync(
         )
     except Exception:
         _set_fail_fast()
+        log_span_timing(
+            "core_api_request",
+            started_at,
+            ok=False,
+            error="request_failed",
+            force=True,
+            method=method.upper(),
+            path=path,
+        )
         raise
 
     if response.status_code >= 500:
         _set_fail_fast()
+    log_span_timing(
+        "core_api_request",
+        started_at,
+        ok=response.status_code < 500,
+        force=response.status_code >= 500,
+        method=method.upper(),
+        path=path,
+        status_code=response.status_code,
+    )
     return response
 
 
@@ -472,12 +569,7 @@ async def push_reader_lead_intent(
 
 
 def _fallback_deeplink(*, user_id: int, source: str, screen: str | None) -> str | None:
-    fallback_base = (settings.reader_miniapp_base_url or "").strip()
-    if not fallback_base:
-        return None
-    separator = "&" if "?" in fallback_base else "?"
-    fallback_screen = (screen or "home").strip() or "home"
-    return f"{fallback_base}{separator}tg={int(user_id)}&src={source}&screen={fallback_screen}"
+    return build_reader_miniapp_url(user_id=int(user_id), source=source, screen=screen)
 
 
 async def build_reader_miniapp_deeplink(

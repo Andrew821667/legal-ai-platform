@@ -35,6 +35,7 @@ import database
 import content
 import security
 import utils
+from lead_perf import log_update_timing, perf_start
 from config import Config
 from handlers.admin import (
     blacklist_command,
@@ -587,125 +588,139 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """
     Общий роутер входящих сообщений.
     """
+    started_at = perf_start()
     message = _extract_incoming_message(update)
     if not message:
         return
 
-    if _is_business_update(update):
-        if await _try_handle_business_operator_message(update, context):
-            return
+    try:
+        if _is_business_update(update):
+            if await _try_handle_business_operator_message(update, context):
+                log_update_timing(update, started_at, ok=True)
+                return
 
-        reason = _business_skip_reason(message, context.bot.id)
-        if reason:
-            if reason == "owner_message":
-                text = getattr(message, "text", "") or ""
-                if _is_legacy_owner_intro_text(text):
-                    connection_id = getattr(message, "business_connection_id", None)
+            reason = _business_skip_reason(message, context.bot.id)
+            if reason:
+                if reason == "owner_message":
+                    text = getattr(message, "text", "") or ""
+                    if _is_legacy_owner_intro_text(text):
+                        connection_id = getattr(message, "business_connection_id", None)
+                        chat = getattr(message, "chat", None)
+                        chat_id = getattr(chat, "id", None)
+                        client_name = getattr(chat, "first_name", "") or "клиент"
+                        message_id = getattr(message, "message_id", None)
+
+                        if connection_id and message_id:
+                            try:
+                                await context.bot.delete_business_messages(
+                                    business_connection_id=str(connection_id),
+                                    message_ids=[int(message_id)],
+                                )
+                                logger.info(
+                                    "Deleted legacy owner intro message %s on connection %s",
+                                    message_id,
+                                    connection_id,
+                                )
+                            except Exception as delete_error:
+                                logger.warning(
+                                    "Failed to delete legacy owner intro message %s: %s",
+                                    message_id,
+                                    delete_error,
+                                )
+
+                        if connection_id and chat_id is not None:
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text=content.build_business_welcome_message(client_name),
+                                    reply_markup=build_business_menu_markup(),
+                                    business_connection_id=str(connection_id),
+                                )
+                                logger.info(
+                                    "Sent replacement welcome after owner intro for chat %s (connection %s)",
+                                    chat_id,
+                                    connection_id,
+                                )
+                            except Exception as send_error:
+                                logger.warning(
+                                    "Failed to send replacement welcome for chat %s: %s",
+                                    chat_id,
+                                    send_error,
+                                )
+                elif reason in {
+                    "from_user_is_bot",
+                    "sender_business_bot",
+                    "via_bot_message",
+                    "outgoing_private_message",
+                    "invalid_sender_chat_ids",
+                }:
+                    actor = getattr(message, "from_user", None)
                     chat = getattr(message, "chat", None)
-                    chat_id = getattr(chat, "id", None)
-                    client_name = getattr(chat, "first_name", "") or "клиент"
-                    message_id = getattr(message, "message_id", None)
+                    if reason == "outgoing_private_message" and security.security_manager.is_trusted_business_operator(
+                        getattr(actor, "id", None)
+                    ):
+                        logger.info("Skip trusted business operator message %s without security penalty", update.update_id)
+                        log_update_timing(update, started_at, ok=True)
+                        return
+                    decision = security.security_manager.register_actor_violation(
+                        user_id=getattr(actor, "id", None),
+                        reason_code=reason,
+                        payload={
+                            "chat_id": getattr(chat, "id", None),
+                            "chat_type": str(getattr(chat, "type", "")).lower(),
+                        },
+                        chat_id=getattr(chat, "id", None),
+                        update_id=update.update_id,
+                        update_type="business_message",
+                    )
+                    await _apply_security_decision(
+                        update,
+                        context,
+                        decision,
+                        update_type="business_message",
+                        user_id=getattr(actor, "id", None),
+                        chat_id=getattr(chat, "id", None),
+                        notify_user=False,
+                    )
+                logger.info("Skip business update %s: reason=%s", update.update_id, reason)
+                log_update_timing(update, started_at, ok=True)
+                return
 
-                    if connection_id and message_id:
-                        try:
-                            await context.bot.delete_business_messages(
-                                business_connection_id=str(connection_id),
-                                message_ids=[int(message_id)],
-                            )
-                            logger.info(
-                                "Deleted legacy owner intro message %s on connection %s",
-                                message_id,
-                                connection_id,
-                            )
-                        except Exception as delete_error:
-                            logger.warning(
-                                "Failed to delete legacy owner intro message %s: %s",
-                                message_id,
-                                delete_error,
-                            )
+            if not await _guard_message_update(update, context):
+                log_update_timing(update, started_at, ok=True)
+                return
 
-                    if connection_id and chat_id is not None:
-                        try:
-                            await context.bot.send_message(
-                                chat_id=chat_id,
-                                text=content.build_business_welcome_message(client_name),
-                                reply_markup=build_business_menu_markup(),
-                                business_connection_id=str(connection_id),
-                            )
-                            logger.info(
-                                "Sent replacement welcome after owner intro for chat %s (connection %s)",
-                                chat_id,
-                                connection_id,
-                            )
-                        except Exception as send_error:
-                            logger.warning(
-                                "Failed to send replacement welcome for chat %s: %s",
-                                chat_id,
-                                send_error,
-                            )
-            elif reason in {
-                "from_user_is_bot",
-                "sender_business_bot",
-                "via_bot_message",
-                "outgoing_private_message",
-                "invalid_sender_chat_ids",
-            }:
-                actor = getattr(message, "from_user", None)
-                chat = getattr(message, "chat", None)
-                if reason == "outgoing_private_message" and security.security_manager.is_trusted_business_operator(
-                    getattr(actor, "id", None)
-                ):
-                    logger.info("Skip trusted business operator message %s without security penalty", update.update_id)
-                    return
-                decision = security.security_manager.register_actor_violation(
-                    user_id=getattr(actor, "id", None),
-                    reason_code=reason,
-                    payload={
-                        "chat_id": getattr(chat, "id", None),
-                        "chat_type": str(getattr(chat, "type", "")).lower(),
-                    },
-                    chat_id=getattr(chat, "id", None),
-                    update_id=update.update_id,
-                    update_type="business_message",
+            connection_id = getattr(message, "business_connection_id", None)
+            if not database.db.is_business_connection_enabled(connection_id):
+                logger.info(
+                    "Skip business update %s: connection disabled (%s)",
+                    update.update_id,
+                    connection_id,
                 )
-                await _apply_security_decision(
-                    update,
-                    context,
-                    decision,
-                    update_type="business_message",
-                    user_id=getattr(actor, "id", None),
-                    chat_id=getattr(chat, "id", None),
-                    notify_user=False,
-                )
-            logger.info("Skip business update %s: reason=%s", update.update_id, reason)
-            return
+                log_update_timing(update, started_at, ok=True)
+                return
 
-        if not await _guard_message_update(update, context):
-            return
+            chat_id = getattr(getattr(message, "chat", None), "id", None)
+            if chat_id is not None and not database.db.is_chat_enabled(int(chat_id)):
+                logger.info("Skip business update %s: chat %s disabled", update.update_id, chat_id)
+                log_update_timing(update, started_at, ok=True)
+                return
 
-        connection_id = getattr(message, "business_connection_id", None)
-        if not database.db.is_business_connection_enabled(connection_id):
-            logger.info(
-                "Skip business update %s: connection disabled (%s)",
-                update.update_id,
-                connection_id,
-            )
-            return
-
-        chat_id = getattr(getattr(message, "chat", None), "id", None)
-        if chat_id is not None and not database.db.is_chat_enabled(int(chat_id)):
-            logger.info("Skip business update %s: chat %s disabled", update.update_id, chat_id)
-            return
-
-        await handle_business_message(update, context)
-    else:
-        from_user = getattr(message, "from_user", None)
-        if from_user and from_user.id == context.bot.id:
-            logger.info("Skip self message")
-            return
-        if not await _guard_message_update(update, context):
-            return
-        await handle_message(update, context)
+            await handle_business_message(update, context)
+        else:
+            from_user = getattr(message, "from_user", None)
+            if from_user and from_user.id == context.bot.id:
+                logger.info("Skip self message")
+                log_update_timing(update, started_at, ok=True)
+                return
+            if not await _guard_message_update(update, context):
+                log_update_timing(update, started_at, ok=True)
+                return
+            await handle_message(update, context)
+        log_update_timing(update, started_at, ok=True)
+    except Exception as error:
+        log_update_timing(update, started_at, ok=False, error=type(error).__name__)
+        raise
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -715,30 +730,37 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     if not query:
         return
+    started_at = perf_start()
+    try:
+        if await _try_handle_business_operator_callback(update, context):
+            log_update_timing(update, started_at, ok=True)
+            return
 
-    if await _try_handle_business_operator_callback(update, context):
-        return
+        if not await _guard_callback_update(update, context):
+            log_update_timing(update, started_at, ok=True)
+            return
 
-    if not await _guard_callback_update(update, context):
-        return
-
-    data = query.data or ""
-    if data.startswith("menu_"):
-        await handle_business_menu_callback(update, context)
-    elif data.startswith("consent_"):
-        await handle_consent_callback(update, context)
-    elif data.startswith("doc_"):
-        await handle_documents_callback(update, context)
-    elif data.startswith("profile_"):
-        await handle_profile_callback(update, context)
-    elif data.startswith("magnet_"):
-        await handle_lead_magnet_callback(update, context)
-    elif data.startswith("cleanup_"):
-        await handle_cleanup_callback(update, context)
-    elif data.startswith("admin_"):
-        await handle_admin_panel_callback(update, context)
-    else:
-        await query.answer("Неизвестное действие")
+        data = query.data or ""
+        if data.startswith("menu_"):
+            await handle_business_menu_callback(update, context)
+        elif data.startswith("consent_"):
+            await handle_consent_callback(update, context)
+        elif data.startswith("doc_"):
+            await handle_documents_callback(update, context)
+        elif data.startswith("profile_"):
+            await handle_profile_callback(update, context)
+        elif data.startswith("magnet_"):
+            await handle_lead_magnet_callback(update, context)
+        elif data.startswith("cleanup_"):
+            await handle_cleanup_callback(update, context)
+        elif data.startswith("admin_"):
+            await handle_admin_panel_callback(update, context)
+        else:
+            await query.answer("Неизвестное действие")
+        log_update_timing(update, started_at, ok=True)
+    except Exception as error:
+        log_update_timing(update, started_at, ok=False, error=type(error).__name__)
+        raise
 
 
 async def business_connection_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

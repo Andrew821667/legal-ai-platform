@@ -407,7 +407,7 @@ async def _handle_admin_lookup_input(
             )
             return True
 
-        snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+        snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id)
         if not snapshot:
             await utils.safe_reply_text(
                 message,
@@ -979,18 +979,14 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="profile_no_user")
         return
 
-    snapshot = admin_interface.admin_interface.get_user_snapshot(user.id) or {
-        "user": user_data,
-        "lead": database.db.get_lead_by_user_id(user_data["id"]),
-        "consent": database.db.get_user_consent_state(user_data["id"]),
-    }
-    lead = snapshot.get("lead")
-    consent_state = snapshot.get("consent", {})
+    local_user = database.db.get_local_user_by_id(user_data["id"]) or user_data
+    lead = database.db.get_local_lead_by_user_id(user_data["id"])
+    consent_state = database.db.get_user_consent_state(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
     reply_markup = _profile_panel_markup(is_admin)
     await utils.safe_reply_text(
         update.message,
-        _format_profile_text(snapshot.get("user", user_data), lead, consent_state, is_admin),
+        _format_profile_text(local_user, lead, consent_state, is_admin),
         reply_markup=reply_markup,
         action="profile_command",
     )
@@ -1044,10 +1040,7 @@ async def transborder_consent_command(update: Update, context: ContextTypes.DEFA
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="transborder_no_user")
         return
-    snapshot = admin_interface.admin_interface.get_user_snapshot(user.id) or {
-        "consent": database.db.get_user_consent_state(user_data["id"])
-    }
-    consent_state = snapshot.get("consent", {})
+    consent_state = database.db.get_user_consent_state(user_data["id"])
     message = content.transborder_policy_text()
     if bool(consent_state.get("transborder_consent")):
         await utils.safe_reply_text(
@@ -1072,8 +1065,7 @@ async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_T
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="consent_status_no_user")
         return
-    snapshot = admin_interface.admin_interface.get_user_snapshot(user.id) or {"consent": database.db.get_user_consent_state(user_data["id"])}
-    consent_state = snapshot.get("consent", {})
+    consent_state = database.db.get_user_consent_state(user_data["id"])
     is_admin = user.id == config.ADMIN_TELEGRAM_ID
     text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
     await utils.safe_reply_text(
@@ -1091,7 +1083,7 @@ async def export_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="export_data_no_user")
         return
-    payload = admin_interface.admin_interface.export_user_data(user.id)
+    payload = await admin_interface.admin_interface.export_user_data_async(user.id)
     if not payload:
         await utils.safe_reply_text(update.message, "Данные пользователя не найдены.", action="export_data_not_found")
         return

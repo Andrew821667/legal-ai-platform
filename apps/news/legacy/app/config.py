@@ -155,6 +155,10 @@ class Settings(BaseSettings):
     core_api_read_cache_stale_seconds: int = Field(default=180)
     core_api_pool_connections: int = Field(default=20)
     core_api_pool_maxsize: int = Field(default=50)
+    reader_perf_logging_enabled: bool = Field(default=True)
+    reader_perf_log_all_updates: bool = Field(default=False)
+    reader_perf_slow_update_ms: int = Field(default=1200)
+    reader_perf_slow_span_ms: int = Field(default=250)
 
     # Telegram Client API (для сбора новостей из каналов)
     telegram_api_id: int = Field(default=0)

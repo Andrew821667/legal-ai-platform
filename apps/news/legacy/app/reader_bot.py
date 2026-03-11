@@ -18,6 +18,7 @@ from app.models.database import AsyncSessionLocal, engine
 from app.models import reader_models as _reader_models  # noqa: F401
 from app.models import reader_publications as _reader_publications  # noqa: F401
 from app.models.reader_models import UserProfile, LeadProfile, UserFeedback, UserInteraction, SavedArticle
+from app.services.reader_perf import log_update_timing, perf_start
 
 # Setup logging
 logging.basicConfig(
@@ -30,10 +31,16 @@ logger = logging.getLogger(__name__)
 # Database middleware
 async def db_middleware(handler, event, data):
     """Provide database session for handlers."""
+    started_at = perf_start()
     async with AsyncSessionLocal() as session:
         data['db'] = session
         try:
-            return await handler(event, data)
+            result = await handler(event, data)
+            log_update_timing(event, started_at, ok=True)
+            return result
+        except Exception as exc:
+            log_update_timing(event, started_at, ok=False, error=type(exc).__name__)
+            raise
         finally:
             await session.close()
 

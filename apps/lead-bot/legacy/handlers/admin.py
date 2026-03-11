@@ -264,7 +264,7 @@ async def pdn_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         telegram_id = int(args[0])
-        snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+        snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id)
         if not snapshot:
             await update.message.reply_text("Пользователь не найден")
             return

@@ -28,6 +28,7 @@ import security
 import prompts
 import content
 import funnel
+from lead_perf import log_span_timing, perf_start
 from handlers.constants import *
 from handlers.helpers import notify_admin_new_lead
 from handlers.user import process_pending_start_payload
@@ -161,6 +162,8 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
     """
     Обработчик inline кнопок меню для бизнес-чатов
     """
+    started_at = perf_start()
+    callback_data = ""
     try:
         query = update.callback_query
         try:
@@ -189,8 +192,18 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 first_name=user.first_name,
                 last_name=user.last_name,
             )
-            lead = database.db.get_lead_by_user_id(user_db_id) if user_db_id else None
+            lead = database.db.get_local_lead_by_user_id(user_db_id) if user_db_id else None
             selected_profile = database.db.get_user_offer_profile(user_db_id)
+
+        async def _send_business_menu_message(text: str, reply_markup: InlineKeyboardMarkup | None) -> None:
+            await utils.safe_send_message(
+                context.bot,
+                action=f"business_menu:{callback_data or 'unknown'}",
+                chat_id=query.message.chat.id,
+                text=text,
+                business_connection_id=query.message.business_connection_id,
+                reply_markup=reply_markup,
+            )
 
         profile_callback_map = {
             "menu_offer_set_inhouse": "inhouse",
@@ -217,12 +230,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             )
             response_markup = _offer_profile_markup()
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup,
-                )
+                await _send_business_menu_message(response_text, response_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -236,12 +244,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             response_text = content.offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
             response_markup = _offer_profile_markup()
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup,
-                )
+                await _send_business_menu_message(response_text, response_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -267,12 +270,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 database.db.reset_user_funnel_state(user_db_id)
             restart_text = "Историю очистил. Начинаем заново. Опишите задачу одним сообщением."
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=restart_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=menu_markup,
-                )
+                await _send_business_menu_message(restart_text, menu_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -296,12 +294,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             else:
                 response_text = content.build_welcome_message(user.first_name if user else "клиент")
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=menu_markup,
-                )
+                await _send_business_menu_message(response_text, menu_markup)
             else:
                 await utils.safe_reply_text(
                     query.message,
@@ -317,12 +310,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
         if callback_data == "menu_dashboard":
             response_text = content.WORKSPACE_TEXT
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=menu_markup,
-                )
+                await _send_business_menu_message(response_text, menu_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -340,18 +328,12 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     action="menu_profile_no_user",
                 )
                 return
-            snapshot = admin_interface.admin_interface.get_user_snapshot(user.id) if user else None
-            user_row = (snapshot or {}).get("user") or database.db.get_user_by_id(user_db_id) or {}
-            lead = (snapshot or {}).get("lead") or database.db.get_lead_by_user_id(user_db_id)
-            consent_state = (snapshot or {}).get("consent") or database.db.get_user_consent_state(user_db_id)
+            user_row = database.db.get_local_user_by_id(user_db_id) or {}
+            lead = database.db.get_local_lead_by_user_id(user_db_id)
+            consent_state = database.db.get_user_consent_state(user_db_id)
             response_text = _build_client_profile_text(user_row, lead, consent_state)
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=menu_markup,
-                )
+                await _send_business_menu_message(response_text, menu_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -365,12 +347,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             response_text = _documents_panel_text()
             docs_markup = _documents_panel_markup()
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=docs_markup,
-                )
+                await _send_business_menu_message(response_text, docs_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -387,12 +364,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             )
             response_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup,
-                )
+                await _send_business_menu_message(response_text, response_markup)
             else:
                 await utils.safe_edit_text(
                     query.message,
@@ -486,12 +458,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 response_markup = menu_markup
 
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup,
-                )
+                await _send_business_menu_message(response_text, response_markup)
             else:
                 await utils.safe_reply_text(
                     query.message,
@@ -517,12 +484,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             )
             response_markup = _personal_mode_markup()
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup,
-                )
+                await _send_business_menu_message(response_text, response_markup)
             else:
                 await utils.safe_reply_text(
                     query.message,
@@ -589,11 +551,9 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 response_markup = menu_markup if is_business else _consultation_contact_markup()
 
             if is_business:
-                await context.bot.send_message(
-                    chat_id=query.message.chat.id,
-                    text=response_text,
-                    business_connection_id=query.message.business_connection_id,
-                    reply_markup=response_markup if callback_data == "menu_leave_contact" else menu_markup,
+                await _send_business_menu_message(
+                    response_text,
+                    response_markup if callback_data == "menu_leave_contact" else menu_markup,
                 )
             else:
                 await utils.safe_reply_text(
@@ -609,12 +569,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             return
 
         if is_business:
-            await context.bot.send_message(
-                chat_id=query.message.chat.id,
-                text=response_text,
-                business_connection_id=query.message.business_connection_id,
-                reply_markup=menu_markup,
-            )
+            await _send_business_menu_message(response_text, menu_markup)
         else:
             await utils.safe_edit_text(
                 query.message,
@@ -622,8 +577,23 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 reply_markup=menu_markup,
                 action=f"{callback_data}_edit",
             )
+        log_span_timing(
+            "lead.menu.callback",
+            started_at,
+            ok=True,
+            callback_data=callback_data or "unknown",
+            business_mode=is_business,
+        )
             
     except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError) as e:
+        log_span_timing(
+            "lead.menu.callback",
+            started_at,
+            ok=False,
+            error=type(e).__name__,
+            force=True,
+            callback_data=callback_data or "unknown",
+        )
         logger.error(f"Error in handle_business_menu_callback: {e}")
 
 
@@ -1152,8 +1122,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         return
 
     if action == "doc_consent_status":
-        snapshot = admin_interface.admin_interface.get_user_snapshot(user.id)
-        consent_state = (snapshot or {}).get("consent", {})
+        consent_state = database.db.get_user_consent_state(user_data["id"])
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         status_text = content.consent_status_text(consent_state) if is_admin else content.consent_user_status_text(consent_state)
         await utils.safe_edit_text(
@@ -1164,7 +1133,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         )
         return
     if action == "doc_export_data":
-        payload = admin_interface.admin_interface.export_user_data(user.id)
+        payload = await admin_interface.admin_interface.export_user_data_async(user.id)
         await utils.safe_edit_text(
             query.message,
             _clip_for_edit(_documents_panel_text("📊 Экспорт данных", content.export_data_text(payload))),
@@ -1346,7 +1315,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if user_detail_match:
             telegram_id = int(user_detail_match.group(1))
-            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+            snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id)
             if not snapshot:
                 await utils.safe_edit_text(
                     query.message,
@@ -1376,7 +1345,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
 
         if user_export_match:
             telegram_id = int(user_export_match.group(1))
-            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id)
+            snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id)
             if not snapshot:
                 await utils.safe_edit_text(
                     query.message,
@@ -1388,7 +1357,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            payload = admin_interface.admin_interface.export_user_data(telegram_id)
+            payload = await admin_interface.admin_interface.export_user_data_async(telegram_id)
             export_text = (
                 f"🧾 Экспорт данных пользователя ID {telegram_id}\n\n"
                 f"{content.export_data_text(payload)}"
@@ -1419,7 +1388,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 )
                 return
 
-            snapshot = admin_interface.admin_interface.get_user_snapshot(telegram_id) or {
+            snapshot = await admin_interface.admin_interface.get_user_snapshot_async(telegram_id) or {
                 "user": admin_interface.admin_interface.get_user_by_telegram_id(telegram_id) or {},
                 "lead": {},
                 "consent": {},

@@ -11,6 +11,7 @@ import urllib.error
 from typing import Dict
 import database
 from config import Config
+from lead_perf import log_span_timing, perf_start
 
 config = Config()
 
@@ -40,6 +41,7 @@ class AdminInterface:
     ):
         if not self.core_api_enabled:
             return None
+        started_at = perf_start()
 
         query = ""
         if params:
@@ -60,9 +62,27 @@ class AdminInterface:
         try:
             with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8")
+                log_span_timing(
+                    "lead_core_api_request",
+                    started_at,
+                    ok=True,
+                    method=method.upper(),
+                    path=path,
+                    admin_scope=admin_scope,
+                )
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as error:
             payload_text = error.read().decode("utf-8", errors="ignore")
+            log_span_timing(
+                "lead_core_api_request",
+                started_at,
+                ok=False,
+                error=f"HTTP{error.code}",
+                force=True,
+                method=method.upper(),
+                path=path,
+                admin_scope=admin_scope,
+            )
             logger.warning(
                 "Core API %s fallback for %s [%s]: %s",
                 method.upper(),
@@ -72,6 +92,16 @@ class AdminInterface:
             )
             return None
         except Exception as error:
+            log_span_timing(
+                "lead_core_api_request",
+                started_at,
+                ok=False,
+                error=type(error).__name__,
+                force=True,
+                method=method.upper(),
+                path=path,
+                admin_scope=admin_scope,
+            )
             logger.warning("Core API %s fallback for %s: %s", method.upper(), path, error)
             return None
 
@@ -243,37 +273,95 @@ class AdminInterface:
         return self.db.get_lead_by_id(legacy_lead_id) or {}
 
     def get_user_snapshot(self, telegram_id: int) -> dict | None:
-        target_user = self.get_user_by_telegram_id(telegram_id)
-        if not target_user:
-            return None
+        started_at = perf_start()
+        try:
+            target_user = self.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                log_span_timing(
+                    "lead.get_user_snapshot",
+                    started_at,
+                    ok=True,
+                    telegram_id=telegram_id,
+                    found=False,
+                )
+                return None
 
-        consent = {
-            "consent_given": bool(target_user.get("consent_given")),
-            "consent_date": target_user.get("consent_date"),
-            "consent_revoked": bool(target_user.get("consent_revoked")),
-            "consent_revoked_at": target_user.get("consent_revoked_at"),
-            "transborder_consent": bool(target_user.get("transborder_consent")),
-            "transborder_consent_date": target_user.get("transborder_consent_date"),
-            "marketing_consent": bool(target_user.get("marketing_consent")),
-            "marketing_consent_date": target_user.get("marketing_consent_date"),
-        }
-        lead = self.get_latest_lead_for_telegram_user(telegram_id)
-        return {
-            "user": target_user,
-            "lead": lead,
-            "consent": consent,
-        }
+            consent = {
+                "consent_given": bool(target_user.get("consent_given")),
+                "consent_date": target_user.get("consent_date"),
+                "consent_revoked": bool(target_user.get("consent_revoked")),
+                "consent_revoked_at": target_user.get("consent_revoked_at"),
+                "transborder_consent": bool(target_user.get("transborder_consent")),
+                "transborder_consent_date": target_user.get("transborder_consent_date"),
+                "marketing_consent": bool(target_user.get("marketing_consent")),
+                "marketing_consent_date": target_user.get("marketing_consent_date"),
+            }
+            lead = self.get_latest_lead_for_telegram_user(telegram_id)
+            log_span_timing(
+                "lead.get_user_snapshot",
+                started_at,
+                ok=True,
+                telegram_id=telegram_id,
+                found=True,
+            )
+            return {
+                "user": target_user,
+                "lead": lead,
+                "consent": consent,
+            }
+        except Exception as error:
+            log_span_timing(
+                "lead.get_user_snapshot",
+                started_at,
+                ok=False,
+                error=type(error).__name__,
+                force=True,
+                telegram_id=telegram_id,
+            )
+            raise
+
+    async def get_user_snapshot_async(self, telegram_id: int) -> dict | None:
+        return await asyncio.to_thread(self.get_user_snapshot, telegram_id)
 
     def export_user_data(self, telegram_id: int) -> dict:
-        target_user = self.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
-            return {}
+        started_at = perf_start()
+        try:
+            target_user = self.db.get_user_by_telegram_id(telegram_id)
+            if not target_user:
+                log_span_timing(
+                    "lead.export_user_data",
+                    started_at,
+                    ok=True,
+                    telegram_id=telegram_id,
+                    found=False,
+                )
+                return {}
 
-        payload = self.db.export_user_data(target_user["id"])
-        core_lead = self.get_latest_lead_for_telegram_user(telegram_id)
-        if core_lead:
-            payload["lead"] = core_lead
-        return payload
+            payload = self.db.export_user_data(target_user["id"])
+            core_lead = self.get_latest_lead_for_telegram_user(telegram_id)
+            if core_lead:
+                payload["lead"] = core_lead
+            log_span_timing(
+                "lead.export_user_data",
+                started_at,
+                ok=True,
+                telegram_id=telegram_id,
+                found=True,
+            )
+            return payload
+        except Exception as error:
+            log_span_timing(
+                "lead.export_user_data",
+                started_at,
+                ok=False,
+                error=type(error).__name__,
+                force=True,
+                telegram_id=telegram_id,
+            )
+            raise
+
+    async def export_user_data_async(self, telegram_id: int) -> dict:
+        return await asyncio.to_thread(self.export_user_data, telegram_id)
 
     def _get_funnel_payload(self, days=30) -> Dict:
         funnel_data = self.db.get_funnel_report(days)
