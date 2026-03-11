@@ -44,3 +44,11 @@ def test_offer_profile_cta_label_mentions_mode() -> None:
     assert "Юрфирма" in manual_label
     assert "(вручную)" in manual_label
     assert "(авто)" in auto_label
+
+
+def test_workspace_onboarding_text_emphasizes_profile_choice() -> None:
+    onboarding_text = content.build_workspace_text(selected_profile="business", emphasize_profile_choice=True)
+    regular_text = content.build_workspace_text(selected_profile="business")
+    assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." in onboarding_text
+    assert "Так я быстрее покажу именно те услуги и цены" in onboarding_text
+    assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." not in regular_text

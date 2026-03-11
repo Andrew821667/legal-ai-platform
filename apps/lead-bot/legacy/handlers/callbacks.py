@@ -836,6 +836,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             content.build_workspace_text(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
                 selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+                emphasize_profile_choice=True,
             ),
             reply_markup=_workspace_markup_for(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
@@ -886,6 +887,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             content.build_workspace_text(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
                 selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+                emphasize_profile_choice=True,
             ),
             reply_markup=_workspace_markup_for(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),

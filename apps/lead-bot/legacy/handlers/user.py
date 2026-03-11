@@ -957,7 +957,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await utils.safe_reply_text(
             update.message,
-            content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+            content.build_workspace_text(
+                lead=lead,
+                selected_profile=selected_profile,
+                emphasize_profile_choice=True,
+            ),
             reply_markup=workspace_markup,
             action="start_workspace",
         )
@@ -1413,7 +1417,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
             await utils.safe_reply_text(
                 original_message,
-                content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+                content.build_workspace_text(
+                    lead=lead,
+                    selected_profile=selected_profile,
+                    emphasize_profile_choice=True,
+                ),
                 reply_markup=workspace_markup,
                 action="forced_workspace_new_session",
             )
@@ -1433,7 +1441,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
             await utils.safe_reply_text(
                 original_message,
-                content.build_workspace_text(lead=lead, selected_profile=selected_profile),
+                content.build_workspace_text(
+                    lead=lead,
+                    selected_profile=selected_profile,
+                    emphasize_profile_choice=True,
+                ),
                 reply_markup=workspace_markup,
                 action="workspace_on_greeting",
             )

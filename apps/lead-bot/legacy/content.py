@@ -266,10 +266,18 @@ HELP_MESSAGE = (
 def build_workspace_text(
     lead: dict | None = None,
     selected_profile: str | None = None,
+    emphasize_profile_choice: bool = False,
 ) -> str:
     _, active_profile_label, mode = _active_offer_profile_state(lead=lead, selected_profile=selected_profile)
+    intro = (
+        "👉 Начните с верхней кнопки «🎯 Профиль услуг».\n"
+        "Так я быстрее покажу именно те услуги и цены, которые подходят вашей роли.\n\n"
+        if emphasize_profile_choice
+        else ""
+    )
     return (
         "🧭 РАБОЧИЙ СТОЛ\n\n"
+        f"{intro}"
         "Сначала проверьте профиль услуг в верхней кнопке. Это важно: от него зависят услуги, цены и маршрут консультации.\n\n"
         f"Сейчас активен: {active_profile_label}\n"
         f"Режим: {mode}\n\n"
