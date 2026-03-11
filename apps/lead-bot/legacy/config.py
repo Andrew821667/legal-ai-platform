@@ -118,6 +118,14 @@ class Config:
         self.ALLOW_ADMIN_TEST_LEADS: bool = os.getenv('ALLOW_ADMIN_TEST_LEADS', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_URL: str = os.getenv('CORE_API_URL', '').strip()
         self.API_KEY_BOT: str = os.getenv('API_KEY_BOT', '').strip()
+        self.TELEGRAM_CHANNEL_URL: str = (
+            os.getenv('LEAD_PUBLIC_CHANNEL_URL')
+            or os.getenv('TELEGRAM_CHANNEL_URL', '')
+        ).strip()
+        self.TELEGRAM_CHANNEL_USERNAME: str = (
+            os.getenv('LEAD_PUBLIC_CHANNEL_USERNAME')
+            or os.getenv('TELEGRAM_CHANNEL_USERNAME', '')
+        ).strip()
         self.API_KEY_NEWS: str = os.getenv('API_KEY_NEWS', '').strip()
         self.API_KEY_ADMIN: str = os.getenv('API_KEY_ADMIN', '').strip()
         self.CORE_API_SYNC_ENABLED: bool = os.getenv('CORE_API_SYNC_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}

@@ -21,6 +21,8 @@ CONTACTS = {
     "github": "github.com/Andrew821667",
 }
 
+CHANNEL_BUTTON_TEXT = "📰 Канал Legal AI PRO"
+
 
 MODULE_CATALOG = {
     "consultation_30m": "Консультация 30 минут по кейсу",
@@ -220,6 +222,44 @@ def contact_lines(include_github: bool = False) -> str:
     return "\n".join(lines)
 
 
+def public_channel_url() -> str | None:
+    direct_url = (config.TELEGRAM_CHANNEL_URL or "").strip()
+    if direct_url:
+        if direct_url.startswith(("http://", "https://")):
+            return direct_url
+        return f"https://{direct_url.lstrip('/')}"
+
+    username = (config.TELEGRAM_CHANNEL_USERNAME or "").strip().lstrip("@")
+    if username:
+        return f"https://t.me/{username}"
+    return None
+
+
+def channel_nurture_text() -> str:
+    if not public_channel_url():
+        return ""
+    return (
+        "Если к консультации пока не готовы, можно начать с канала Legal AI PRO: "
+        "там короткие практические разборы по Legal AI, автоматизации юрфункции и внедрению."
+    )
+
+
+def post_contact_channel_text() -> str:
+    if not public_channel_url():
+        return ""
+    return (
+        "Пока команда готовит ответ, можно подписаться на канал Legal AI PRO: "
+        "там регулярные разборы, кейсы внедрения и сигналы рынка."
+    )
+
+
+def with_channel_nurture(text: str, *, after_contact: bool = False) -> str:
+    extra = post_contact_channel_text() if after_contact else channel_nurture_text()
+    if not extra:
+        return text
+    return f"{text}\n\n{extra}"
+
+
 def build_welcome_message(first_name: str) -> str:
     name = (first_name or "").strip() or "коллега"
     return (
@@ -378,14 +418,17 @@ def menu_response_by_key(
     selected_profile: str | None = None,
 ) -> str:
     if key == "menu_services":
-        return _platform_services_text(_resolve_client_platform(lead, selected_profile))
+        return with_channel_nurture(_platform_services_text(_resolve_client_platform(lead, selected_profile)))
     if key == "menu_prices":
-        return _platform_prices_text(_resolve_client_platform(lead, selected_profile))
+        return with_channel_nurture(_platform_prices_text(_resolve_client_platform(lead, selected_profile)))
     if key == "menu_offer_profile":
         return offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
     if key == "menu_dashboard":
         return build_workspace_text(lead=lead, selected_profile=selected_profile)
-    return MENU_RESPONSES.get(key, "Выберите пункт меню.")
+    response = MENU_RESPONSES.get(key, "Выберите пункт меню.")
+    if key in {"menu_help", "menu_contract_ai"}:
+        return with_channel_nurture(response)
+    return response
 
 
 def menu_response_by_button(

@@ -1,6 +1,7 @@
 """
 Константы для handlers - меню кнопок и другие константы
 """
+from telegram import InlineKeyboardMarkup
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
 
@@ -59,6 +60,23 @@ def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
 WORKSPACE_INLINE_MENU = build_workspace_inline_menu()
 
 QUICK_NAV_MENU = build_quick_nav_menu()
+
+
+def append_inline_url_row(
+    markup: InlineKeyboardMarkup,
+    text: str,
+    url: str | None,
+    *,
+    prepend: bool = False,
+) -> InlineKeyboardMarkup:
+    if not url:
+        return markup
+    rows = [list(row) for row in markup.inline_keyboard]
+    if any(any(getattr(button, "url", None) == url for button in row) for row in rows):
+        return markup
+    link_row = [InlineKeyboardButton(text, url=url)]
+    updated_rows = [link_row, *rows] if prepend else [*rows, link_row]
+    return InlineKeyboardMarkup(updated_rows)
 
 LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("📞 Консультация 30 мин", callback_data="magnet_consultation")],

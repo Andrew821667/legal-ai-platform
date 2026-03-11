@@ -52,3 +52,11 @@ def test_workspace_onboarding_text_emphasizes_profile_choice() -> None:
     assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." in onboarding_text
     assert "Так я быстрее покажу именно те услуги и цены" in onboarding_text
     assert "👉 Начните с верхней кнопки «🎯 Профиль услуг»." not in regular_text
+
+
+def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
+    response = content.menu_response_by_key("menu_help")
+    if content.public_channel_url():
+        assert "канала Legal AI PRO" in response
+    else:
+        assert "канала Legal AI PRO" not in response

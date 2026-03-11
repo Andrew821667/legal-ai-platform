@@ -141,7 +141,10 @@ async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, em
 
             # Подтверждение пользователю
             base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
-            await update.message.reply_text(f"{base_message}\n\nКонтакт для отправки: {email}")
+            await update.message.reply_text(
+                f"{content.with_channel_nurture(base_message, after_contact=True)}\n\n"
+                f"Контакт для отправки: {email}"
+            )
             logger.info("Lead magnet %s sent to %s", magnet_type, utils.mask_email(email))
         else:
             # Ошибка отправки

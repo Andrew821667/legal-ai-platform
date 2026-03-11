@@ -61,6 +61,15 @@ def _workspace_markup_for(lead: dict | None = None, selected_profile: str | None
     )
 
 
+def _with_channel_button(markup: InlineKeyboardMarkup, *, prepend: bool = False) -> InlineKeyboardMarkup:
+    return append_inline_url_row(
+        markup,
+        content.CHANNEL_BUTTON_TEXT,
+        content.public_channel_url(),
+        prepend=prepend,
+    )
+
+
 def _personal_mode_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(PERSONAL_MODE_RETURN_MENU)
 
@@ -371,7 +380,7 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                 f"{content.menu_response_by_key('menu_contract_ai', lead=lead, selected_profile=selected_profile)}\n\n"
                 f"{content.LEAD_MAGNET_OFFER_TEXT}"
             )
-            response_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
+            response_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
             else:
@@ -464,7 +473,8 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
                     "Принято. Передал команде, что с вами лучше связаться в Telegram.\n"
                     "Если захотите ускорить связь, можете в любой момент отправить номер."
                 )
-                response_markup = menu_markup
+                response_text = content.with_channel_nurture(response_text, after_contact=True)
+                response_markup = _with_channel_button(menu_markup)
 
             if is_business:
                 await _send_business_menu_message(response_text, response_markup)
@@ -578,12 +588,22 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             return
 
         if is_business:
-            await _send_business_menu_message(response_text, menu_markup)
+            reply_markup = (
+                _with_channel_button(menu_markup)
+                if callback_data in {"menu_services", "menu_prices", "menu_help"}
+                else menu_markup
+            )
+            await _send_business_menu_message(response_text, reply_markup)
         else:
+            reply_markup = (
+                _with_channel_button(menu_markup)
+                if callback_data in {"menu_services", "menu_prices", "menu_help"}
+                else menu_markup
+            )
             await utils.safe_edit_text(
                 query.message,
                 response_text,
-                reply_markup=menu_markup,
+                reply_markup=reply_markup,
                 action=f"{callback_data}_edit",
             )
         log_span_timing(

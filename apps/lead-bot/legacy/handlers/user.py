@@ -340,6 +340,15 @@ def _quick_nav_markup_for(lead: dict | None = None, selected_profile: str | None
     )
 
 
+def _with_channel_button(markup: InlineKeyboardMarkup, *, prepend: bool = False) -> InlineKeyboardMarkup:
+    return append_inline_url_row(
+        markup,
+        content.CHANNEL_BUTTON_TEXT,
+        content.public_channel_url(),
+        prepend=prepend,
+    )
+
+
 def _main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU, resize_keyboard=True)
 
@@ -2038,8 +2047,11 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
 async def offer_lead_magnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Предложение lead magnet"""
     _ = context
-    reply_markup = InlineKeyboardMarkup(LEAD_MAGNET_MENU)
-    await update.message.reply_text(content.LEAD_MAGNET_OFFER_TEXT, reply_markup=reply_markup)
+    reply_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
+    await update.message.reply_text(
+        content.with_channel_nurture(content.LEAD_MAGNET_OFFER_TEXT),
+        reply_markup=reply_markup,
+    )
 
 
 
@@ -2062,16 +2074,19 @@ async def handle_handoff_request(
         # Уведомляем пользователя
         await utils.safe_reply_text(
             update.message,
-            content.HANDOFF_ACK_TEXT,
+            content.with_channel_nurture(content.HANDOFF_ACK_TEXT, after_contact=True),
             reply_markup=_main_menu_markup(user.id),
             action="handoff_ack",
         )
         await utils.safe_reply_text(
             update.message,
             "Навигация:",
-            reply_markup=_quick_nav_markup_for(
-                lead=database.db.get_lead_by_user_id(user_data["id"]),
-                selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+            reply_markup=_with_channel_button(
+                _quick_nav_markup_for(
+                    lead=database.db.get_lead_by_user_id(user_data["id"]),
+                    selected_profile=database.db.get_user_offer_profile(user_data["id"]),
+                ),
+                prepend=True,
             ),
             action="handoff_quick_nav",
         )
