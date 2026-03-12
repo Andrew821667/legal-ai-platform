@@ -7,13 +7,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Dict, Any
 
-from sqlalchemy import select, func, extract
+from sqlalchemy import select, func, extract, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import APIUsage, MonthlyAPIStats
 import structlog
 
 logger = structlog.get_logger()
+
+_usage_tracking_schema_available: Optional[bool] = None
 
 
 # Стоимость за 1M токенов в USD (актуально на январь 2025)
@@ -120,7 +122,7 @@ async def track_api_usage(
     completion_tokens: int,
     article_id: Optional[int] = None,
     draft_id: Optional[int] = None
-) -> APIUsage:
+) -> Optional[APIUsage]:
     """
     Записать использование API в БД.
 
@@ -135,8 +137,24 @@ async def track_api_usage(
         draft_id: ID драфта (опционально)
 
     Returns:
-        Созданная запись APIUsage
+        Созданная запись APIUsage или None, если analytics tables недоступны
     """
+    global _usage_tracking_schema_available
+
+    if _usage_tracking_schema_available is not False:
+        result = await db.execute(
+            text(
+                "SELECT "
+                "to_regclass('api_usage') IS NOT NULL AS has_api_usage, "
+                "to_regclass('monthly_api_stats') IS NOT NULL AS has_monthly_api_stats"
+            )
+        )
+        row = result.mappings().one()
+        _usage_tracking_schema_available = bool(row["has_api_usage"]) and bool(row["has_monthly_api_stats"])
+
+    if not _usage_tracking_schema_available:
+        return None
+
     total_tokens = prompt_tokens + completion_tokens
     cost_usd = calculate_cost(provider, model, prompt_tokens, completion_tokens)
 
