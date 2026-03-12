@@ -45,7 +45,12 @@ async def test_notify_admin_new_lead_skips_same_origin_chat(monkeypatch: pytest.
     monkeypatch.setattr(
         helpers.database.db,
         "get_lead_by_id",
-        lambda lead_id: {"id": lead_id, "temperature": "cold", "pain_point": "Ничего не понял"},
+        lambda lead_id: {
+            "id": lead_id,
+            "temperature": "cold",
+            "pain_point": "Ничего не понял",
+            "phone": "+79092330909",
+        },
     )
     monkeypatch.setattr(helpers.database.db, "get_user_by_id", lambda user_id: None)
     monkeypatch.setattr(helpers.database.db, "create_notification", lambda *args, **kwargs: None)
@@ -71,7 +76,7 @@ async def test_notify_admin_new_lead_skips_same_origin_chat(monkeypatch: pytest.
     await helpers.notify_admin_new_lead(
         context=context,
         lead_id=7,
-        lead_data={"temperature": "cold", "pain_point": "Ничего не понял"},
+        lead_data={"temperature": "cold", "pain_point": "Ничего не понял", "phone": "+79092330909"},
         user_data={
             "id": 1,
             "telegram_id": 321681061,
@@ -82,3 +87,50 @@ async def test_notify_admin_new_lead_skips_same_origin_chat(monkeypatch: pytest.
 
     assert sent_targets == []
     assert marked == [7]
+
+
+@pytest.mark.anyio
+async def test_notify_admin_new_lead_requires_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent_targets: list[int] = []
+    marked: list[int] = []
+
+    monkeypatch.setattr(
+        helpers.database.db,
+        "get_lead_by_id",
+        lambda lead_id: {"id": lead_id, "temperature": "cold", "pain_point": "Ничего не понял"},
+    )
+    monkeypatch.setattr(helpers.database.db, "get_user_by_id", lambda user_id: None)
+    monkeypatch.setattr(helpers.database.db, "create_notification", lambda *args, **kwargs: None)
+    monkeypatch.setattr(helpers.database.db, "mark_lead_notification_sent", lambda lead_id: marked.append(lead_id))
+    monkeypatch.setattr(
+        helpers.admin_interface.admin_interface,
+        "get_lead_snapshot_by_legacy_id",
+        lambda lead_id: {},
+    )
+    monkeypatch.setattr(helpers.core_api_bridge, "enabled", False)
+    monkeypatch.setattr(helpers.config, "LEADS_CHAT_ID", 777777)
+    monkeypatch.setattr(helpers.config, "ADMIN_TELEGRAM_ID", 888888)
+    monkeypatch.setattr(helpers.config, "SMTP_USER", "")
+    monkeypatch.setattr(helpers.config, "SMTP_PASSWORD", "")
+
+    class _FakeBot:
+        async def send_message(self, chat_id, text):
+            sent_targets.append(chat_id)
+            return SimpleNamespace()
+
+    context = SimpleNamespace(bot=_FakeBot())
+
+    await helpers.notify_admin_new_lead(
+        context=context,
+        lead_id=8,
+        lead_data={"temperature": "cold", "pain_point": "Ничего не понял"},
+        user_data={
+            "id": 1,
+            "telegram_id": 321681061,
+            "username": "LegalAI_Popov_Andrew",
+            "first_name": "Andrew",
+        },
+    )
+
+    assert sent_targets == []
+    assert marked == []

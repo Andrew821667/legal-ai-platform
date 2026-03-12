@@ -27,6 +27,7 @@ class LeadQualifier:
             ID лида или None
         """
         try:
+            existing_lead = self.db.get_lead_by_user_id(user_id)
             # Подготовка данных для сохранения
             lead_data = {}
 
@@ -81,6 +82,22 @@ class LeadQualifier:
             # Интересующая услуга
             if extracted_data.get('interested_service'):
                 lead_data['notes'] = f"Интересует: {extracted_data['interested_service']}"
+
+            has_contact = bool(lead_data.get('email') or lead_data.get('phone'))
+            existing_has_contact = bool(existing_lead and (existing_lead.get('email') or existing_lead.get('phone')))
+
+            if not existing_lead and not has_contact:
+                logger.info(
+                    "Skipping lead creation for user %s: no contact info yet",
+                    user_id,
+                )
+                return None
+
+            if not lead_data and existing_lead:
+                return existing_lead.get("id")
+
+            if not has_contact and not existing_has_contact and not existing_lead:
+                return None
 
             # Сохраняем или обновляем лид
             lead_id = self.db.create_or_update_lead(user_id, lead_data)

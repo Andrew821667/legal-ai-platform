@@ -213,6 +213,18 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 )
         core_snapshot = admin_interface.admin_interface.get_lead_snapshot_by_legacy_id(lead_id) or {}
         lead = {**legacy_lead, **core_snapshot}
+        has_contact = bool(
+            lead.get("email")
+            or lead.get("phone")
+            or lead_data.get("email")
+            or lead_data.get("phone")
+        )
+        if not has_contact:
+            logger.info(
+                "Skipping admin lead notification for lead %s: contact info is missing",
+                lead_id,
+            )
+            return
         logger.info(
             "Lead %s notification: temperature=%s (from lead_data: %s)",
             lead_id,
