@@ -220,9 +220,21 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
     if not articles:
         return "📭 За неделю релевантных публикаций пока не найдено."
 
+    source_limit = max(
+        3,
+        int(getattr(settings, "reader_weekly_digest_source_limit", 5) or 5),
+    )
+    preview_chars = max(
+        120,
+        int(getattr(settings, "reader_weekly_digest_source_preview_chars", 180) or 180),
+    )
+    prompt_articles = articles[:source_limit]
     source_lines = []
-    for idx, article in enumerate(articles[:8], 1):
-        preview_body = _trim_text(_dedupe_title_prefix(article.draft.title, article.draft.content), 260)
+    for idx, article in enumerate(prompt_articles, 1):
+        preview_body = _trim_text(
+            _dedupe_title_prefix(article.draft.title, article.draft.content),
+            preview_chars,
+        )
         source_lines.append(
             f"{idx}) {_trim_text(article.draft.title, 120)}\n"
             f"{preview_body}"
@@ -249,7 +261,7 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
                             "1) Главный тренд недели (1-2 предложения)\n"
                             "2) Что важно юристу/руководителю (3 пункта)\n"
                             "3) Какие внедрения имеет смысл пилотировать (2 пункта)\n"
-                            "Пиши только по-русски, без Markdown-таблиц и без ссылок."
+                            "Пиши только по-русски, коротко и предметно, без Markdown-таблиц и без ссылок."
                         ),
                     },
                     {
@@ -257,8 +269,8 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
                         "content": f"Материалы за неделю:\n\n{source_blob}",
                     },
                 ],
-                max_tokens=650,
-                temperature=0.35,
+                max_tokens=480,
+                temperature=0.25,
                 operation="reader_weekly_digest",
                 db=db,
             ),

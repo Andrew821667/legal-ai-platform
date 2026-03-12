@@ -220,7 +220,7 @@ async def _load_control() -> dict[str, object]:
 def _llm_available() -> bool:
     provider = (settings.default_llm_provider or "deepseek").strip().lower()
     if provider == "deepseek":
-        return bool((settings.deepseek_api_key or "").strip())
+        return bool(settings.resolved_deepseek_api_key)
     if provider == "openai":
         return bool((settings.openai_api_key or "").strip())
     if provider == "perplexity":

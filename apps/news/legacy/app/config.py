@@ -101,6 +101,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = Field(default="")
+    openai_base_url: str = Field(default="")
     openai_model_analysis: str = Field(default="gpt-4o-mini")
     openai_model_critical: str = Field(default="gpt-4o")
     openai_tts_model: str = Field(default="tts-1")
@@ -121,6 +122,7 @@ class Settings(BaseSettings):
     deepseek_max_tokens: int = Field(default=3500)
     deepseek_temperature: float = Field(default=0.7)
     deepseek_base_url: str = Field(default="https://api.deepseek.com")
+    news_model: str = Field(default="")
 
     # LLM Provider Selection
     default_llm_provider: str = Field(default="deepseek")  # openai, perplexity, or deepseek
@@ -159,6 +161,9 @@ class Settings(BaseSettings):
     reader_perf_log_all_updates: bool = Field(default=False)
     reader_perf_slow_update_ms: int = Field(default=1200)
     reader_perf_slow_span_ms: int = Field(default=250)
+    reader_weekly_digest_timeout_seconds: float = Field(default=22.0)
+    reader_weekly_digest_source_limit: int = Field(default=5)
+    reader_weekly_digest_source_preview_chars: int = Field(default=180)
 
     # Telegram Client API (для сбора новостей из каналов)
     telegram_api_id: int = Field(default=0)
@@ -174,6 +179,44 @@ class Settings(BaseSettings):
         if not self.telegram_channels:
             return []
         return [ch.strip() for ch in self.telegram_channels.split(",") if ch.strip()]
+
+    @property
+    def openai_base_url_normalized(self) -> str:
+        return (self.openai_base_url or "").strip().rstrip("/")
+
+    @property
+    def uses_deepseek_via_openai_base(self) -> bool:
+        return "deepseek" in self.openai_base_url_normalized.lower()
+
+    @property
+    def resolved_openai_model_analysis(self) -> str:
+        candidate = (self.news_model or "").strip()
+        if candidate and self.openai_base_url_normalized:
+            return candidate
+        return (self.openai_model_analysis or "gpt-4o-mini").strip()
+
+    @property
+    def resolved_deepseek_api_key(self) -> str:
+        candidate = (self.deepseek_api_key or "").strip()
+        if candidate:
+            return candidate
+        if self.uses_deepseek_via_openai_base:
+            return (self.openai_api_key or "").strip()
+        return ""
+
+    @property
+    def resolved_deepseek_model(self) -> str:
+        candidate = (self.news_model or "").strip()
+        if candidate and (self.uses_deepseek_via_openai_base or "deepseek" in candidate.lower()):
+            return candidate
+        return (self.deepseek_model or "deepseek-chat").strip()
+
+    @property
+    def resolved_deepseek_base_url(self) -> str:
+        candidate = self.openai_base_url_normalized
+        if candidate and self.uses_deepseek_via_openai_base:
+            return candidate
+        return (self.deepseek_base_url or "https://api.deepseek.com").strip().rstrip("/")
 
     # News Fetcher
     fetcher_enabled: bool = Field(default=True)

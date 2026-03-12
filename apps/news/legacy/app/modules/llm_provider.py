@@ -29,6 +29,48 @@ class LLMProvider:
         self._openai_client = None
         self._deepseek_client = None
 
+    async def _track_usage_safe(
+        self,
+        *,
+        db: Optional[AsyncSession],
+        provider: str,
+        model: str,
+        operation: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        article_id: Optional[int] = None,
+        draft_id: Optional[int] = None,
+    ) -> None:
+        """Track API usage without breaking user-facing generation on legacy DB drift."""
+        if db is None:
+            return
+
+        try:
+            from app.modules.api_usage_tracker import track_api_usage
+
+            await track_api_usage(
+                db=db,
+                provider=provider,
+                model=model,
+                operation=operation,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                article_id=article_id,
+                draft_id=draft_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "api_usage_tracking_skipped",
+                provider=provider,
+                model=model,
+                operation=operation,
+                error=str(exc),
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                logger.warning("api_usage_tracking_rollback_failed", provider=provider, operation=operation)
+
     async def generate_completion(
         self,
         messages: List[Dict[str, str]],
@@ -75,11 +117,16 @@ class LLMProvider:
     ) -> str:
         """Generate completion using OpenAI API."""
         if self._openai_client is None:
-            self._openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+            client_kwargs = {"api_key": settings.openai_api_key}
+            if settings.openai_base_url_normalized:
+                client_kwargs["base_url"] = settings.openai_base_url_normalized
+            self._openai_client = AsyncOpenAI(**client_kwargs)
+
+        model_name = settings.resolved_openai_model_analysis
 
         try:
             response = await self._openai_client.chat.completions.create(
-                model=settings.openai_model_analysis,
+                model=model_name,
                 messages=messages,
                 temperature=temperature or settings.openai_temperature,
                 max_tokens=max_tokens or settings.openai_max_tokens
@@ -87,22 +134,19 @@ class LLMProvider:
 
             result = response.choices[0].message.content.strip()
 
-            # Track API usage
-            if db is not None:
-                from app.modules.api_usage_tracker import track_api_usage
-                await track_api_usage(
-                    db=db,
-                    provider="openai",
-                    model=settings.openai_model_analysis,
-                    operation=operation,
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    article_id=article_id,
-                    draft_id=draft_id
-                )
+            await self._track_usage_safe(
+                db=db,
+                provider="openai",
+                model=model_name,
+                operation=operation,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                article_id=article_id,
+                draft_id=draft_id,
+            )
 
             logger.info("openai_completion_generated",
-                       model=settings.openai_model_analysis,
+                       model=model_name,
                        tokens=response.usage.total_tokens)
             return result
 
@@ -158,11 +202,9 @@ class LLMProvider:
                 data = response.json()
                 result = data["choices"][0]["message"]["content"].strip()
 
-                # Track API usage
                 usage = data.get("usage", {})
-                if db is not None and usage:
-                    from app.modules.api_usage_tracker import track_api_usage
-                    await track_api_usage(
+                if usage:
+                    await self._track_usage_safe(
                         db=db,
                         provider="perplexity",
                         model=settings.perplexity_model,
@@ -170,7 +212,7 @@ class LLMProvider:
                         prompt_tokens=usage.get("prompt_tokens", 0),
                         completion_tokens=usage.get("completion_tokens", 0),
                         article_id=article_id,
-                        draft_id=draft_id
+                        draft_id=draft_id,
                     )
 
                 logger.info("perplexity_completion_generated",
@@ -215,14 +257,19 @@ class LLMProvider:
     ) -> str:
         """Generate completion using DeepSeek API (OpenAI-compatible)."""
         if self._deepseek_client is None:
+            api_key = settings.resolved_deepseek_api_key
+            if not api_key:
+                raise RuntimeError("DeepSeek API key is not configured")
             self._deepseek_client = AsyncOpenAI(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url
+                api_key=api_key,
+                base_url=settings.resolved_deepseek_base_url
             )
+
+        model_name = settings.resolved_deepseek_model
 
         try:
             response = await self._deepseek_client.chat.completions.create(
-                model=settings.deepseek_model,
+                model=model_name,
                 messages=messages,
                 temperature=temperature or settings.deepseek_temperature,
                 max_tokens=max_tokens or settings.deepseek_max_tokens
@@ -230,22 +277,19 @@ class LLMProvider:
 
             result = response.choices[0].message.content.strip()
 
-            # Track API usage
-            if db is not None:
-                from app.modules.api_usage_tracker import track_api_usage
-                await track_api_usage(
-                    db=db,
-                    provider="deepseek",
-                    model=settings.deepseek_model,
-                    operation=operation,
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    article_id=article_id,
-                    draft_id=draft_id
-                )
+            await self._track_usage_safe(
+                db=db,
+                provider="deepseek",
+                model=model_name,
+                operation=operation,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                article_id=article_id,
+                draft_id=draft_id,
+            )
 
             logger.info("deepseek_completion_generated",
-                       model=settings.deepseek_model,
+                       model=model_name,
                        tokens=response.usage.total_tokens)
             return result
 

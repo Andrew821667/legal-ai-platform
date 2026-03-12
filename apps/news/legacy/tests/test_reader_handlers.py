@@ -1,7 +1,10 @@
+import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.bot import reader_handlers
 from app.bot.reader_handlers import (
+    _build_weekly_digest_text,
     _build_article_detail_text,
     _normalize_reader_text,
     get_article_keyboard,
@@ -59,3 +62,21 @@ def test_build_article_detail_text_truncates_and_sanitizes() -> None:
 def test_reader_publication_channel_post_url() -> None:
     article = _publication(channel_username="@legal_ai_pro", telegram_message_id=777)
     assert article.channel_post_url == "https://t.me/legal_ai_pro/777"
+
+
+def test_build_weekly_digest_text_uses_llm_summary(monkeypatch) -> None:
+    class _StubLLM:
+        async def generate_completion(self, **kwargs):
+            assert kwargs["max_tokens"] == 480
+            return "Главный тренд недели: компании проверяют полезные AI-сценарии."
+
+    monkeypatch.setattr(reader_handlers.settings, "reader_weekly_digest_timeout_seconds", 22, raising=False)
+    monkeypatch.setattr(reader_handlers.settings, "reader_weekly_digest_source_limit", 5, raising=False)
+    monkeypatch.setattr(reader_handlers.settings, "reader_weekly_digest_source_preview_chars", 180, raising=False)
+    monkeypatch.setattr("app.modules.llm_provider.get_llm_provider", lambda provider: _StubLLM())
+
+    text = asyncio.run(_build_weekly_digest_text([_publication()], db=None))
+
+    assert "📆 <b>Недельный дайджест для вас</b>" in text
+    assert "Главный тренд недели" in text
+    assert "Ниже добавил карточки ключевых публикаций." in text
