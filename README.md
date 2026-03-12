@@ -15,6 +15,12 @@
 Документация по анализу договоров:
 - `docs/contract-analyzer.md` — алгоритм и формат результата `contract-worker`.
 
+Актуальные source-of-truth документы:
+- `docs/README.md` — карта документации и разделение между текущими документами и архивом;
+- `docs/project-control-checklist.md` — текущий статус и остаток работ;
+- `docs/architecture.md` — runtime-архитектура;
+- `docs/runbook.md` — эксплуатация и деплой.
+
 ## Быстрый старт (dev)
 ```bash
 uv sync

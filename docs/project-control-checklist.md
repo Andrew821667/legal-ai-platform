@@ -72,7 +72,7 @@
 - `[x]` Dependabot PR приведены в стабильное состояние.
 - `[x]` Docker images получают immutable tag по `github.sha`, а не только `latest`.
 - `[x]` В `.gitignore` добавлен `venv/`.
-- `[~]` Нужен отдельный проход по README/docs, чтобы убрать все устаревшие dev/security инструкции; критичные quickstart/demo хвосты уже почищены.
+- `[x]` README/docs разделены на source-of-truth и archival layer; карта актуальной документации зафиксирована в [docs/README.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/README.md), критичные quickstart/demo/security хвосты почищены, а исторические audit/stage документы больше не masquerade как текущая инструкция.
 - `[x]` Добавлен опциональный CI-smoke внешнего `Contract_AI_System` entrypoint через repo variables `CONTRACT_AI_SYSTEM_SMOKE_URL` / `CONTRACT_AI_SYSTEM_EXPECTED_MARKER`; он не подменяет отдельный CI репозитория `Contract-AI-System-`.
 
 ## 6. Product / UX / позиционирование
