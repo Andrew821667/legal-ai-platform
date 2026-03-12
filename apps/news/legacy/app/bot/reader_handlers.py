@@ -203,6 +203,18 @@ def _trim_text(text: str, limit: int = 360) -> str:
     return cleaned[:limit].rstrip() + "..."
 
 
+def _dedupe_title_prefix(title: str | None, body: str | None) -> str:
+    normalized_title = _normalize_reader_text(title, multiline=False)
+    normalized_body = _normalize_reader_text(body, multiline=True)
+    if not normalized_title or not normalized_body:
+        return normalized_body
+    if normalized_body.lower().startswith(normalized_title.lower()):
+        trimmed = normalized_body[len(normalized_title):].lstrip(" .,:;!-")
+        if trimmed:
+            return trimmed
+    return normalized_body
+
+
 async def _build_weekly_digest_text(articles: list[ReaderPublication], db: AsyncSession) -> str:
     """Build weekly digest text via LLM with deterministic fallback."""
     if not articles:
@@ -210,9 +222,10 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
 
     source_lines = []
     for idx, article in enumerate(articles[:8], 1):
+        preview_body = _trim_text(_dedupe_title_prefix(article.draft.title, article.draft.content), 260)
         source_lines.append(
-            f"{idx}) {article.draft.title}\n"
-            f"{_trim_text(article.draft.content, 260)}"
+            f"{idx}) {_trim_text(article.draft.title, 120)}\n"
+            f"{preview_body}"
         )
     source_blob = "\n\n".join(source_lines)
 
@@ -264,9 +277,10 @@ async def _build_weekly_digest_text(articles: list[ReaderPublication], db: Async
     # Fallback if LLM unavailable
     lines = []
     for idx, article in enumerate(articles[:6], 1):
+        preview_body = _trim_text(_dedupe_title_prefix(article.draft.title, article.draft.content), 170)
         lines.append(
             f"{idx}. <b>{escape(_trim_text(article.draft.title, 110))}</b>\n"
-            f"{escape(_trim_text(article.draft.content, 170))}"
+            f"{escape(preview_body)}"
         )
     return (
         "📆 <b>Недельный дайджест для вас</b>\n\n"
@@ -2396,9 +2410,10 @@ async def provide_personalized_digest(callback: CallbackQuery, db: AsyncSession)
 
     for i, article in enumerate(personalized_articles[:3], 1):
         if article.draft:
+            preview_body = _trim_text(_dedupe_title_prefix(article.draft.title, article.draft.content), 100)
             digest_blocks.append(
                 f"{i}. <b>{_safe_html_text(article.draft.title, limit=60, multiline=False)}</b>\n"
-                f"   {_safe_html_text(article.draft.content, limit=100, multiline=False)}"
+                f"   {escape(preview_body)}"
             )
 
     digest_blocks.append(
