@@ -1,6 +1,6 @@
 # Contract AI Entrypoints
 
-Обновлено: 2026-03-11
+Обновлено: 2026-03-12
 
 Цель:
 - иметь инвентарь точек входа из `legal-ai-platform` во внешний `Contract_AI_System`;
@@ -43,3 +43,16 @@
 1. Что внешний URL реально доступен с того устройства, где пользователь кликает.
 2. Что у action-кнопок нет рассинхрона с copy на лендингах и в боте.
 3. Что при недоступности внешнего модуля пользователь все равно может уйти в консультацию/пилот, а не в тупик.
+
+## Опциональная CI-проверка
+
+Для репозитория `legal-ai-platform` можно включить легкий smoke внешнего entrypoint в GitHub Actions.
+
+Нужные repo variables:
+- `CONTRACT_AI_SYSTEM_SMOKE_URL`
+- `CONTRACT_AI_SYSTEM_EXPECTED_MARKER` — необязательно
+
+Логика:
+- если `CONTRACT_AI_SYSTEM_SMOKE_URL` не задан, job пропускается;
+- если задан, CI проверяет, что внешний entrypoint отвечает `2xx`;
+- если задан `CONTRACT_AI_SYSTEM_EXPECTED_MARKER`, CI дополнительно ищет этот маркер в ответе.

@@ -10,10 +10,10 @@ import database
 import utils
 from telegram import Update
 from telegram.ext import ContextTypes
-from handlers.helpers import extract_email, send_lead_magnet_email
-from handlers.markup import consultation_contact_markup as _consultation_contact_markup
-from handlers.user_cta_actions import handle_handoff_request
-from handlers.user_message_helpers import (
+from .helpers import extract_email, send_lead_magnet_email
+from .markup import consultation_contact_markup as _consultation_contact_markup
+from .user_cta_actions import handle_handoff_request
+from .user_message_helpers import (
     build_new_phone_lead_payload as _build_new_phone_lead_payload,
     normalize_magnet_type as _normalize_magnet_type,
 )

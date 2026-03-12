@@ -18,10 +18,10 @@ import prompts
 import security
 import utils
 from config import get_config
-from handlers.helpers import notify_admin_new_lead
-from handlers.markup import consultation_cta_markup as _consultation_cta_markup
-from handlers.user_cta_actions import offer_lead_magnet
-from handlers.user_message_helpers import (
+from .helpers import notify_admin_new_lead
+from .markup import consultation_cta_markup as _consultation_cta_markup
+from .user_cta_actions import offer_lead_magnet
+from .user_message_helpers import (
     append_profile_name_context as _append_profile_name_context,
     schedule_typing_indicator as _schedule_typing_indicator,
 )

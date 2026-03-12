@@ -14,7 +14,7 @@ import database
 import security
 import utils
 from config import get_config
-from handlers.constants import ADMIN_CLEANUP_MENU
+from .constants import ADMIN_CLEANUP_MENU
 
 config = get_config()
 logger = logging.getLogger(__name__)

@@ -45,6 +45,10 @@
 - `GET /health` — быстрый liveness для Caddy/Docker/monitoring (вне version prefix).
 - `GET /health/detailed` — расширенный health для инфраструктуры/мониторинга (public, вне version prefix).
 - `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
+- `GET /api/v1/special-consultations/products` — каталог специальных платных консультационных форматов.
+- `POST /api/v1/special-consultations/orders` — создание заказа на special-format поверх бесплатного lead flow.
+- `POST /api/v1/special-consultations/orders/{order_id}/payments` — создание payment transaction / checkout-контекста.
+- `POST /api/v1/special-consultations/payments/events` — provider-neutral reconcile вход для будущих webhook-адаптеров.
 - `GET /api/v1/contract-jobs/{job_id}` — получение статуса конкретной задачи (scope `bot|worker|admin`).
 - `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
 - `GET /api/v1/contract-jobs/ops-overview` — единый операционный обзор (summary + sample задач + последние audit-события).

@@ -14,8 +14,8 @@ import content
 import database
 import utils
 from config import get_config
-from handlers.helpers import notify_admin_new_lead
-from handlers.markup import consultation_contact_markup
+from .helpers import notify_admin_new_lead
+from .markup import consultation_contact_markup
 
 logger = logging.getLogger(__name__)
 config = get_config()

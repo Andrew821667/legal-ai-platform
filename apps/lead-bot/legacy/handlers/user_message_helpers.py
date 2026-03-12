@@ -12,7 +12,7 @@ import database
 import utils
 from telegram.error import TelegramError
 from telegram_ui import normalize_button_text
-from handlers.helpers import extract_email
+from .helpers import extract_email
 
 logger = logging.getLogger(__name__)
 

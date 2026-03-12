@@ -3,7 +3,7 @@
 Монорепозиторий платформы лидогенерации Legal AI.
 
 ## Компоненты
-- `apps/core-api` — единый backend (FastAPI + Postgres)
+- `apps/core-api` — единый backend (FastAPI + Postgres), включая контуры лидов, contract jobs и `special paid consultation` orders/payments
 - `apps/lead-bot` — Telegram-бот захвата лидов
 - `apps/news` — генератор, паблишер и admin-бот новостей
 - `apps/news/legacy` — reader-бот канала (персонализация/поиск/сохранённое)
@@ -24,6 +24,7 @@ docker compose -f infra/compose/docker-compose.dev.yml up --build
 Важно:
 - после любого изменения Python-зависимостей в workspace-пакетах нужно регенерировать корневой `uv.lock` командой `uv lock`;
 - для `apps/lead-bot` это критично: `python-telegram-bot[job-queue]` ставится через `apps/lead-bot/pyproject.toml`, а не через legacy `requirements.txt`;
+- `special paid consultation` живет в `core-api` как отдельный продуктовый слой и не заменяет бесплатную консультацию по умолчанию;
 - production-deploy не пересобирает `lead-bot` автоматически, потому что в `infra/compose/docker-compose.prod.yml` используется готовый образ `LEAD_BOT_IMAGE`.
 - если менялись migration/модели `apps/core-api`, сначала нужно обновить `CORE_API_IMAGE`, потом выполнить Alembic миграции, и только после этого перезапускать `lead-bot`;
 - `infra/scripts/deploy.sh` теперь делает это в правильном порядке: `docker compose pull` -> `alembic upgrade head` -> restart сервисов.

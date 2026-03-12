@@ -8,19 +8,19 @@ import database
 import utils
 from config import get_config
 from telegram_ui import normalize_button_text
-from handlers.constants import ADMIN_PANEL_MENU
-from handlers.markup import (
+from .constants import ADMIN_PANEL_MENU
+from .markup import (
     consultation_contact_markup as _consultation_contact_markup,
     main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     personal_mode_markup as _personal_mode_markup,
     workspace_markup_for as _workspace_markup_for,
 )
-from handlers.user_commands import (
+from .user_commands import (
     _pdn_consent_prompt_text,
     _should_require_pdn_consent,
 )
-from handlers.user_message_helpers import looks_like_plain_greeting, looks_like_return_to_bot
+from .user_message_helpers import looks_like_plain_greeting, looks_like_return_to_bot
 
 config = get_config()
 

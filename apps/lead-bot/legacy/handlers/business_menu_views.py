@@ -5,15 +5,15 @@ from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup
 import content
 import database
 from config import get_config
-from handlers.callback_flows import build_client_profile_text as _build_client_profile_text
-from handlers.constants import ADMIN_MENU, LEAD_MAGNET_MENU, MAIN_MENU, append_inline_url_row
-from handlers.markup import (
+from .callback_flows import build_client_profile_text as _build_client_profile_text
+from .constants import ADMIN_MENU, LEAD_MAGNET_MENU, MAIN_MENU, append_inline_url_row
+from .markup import (
     documents_panel_markup as _documents_panel_markup,
     documents_panel_text as _documents_panel_text,
     offer_profile_markup as _offer_profile_markup,
     with_channel_button as _with_channel_button,
 )
-from handlers.business_menu_support import BusinessMenuResponder, BusinessMenuState
+from .business_menu_support import BusinessMenuResponder, BusinessMenuState
 
 config = get_config()
 

@@ -1,6 +1,6 @@
 # Project Control Checklist
 
-Обновлено: 2026-03-11
+Обновлено: 2026-03-12
 
 Статусы:
 - `[x]` сделано и проверено
@@ -40,8 +40,8 @@
 - `[x]` Legacy runtime-модули переведены на cached config singleton вместо множественных `Config()` на импорт.
 - `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще можно упростить, но уже снята основная перегрузка первого касания: welcome/workspace тексты сокращены, а первый вход не через `/start` и простые приветствия больше не отдают два плотных сообщения подряд, а сводятся к одному entry-screen с быстрым маршрутом.
-- `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `handlers/callback_flows.py`, `handlers/business_menu_support.py`, `handlers/business_menu_views.py`, `handlers/business_menu_contact.py`, `handlers/business_menu_callbacks.py`, `handlers/cleanup_callbacks.py`, `handlers/user_commands.py`, `handlers/user_admin_lookup.py`, `handlers/user_message_helpers.py`, `handlers/user_cta_actions.py`, `handlers/user_non_text.py`, `handlers/user_profile_edit.py`, `handlers/user_routing.py`, `handlers/user_ai_response.py`, `handlers/user_lead_flow.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, `database_users.py`, `database_chat_state.py`, `database_schema.py`, `database_facade.py`; `database.py` сокращен до ~210 строк как базовый runtime/core-sync фасад, `callbacks.py` — до ~25 строк как dispatcher entrypoint, `business_menu_callbacks.py` — до ~150 строк, `user.py` — до ~280 строк. Остался уже не giant-file долг, а финальная шлифовка legacy boundary.
-- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок, cleanup и secondary callback flows вынесены из `callbacks.py`, `business_menu` разделен на support/views/contact dispatcher, командный слой, admin lookup, message helpers, CTA actions, non-text/profile-edit, routing, AI-response и lead-flow слой вынесены из `user.py`, `database.py` превращен в тонкий runtime/core-sync фасад, `handlers/__init__.py` переведен в lazy compatibility shim вместо eager god-import, `handlers/common.py` очищен до реальных runtime-зависимостей. Осталась финальная шлифовка boundary-правил и внутренних импортов, а не крупный structural debt.
+- `[x]` Giant files (`database.py`, `callbacks.py`, `user.py`) разрезаны до узких модулей; вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `handlers/callback_flows.py`, `handlers/business_menu_support.py`, `handlers/business_menu_views.py`, `handlers/business_menu_contact.py`, `handlers/business_menu_callbacks.py`, `handlers/cleanup_callbacks.py`, `handlers/user_commands.py`, `handlers/user_admin_lookup.py`, `handlers/user_message_helpers.py`, `handlers/user_cta_actions.py`, `handlers/user_non_text.py`, `handlers/user_profile_edit.py`, `handlers/user_routing.py`, `handlers/user_ai_response.py`, `handlers/user_lead_flow.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, `database_users.py`, `database_chat_state.py`, `database_schema.py`, `database_facade.py`; `database.py` сокращен до ~210 строк как базовый runtime/core-sync фасад, `callbacks.py` — до ~25 строк как dispatcher entrypoint, `business_menu_callbacks.py` — до ~150 строк, `user.py` — до ~280 строк.
+- `[x]` Import graph legacy-пакета дочищен: прямая связка `callbacks -> user` убрана, admin/runtime блок, cleanup и secondary callback flows вынесены из `callbacks.py`, `business_menu` разделен на support/views/contact dispatcher, командный слой, admin lookup, message helpers, CTA actions, non-text/profile-edit, routing, AI-response и lead-flow вынесены из `user.py`, `database.py` превращен в тонкий runtime/core-sync фасад, `handlers/__init__.py` переведен в lazy compatibility shim, а внутренние импорты `handlers/*` переведены на относительные package-imports.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
@@ -53,7 +53,7 @@
 - `[x]` Исправлены тавтологичные футеры в reader-текстах.
 - `[x]` Обычные news `draft/review` теперь чистятся по retention.
 - `[x]` `weekly_review` живет отдельно и не режется как обычная новость.
-- `[~]` Проверить, что для всех старых публикаций есть backfill данных на `source_url/channel_post_url`, если нужны кнопки открытия оригинала.
+- `[x]` Проверено, что для опубликованных записей в `scheduled_posts` есть `source_url` и channel-post metadata; дополнительный backfill для текущей базы не требуется.
 
 ## 4. Web / Contract AI Integration Boundary
 - `[x]` Зафиксировано, что реальный `Contract_AI_System` — отдельный репозиторий и внешний модуль относительно `legal-ai-platform`.
@@ -73,18 +73,18 @@
 - `[x]` Docker images получают immutable tag по `github.sha`, а не только `latest`.
 - `[x]` В `.gitignore` добавлен `venv/`.
 - `[~]` Нужен отдельный проход по README/docs, чтобы убрать все устаревшие dev/security инструкции; критичные quickstart/demo хвосты уже почищены.
-- `[ ]` При необходимости расширить CI на интеграционные проверки внешнего контрактного контура, не подменяя этим отдельный CI репозитория `Contract-AI-System-`.
+- `[x]` Добавлен опциональный CI-smoke внешнего `Contract_AI_System` entrypoint через repo variables `CONTRACT_AI_SYSTEM_SMOKE_URL` / `CONTRACT_AI_SYSTEM_EXPECTED_MARKER`; он не подменяет отдельный CI репозитория `Contract-AI-System-`.
 
 ## 6. Product / UX / позиционирование
 - `[x]` Бесплатная консультация и специальные платные форматы концептуально разведены.
 - `[x]` Ценовая и продуктовая модель между `lead-bot`, `web` и внешним `Contract_AI_System` синхронизирована на уровне integration boundary; полная унификация самого модуля должна вестись в отдельном репозитории.
 - `[x]` Якорные продукты доведены до реальных текстов и маршрутов в `web` и `lead-bot`.
-- `[ ]` Подготовить продуктовый контур для специальных платных консультаций:
+- `[x]` Подготовить продуктовый контур для специальных платных консультаций:
   - products
   - orders
   - payments
   - webhook/provider flow
-- `[ ]` Решить, где и как системно показывать special paid consultation без размывания бесплатного входа.
+- `[x]` Решить, где и как системно показывать special paid consultation без размывания бесплатного входа; placement policy зафиксирован в [special-paid-consultation-placement.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/special-paid-consultation-placement.md).
 
 ## 7. Compliance и операционная модель
 - `[x]` Тексты consent/disclaimer стали ближе к реальной модели обработки данных.
@@ -109,7 +109,7 @@
 - `[x]` Secret inventory + rotation checklist.
 - `[x]` Web disclaimer в системных точках интерфейса.
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
-- `[~]` Legacy refactor: split files + remove wildcard imports + config singleton. Основной structural debt уже снят; остаются локальные boundary/import-polish задачи.
+- `[x]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[x]` Отдельный compliance-review по реальной операционной схеме.
 - `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour; runtime/startup warnings и отдельные checklists уже добавлены, ручной regulatory контур остается.
 

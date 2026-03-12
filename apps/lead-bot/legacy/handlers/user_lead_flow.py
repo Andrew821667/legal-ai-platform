@@ -13,9 +13,9 @@ import content
 import database
 import funnel
 import utils
-from handlers.helpers import extract_email, notify_admin_new_lead, send_lead_magnet_email
-from handlers.user_cta_actions import handle_handoff_request
-from handlers.user_message_helpers import (
+from .helpers import extract_email, notify_admin_new_lead, send_lead_magnet_email
+from .user_cta_actions import handle_handoff_request
+from .user_message_helpers import (
     build_new_phone_lead_payload as _build_new_phone_lead_payload,
     extract_phone_candidate as _extract_phone_candidate,
     looks_like_new_topic_after_handoff as _looks_like_new_topic_after_handoff,

@@ -15,9 +15,9 @@ from config import get_config
 from telegram import InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from handlers.constants import LEAD_MAGNET_MENU
-from handlers.helpers import notify_admin_new_lead
-from handlers.markup import (
+from .constants import LEAD_MAGNET_MENU
+from .helpers import notify_admin_new_lead
+from .markup import (
     consultation_cta_markup as _consultation_cta_markup,
     main_menu_markup as _main_menu_markup,
     quick_nav_markup_for as _quick_nav_markup_for,

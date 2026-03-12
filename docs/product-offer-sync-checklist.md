@@ -146,7 +146,8 @@
   - `рабочий контур`
   - `интеграции`
   - `special paid consultation`
-- `[ ]` Привязать будущую платежную систему к special paid consultation и/или pilot orders, а не к старой SaaS-подписке по умолчанию.
+- `[x]` Базовый payment/order contour для `special paid consultation` вынесен в `core-api` как отдельный слой с catalog/orders/payments/provider-event flow.
+- `[x]` Placement policy special-format сценариев зафиксирован отдельно: [special-paid-consultation-placement.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/special-paid-consultation-placement.md).
 - `[!]` Завести отдельный backlog по самому `Contract-AI-System-` и не смешивать его с checklist этого монорепо.
 
 ## 7. Источник истины на сейчас

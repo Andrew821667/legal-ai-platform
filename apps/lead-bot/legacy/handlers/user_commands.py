@@ -15,7 +15,7 @@ from config import get_config
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from handlers.markup import (
+from .markup import (
     documents_markup as _documents_markup,
     main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
@@ -24,7 +24,7 @@ from handlers.markup import (
     transborder_consent_markup as _transborder_consent_markup,
     workspace_markup_for as _workspace_markup_for,
 )
-from handlers.start_payloads import (
+from .start_payloads import (
     PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
     _CONTRACT_START_PAYLOAD_RE,
     _READER_START_PAYLOAD_RE,

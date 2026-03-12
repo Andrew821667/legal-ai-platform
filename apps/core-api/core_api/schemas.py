@@ -13,8 +13,12 @@ from core_api.models import (
     LeadSegment,
     LeadSource,
     LeadStatus,
+    PaymentProvider,
+    PaymentTransactionStatus,
     PostFeedbackSource,
     ScheduledPostStatus,
+    SpecialConsultationOrderSource,
+    SpecialConsultationOrderStatus,
     Scope,
     UserRole,
 )
@@ -338,6 +342,137 @@ class ContractJobOut(BaseModel):
     last_error: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SpecialConsultationProductUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    currency: str = Field(default="RUB", min_length=3, max_length=3)
+    base_price_minor: int | None = Field(default=None, ge=0)
+    requires_manual_quote: bool = True
+    is_active: bool = True
+    sort_order: int = 0
+    highlights: list[str] = Field(default_factory=list)
+    fulfillment_note: str | None = None
+
+
+class SpecialConsultationProductOut(BaseModel):
+    code: str
+    created_at: datetime
+    updated_at: datetime
+    name: str
+    description: str | None
+    currency: str
+    base_price_minor: int | None
+    requires_manual_quote: bool
+    is_active: bool
+    sort_order: int
+    highlights: list[str]
+    fulfillment_note: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class SpecialConsultationOrderCreate(BaseModel):
+    product_code: str = Field(min_length=1, max_length=120)
+    source: SpecialConsultationOrderSource
+    lead_id: uuid.UUID | None = None
+    lead_source: LeadSource | None = None
+    telegram_user_id: int | None = None
+    customer_name: str | None = None
+    customer_contact: str | None = None
+    customer_email: str | None = None
+    customer_phone: str | None = None
+    customer_company: str | None = None
+    request_note: str | None = None
+    amount_minor: int | None = Field(default=None, ge=0)
+    currency: str = Field(default="RUB", min_length=3, max_length=3)
+    payment_due_at: datetime | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecialConsultationOrderPatch(BaseModel):
+    status: SpecialConsultationOrderStatus | None = None
+    amount_minor: int | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    request_note: str | None = None
+    internal_note: str | None = None
+    payment_due_at: datetime | None = None
+    fulfilled_at: datetime | None = None
+    context: dict[str, Any] | None = None
+
+
+class SpecialConsultationOrderOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    lead_id: uuid.UUID | None
+    product_code: str
+    source: SpecialConsultationOrderSource
+    status: SpecialConsultationOrderStatus
+    telegram_user_id: int | None
+    customer_name: str | None
+    customer_contact: str | None
+    customer_email: str | None
+    customer_phone: str | None
+    customer_company: str | None
+    request_note: str | None
+    internal_note: str | None
+    currency: str
+    amount_minor: int | None
+    payment_due_at: datetime | None
+    paid_at: datetime | None
+    cancelled_at: datetime | None
+    fulfilled_at: datetime | None
+    context: dict[str, Any]
+
+    model_config = {"from_attributes": True}
+
+
+class SpecialConsultationPaymentCreate(BaseModel):
+    provider: PaymentProvider
+    amount_minor: int | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    provider_payment_id: str | None = Field(default=None, max_length=255)
+    external_reference: str | None = Field(default=None, max_length=255)
+    confirmation_url: str | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecialConsultationPaymentEvent(BaseModel):
+    provider: PaymentProvider
+    status: PaymentTransactionStatus
+    provider_payment_id: str | None = Field(default=None, max_length=255)
+    external_reference: str | None = Field(default=None, max_length=255)
+    order_id: uuid.UUID | None = None
+    amount_minor: int | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    confirmation_url: str | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecialConsultationPaymentOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    order_id: uuid.UUID
+    provider: PaymentProvider
+    status: PaymentTransactionStatus
+    amount_minor: int
+    currency: str
+    provider_payment_id: str | None
+    external_reference: str | None
+    confirmation_url: str | None
+    last_event_at: datetime | None
+    paid_at: datetime | None
+    raw_payload: dict[str, Any]
+
+    model_config = {"from_attributes": True}
+
+
+class SpecialConsultationPaymentEventResult(BaseModel):
+    order: SpecialConsultationOrderOut
+    payment: SpecialConsultationPaymentOut
 
 
 class ClaimRequest(BaseModel):

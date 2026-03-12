@@ -91,6 +91,31 @@ jobs:
       - run: npm ci --prefix apps/web
       - run: npm run lint --prefix apps/web
 
+  contract-ai-entrypoint-smoke:
+    if: ${{ vars.CONTRACT_AI_SYSTEM_SMOKE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check external Contract_AI_System entrypoint
+        env:
+          CONTRACT_AI_SYSTEM_SMOKE_URL: ${{ vars.CONTRACT_AI_SYSTEM_SMOKE_URL }}
+          CONTRACT_AI_SYSTEM_EXPECTED_MARKER: ${{ vars.CONTRACT_AI_SYSTEM_EXPECTED_MARKER }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          http_code="$(curl -L -sS -o "$response_file" -w '%{http_code}' "$CONTRACT_AI_SYSTEM_SMOKE_URL")"
+          case "$http_code" in
+            200|201|202|204)
+              ;;
+            *)
+              echo "Unexpected status from Contract_AI_System entrypoint: $http_code"
+              cat "$response_file"
+              exit 1
+              ;;
+          esac
+          if [ -n "${CONTRACT_AI_SYSTEM_EXPECTED_MARKER:-}" ]; then
+            grep -Fq "$CONTRACT_AI_SYSTEM_EXPECTED_MARKER" "$response_file"
+          fi
+
   # Contract_AI_System is maintained in a separate repository and validated there.
   build-and-push:
     needs:

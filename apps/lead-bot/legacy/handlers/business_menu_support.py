@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 
 import database
 import utils
-from handlers.markup import clip_for_edit as _clip_for_edit
+from .markup import clip_for_edit as _clip_for_edit
 
 
 @dataclass

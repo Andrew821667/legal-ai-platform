@@ -15,15 +15,15 @@ import funnel
 import lead_qualifier
 import utils
 from config import get_config
-from handlers.constants import ADMIN_MENU, CONSENT_PDN_MENU, MAIN_MENU
-from handlers.helpers import notify_admin_new_lead
-from handlers.markup import (
+from .constants import ADMIN_MENU, CONSENT_PDN_MENU, MAIN_MENU
+from .helpers import notify_admin_new_lead
+from .markup import (
     clip_for_edit as _clip_for_edit,
     documents_panel_markup as _documents_panel_markup,
     documents_panel_text as _documents_panel_text,
     workspace_markup_for as _workspace_markup_for,
 )
-from handlers.start_payloads import process_pending_start_payload
+from .start_payloads import process_pending_start_payload
 
 config = get_config()
 logger = logging.getLogger(__name__)

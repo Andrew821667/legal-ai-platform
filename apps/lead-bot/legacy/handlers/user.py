@@ -14,11 +14,11 @@ config = get_config()
 import utils
 import security
 import content
-from handlers.markup import (
+from .markup import (
     pdn_consent_markup as _pdn_consent_markup,
     transborder_consent_markup as _transborder_consent_markup,
 )
-from handlers.user_commands import (
+from .user_commands import (
     _is_pdn_consent_granted,
     _pdn_consent_prompt_text,
     _should_require_pdn_consent,
@@ -39,28 +39,28 @@ from handlers.user_commands import (
     transborder_consent_command,
     user_agreement_command,
 )
-from handlers.user_admin_lookup import handle_admin_lookup_input
-from handlers.user_cta_actions import (
+from .user_admin_lookup import handle_admin_lookup_input
+from .user_cta_actions import (
     handle_handoff_request,
     handle_menu_button,
     offer_lead_magnet,
 )
-from handlers.user_ai_response import process_ai_response
-from handlers.user_lead_flow import (
+from .user_ai_response import process_ai_response
+from .user_lead_flow import (
     get_lead_flow_state,
     maybe_create_new_topic_lead,
     maybe_handle_handoff_shortcuts,
     maybe_handle_pending_lead_magnet,
     maybe_handle_repeat_loop,
 )
-from handlers.user_non_text import handle_non_text_input as _handle_non_text_input
-from handlers.user_profile_edit import handle_profile_edit_input
-from handlers.user_routing import (
+from .user_non_text import handle_non_text_input as _handle_non_text_input
+from .user_profile_edit import handle_profile_edit_input
+from .user_routing import (
     maybe_handle_initial_entry,
     maybe_handle_personal_mode,
     maybe_handle_static_reply_action,
 )
-from handlers.start_payloads import process_pending_start_payload
+from .start_payloads import process_pending_start_payload
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import utils
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram_ui import normalize_button_text
-from handlers.markup import (
+from .markup import (
     main_menu_markup as _main_menu_markup,
     profile_edit_cancel_markup as _profile_edit_cancel_markup,
 )

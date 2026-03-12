@@ -46,6 +46,38 @@ class LeadStatus(str, enum.Enum):
     lost = "lost"
 
 
+class SpecialConsultationOrderSource(str, enum.Enum):
+    lead_bot = "lead_bot"
+    web = "web"
+    admin = "admin"
+
+
+class SpecialConsultationOrderStatus(str, enum.Enum):
+    requested = "requested"
+    awaiting_quote = "awaiting_quote"
+    awaiting_payment = "awaiting_payment"
+    paid = "paid"
+    fulfilled = "fulfilled"
+    cancelled = "cancelled"
+    refunded = "refunded"
+
+
+class PaymentProvider(str, enum.Enum):
+    manual = "manual"
+    yookassa = "yookassa"
+    telegram = "telegram"
+
+
+class PaymentTransactionStatus(str, enum.Enum):
+    created = "created"
+    pending = "pending"
+    requires_action = "requires_action"
+    paid = "paid"
+    failed = "failed"
+    cancelled = "cancelled"
+    refunded = "refunded"
+
+
 class ScheduledPostStatus(str, enum.Enum):
     draft = "draft"
     review = "review"
@@ -198,6 +230,140 @@ class Lead(Base):
         ),
         Index("ix_leads_status", "status"),
         Index("ix_leads_temperature", "temperature"),
+    )
+
+
+class SpecialConsultationProduct(Base):
+    __tablename__ = "special_consultation_products"
+
+    code: Mapped[str] = mapped_column(String(120), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default=sa_text("'RUB'"))
+    base_price_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requires_manual_quote: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=sa_text("true")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=sa_text("true"))
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    highlights: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=sa_text("'[]'::jsonb")
+    )
+    fulfillment_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_special_consultation_products_active_sort", "is_active", "sort_order"),
+    )
+
+
+class SpecialConsultationOrder(Base):
+    __tablename__ = "special_consultation_orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True)
+    product_code: Mapped[str] = mapped_column(
+        String(120), ForeignKey("special_consultation_products.code"), nullable=False
+    )
+    source: Mapped[SpecialConsultationOrderSource] = mapped_column(
+        Enum(SpecialConsultationOrderSource, name="special_consultation_order_source_enum"),
+        nullable=False,
+    )
+    status: Mapped[SpecialConsultationOrderStatus] = mapped_column(
+        Enum(SpecialConsultationOrderStatus, name="special_consultation_order_status_enum"),
+        nullable=False,
+        default=SpecialConsultationOrderStatus.requested,
+        server_default=sa_text("'requested'"),
+    )
+    telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_contact: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_company: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default=sa_text("'RUB'"))
+    amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payment_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    context: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb")
+    )
+
+    __table_args__ = (
+        Index("ix_special_consultation_orders_created", "created_at"),
+        Index("ix_special_consultation_orders_status_created", "status", "created_at"),
+        Index(
+            "ix_special_consultation_orders_lead",
+            "lead_id",
+            postgresql_where=sa_text("lead_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_special_consultation_orders_telegram_user_id",
+            "telegram_user_id",
+            postgresql_where=sa_text("telegram_user_id IS NOT NULL"),
+        ),
+    )
+
+
+class SpecialConsultationPayment(Base):
+    __tablename__ = "special_consultation_payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("special_consultation_orders.id"), nullable=False
+    )
+    provider: Mapped[PaymentProvider] = mapped_column(
+        Enum(PaymentProvider, name="payment_provider_enum"),
+        nullable=False,
+    )
+    status: Mapped[PaymentTransactionStatus] = mapped_column(
+        Enum(PaymentTransactionStatus, name="payment_transaction_status_enum"),
+        nullable=False,
+        default=PaymentTransactionStatus.created,
+        server_default=sa_text("'created'"),
+    )
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default=sa_text("'RUB'"))
+    provider_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confirmation_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    raw_payload: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb")
+    )
+
+    __table_args__ = (
+        Index("ix_special_consultation_payments_order_created", "order_id", "created_at"),
+        Index("ix_special_consultation_payments_status_created", "status", "created_at"),
+        Index(
+            "ux_special_consultation_payments_provider_payment_id",
+            "provider",
+            "provider_payment_id",
+            unique=True,
+            postgresql_where=sa_text("provider_payment_id IS NOT NULL"),
+        ),
+        Index(
+            "ux_special_consultation_payments_external_reference",
+            "external_reference",
+            unique=True,
+            postgresql_where=sa_text("external_reference IS NOT NULL"),
+        ),
     )
 
 

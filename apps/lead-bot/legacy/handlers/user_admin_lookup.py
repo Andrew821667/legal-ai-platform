@@ -12,7 +12,7 @@ import utils
 from config import get_config
 from telegram import Update
 from telegram.ext import ContextTypes
-from handlers.markup import main_menu_markup as _main_menu_markup
+from .markup import main_menu_markup as _main_menu_markup
 
 config = get_config()
 

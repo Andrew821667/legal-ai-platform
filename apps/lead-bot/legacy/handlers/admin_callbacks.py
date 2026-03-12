@@ -20,7 +20,7 @@ import database
 import security
 import utils
 from config import get_config
-from handlers.constants import (
+from .constants import (
     ADMIN_CLEANUP_MENU,
     ADMIN_EDIT_FIELD_MENU,
     ADMIN_EXPORT_MENU,
@@ -30,7 +30,7 @@ from handlers.constants import (
     ADMIN_SECURITY_MENU,
     ADMIN_USERS_MENU,
 )
-from handlers.markup import (
+from .markup import (
     admin_lookup_menu_markup as _admin_lookup_menu_markup,
     admin_user_clear_confirm_markup as _admin_user_clear_confirm_markup,
     admin_user_delete_confirm_markup as _admin_user_delete_confirm_markup,

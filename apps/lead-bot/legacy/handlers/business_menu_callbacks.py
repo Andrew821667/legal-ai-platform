@@ -11,23 +11,23 @@ import content
 import database
 import utils
 from lead_perf import log_span_timing, perf_start
-from handlers.business_menu_contact import (
+from .business_menu_contact import (
     CONTACT_FLOW_ACTIONS,
     maybe_handle_contact_actions,
     maybe_handle_contact_choice_callbacks,
     maybe_handle_personal_request,
     maybe_require_pdn_for_contact,
 )
-from handlers.business_menu_support import (
+from .business_menu_support import (
     BusinessMenuResponder,
     BusinessMenuState,
     resolve_local_callback_user,
 )
-from handlers.business_menu_views import (
+from .business_menu_views import (
     maybe_handle_profile_callbacks,
     maybe_handle_view_callbacks,
 )
-from handlers.markup import (
+from .markup import (
     clear_business_contact_state as _clear_business_contact_state,
     with_channel_button as _with_channel_button,
     workspace_markup_for as _workspace_markup_for,

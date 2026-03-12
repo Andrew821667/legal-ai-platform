@@ -9,7 +9,7 @@ from telegram_ui import reply_button as KeyboardButton
 
 import content
 from config import get_config
-from handlers.constants import (
+from .constants import (
     ADMIN_MENU,
     CONSENT_PDN_MENU,
     CONSENT_TRANSBORDER_MENU,

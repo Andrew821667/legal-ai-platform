@@ -12,15 +12,15 @@ import database
 import funnel
 import utils
 from config import get_config
-from handlers.callback_flows import has_pdn_consent as _has_pdn_consent
-from handlers.constants import (
+from .callback_flows import has_pdn_consent as _has_pdn_consent
+from .constants import (
     BUSINESS_AWAITING_CONTACT_KEY,
     BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
     BUSINESS_PENDING_CONTACT_KEY,
     CONSENT_PDN_MENU,
 )
-from handlers.helpers import notify_admin_new_lead
-from handlers.markup import (
+from .helpers import notify_admin_new_lead
+from .markup import (
     business_phone_format_text as _business_phone_format_text,
     clear_business_contact_state as _clear_business_contact_state,
     consultation_contact_markup as _consultation_contact_markup,
@@ -28,7 +28,7 @@ from handlers.markup import (
     personal_mode_markup as _personal_mode_markup,
     with_channel_button as _with_channel_button,
 )
-from handlers.business_menu_support import BusinessMenuResponder, BusinessMenuState
+from .business_menu_support import BusinessMenuResponder, BusinessMenuState
 
 config = get_config()
 logger = logging.getLogger(__name__)

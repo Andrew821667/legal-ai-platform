@@ -24,14 +24,14 @@ import security
 import prompts
 import content
 import funnel
-from handlers.constants import (
+from .constants import (
     BUSINESS_AWAITING_CONTACT_KEY,
     BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
     BUSINESS_PENDING_CONTACT_KEY,
     LEAD_MAGNET_MENU,
 )
-from handlers.helpers import notify_admin_new_lead, extract_email
-from handlers.markup import (
+from .helpers import notify_admin_new_lead, extract_email
+from .markup import (
     business_phone_format_text as _business_phone_format_text,
     clear_business_contact_state as _clear_business_contact_state,
     contact_visibility_choice_markup as _contact_visibility_choice_markup,
