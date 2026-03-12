@@ -86,6 +86,8 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
 
 def test_services_menu_explicitly_allows_freeform_ai_chat() -> None:
     response = content.menu_response_by_key("menu_services", selected_profile="business")
+    assert "быстрых пилотов" in response
+    assert "рабочего контура автоматизации" in response
     assert "Можно не только нажимать кнопки" in response
     assert "ИИ-помощник предложит следующий шаг" in response
 
@@ -120,3 +122,10 @@ def test_contract_module_text_is_clear_for_new_user() -> None:
     assert "Проверка договора" in response
     assert "это наш отдельный сервис для работы с договорами" in response
     assert "демонстрационный разбор договора" in response
+    assert "как ИИ помогает в договорной работе на живом примере" in response
+
+
+def test_consultation_text_explains_value_of_handoff() -> None:
+    response = content.menu_response_by_key("menu_consultation")
+    assert "обсудить задачу с человеком" in response
+    assert "с чего лучше начать внедрение" in response
