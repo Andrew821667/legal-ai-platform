@@ -15,7 +15,7 @@ import funnel
 import lead_qualifier
 import utils
 from config import get_config
-from .constants import ADMIN_MENU, CONSENT_PDN_MENU, MAIN_MENU
+from .constants import CONSENT_PDN_MENU
 from .helpers import notify_admin_new_lead
 from .markup import (
     clip_for_edit as _clip_for_edit,
@@ -282,17 +282,6 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
             action="consent_pdn_yes",
         )
 
-        welcome_message = content.build_welcome_message(user.first_name)
-        if user.id == config.ADMIN_TELEGRAM_ID:
-            reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
-        else:
-            reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await utils.safe_reply_html(
-            query.message,
-            welcome_message,
-            reply_markup=reply_markup,
-            action="consent_welcome_after_yes",
-        )
         await utils.safe_reply_html(
             query.message,
             content.build_workspace_text(
@@ -333,17 +322,6 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
                 action="consent_transborder_no",
             )
 
-        welcome_message = content.build_welcome_message(user.first_name)
-        if user.id == config.ADMIN_TELEGRAM_ID:
-            reply_markup = ReplyKeyboardMarkup(ADMIN_MENU, resize_keyboard=True)
-        else:
-            reply_markup = ReplyKeyboardMarkup(MAIN_MENU, resize_keyboard=True)
-        await utils.safe_reply_html(
-            query.message,
-            welcome_message,
-            reply_markup=reply_markup,
-            action="consent_welcome_after_transborder",
-        )
         await utils.safe_reply_html(
             query.message,
             content.build_workspace_text(

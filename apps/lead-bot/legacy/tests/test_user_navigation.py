@@ -83,5 +83,5 @@ async def test_first_touch_uses_single_workspace_entry(monkeypatch: pytest.Monke
     await user_handlers.handle_message(update, context)
 
     assert len(messages) == 1
-    assert "Рабочий стол" in messages[0]
-    assert "Legal AI PRO помогает разобраться" in messages[0]
+    assert "Здравствуйте, Андрей." in messages[0]
+    assert "С чего удобно начать" in messages[0]

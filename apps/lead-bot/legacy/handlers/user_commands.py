@@ -17,10 +17,10 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from .markup import (
     documents_markup as _documents_markup,
-    main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     profile_panel_markup as _profile_panel_markup,
     quick_nav_markup_for as _quick_nav_markup_for,
+    start_markup_for as _start_markup_for,
     transborder_consent_markup as _transborder_consent_markup,
     workspace_markup_for as _workspace_markup_for,
 )
@@ -111,27 +111,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_profile = database.db.get_user_offer_profile(user_id)
         consent_state = database.db.get_user_consent_state(user_id)
         needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
-        welcome_message = content.build_welcome_message(user.first_name)
-        reply_markup = _main_menu_markup(user.id)
-        workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
+        start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
 
         await utils.safe_reply_html(
             update.message,
-            welcome_message,
-            reply_markup=reply_markup,
-            action="start_welcome",
-        )
-        await utils.safe_reply_html(
-            update.message,
-            content.build_workspace_text(
+            content.build_start_entry_text(
+                first_name=user.first_name,
                 lead=lead,
                 selected_profile=selected_profile,
                 emphasize_profile_choice=True,
             ),
-            reply_markup=workspace_markup,
-            action="start_workspace",
+            reply_markup=start_markup,
+            action="start_entry",
         )
-        logger.info("Workspace sent on /start for user %s", user.id)
+        logger.info("Start entry sent on /start for user %s", user.id)
 
         user_data = database.db.get_user_by_id(user_id)
         if user_data and not needs_pdn_consent:

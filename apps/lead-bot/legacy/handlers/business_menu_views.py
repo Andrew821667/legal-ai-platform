@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import InlineKeyboardMarkup
 
 import content
 import database
-from config import get_config
 from .callback_flows import build_client_profile_text as _build_client_profile_text
-from .constants import ADMIN_MENU, LEAD_MAGNET_MENU, MAIN_MENU, append_inline_url_row
+from .constants import LEAD_MAGNET_MENU, append_inline_url_row
 from .markup import (
     documents_panel_markup as _documents_panel_markup,
     documents_panel_text as _documents_panel_text,
@@ -14,8 +13,6 @@ from .markup import (
     with_channel_button as _with_channel_button,
 )
 from .business_menu_support import BusinessMenuResponder, BusinessMenuState
-
-config = get_config()
 
 PROFILE_CALLBACK_MAP = {
     "menu_offer_set_inhouse": "inhouse",
@@ -92,22 +89,15 @@ async def maybe_handle_view_callbacks(
             database.db.reset_user_funnel_state(state.user_db_id)
 
         user = state.user
-        response_text = (
-            content.build_business_welcome_message(user.first_name if user else "клиент")
-            if responder.is_business
-            else content.build_welcome_message(user.first_name if user else "клиент")
+        response_text = content.build_workspace_text(
+            lead=state.lead,
+            selected_profile=state.selected_profile,
+            first_name=user.first_name if user else "клиент",
         )
         if responder.is_business:
             await responder.send_html(response_text, state.menu_markup, action="menu_return_to_bot")
         else:
-            await responder.reply_text(
-                response_text,
-                ReplyKeyboardMarkup(
-                    ADMIN_MENU if user and user.id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
-                    resize_keyboard=True,
-                ),
-                action="menu_return_to_bot",
-            )
+            await responder.send_html(response_text, state.menu_markup, action="menu_return_to_bot")
         return True
 
     if state.callback_data == "menu_dashboard":

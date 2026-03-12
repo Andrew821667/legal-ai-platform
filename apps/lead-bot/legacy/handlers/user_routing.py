@@ -14,6 +14,7 @@ from .markup import (
     main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     personal_mode_markup as _personal_mode_markup,
+    start_markup_for as _start_markup_for,
     workspace_markup_for as _workspace_markup_for,
 )
 from .user_commands import (
@@ -38,36 +39,6 @@ def _is_navigation_shortcut(message_text: str) -> bool:
     return raw.lower() in ["/menu", "menu", "/меню", "меню"]
 
 
-async def send_welcome_workspace(
-    message: Message,
-    *,
-    first_name: str | None,
-    user_id: int,
-    lead: dict | None,
-    welcome_action: str,
-    workspace_action: str,
-    emphasize_profile_choice: bool = True,
-) -> None:
-    await utils.safe_reply_html(
-        message,
-        content.build_welcome_message(first_name),
-        reply_markup=_main_menu_markup(user_id),
-        action=welcome_action,
-    )
-    selected_profile = database.db.get_user_offer_profile(user_id)
-    workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
-    await utils.safe_reply_html(
-        message,
-        content.build_workspace_text(
-            lead=lead,
-            selected_profile=selected_profile,
-            emphasize_profile_choice=emphasize_profile_choice,
-        ),
-        reply_markup=workspace_markup,
-        action=workspace_action,
-    )
-
-
 async def send_workspace_entry(
     message: Message,
     *,
@@ -76,9 +47,14 @@ async def send_workspace_entry(
     workspace_action: str,
     emphasize_profile_choice: bool = True,
     include_context_intro: bool = False,
+    first_name: str | None = None,
 ) -> None:
     selected_profile = database.db.get_user_offer_profile(user_id)
-    workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
+    workspace_markup = (
+        _start_markup_for(lead=lead, selected_profile=selected_profile)
+        if include_context_intro
+        else _workspace_markup_for(lead=lead, selected_profile=selected_profile)
+    )
     await utils.safe_reply_html(
         message,
         content.build_workspace_text(
@@ -86,6 +62,7 @@ async def send_workspace_entry(
             selected_profile=selected_profile,
             emphasize_profile_choice=emphasize_profile_choice,
             include_context_intro=include_context_intro,
+            first_name=first_name,
         ),
         reply_markup=workspace_markup,
         action=workspace_action,
@@ -121,13 +98,12 @@ async def maybe_handle_personal_mode(
         if looks_like_return_to_bot(message_text):
             database.db.set_chat_mode(chat_id, "bot")
             database.db.reset_user_funnel_state(user_data["id"])
-            await send_welcome_workspace(
+            await send_workspace_entry(
                 original_message,
-                first_name=user.first_name,
                 user_id=user.id,
                 lead=lead,
-                welcome_action="personal_mode_return_text",
                 workspace_action="personal_mode_return_workspace",
+                emphasize_profile_choice=False,
             )
         return True
 
@@ -150,6 +126,7 @@ async def maybe_handle_initial_entry(
             lead=lead,
             workspace_action="forced_workspace_new_session",
             include_context_intro=True,
+            first_name=user.first_name,
         )
         return True
 
@@ -160,6 +137,7 @@ async def maybe_handle_initial_entry(
             lead=lead,
             workspace_action="workspace_on_greeting",
             include_context_intro=True,
+            first_name=user.first_name,
         )
         return True
 

@@ -24,6 +24,7 @@ from .constants import (
     BUSINESS_PENDING_CONTACT_KEY,
     append_inline_url_row,
     build_quick_nav_menu,
+    build_start_inline_menu,
     build_workspace_inline_menu,
 )
 
@@ -67,6 +68,20 @@ def workspace_markup_for(
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         build_workspace_inline_menu(
+            content.offer_profile_cta_label(
+                lead=lead,
+                selected_profile=selected_profile,
+            )
+        )
+    )
+
+
+def start_markup_for(
+    lead: dict | None = None,
+    selected_profile: str | None = None,
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        build_start_inline_menu(
             content.offer_profile_cta_label(
                 lead=lead,
                 selected_profile=selected_profile,

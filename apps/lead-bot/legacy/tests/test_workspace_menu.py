@@ -63,12 +63,15 @@ def test_workspace_onboarding_text_emphasizes_profile_choice() -> None:
 
 def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
     first_touch = content.build_workspace_text(
+        first_name="Андрей",
         selected_profile="business",
         emphasize_profile_choice=True,
         include_context_intro=True,
     )
-    assert "Legal AI PRO помогает разобраться" in first_touch
-    assert "Быстрый маршрут" in first_touch
+    assert "Legal AI PRO" in first_touch
+    assert "это практический сервис для юридической работы и автоматизации" in first_touch
+    assert "С чего удобно начать" in first_touch
+    assert "Проверить договор" in first_touch
 
 
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
@@ -81,11 +84,19 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "помогает юристам и бизнесу быстрее работать" in welcome
-    assert "долго согласуются договоры" in welcome
+    assert "помогает юристам, руководителям и командам" in welcome
+    assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome
     assert "информационный характер" in welcome
     assert "<b>" in welcome
+
+
+def test_start_entry_text_is_clear_for_new_user() -> None:
+    start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
+    assert "Здравствуйте, Андрей." in start_entry
+    assert "какой формат помощи нужен именно вам" in start_entry
+    assert "Сначала нажмите верхнюю кнопку" in start_entry
+    assert "Сейчас активен:" in start_entry
 
 
 def test_contract_module_text_is_clear_for_new_user() -> None:

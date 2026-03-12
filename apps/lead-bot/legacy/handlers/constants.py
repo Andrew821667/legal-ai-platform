@@ -43,6 +43,27 @@ def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LAB
     ]
 
 
+def build_start_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
+    return [
+        [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
+        [
+            InlineKeyboardButton("🧪 Проверить договор", callback_data="menu_contract_ai"),
+            InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
+        ],
+        [
+            InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
+            InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
+        ],
+        [
+            InlineKeyboardButton("📲 Оставить контакт", callback_data="menu_leave_contact"),
+            InlineKeyboardButton("❓ Помощь", callback_data="menu_help"),
+        ],
+        [
+            InlineKeyboardButton("📚 Документы", callback_data="menu_documents"),
+        ],
+    ]
+
+
 def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
@@ -58,6 +79,7 @@ def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
 
 
 WORKSPACE_INLINE_MENU = build_workspace_inline_menu()
+START_INLINE_MENU = build_start_inline_menu()
 
 QUICK_NAV_MENU = build_quick_nav_menu()
 
