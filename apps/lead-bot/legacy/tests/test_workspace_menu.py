@@ -106,6 +106,7 @@ def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in welcome
     assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome
+    assert "💬 <b>Необязательно ждать подходящую кнопку" in welcome
     assert "информационный характер" in welcome
     assert "<b>" in welcome
 
@@ -116,7 +117,7 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
     assert "Сейчас активен:" in start_entry
-    assert "Можно не ждать подходящей кнопки" in start_entry
+    assert "💬 <b>Необязательно ждать подходящую кнопку" in start_entry
 
 
 def test_contract_module_text_is_clear_for_new_user() -> None:
