@@ -13,9 +13,9 @@ export const ROUTES = {
   miniAppProfile: "/miniapp/profile",
 } as const;
 
-const LEAD_BOT_USERNAME = "legal_ai_helper_new_bot";
-const READER_BOT_USERNAME = "legal_ai_news_reader_bot";
-const CHANNEL_USERNAME = "legal_ai_pro";
+const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_ai_helper_new_bot").trim();
+const READER_BOT_USERNAME = (process.env.NEXT_PUBLIC_READER_BOT_USERNAME || "legal_ai_news_reader_bot").trim();
+const CHANNEL_USERNAME = (process.env.NEXT_PUBLIC_CHANNEL_USERNAME || "legal_ai_pro").trim();
 const CONTRACT_AI_SYSTEM_URL = (process.env.NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL || "").trim();
 
 export const EXTERNAL_LINKS = {

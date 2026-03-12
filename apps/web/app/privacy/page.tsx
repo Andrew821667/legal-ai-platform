@@ -1,4 +1,17 @@
 import type { Metadata } from "next";
+import {
+  LEGAL_BRAND,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_CONTACT_PHONE,
+  LEGAL_CONTACT_PHONE_HREF,
+  LEGAL_CONTACT_TELEGRAM,
+  LEGAL_CONTACT_TELEGRAM_URL,
+  LEGAL_OPERATOR_DETAILS,
+  LEGAL_OPERATOR_INN,
+  LEGAL_OPERATOR_NAME,
+  LEGAL_OPERATOR_STATUS,
+  LEGAL_SITE_URL,
+} from "@/lib/legalProfile";
 
 export const metadata: Metadata = {
   title: "Политика конфиденциальности",
@@ -56,8 +69,8 @@ export default function PrivacyPolicy() {
             </p>
             
             <p className="text-slate-700 mb-4">
-              1.2. Оператором персональных данных является: <strong>Попов Андрей</strong> (самозанятый), 
-              осуществляющий деятельность через сайт <strong>legalaipro.ru</strong> (далее — «Сайт», «мы», «Оператор»).
+              1.2. Оператором персональных данных является: <strong>{LEGAL_OPERATOR_NAME}</strong> ({LEGAL_OPERATOR_STATUS}),
+              осуществляющий деятельность через сайт <strong>{LEGAL_SITE_URL}</strong> (далее — «Сайт», «мы», «Оператор»).
             </p>
             
             <p className="text-slate-700 mb-4">
@@ -261,9 +274,9 @@ export default function PrivacyPolicy() {
             </p>
             
             <ul className="list-none text-slate-700 space-y-2">
-              <li>📧 Email: <a href="mailto:a.popov.gv@gmail.com" className="text-amber-600 hover:text-amber-700">a.popov.gv@gmail.com</a></li>
-              <li>📞 Телефон: <a href="tel:+79092330909" className="text-amber-600 hover:text-amber-700">+7 909 233-09-09</a></li>
-              <li>💬 Telegram: <a href="https://t.me/legal_ai_helper_new_bot" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">@legal_ai_helper_new_bot</a></li>
+              <li>📧 Email: <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_EMAIL}</a></li>
+              <li>📞 Телефон: <a href={`tel:${LEGAL_CONTACT_PHONE_HREF}`} className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_PHONE}</a></li>
+              <li>💬 Telegram: <a href={LEGAL_CONTACT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_TELEGRAM}</a></li>
             </ul>
           </section>
 
@@ -295,12 +308,15 @@ export default function PrivacyPolicy() {
             </p>
             
             <div className="bg-slate-50 p-6 rounded-lg">
-              <p className="text-slate-900 font-semibold mb-3">Legal AI PRO</p>
+              <p className="text-slate-900 font-semibold mb-3">{LEGAL_BRAND}</p>
               <ul className="space-y-2 text-slate-700">
-                <li><strong>Email:</strong> <a href="mailto:a.popov.gv@gmail.com" className="text-amber-600 hover:text-amber-700">a.popov.gv@gmail.com</a></li>
-                <li><strong>Телефон:</strong> <a href="tel:+79092330909" className="text-amber-600 hover:text-amber-700">+7 909 233-09-09</a></li>
-                <li><strong>Telegram:</strong> <a href="https://t.me/legal_ai_helper_new_bot" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">@legal_ai_helper_new_bot</a></li>
-                <li><strong>Сайт:</strong> <a href="https://legalaipro.ru" className="text-amber-600 hover:text-amber-700">https://legalaipro.ru</a></li>
+                <li><strong>Оператор:</strong> {LEGAL_OPERATOR_NAME} ({LEGAL_OPERATOR_STATUS})</li>
+                {LEGAL_OPERATOR_INN ? <li><strong>ИНН:</strong> {LEGAL_OPERATOR_INN}</li> : null}
+                {LEGAL_OPERATOR_DETAILS ? <li><strong>Реквизиты / статус:</strong> {LEGAL_OPERATOR_DETAILS}</li> : null}
+                <li><strong>Email:</strong> <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_EMAIL}</a></li>
+                <li><strong>Телефон:</strong> <a href={`tel:${LEGAL_CONTACT_PHONE_HREF}`} className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_PHONE}</a></li>
+                <li><strong>Telegram:</strong> <a href={LEGAL_CONTACT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">{LEGAL_CONTACT_TELEGRAM}</a></li>
+                <li><strong>Сайт:</strong> <a href={LEGAL_SITE_URL} className="text-amber-600 hover:text-amber-700">{LEGAL_SITE_URL}</a></li>
               </ul>
             </div>
           </section>

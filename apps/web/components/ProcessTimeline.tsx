@@ -2,6 +2,7 @@
 
 import { useScrollAnimation } from '@/lib/hooks/useScrollAnimation';
 import { ClipboardCheck, MessageSquare, Code, Rocket, BarChart, HeadphonesIcon } from 'lucide-react';
+import { leadBotDeepLink } from "@/lib/links";
 
 export default function ProcessTimeline() {
   const { ref, isVisible } = useScrollAnimation();
@@ -120,7 +121,7 @@ export default function ProcessTimeline() {
             Готовы начать? Первая консультация бесплатно!
           </p>
           <a
-            href="https://t.me/legal_ai_helper_new_bot"
+            href={leadBotDeepLink()}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg"

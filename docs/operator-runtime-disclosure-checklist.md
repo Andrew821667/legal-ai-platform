@@ -20,11 +20,19 @@
 - `USER_AGREEMENT_URL`
 - `AI_POLICY_URL`
 - `MARKETING_CONSENT_URL`
+- `NEXT_PUBLIC_OPERATOR_NAME`
+- `NEXT_PUBLIC_OPERATOR_STATUS`
+- `NEXT_PUBLIC_OPERATOR_INN`
+- `NEXT_PUBLIC_OPERATOR_DETAILS`
+- `NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL`
+- `NEXT_PUBLIC_CONTACT_PHONE`
+- `NEXT_PUBLIC_CONTACT_TELEGRAM`
 
 Минимальное требование:
 - `OPERATOR_NAME` не должен оставаться generic значением, если сервис публичный;
 - `OPERATOR_INN` и `OPERATOR_DETAILS` должны содержать реальные реквизиты или статус оператора;
 - `PRIVACY_CONTACT_EMAIL` должен вести на реальный канал связи по ПД.
+- `NEXT_PUBLIC_*` disclosure vars не должны расходиться с серверными значениями для `lead-bot`.
 
 ## 2. Что проверить в `lead-bot`
 
@@ -68,6 +76,9 @@
    - policy links;
    - wording по трансграничной передаче и аналитике.
 4. Зафиксировать дату и результат проверки в operational notes.
+
+Команда для локальной контрольной проверки:
+- `bash infra/scripts/runtime_compliance_audit.sh`
 
 ## 5. Когда чек-лист считается закрытым
 

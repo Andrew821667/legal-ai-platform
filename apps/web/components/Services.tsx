@@ -12,6 +12,7 @@ import {
   Coins,
 } from "lucide-react";
 import { useScrollAnimation } from "@/lib/hooks/useScrollAnimation";
+import { leadBotDeepLink } from "@/lib/links";
 
 export default function Services() {
   const { ref: headerRef, isVisible: headerVisible } = useScrollAnimation();
@@ -221,7 +222,7 @@ export default function Services() {
                   </a>
                 ) : (
                   <a
-                    href="https://t.me/legal_ai_helper_new_bot"
+                    href={leadBotDeepLink()}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full block text-center py-3 rounded-lg border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 hover:text-amber-600 transition-colors"
@@ -250,7 +251,7 @@ export default function Services() {
               Все услуги подробно
             </a>
             <a
-              href="https://t.me/legal_ai_helper_new_bot"
+              href={leadBotDeepLink()}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-transform hover:scale-105 shadow-lg"

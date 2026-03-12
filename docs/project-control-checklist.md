@@ -95,6 +95,9 @@
   - реквизиты оператора
   - retention policy на уровне регламента, а не только кода
 - `[~]` Проверить фактические публичные URL политик и их актуальность; runtime-checklist оформлен в [operator-runtime-disclosure-checklist.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/operator-runtime-disclosure-checklist.md), но живая проверка после деплоя остается ручной.
+- `[x]` `web` переведен на единый runtime legal profile с warning при отсутствии публичных disclosure env; hardcoded operator/contact данные убраны из critical legal/contact routes.
+- `[x]` Добавлен повторяемый runtime/compliance audit: [runtime_compliance_audit.sh](/Users/andrew/Мои AI проекты/legal-ai-platform/infra/scripts/runtime_compliance_audit.sh).
+- `[~]` Runtime audit от `2026-03-12` пройден: внутренние legal routes (`/privacy`, `/terms`, `/user-agreement`, `/transborder-consent`, `/marketing-consent`, `/ai-policy`) отвечают `200`; критичные runtime secrets и public disclosure vars заполнены, но для полного operator disclosure все еще отсутствует `OPERATOR_INN` / `NEXT_PUBLIC_OPERATOR_INN`, а optional integration secrets (`API_KEY_WORKER`, `ALERT_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `PERPLEXITY_API_KEY`, `GA4_CREDENTIALS`, `YM_ACCESS_TOKEN`, `GITHUB_TOKEN`, `SMTP_PASSWORD`) по-прежнему не заданы.
 - `[x]` Привести `lead-bot` и `web` к одному public policy contour:
   - `privacy`
   - `transborder-consent`

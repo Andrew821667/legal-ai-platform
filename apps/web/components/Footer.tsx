@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
+import {
+  LEGAL_BRAND,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_CONTACT_PHONE,
+  LEGAL_CONTACT_PHONE_HREF,
+} from "@/lib/legalProfile";
 
 type NavItem = {
   name: string;
@@ -68,7 +74,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-8">
           <div className="lg:col-span-2">
-            <h3 className="text-2xl font-bold text-white mb-4">Legal AI PRO</h3>
+            <h3 className="text-2xl font-bold text-white mb-4">{LEGAL_BRAND}</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
               Платформа автоматизации юридической функции: intake заявок, договорная и судебная работа,
               комплаенс, внутренний контроль и управляемые AI-процессы в legal ops.
@@ -102,7 +108,7 @@ export default function Footer() {
                 </svg>
               </a>
               <a
-                href="mailto:a.popov.gv@gmail.com"
+                href={`mailto:${LEGAL_CONTACT_EMAIL}`}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white p-3 rounded-lg transition-all"
                 aria-label="Email"
                 title="Email"
@@ -153,8 +159,11 @@ export default function Footer() {
               <div className="text-amber-500 text-xl">📞</div>
               <div>
                 <div className="text-white font-medium mb-1">Телефон</div>
-                <a href="tel:+79092330909" className="text-slate-400 hover:text-amber-500 transition-colors text-sm">
-                  +7 909 233-09-09
+                <a
+                  href={`tel:${LEGAL_CONTACT_PHONE_HREF}`}
+                  className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
+                >
+                  {LEGAL_CONTACT_PHONE}
                 </a>
               </div>
             </div>
@@ -163,10 +172,10 @@ export default function Footer() {
               <div>
                 <div className="text-white font-medium mb-1">Email</div>
                 <a
-                  href="mailto:a.popov.gv@gmail.com"
+                  href={`mailto:${LEGAL_CONTACT_EMAIL}`}
                   className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
                 >
-                  a.popov.gv@gmail.com
+                  {LEGAL_CONTACT_EMAIL}
                 </a>
               </div>
             </div>
@@ -204,7 +213,7 @@ export default function Footer() {
         <div className="border-t border-slate-800 pt-8 pb-6">
           <div className="text-center text-sm text-slate-500 leading-relaxed max-w-5xl mx-auto space-y-3">
             <p>
-              <strong className="text-slate-400">Legal AI PRO</strong>: внедрение AI в юридическую функцию,
+              <strong className="text-slate-400">{LEGAL_BRAND}</strong>: внедрение AI в юридическую функцию,
               автоматизация договорных и типовых правовых процессов, проектирование legal ops контуров.
             </p>
             <LegalDisclaimer className="mx-auto max-w-4xl text-slate-500" />
@@ -226,7 +235,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-500 text-sm">© {new Date().getFullYear()} Legal AI PRO. Все права защищены.</p>
+          <p className="text-slate-500 text-sm">© {new Date().getFullYear()} {LEGAL_BRAND}. Все права защищены.</p>
           <div className="flex gap-6 text-sm">
             <Link href="/privacy" className="text-slate-500 hover:text-amber-500 transition-colors">
               Политика конфиденциальности

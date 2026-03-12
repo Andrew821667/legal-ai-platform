@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useScrollAnimation } from "@/lib/hooks/useScrollAnimation";
 import { ChevronDown } from "lucide-react";
 import { faqData } from "@/lib/faqData";
+import { leadBotDeepLink } from "@/lib/links";
+import { LEGAL_CONTACT_PHONE, LEGAL_CONTACT_PHONE_HREF } from "@/lib/legalProfile";
 
 export default function FAQ() {
   const { ref: sectionRef, isVisible: sectionVisible } = useScrollAnimation();
@@ -95,7 +97,7 @@ export default function FAQ() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href="https://t.me/legal_ai_helper_new_bot?start=consultation"
+              href={leadBotDeepLink("consultation")}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center bg-white text-amber-700 font-semibold px-8 py-4 rounded-lg text-lg hover:bg-slate-100 transition-all transform hover:scale-105 shadow-lg"
@@ -103,10 +105,10 @@ export default function FAQ() {
               Написать в Telegram
             </a>
             <a
-              href="tel:+79092330909"
+              href={`tel:${LEGAL_CONTACT_PHONE_HREF}`}
               className="inline-flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all border border-white/30 hover:border-white/60"
             >
-              Позвонить: +7 909 233-09-09
+              Позвонить: {LEGAL_CONTACT_PHONE}
             </a>
           </div>
         </div>

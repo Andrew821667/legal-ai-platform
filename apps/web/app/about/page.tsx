@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { EXTERNAL_LINKS, leadBotDeepLink } from "@/lib/links";
+import { LEGAL_CONTACT_EMAIL } from "@/lib/legalProfile";
 
 export const metadata: Metadata = {
   title: "О платформе",
@@ -65,8 +66,8 @@ export default function AboutPage() {
             <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
               <h3 className="font-semibold text-amber-300">Email</h3>
               <p className="mt-2 text-sm text-slate-300">
-                <a href="mailto:a.popov.gv@gmail.com" className="hover:text-amber-300">
-                  a.popov.gv@gmail.com
+                <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="hover:text-amber-300">
+                  {LEGAL_CONTACT_EMAIL}
                 </a>
               </p>
             </article>

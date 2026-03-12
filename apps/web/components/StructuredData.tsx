@@ -1,13 +1,22 @@
+import { EXTERNAL_LINKS } from "@/lib/links";
+import {
+  LEGAL_BRAND,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_CONTACT_PHONE_HREF,
+  LEGAL_OPERATOR_NAME,
+  LEGAL_SITE_URL,
+} from "@/lib/legalProfile";
+
 interface StructuredDataProps {
   siteUrl?: string;
 }
 
-export default function StructuredData({ siteUrl = "https://legalaipro.ru" }: StructuredDataProps) {
+export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredDataProps) {
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
     "@id": `${siteUrl}/#organization`,
-    name: "Legal AI PRO",
+    name: LEGAL_BRAND,
     url: siteUrl,
     description:
       "Команда, которая помогает юридическим функциям внедрять AI-сценарии для заявок, договорной работы, комплаенса и типовых процессов.",
@@ -18,19 +27,19 @@ export default function StructuredData({ siteUrl = "https://legalaipro.ru" }: St
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer service",
-      telephone: "+7-909-233-09-09",
-      email: "a.popov.gv@gmail.com",
+      telephone: LEGAL_CONTACT_PHONE_HREF,
+      email: LEGAL_CONTACT_EMAIL,
       availableLanguage: ["Russian", "English"],
       areaServed: "RU",
     },
-    sameAs: ["https://t.me/legal_ai_pro"],
+    sameAs: [EXTERNAL_LINKS.channel],
   };
 
   const serviceSchema = {
     "@context": "https://schema.org",
     "@type": "ProfessionalService",
     "@id": `${siteUrl}/#service`,
-    name: "Legal AI PRO",
+    name: LEGAL_BRAND,
     serviceType: "AI automation for legal operations",
     provider: {
       "@id": `${siteUrl}/#organization`,
@@ -63,7 +72,7 @@ export default function StructuredData({ siteUrl = "https://legalaipro.ru" }: St
     "@type": "WebSite",
     "@id": `${siteUrl}/#website`,
     url: siteUrl,
-    name: "Legal AI PRO",
+    name: LEGAL_BRAND,
     description: "Сайт о внедрении AI в юридическую функцию.",
     publisher: {
       "@id": `${siteUrl}/#organization`,
@@ -74,15 +83,15 @@ export default function StructuredData({ siteUrl = "https://legalaipro.ru" }: St
   const personSchema = {
     "@context": "https://schema.org",
     "@type": "Person",
-    name: "Андрей Попов",
-    jobTitle: "Основатель Legal AI PRO",
+    name: LEGAL_OPERATOR_NAME,
+    jobTitle: `Основатель ${LEGAL_BRAND}`,
     description:
       "Специалист по автоматизации юридической функции и внедрению AI-сценариев в рабочие процессы.",
     worksFor: {
       "@id": `${siteUrl}/#organization`,
     },
-    email: "a.popov.gv@gmail.com",
-    telephone: "+7-909-233-09-09",
+    email: LEGAL_CONTACT_EMAIL,
+    telephone: LEGAL_CONTACT_PHONE_HREF,
   };
 
   const structuredData = {

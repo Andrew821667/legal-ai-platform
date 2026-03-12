@@ -4,6 +4,7 @@ import AppShell from "@/components/AppShell";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import YandexMetrika from "@/components/YandexMetrika";
 import StructuredData from "@/components/StructuredData";
+import { reportLegalProfileWarnings } from "@/lib/legalProfile";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://legalaipro.ru";
 
@@ -78,6 +79,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  reportLegalProfileWarnings();
+
   return (
     <html lang="ru" className="scroll-smooth">
       <head>

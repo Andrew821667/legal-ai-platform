@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
+import { leadBotDeepLink } from "@/lib/links";
 
 export default function StickyCTA() {
   const [isVisible, setIsVisible] = useState(false);
@@ -22,7 +23,7 @@ export default function StickyCTA() {
 
   return (
     <a
-      href="https://t.me/legal_ai_helper_new_bot"
+      href={leadBotDeepLink()}
       target="_blank"
       rel="noopener noreferrer"
       className={`fixed bottom-8 right-8 z-50 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 flex items-center gap-3 group ${
