@@ -57,8 +57,18 @@ def test_workspace_onboarding_text_emphasizes_profile_choice() -> None:
     onboarding_text = content.build_workspace_text(selected_profile="business", emphasize_profile_choice=True)
     regular_text = content.build_workspace_text(selected_profile="business")
     assert "Начните с верхней кнопки «🎯 Профиль услуг»." in onboarding_text
-    assert "Так я быстрее покажу именно те услуги и цены" in onboarding_text
+    assert "Так я быстрее покажу подходящие услуги, цены" in onboarding_text
     assert "Начните с верхней кнопки «🎯 Профиль услуг»." not in regular_text
+
+
+def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
+    first_touch = content.build_workspace_text(
+        selected_profile="business",
+        emphasize_profile_choice=True,
+        include_context_intro=True,
+    )
+    assert "Legal AI PRO помогает разобраться" in first_touch
+    assert "Быстрый маршрут" in first_touch
 
 
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
@@ -71,9 +81,9 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "помогает юристам и бизнесу" in welcome
+    assert "помогает юристам и бизнесу быстрее работать" in welcome
     assert "долго согласуются договоры" in welcome
-    assert "Если вы только знакомитесь с темой, это нормально" in welcome
+    assert "Можно начать без специальных терминов" in welcome
     assert "информационный характер" in welcome
     assert "<b>" in welcome
 

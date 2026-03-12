@@ -68,6 +68,30 @@ async def send_welcome_workspace(
     )
 
 
+async def send_workspace_entry(
+    message: Message,
+    *,
+    user_id: int,
+    lead: dict | None,
+    workspace_action: str,
+    emphasize_profile_choice: bool = True,
+    include_context_intro: bool = False,
+) -> None:
+    selected_profile = database.db.get_user_offer_profile(user_id)
+    workspace_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
+    await utils.safe_reply_html(
+        message,
+        content.build_workspace_text(
+            lead=lead,
+            selected_profile=selected_profile,
+            emphasize_profile_choice=emphasize_profile_choice,
+            include_context_intro=include_context_intro,
+        ),
+        reply_markup=workspace_markup,
+        action=workspace_action,
+    )
+
+
 async def maybe_handle_personal_mode(
     *,
     update: Update,
@@ -120,24 +144,22 @@ async def maybe_handle_initial_entry(
     history_exists: bool,
 ) -> bool:
     if message_text and not history_exists and not _is_navigation_shortcut(message_text):
-        await send_welcome_workspace(
+        await send_workspace_entry(
             original_message,
-            first_name=user.first_name,
             user_id=user.id,
             lead=lead,
-            welcome_action="forced_welcome_new_session",
             workspace_action="forced_workspace_new_session",
+            include_context_intro=True,
         )
         return True
 
     if message_text and looks_like_plain_greeting(message_text):
-        await send_welcome_workspace(
+        await send_workspace_entry(
             original_message,
-            first_name=user.first_name,
             user_id=user.id,
             lead=lead,
-            welcome_action="fixed_welcome_on_greeting",
             workspace_action="workspace_on_greeting",
+            include_context_intro=True,
         )
         return True
 

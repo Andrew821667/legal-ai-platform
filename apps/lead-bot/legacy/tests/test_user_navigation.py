@@ -45,3 +45,43 @@ async def test_workspace_button_bypasses_forced_welcome(monkeypatch: pytest.Monk
 
     assert called["menu"] is True
     assert called["welcome"] is False
+
+
+@pytest.mark.anyio
+async def test_first_touch_uses_single_workspace_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    messages: list[str] = []
+
+    async def _fake_reply_html(message, text, **kwargs) -> None:
+        messages.append(text)
+
+    monkeypatch.setattr(user_handlers.utils, "safe_reply_html", _fake_reply_html)
+    monkeypatch.setattr(
+        user_handlers.database.db,
+        "get_user_by_telegram_id",
+        lambda telegram_id: {"id": 1, "telegram_id": telegram_id, "username": "user"},
+    )
+    monkeypatch.setattr(user_handlers.database.db, "get_lead_by_user_id", lambda user_id: None)
+    monkeypatch.setattr(user_handlers.database.db, "get_user_consent_state", lambda user_id: {})
+    monkeypatch.setattr(user_handlers.database.db, "get_chat_mode", lambda chat_id: "bot")
+    monkeypatch.setattr(user_handlers.database.db, "get_conversation_history", lambda user_id, limit=1: [])
+    monkeypatch.setattr(user_handlers.database.db, "get_user_offer_profile", lambda user_id: None)
+    monkeypatch.setattr(user_handlers.database.db, "create_or_update_user", lambda **kwargs: 1)
+    monkeypatch.setattr(user_handlers.database.db, "set_chat_mode", lambda chat_id, mode: None)
+
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(
+            id=42,
+            username="user",
+            first_name="Андрей",
+            last_name=None,
+        ),
+        effective_message=SimpleNamespace(text="Привет"),
+        effective_chat=SimpleNamespace(id=42),
+    )
+    context = SimpleNamespace(user_data={})
+
+    await user_handlers.handle_message(update, context)
+
+    assert len(messages) == 1
+    assert "Рабочий стол" in messages[0]
+    assert "Legal AI PRO помогает разобраться" in messages[0]
