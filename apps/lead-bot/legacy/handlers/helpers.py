@@ -280,13 +280,24 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         notification_message += f"🌡️ Температура: {temperature.upper()}"
 
         # Отправляем в Telegram с retry и fallback в личный чат админа.
+        origin_chat_id = user_data.get('telegram_id') or user_data.get('id')
         targets = []
         if config.LEADS_CHAT_ID and config.LEADS_CHAT_ID != config.ADMIN_TELEGRAM_ID:
             targets.append(config.LEADS_CHAT_ID)
         targets.append(config.ADMIN_TELEGRAM_ID)
 
+        filtered_targets = [target_chat_id for target_chat_id in targets if target_chat_id != origin_chat_id]
+        if not filtered_targets:
+            logger.info(
+                "Suppressed lead notification for lead %s: origin chat %s matches all admin targets",
+                lead_id,
+                origin_chat_id,
+            )
+            database.db.mark_lead_notification_sent(lead_id)
+            return
+
         sent_any = False
-        for target_chat_id in targets:
+        for target_chat_id in filtered_targets:
             try:
                 await utils.telegram_call_with_retry(
                     lambda target_chat_id=target_chat_id: context.bot.send_message(

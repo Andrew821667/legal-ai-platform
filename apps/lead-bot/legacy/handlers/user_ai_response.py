@@ -156,8 +156,10 @@ async def _maybe_send_consultation_cta(
         return False
 
     try:
-        await original_message.reply_text(
+        await utils.safe_reply_html(
+            original_message,
             content.CONSULTATION_CTA_TEXT,
+            action="consultation_cta",
             reply_markup=_consultation_cta_markup(),
         )
         return True
