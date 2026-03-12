@@ -41,7 +41,7 @@
 - `[x]` Wildcard imports убраны из handler-модулей `lead-bot`.
 - `[~]` Стартовый flow все еще перегружен legacy-логикой и может быть сокращен еще сильнее.
 - `[~]` Разбить giant files (`database.py`, `callbacks.py`, `user.py`) на более узкие модули; уже вынесены `handlers/markup.py`, `handlers/start_payloads.py`, `handlers/admin_callbacks.py`, `handlers/callback_flows.py`, `handlers/business_menu_support.py`, `handlers/business_menu_views.py`, `handlers/business_menu_contact.py`, `handlers/business_menu_callbacks.py`, `handlers/cleanup_callbacks.py`, `handlers/user_commands.py`, `handlers/user_admin_lookup.py`, `handlers/user_message_helpers.py`, `handlers/user_cta_actions.py`, `handlers/user_non_text.py`, `handlers/user_profile_edit.py`, `handlers/user_routing.py`, `handlers/user_ai_response.py`, `handlers/user_lead_flow.py`, `database_conversations.py`, `database_consent.py`, `database_user_state.py`, `database_leads.py`, `database_reporting.py`, `database_knowledge.py`, `database_security.py`, `database_users.py`, `database_chat_state.py`, `database_schema.py`, `database_facade.py`; `database.py` сокращен до ~210 строк как базовый runtime/core-sync фасад, `callbacks.py` — до ~25 строк как dispatcher entrypoint, `business_menu_callbacks.py` — до ~150 строк, `user.py` — до ~280 строк. Остался уже не giant-file долг, а финальная шлифовка legacy boundary.
-- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок, cleanup и secondary callback flows вынесены из `callbacks.py`, `business_menu` разделен на support/views/contact dispatcher, командный слой, admin lookup, message helpers, CTA actions, non-text/profile-edit, routing, AI-response и lead-flow слой вынесены из `user.py`, `database.py` превращен в тонкий runtime/core-sync фасад, но финальная полировка зависимостей и boundary-правил legacy еще не закончена.
+- `[~]` Почистить import graph legacy; прямую связку `callbacks -> user` уже убрали, admin/runtime блок, cleanup и secondary callback flows вынесены из `callbacks.py`, `business_menu` разделен на support/views/contact dispatcher, командный слой, admin lookup, message helpers, CTA actions, non-text/profile-edit, routing, AI-response и lead-flow слой вынесены из `user.py`, `database.py` превращен в тонкий runtime/core-sync фасад, `handlers/__init__.py` переведен в lazy compatibility shim вместо eager god-import, `handlers/common.py` очищен до реальных runtime-зависимостей. Осталась финальная шлифовка boundary-правил и внутренних импортов, а не крупный structural debt.
 - `[x]` Перевести legacy config/init на единый singleton/cache pattern.
 
 ## 3. News / Reader
@@ -109,7 +109,7 @@
 - `[x]` Secret inventory + rotation checklist.
 - `[x]` Web disclaimer в системных точках интерфейса.
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
-- `[~]` Legacy refactor: split files + remove wildcard imports + config singleton.
+- `[~]` Legacy refactor: split files + remove wildcard imports + config singleton. Основной structural debt уже снят; остаются локальные boundary/import-polish задачи.
 - `[x]` Отдельный compliance-review по реальной операционной схеме.
 - `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour; runtime/startup warnings и отдельные checklists уже добавлены, ручной regulatory контур остается.
 

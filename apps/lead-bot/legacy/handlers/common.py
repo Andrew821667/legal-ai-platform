@@ -5,22 +5,10 @@ from __future__ import annotations
 
 import logging
 import time
-import re
-import asyncio
-from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.error import BadRequest, Conflict, NetworkError, RetryAfter, TimedOut
 from telegram.ext import ContextTypes
-import database
-import ai_brain
-import lead_qualifier
-import admin_interface
-from config import get_config
-config = get_config()
 import utils
-import email_sender
-import security
-import prompts
 
 logger = logging.getLogger(__name__)
 _LAST_TRANSIENT_POLLING_ERROR_LOG_TS = 0.0
