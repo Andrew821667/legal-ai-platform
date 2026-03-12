@@ -77,6 +77,7 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
     response = content.menu_response_by_key("menu_help")
     assert "Можно не только нажимать кнопки" in response
+    assert "как внедрять ИИ в юридические и бизнес-процессы" in response
     if content.public_channel_url():
         assert "канала Legal AI PRO" in response
     else:
@@ -98,7 +99,7 @@ def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
     assert "это ИИ-помощник по автоматизации юридических процессов" in welcome
-    assert "помогает юристам, руководителям и командам" in welcome
+    assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in welcome
     assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome
     assert "информационный характер" in welcome
@@ -108,9 +109,10 @@ def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
 def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
-    assert "какой формат помощи нужен именно вам" in start_entry
+    assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
     assert "Сейчас активен:" in start_entry
+    assert "Можно не ждать подходящей кнопки" in start_entry
 
 
 def test_contract_module_text_is_clear_for_new_user() -> None:
