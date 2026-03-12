@@ -76,7 +76,9 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
 
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
     response = content.menu_response_by_key("menu_help")
-    assert "Можно не только нажимать кнопки" in response
+    assert "Можно просто написать задачу боту" in response
+    assert "<u><b>" in response
+    assert "хотим внедрить ИИ в договорную работу" in response
     assert "как внедрять ИИ в юридические и бизнес-процессы" in response
     if content.public_channel_url():
         assert "канала Legal AI PRO" in response
@@ -88,14 +90,14 @@ def test_services_menu_explicitly_allows_freeform_ai_chat() -> None:
     response = content.menu_response_by_key("menu_services", selected_profile="business")
     assert "быстрых пилотов" in response
     assert "рабочего контура автоматизации" in response
-    assert "Можно не только нажимать кнопки" in response
-    assert "ИИ-помощник предложит следующий шаг" in response
+    assert "Можно просто написать задачу боту" in response
+    assert "юристы тонут во входящих запросах" in response
 
 
 def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
     response = content.menu_response_by_key("menu_offer_profile", selected_profile="business")
-    assert "Можно не только нажимать кнопки" in response
-    assert "ИИ-помощник предложит следующий шаг" in response
+    assert "Можно просто написать задачу боту" in response
+    assert "хотим внедрить ИИ в договорную работу" in response
 
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
