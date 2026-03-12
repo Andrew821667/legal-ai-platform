@@ -28,6 +28,10 @@
 - `NEXT_PUBLIC_CONTACT_PHONE`
 - `NEXT_PUBLIC_CONTACT_TELEGRAM`
 
+Важно:
+- в `.env.example` и `apps/web/.env.example` эти поля могут быть пустыми намеренно, чтобы placeholder-значения не выглядели как готовые боевые реквизиты;
+- source of truth здесь — фактический runtime `.env`, а не пример файла.
+
 Минимальное требование:
 - `OPERATOR_NAME` не должен оставаться generic значением, если сервис публичный;
 - `OPERATOR_INN` и `OPERATOR_DETAILS` должны содержать реальные реквизиты или статус оператора;

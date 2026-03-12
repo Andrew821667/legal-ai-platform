@@ -22,7 +22,7 @@
 - `[x]` `web-admin`: hash password + TOTP + persistent throttling + revokeable sessions.
 - `[x]` `core-api`: внешний perimeter ужесточен, лишняя экспозиция сокращена.
 - `[x]` Зависимости обновлены, открытые Dependabot alerts закрыты.
-- `[~]` Убрать остаточные слабые dev/default значения и legacy-упоминания из docs/examples; критичные dev defaults и основные stale contract-ai quickstart/demo файлы уже очищены.
+- `[x]` Остаточные слабые dev/default значения и legacy-упоминания в source-of-truth docs/examples дочищены: public legal/disclosure placeholders в `.env.example` и `apps/web/.env.example` больше не выглядят как готовые боевые реквизиты, а локальный `Contract_AI_System` bridge явно помечен как вспомогательный integration-mode, а не production default.
 - `[x]` Заведен единый `secret inventory` по всем сервисам.
 - `[x]` Заведен `secret rotation checklist` с журналом и правилами ротации.
 - `[!]` Реально ротировать боевые токены/ключи по регламенту, не только держать код готовым.
@@ -63,7 +63,7 @@
 - `[x]` Инвентаризированы основные точки перехода из `web` и `lead-bot` в `Contract_AI_System`, заведён отдельный список entrypoints.
 - `[x]` Зафиксирован канонический URL/entrypoint внешнего `Contract_AI_System` для `web`, `lead-bot` и docs.
 - `[x]` Локальная мобильная версия `web`/`miniapp` перепроверена на QA-порту `127.0.0.1:8088`; адаптивные CTA и верхние панели больше не режутся на узком экране.
-- `[ ]` Проверить живой внешний entrypoint `Contract_AI_System` на реальном устройстве и убедиться, что CTA не ведут в тупик.
+- `[~]` Для живой проверки внешнего entrypoint `Contract_AI_System` оформлен отдельный runbook: [contract-ai-live-checklist.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/contract-ai-live-checklist.md); сама проверка на реальном устройстве все еще остается ручной.
 - `[!]` Полноценный аудит frontend/admin/auth/billing/test-matrix самого `Contract_AI_System` вести отдельно в репозитории `Contract-AI-System-`.
 - `[x]` Явный legal disclaimer системно добавлен в web через CTA/lead/footer.
 
@@ -105,7 +105,7 @@
   - `user-agreement`
   - `ai-policy`
 - `[x]` Missing legal routes добавлены в `web`: `transborder-consent`, `marketing-consent`, `user-agreement`, `ai-policy`.
-- `[!]` Заполнить в runtime `OPERATOR_*` и `PRIVACY_CONTACT_EMAIL`, если публичный контур запускается с реальными пользователями.
+- `[x]` В runtime заполнены реальные `OPERATOR_*`, `PRIVACY_CONTACT_EMAIL` и `NEXT_PUBLIC_* disclosure` поля для текущего публичного контура; при переносе на внешний сервер этот блок нужно пройти повторно по deploy-checklist.
 - `[x]` Заведен отдельный incident/compliance runbook для утечек/инцидентов с ПД: [pd-incident-runbook.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/pd-incident-runbook.md)
 
 ## Осталось в первую очередь
@@ -114,7 +114,7 @@
 - `[x]` Pricing/product sync между bot/web и внешним `Contract_AI_System`.
 - `[x]` Legacy refactor: split files + remove wildcard imports + config singleton.
 - `[x]` Отдельный compliance-review по реальной операционной схеме.
-- `[~]` Закрыть operational gaps из compliance-review: operator disclosure, policy URLs, manual RKN contour; runtime/startup warnings и отдельные checklists уже добавлены, ручной regulatory контур остается.
+- `[~]` Закрыть operational gaps из compliance-review: operator disclosure и runtime legal contour уже выровнены, для policy URLs / manual RKN contour / трансгранички / retention оформлен отдельный runbook [manual-regulatory-contour-checklist.md](/Users/andrew/Мои AI проекты/legal-ai-platform/docs/manual-regulatory-contour-checklist.md); финальный regulatory sign-off остается ручным.
 
 ## Финальная сверка перед commit/push
 - `[ ]` `git status` понятен, нет случайных чужих правок.

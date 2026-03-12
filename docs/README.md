@@ -22,6 +22,8 @@
 - [contract-analyzer.md](./contract-analyzer.md)
 - [failure-recovery.md](./failure-recovery.md)
 - [pd-incident-runbook.md](./pd-incident-runbook.md)
+- [contract-ai-live-checklist.md](./contract-ai-live-checklist.md)
+- [manual-regulatory-contour-checklist.md](./manual-regulatory-contour-checklist.md)
 - [server-requirements.md](./server-requirements.md)
 - [data-model.md](./data-model.md)
 
