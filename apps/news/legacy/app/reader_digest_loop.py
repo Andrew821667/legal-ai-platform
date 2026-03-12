@@ -28,6 +28,7 @@ from app.models.reader_models import LeadProfile, SavedArticle, UserFeedback, Us
 from app.modules.llm_provider import get_llm_provider
 from app.services.core_feedback import reader_post_deeplink
 from app.services.reader_service import get_weekly_digest_candidates
+from app.services.reader_text import normalize_reader_text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,8 +48,6 @@ _DIGEST_INTERVALS = {
     "weekly": timedelta(hours=156),
 }
 _TICK_HEARTBEAT_SECONDS = 600
-
-
 def _core_api_enabled() -> bool:
     return bool((settings.core_api_url or "").strip() and (settings.api_key_news or "").strip())
 
@@ -255,7 +254,7 @@ async def _build_digest_summary(
             operation="reader_digest_worker",
             db=db,
         )
-        cleaned = " ".join((result or "").split()).strip()
+        cleaned = normalize_reader_text(result or "", multiline=True)
         if cleaned:
             return escape(_trim_text(cleaned, 1800))
     except Exception:
@@ -276,8 +275,8 @@ async def _render_digest_text(
     fallback_lines: list[str] = []
     links: list[str] = []
     for idx, article in enumerate(articles[:6], 1):
-        title = _trim_text(article.draft.title, 120)
-        body = _trim_text(article.draft.content, 250)
+        title = _trim_text(normalize_reader_text(article.draft.title, multiline=False), 120)
+        body = _trim_text(normalize_reader_text(article.draft.content, multiline=True), 250)
         article_blocks.append(f"{idx}) {title}\n{body}")
         fallback_lines.append(
             f"{idx}. <b>{escape(_trim_text(title, 92))}</b>\n"
