@@ -62,6 +62,7 @@
 - `[x]` `web` и `lead-bot` говорят о `Contract_AI_System` как о внешнем модуле/флагманском направлении без обещаний, которые живут только в отдельном репозитории.
 - `[x]` Инвентаризированы основные точки перехода из `web` и `lead-bot` в `Contract_AI_System`, заведён отдельный список entrypoints.
 - `[x]` Зафиксирован канонический URL/entrypoint внешнего `Contract_AI_System` для `web`, `lead-bot` и docs.
+- `[x]` Локальная мобильная версия `web`/`miniapp` перепроверена на QA-порту `127.0.0.1:8088`; адаптивные CTA и верхние панели больше не режутся на узком экране.
 - `[ ]` Проверить живой внешний entrypoint `Contract_AI_System` на реальном устройстве и убедиться, что CTA не ведут в тупик.
 - `[!]` Полноценный аудит frontend/admin/auth/billing/test-matrix самого `Contract_AI_System` вести отдельно в репозитории `Contract-AI-System-`.
 - `[x]` Явный legal disclaimer системно добавлен в web через CTA/lead/footer.

@@ -2,6 +2,36 @@
     email {$ACME_EMAIL}
 }
 
+:8088 {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "SAMEORIGIN"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    handle /api/v1/* {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health/detailed {
+        reverse_proxy core-api:8000
+    }
+
+    handle {
+        reverse_proxy web:3000
+    }
+}
+
+http://localhost, http://127.0.0.1 {
+    redir http://127.0.0.1:8088{uri} 308
+}
+
 {$CONTRACT_DOMAIN} {
     encode zstd gzip
     header {

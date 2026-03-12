@@ -33,7 +33,7 @@ export default function MiniAppTopBar() {
           href={ROUTES.miniAppProfile}
           action={MINIAPP_ACTIONS.openOnboarding}
           meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.topbar, screen: MINIAPP_SCREENS.home }}
-          className="mt-3 inline-flex rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+          className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-amber-400 sm:w-auto"
         >
           Пройти настройку
         </MiniTrackedLink>
@@ -43,7 +43,7 @@ export default function MiniAppTopBar() {
 
   return (
     <article className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-emerald-300">Профиль активен</h2>
           <p className="mt-1 text-xs text-slate-200">
@@ -54,7 +54,7 @@ export default function MiniAppTopBar() {
           href={ROUTES.miniAppProfile}
           action={MINIAPP_ACTIONS.openProfile}
           meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.topbar, screen: MINIAPP_SCREENS.home }}
-          className="rounded-lg border border-emerald-400/40 px-3 py-2 text-xs font-semibold text-emerald-200 hover:border-emerald-300 transition-colors"
+          className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-400/40 px-3 py-2 text-xs font-semibold text-emerald-200 transition-colors hover:border-emerald-300 sm:w-auto"
         >
           Изменить
         </MiniTrackedLink>

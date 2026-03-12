@@ -81,35 +81,35 @@ export default function Home() {
           <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             Платформа автоматизации юридической работы
           </span>
-          <h1 className="mt-6 max-w-4xl text-4xl md:text-5xl font-semibold leading-tight text-white">
+          <h1 className="mt-6 max-w-4xl text-3xl font-semibold leading-tight text-white sm:text-4xl md:text-5xl">
             Legal AI PRO: от бесплатной консультации и проверки договора к пилоту и рабочему внедрению
           </h1>
-          <p className="mt-6 max-w-3xl text-lg text-slate-300 leading-relaxed">
+          <p className="mt-6 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
             Помогаем перейти от разрозненных ИИ-экспериментов к управляемой практике: сначала бесплатно помогаем
             понять задачу, затем проверяем гипотезу в Contract_AI_System и только после этого выходим в пилот и
             рабочий контур.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {contractAIExternal ? (
               <a
                 href={contractAIHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+                className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400"
               >
                 Открыть сервис проверки договоров
               </a>
             ) : (
               <Link
                 href={contractAIHref}
-                className="rounded-lg bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+                className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400"
               >
                 Открыть сервис проверки договоров
               </Link>
             )}
             <Link
               href={ROUTES.solutions}
-              className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+              className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
             >
               Посмотреть решения
             </Link>
@@ -117,7 +117,7 @@ export default function Home() {
               href={leadBotDeepLink("web_home_intro")}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-200 hover:border-sky-400 hover:text-sky-300 transition-colors"
+              className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-sky-400 hover:text-sky-300"
             >
               Бесплатная консультация в Telegram
             </a>
