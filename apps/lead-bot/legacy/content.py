@@ -277,6 +277,20 @@ def with_channel_nurture(text: str, *, after_contact: bool = False) -> str:
     return f"{text}\n\n{extra}"
 
 
+def assistant_chat_hint_text() -> str:
+    return (
+        "<i>Можно не только нажимать кнопки: просто напишите задачу обычными словами, "
+        "и ИИ-помощник предложит следующий шаг.</i>"
+    )
+
+
+def with_assistant_chat_hint(text: str) -> str:
+    hint = assistant_chat_hint_text()
+    if hint in text:
+        return text
+    return f"{text}\n\n{hint}"
+
+
 def contract_ai_entry_hint() -> str:
     if not contract_ai_public_url():
         return ""
@@ -316,7 +330,8 @@ def build_welcome_message(first_name: str) -> str:
     name = _e((first_name or "").strip() or "коллега")
     return (
         f"<b>Здравствуйте, {name}.</b>\n\n"
-        "<b>Legal AI PRO</b> помогает юристам, руководителям и командам быстрее разбирать договоры, "
+        "<b>Legal AI PRO</b> — это ИИ-помощник по автоматизации юридических процессов.\n"
+        "Он помогает юристам, руководителям и командам быстрее разбирать договоры, "
         "не терять юридические запросы и запускать автоматизацию без лишней сложности.\n\n"
         "<b>Когда это особенно полезно:</b>\n"
         "• договоры долго согласуются\n"
@@ -346,7 +361,7 @@ def build_start_entry_text(
         )
     return (
         f"<b>Здравствуйте, {name}.</b>\n\n"
-        "<b>Legal AI PRO</b> — это практический сервис для юридической работы и автоматизации.\n"
+        "<b>Legal AI PRO</b> — это ИИ-помощник по автоматизации юридических процессов.\n"
         "Он помогает быстрее разбирать договоры, не терять юридические запросы и понять, "
         "какой формат помощи нужен именно вам.\n\n"
         f"{profile_hint}"
@@ -425,13 +440,13 @@ def build_workspace_text(
     return (
         "<b>🧭 Рабочий стол</b>\n\n"
         f"{intro}"
-        "Здесь собраны основные разделы: услуги, цены, проверка договора, консультация и документы.\n\n"
+        "Здесь собраны основные разделы: услуги, цены, ИИ-проверка договора, консультация и документы.\n\n"
         "Если профиль определился неточно, переключите верхнюю кнопку «🎯 Профиль услуг».\n\n"
         f"<b>Сейчас активен:</b> {_e(active_profile_label)}\n"
         f"<b>Режим:</b> {_e(mode)}\n\n"
         "<b>Что можно сделать сейчас:</b>\n"
         "• посмотреть услуги и ориентиры по бюджету\n"
-        "• открыть проверку договора\n"
+        "• открыть ИИ-проверку договора или описать задачу своими словами\n"
         "• запросить консультацию или оставить контакт\n\n"
         "Для персональной заявки и ИИ-разбора я сначала попрошу согласие на обработку данных.\n\n"
         "Выберите нужный раздел кнопками ниже."
@@ -530,14 +545,16 @@ def menu_response_by_key(
     selected_profile: str | None = None,
 ) -> str:
     if key == "menu_services":
-        return with_channel_nurture(_platform_services_text(_resolve_client_platform(lead, selected_profile)))
+        return with_channel_nurture(with_assistant_chat_hint(_platform_services_text(_resolve_client_platform(lead, selected_profile))))
     if key == "menu_prices":
-        return with_channel_nurture(_platform_prices_text(_resolve_client_platform(lead, selected_profile)))
+        return with_channel_nurture(with_assistant_chat_hint(_platform_prices_text(_resolve_client_platform(lead, selected_profile))))
     if key == "menu_offer_profile":
-        return offer_profile_panel_text(lead=lead, selected_profile=selected_profile)
+        return with_assistant_chat_hint(offer_profile_panel_text(lead=lead, selected_profile=selected_profile))
     if key == "menu_dashboard":
         return build_workspace_text(lead=lead, selected_profile=selected_profile)
     response = MENU_RESPONSES.get(key, "Выберите пункт меню.")
+    if key in {"menu_help", "menu_contract_ai", "menu_consultation", "menu_leave_contact", "menu_profile", "menu_documents"}:
+        response = with_assistant_chat_hint(response)
     if key in {"menu_help", "menu_contract_ai"}:
         if key == "menu_contract_ai":
             hint = contract_ai_entry_hint()

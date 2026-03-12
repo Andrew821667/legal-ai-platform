@@ -69,21 +69,35 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
         include_context_intro=True,
     )
     assert "Legal AI PRO" in first_touch
-    assert "это практический сервис для юридической работы и автоматизации" in first_touch
+    assert "это ИИ-помощник по автоматизации юридических процессов" in first_touch
     assert "С чего удобно начать" in first_touch
     assert "Проверить договор" in first_touch
 
 
 def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
     response = content.menu_response_by_key("menu_help")
+    assert "Можно не только нажимать кнопки" in response
     if content.public_channel_url():
         assert "канала Legal AI PRO" in response
     else:
         assert "канала Legal AI PRO" not in response
 
 
+def test_services_menu_explicitly_allows_freeform_ai_chat() -> None:
+    response = content.menu_response_by_key("menu_services", selected_profile="business")
+    assert "Можно не только нажимать кнопки" in response
+    assert "ИИ-помощник предложит следующий шаг" in response
+
+
+def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
+    response = content.menu_response_by_key("menu_offer_profile", selected_profile="business")
+    assert "Можно не только нажимать кнопки" in response
+    assert "ИИ-помощник предложит следующий шаг" in response
+
+
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
+    assert "это ИИ-помощник по автоматизации юридических процессов" in welcome
     assert "помогает юристам, руководителям и командам" in welcome
     assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome

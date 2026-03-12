@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from handlers import user as user_handlers
+from handlers import user_routing
 
 
 @pytest.mark.anyio
@@ -85,3 +86,25 @@ async def test_first_touch_uses_single_workspace_entry(monkeypatch: pytest.Monke
     assert len(messages) == 1
     assert "Здравствуйте, Андрей." in messages[0]
     assert "С чего удобно начать" in messages[0]
+
+
+@pytest.mark.anyio
+async def test_first_substantive_message_is_not_swallowed_by_entry_screen(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = {"workspace": False}
+
+    async def _unexpected_workspace(*args, **kwargs) -> None:
+        called["workspace"] = True
+
+    monkeypatch.setattr(user_routing, "send_workspace_entry", _unexpected_workspace)
+
+    handled = await user_routing.maybe_handle_initial_entry(
+        original_message=SimpleNamespace(),
+        message_text="Нужно автоматизировать согласование договоров и входящих запросов",
+        user=SimpleNamespace(id=42, first_name="Андрей"),
+        user_data={"id": 1},
+        lead=None,
+        history_exists=False,
+    )
+
+    assert handled is False
+    assert called["workspace"] is False

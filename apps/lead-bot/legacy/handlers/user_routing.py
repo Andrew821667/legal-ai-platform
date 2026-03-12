@@ -120,15 +120,10 @@ async def maybe_handle_initial_entry(
     history_exists: bool,
 ) -> bool:
     if message_text and not history_exists and not _is_navigation_shortcut(message_text):
-        await send_workspace_entry(
-            original_message,
-            user_id=user.id,
-            lead=lead,
-            workspace_action="forced_workspace_new_session",
-            include_context_intro=True,
-            first_name=user.first_name,
-        )
-        return True
+        # Первый содержательный запрос не должен теряться за стартовым экраном:
+        # для нового пользователя перехватываем только чистое приветствие.
+        if not looks_like_plain_greeting(message_text):
+            return False
 
     if message_text and looks_like_plain_greeting(message_text):
         await send_workspace_entry(
