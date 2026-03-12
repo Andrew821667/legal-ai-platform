@@ -11,7 +11,6 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timedelta
-from html import escape
 from zoneinfo import ZoneInfo
 
 import requests
@@ -57,6 +56,18 @@ def _trim_text(value: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[:limit].rstrip(" ,.;:") + "..."
+
+
+def _dedupe_title_prefix(title: str, body: str) -> str:
+    normalized_title = " ".join((title or "").split()).strip()
+    normalized_body = " ".join((body or "").split()).strip()
+    if not normalized_title or not normalized_body:
+        return normalized_body
+    if normalized_body.lower().startswith(normalized_title.lower()):
+        trimmed = normalized_body[len(normalized_title):].lstrip(" .,:;!-")
+        if trimmed:
+            return trimmed
+    return normalized_body
 
 
 def _normalize_slot_time(value: str) -> str:
@@ -256,7 +267,7 @@ async def _build_digest_summary(
         )
         cleaned = normalize_reader_text(result or "", multiline=True)
         if cleaned:
-            return escape(_trim_text(cleaned, 1800))
+            return _trim_text(cleaned, 1800)
     except Exception:
         logger.exception("reader_digest_llm_failed")
     return ""
@@ -276,16 +287,22 @@ async def _render_digest_text(
     links: list[str] = []
     for idx, article in enumerate(articles[:6], 1):
         title = _trim_text(normalize_reader_text(article.draft.title, multiline=False), 120)
-        body = _trim_text(normalize_reader_text(article.draft.content, multiline=True), 250)
+        body = _trim_text(
+            _dedupe_title_prefix(
+                title,
+                normalize_reader_text(article.draft.content, multiline=True),
+            ),
+            250,
+        )
         article_blocks.append(f"{idx}) {title}\n{body}")
         fallback_lines.append(
-            f"{idx}. <b>{escape(_trim_text(title, 92))}</b>\n"
-            f"{escape(_trim_text(body, 160))}"
+            f"{idx}. { _trim_text(title, 92) }\n"
+            f"{ _trim_text(body, 160) }"
         )
         link = reader_post_deeplink(article.id)
         if link:
             links.append(
-                f"• <a href=\"{escape(link, quote=True)}\">{escape(_trim_text(title, 80))}</a>"
+                f"• {_trim_text(title, 80)}\n{link}"
             )
 
     summary = await _build_digest_summary(
@@ -297,7 +314,7 @@ async def _render_digest_text(
         summary = "Ключевые материалы под ваши темы за последние дни:"
 
     text_parts = [
-        "📬 <b>Персональный digest по AI в юридической функции</b>",
+        "📬 Персональный digest по AI в юридической функции",
         "",
         summary,
         "",
@@ -307,7 +324,7 @@ async def _render_digest_text(
         text_parts.extend(
             [
                 "",
-                "<b>Открыть материалы в reader-боте</b>",
+                "Открыть материалы в reader-боте",
                 "\n".join(links[:3]),
             ]
         )
@@ -377,7 +394,6 @@ async def _run_digest_cycle(bot: Bot, *, max_users: int) -> dict[str, int]:
                 await bot.send_message(
                     chat_id=int(profile.user_id),
                     text=digest_text,
-                    parse_mode="HTML",
                     disable_web_page_preview=True,
                 )
                 db.add(
