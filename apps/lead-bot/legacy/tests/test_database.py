@@ -5,6 +5,7 @@ import pytest
 import tempfile
 import os
 import time
+import json
 from database import Database
 
 
@@ -693,3 +694,39 @@ def test_get_lead_by_user_id_prefers_core_snapshot(test_db, monkeypatch):
     assert lead["company"] == "Core Co"
     assert lead["temperature"] == "hot"
     assert lead["core_lead_id"] == "core-lead-10007"
+
+
+def test_core_get_json_uses_short_cache(test_db, monkeypatch):
+    import database as database_module
+
+    calls = {"count": 0}
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def read(self):
+            return json.dumps(self._payload, ensure_ascii=False).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def _fake_urlopen(request, timeout=0):
+        calls["count"] += 1
+        return _FakeResponse([{"telegram_id": 424242, "username": "cached_core"}])
+
+    monkeypatch.setattr(database_module.config, "CORE_API_SYNC_ENABLED", True)
+    monkeypatch.setattr(database_module.config, "CORE_API_URL", "http://core-api:8000")
+    monkeypatch.setattr(database_module.config, "API_KEY_BOT", "test-api-key")
+    monkeypatch.setattr(database_module.config, "CORE_API_CACHE_TTL_SECONDS", 30.0)
+    monkeypatch.setattr(database_module.config, "CORE_API_STALE_CACHE_TTL_SECONDS", 60.0)
+    monkeypatch.setattr(database_module.urllib.request, "urlopen", _fake_urlopen)
+
+    first = test_db._core_get_json("/api/v1/users", {"telegram_id": 424242})
+    second = test_db._core_get_json("/api/v1/users", {"telegram_id": 424242})
+
+    assert first == second
+    assert calls["count"] == 1

@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import httpx
 from telegram import Update
 from telegram.request import HTTPXRequest
 from telegram.ext import (
@@ -839,17 +840,28 @@ async def cleanup_conversations_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def build_application() -> Application:
+    httpx_kwargs: dict[str, Any] | None = None
+    if config.TELEGRAM_FORCE_IPV4:
+        # Binding the client to an IPv4 local address nudges httpx/httpcore to use
+        # an IPv4 path to Telegram and avoids slow/failing IPv6 resolution attempts
+        # observed in Docker on this host.
+        httpx_kwargs = {
+            "transport": httpx.AsyncHTTPTransport(local_address="0.0.0.0"),
+        }
+
     request = HTTPXRequest(
         connect_timeout=8.0,
         read_timeout=20.0,
         write_timeout=20.0,
         pool_timeout=3.0,
+        httpx_kwargs=httpx_kwargs,
     )
     get_updates_request = HTTPXRequest(
         connect_timeout=8.0,
         read_timeout=45.0,
         write_timeout=20.0,
         pool_timeout=3.0,
+        httpx_kwargs=httpx_kwargs,
     )
 
     application = (

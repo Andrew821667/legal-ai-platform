@@ -115,6 +115,9 @@ services:
     environment:
       CORE_API_URL: http://core-api:8000
       TZ: ${TZ:-Europe/Moscow}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       core-api:
         condition: service_healthy

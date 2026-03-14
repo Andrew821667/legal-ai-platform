@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import hashlib
 import logging
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -76,9 +77,34 @@ class CoreApiBridge:
         self.api_key = config.API_KEY_BOT
         self.timeout = config.CORE_API_TIMEOUT_SECONDS
         self.enabled = bool(config.CORE_API_SYNC_ENABLED and self.base_url and self.api_key)
+        self.post_dedup_ttl = config.CORE_API_POST_DEDUP_TTL_SECONDS
+        self._recent_post_successes: dict[str, float] = {}
+
+    def _is_recent_duplicate(self, idempotency_key: str) -> bool:
+        if self.post_dedup_ttl <= 0:
+            return False
+        now = time.monotonic()
+        last_success_at = self._recent_post_successes.get(idempotency_key)
+        if last_success_at is None:
+            return False
+        if (now - last_success_at) > self.post_dedup_ttl:
+            self._recent_post_successes.pop(idempotency_key, None)
+            return False
+        return True
+
+    def _remember_success(self, idempotency_key: str) -> None:
+        if self.post_dedup_ttl <= 0:
+            return
+        self._recent_post_successes[idempotency_key] = time.monotonic()
+        if len(self._recent_post_successes) > 512:
+            oldest_key = min(self._recent_post_successes.items(), key=lambda item: item[1])[0]
+            self._recent_post_successes.pop(oldest_key, None)
 
     def _post(self, path: str, payload: dict[str, Any], idempotency_key: str) -> dict[str, Any] | None:
         if not self.enabled:
+            return None
+        if self._is_recent_duplicate(idempotency_key):
+            logger.debug("Skipping duplicate core-api post %s for %s", idempotency_key, path)
             return None
 
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -95,6 +121,7 @@ class CoreApiBridge:
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
+                self._remember_success(idempotency_key)
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as error:
             payload_text = error.read().decode("utf-8", errors="ignore")

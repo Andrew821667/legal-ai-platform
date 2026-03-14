@@ -1,10 +1,12 @@
 """Base SQLite runtime facade for the legacy lead-bot database layer."""
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
 import sqlite3
+import time
 import urllib.parse
 import urllib.request
 from typing import Dict, Optional
@@ -23,10 +25,43 @@ class Database(database_facade.DatabaseFacadeMixin):
 
     def __init__(self, db_path: str = None):
         self.db_path = db_path or config.DB_PATH
+        self._core_get_cache: dict[str, tuple[float, object]] = {}
         db_dir = os.path.dirname(self.db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
         self.init_database()
+
+    @staticmethod
+    def _core_cache_key(path: str, params: dict | None = None) -> str:
+        cleaned = {key: value for key, value in (params or {}).items() if value is not None}
+        return json.dumps(
+            {
+                "path": path,
+                "params": cleaned,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+
+    def _core_cache_lookup(self, cache_key: str, ttl_seconds: float) -> object | None:
+        if ttl_seconds <= 0:
+            return None
+        cached = self._core_get_cache.get(cache_key)
+        if not cached:
+            return None
+        cached_at, payload = cached
+        if (time.monotonic() - cached_at) > ttl_seconds:
+            return None
+        return copy.deepcopy(payload)
+
+    def _core_cache_store(self, cache_key: str, payload: object) -> None:
+        if config.CORE_API_STALE_CACHE_TTL_SECONDS <= 0:
+            return
+        self._core_get_cache[cache_key] = (time.monotonic(), copy.deepcopy(payload))
+        if len(self._core_get_cache) > 256:
+            oldest_key = min(self._core_get_cache.items(), key=lambda item: item[1][0])[0]
+            self._core_get_cache.pop(oldest_key, None)
 
     def get_connection(self) -> sqlite3.Connection:
         """Получение подключения к БД."""
@@ -45,6 +80,11 @@ class Database(database_facade.DatabaseFacadeMixin):
         if not (config.CORE_API_SYNC_ENABLED and config.CORE_API_URL and config.API_KEY_BOT):
             return None
         started_at = perf_start()
+        cache_key = self._core_cache_key(path, params)
+        cached = self._core_cache_lookup(cache_key, config.CORE_API_CACHE_TTL_SECONDS)
+        if cached is not None:
+            log_span_timing("lead_db_core_get", started_at, ok=True, path=path, cache="hot")
+            return cached
 
         query = ""
         if params:
@@ -60,9 +100,22 @@ class Database(database_facade.DatabaseFacadeMixin):
         try:
             with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8")
+                payload = json.loads(raw) if raw else None
+                self._core_cache_store(cache_key, payload)
                 log_span_timing("lead_db_core_get", started_at, ok=True, path=path)
-                return json.loads(raw) if raw else None
+                return payload
         except Exception as error:
+            stale = self._core_cache_lookup(cache_key, config.CORE_API_STALE_CACHE_TTL_SECONDS)
+            if stale is not None:
+                log_span_timing(
+                    "lead_db_core_get",
+                    started_at,
+                    ok=True,
+                    path=path,
+                    cache="stale",
+                )
+                logger.debug("Core API getter using stale cache for %s after error: %s", path, error)
+                return stale
             log_span_timing(
                 "lead_db_core_get",
                 started_at,

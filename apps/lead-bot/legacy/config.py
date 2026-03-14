@@ -135,6 +135,22 @@ class Config:
         self.API_KEY_ADMIN: str = os.getenv('API_KEY_ADMIN', '').strip()
         self.CORE_API_SYNC_ENABLED: bool = os.getenv('CORE_API_SYNC_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_TIMEOUT_SECONDS: float = float(os.getenv('CORE_API_TIMEOUT_SECONDS', '5'))
+        self.CORE_API_CACHE_TTL_SECONDS: float = max(
+            0.0,
+            float(os.getenv('CORE_API_CACHE_TTL_SECONDS', '15')),
+        )
+        self.CORE_API_STALE_CACHE_TTL_SECONDS: float = max(
+            self.CORE_API_CACHE_TTL_SECONDS,
+            float(os.getenv('CORE_API_STALE_CACHE_TTL_SECONDS', '120')),
+        )
+        self.CORE_API_POST_DEDUP_TTL_SECONDS: float = max(
+            0.0,
+            float(os.getenv('CORE_API_POST_DEDUP_TTL_SECONDS', '20')),
+        )
+        self.TELEGRAM_FORCE_IPV4: bool = os.getenv(
+            'TELEGRAM_FORCE_IPV4',
+            '1',
+        ).strip().lower() in {'1', 'true', 'yes'}
         self.LEAD_PERF_LOGGING_ENABLED: bool = os.getenv('LEAD_PERF_LOGGING_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
         self.LEAD_PERF_LOG_ALL_UPDATES: bool = os.getenv('LEAD_PERF_LOG_ALL_UPDATES', '0').strip().lower() in {'1', 'true', 'yes'}
         self.LEAD_PERF_SLOW_UPDATE_MS: int = max(50, int(os.getenv('LEAD_PERF_SLOW_UPDATE_MS', '1200')))
