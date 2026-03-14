@@ -35,6 +35,14 @@ config = get_config()
 logger = logging.getLogger(__name__)
 
 
+def _get_local_user_and_lead(telegram_id: int) -> tuple[dict | None, dict | None]:
+    user_row = database.db.get_local_user_by_telegram_id(telegram_id)
+    if not user_row:
+        return None, None
+    lead = database.db.get_local_lead_by_user_id(user_row["id"])
+    return user_row, lead
+
+
 def _extract_start_payload(context: ContextTypes.DEFAULT_TYPE) -> str:
     args = getattr(context, "args", None) or []
     if not args:
@@ -107,7 +115,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat is not None:
             database.db.set_chat_mode(int(chat.id), "bot")
 
-        lead = database.db.get_lead_by_user_id(user_id)
+        lead = database.db.get_local_lead_by_user_id(user_id)
         selected_profile = database.db.get_user_offer_profile(user_id)
         consent_state = database.db.get_user_consent_state(user_id)
         needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
@@ -126,7 +134,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         logger.info("Start entry sent on /start for user %s", user.id)
 
-        user_data = database.db.get_user_by_id(user_id)
+        user_data = database.db.get_local_user_by_id(user_id)
         if user_data and not needs_pdn_consent:
             await process_pending_start_payload(
                 message=update.message,
@@ -169,9 +177,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected_profile = None
     user = update.effective_user
     if user:
-        user_row = database.db.get_user_by_telegram_id(user.id)
+        user_row, lead = _get_local_user_and_lead(user.id)
         if user_row:
-            lead = database.db.get_lead_by_user_id(user_row["id"])
             selected_profile = database.db.get_user_offer_profile(user_row["id"])
     await utils.safe_reply_html(
         update.message,
@@ -185,7 +192,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /profile - карточка пользователя."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="profile_no_user")
         return
@@ -237,7 +244,7 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
     """Команда /marketing_consent - условия рассылок."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     await utils.safe_reply_html(update.message, content.marketing_consent_text(), action="marketing_consent_command")
     if user_data:
         database.db.set_user_marketing_consent(user_data["id"], True)
@@ -247,7 +254,7 @@ async def transborder_consent_command(update: Update, context: ContextTypes.DEFA
     """Команда /transborder_consent - условия и управление согласием."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="transborder_no_user")
         return
@@ -272,7 +279,7 @@ async def consent_status_command(update: Update, context: ContextTypes.DEFAULT_T
     """Команда /consent_status - текущий статус согласий пользователя."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="consent_status_no_user")
         return
@@ -286,7 +293,7 @@ async def export_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Команда /export_data - выгрузка данных пользователя."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     if not user_data:
         await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="export_data_no_user")
         return
@@ -301,7 +308,7 @@ async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_T
     """Команда /revoke_consent - отзыв согласий и удаление ПД."""
     _ = context
     user = update.effective_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
+    user_data = database.db.get_local_user_by_telegram_id(user.id)
     if not user_data:
         await update.message.reply_text("Сначала выполните /start.")
         return
@@ -365,7 +372,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /reset"""
     try:
         user = update.effective_user
-        user_data = database.db.get_user_by_telegram_id(user.id)
+        user_data = database.db.get_local_user_by_telegram_id(user.id)
 
         if user_data:
             database.db.clear_conversation_history(user_data["id"])
@@ -392,9 +399,9 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_profile = None
         user = update.effective_user
         if user:
-            user_row = database.db.get_user_by_telegram_id(user.id)
+            user_row = database.db.get_local_user_by_telegram_id(user.id)
             if user_row:
-                lead = database.db.get_lead_by_user_id(user_row["id"])
+                lead = database.db.get_local_lead_by_user_id(user_row["id"])
                 selected_profile = database.db.get_user_offer_profile(user_row["id"])
         reply_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
 

@@ -77,7 +77,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Message from user %s: %s", user.id, message_preview[:50])
 
         # Получаем или создаем пользователя
-        user_data = database.db.get_user_by_telegram_id(user.id)
+        user_data = database.db.get_local_user_by_telegram_id(user.id)
         if not user_data:
             database.db.create_or_update_user(
                 telegram_id=user.id,
@@ -85,11 +85,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 first_name=user.first_name,
                 last_name=user.last_name,
             )
-            user_data = database.db.get_user_by_telegram_id(user.id)
+            user_data = database.db.get_local_user_by_telegram_id(user.id)
             if not user_data:
                 return
 
-        lead = database.db.get_lead_by_user_id(user_data["id"])
+        lead = database.db.get_local_lead_by_user_id(user_data["id"])
         consent_state = database.db.get_user_consent_state(user_data["id"])
         has_pdn_consent = _is_pdn_consent_granted(consent_state)
         has_transborder_consent = bool(consent_state.get("transborder_consent"))
