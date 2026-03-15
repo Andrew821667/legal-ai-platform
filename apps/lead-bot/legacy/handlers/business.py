@@ -158,13 +158,16 @@ async def handle_business_operator_handoff(
     target = _resolve_business_chat_target(message)
     if not target:
         return None
+    target_chat_id = int(target["telegram_id"])
 
     user_db_id = database.db.create_or_update_user(
-        telegram_id=int(target["telegram_id"]),
+        telegram_id=target_chat_id,
         username=target["username"],
         first_name=target["first_name"],
         last_name=target["last_name"],
     )
+    if mode == "personal_request":
+        database.db.set_chat_mode(target_chat_id, "personal")
     existing_lead = database.db.get_lead_by_user_id(user_db_id) or {}
 
     notes_parts = []
