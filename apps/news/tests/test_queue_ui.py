@@ -91,7 +91,7 @@ def test_build_auto_queue_text_non_empty_and_empty() -> None:
         publish_at_utc=lambda row: None,
         screen_guide=_screen_guide_stub,
     )
-    assert "В scheduled сейчас нет постов." in empty
+    assert "В очереди публикации сейчас нет постов." in empty
 
 
 def test_build_manual_queue_text_non_empty_and_empty() -> None:
@@ -131,7 +131,7 @@ def test_build_manual_queue_text_non_empty_and_empty() -> None:
         screen_guide=_screen_guide_stub,
     )
     assert "Ручная очередь публикации (расширенный режим)" in non_empty
-    assert "Готовые сейчас: 1 из 2" in non_empty
+    assert "К публикации сейчас: 1 из 2" in non_empty
     assert "1. ⚡ 🤖 Пост 1" in non_empty
     assert "2. 🕒 📚 Пост 2" in non_empty
 

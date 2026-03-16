@@ -162,7 +162,7 @@ def build_source_detail_text(
             "",
             "Посты в истории:",
             f"• На проверке: {counts.get('review', 0)}",
-            f"• Готовые: {counts.get('scheduled', 0)}",
+            f"• На публикацию: {counts.get('scheduled', 0)}",
             f"• Опубликованные: {counts.get('posted', 0)}",
             f"• Ошибки: {counts.get('failed', 0)}",
         ]
@@ -208,7 +208,7 @@ def build_telegram_channel_detail_text(
         "",
         "Посты в истории:",
         f"• На проверке: {counts.get('review', 0)}",
-        f"• Готовые: {counts.get('scheduled', 0)}",
+        f"• На публикацию: {counts.get('scheduled', 0)}",
         f"• Опубликованные: {counts.get('posted', 0)}",
         f"• Ошибки: {counts.get('failed', 0)}",
         "",

@@ -26,7 +26,7 @@ def build_system_text(
         + "\n\n"
         f"📝 Черновики: {counts.get('draft', -1)}\n"
         f"🟡 На проверке: {counts.get('review', -1)}\n"
-        f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+        f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
         f"📤 Опубликованные: {counts.get('posted', -1)}\n"
         f"❌ Ошибки: {counts.get('failed', -1)}\n"
         f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"

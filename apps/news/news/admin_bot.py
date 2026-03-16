@@ -542,7 +542,7 @@ def _status_label(status: str) -> str:
     mapping = {
         "draft": "📝 Авторские черновики",
         "review": "🟡 На проверке",
-        "scheduled": "✅ Готовые к публикации",
+        "scheduled": "✅ На публикацию",
         "posted": "📤 Опубликованные",
         "failed": "❌ Ошибки публикации",
     }
@@ -2050,7 +2050,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
-            f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+            f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
@@ -2090,7 +2090,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
-            f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+            f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
             f"Следующая публикация: {next_publish}"
@@ -2113,7 +2113,7 @@ class NewsAdminBot:
             _inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0"),
             _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0"),
             _inline_button(
-                f"✅ Готовые ({counts.get('scheduled', 0)})",
+                f"✅ На публикацию ({counts.get('scheduled', 0)})",
                 callback_data="pl:scheduled:0",
                 style=_BUTTON_STYLE_SUCCESS,
             ),
@@ -2141,7 +2141,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
-            f"✅ Готовые: {counts.get('scheduled', -1)}\n"
+            f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n\n"
             f"Следующая публикация: {next_publish}"
@@ -3231,7 +3231,7 @@ class NewsAdminBot:
             "",
             f"📝 Черновики: {counts.get('draft', -1)}",
             f"🟡 На проверке: {counts.get('review', -1)}",
-            f"✅ Готовые: {counts.get('scheduled', -1)}",
+            f"✅ На публикацию: {counts.get('scheduled', -1)}",
             f"📤 Опубликованные: {counts.get('posted', -1)}",
             f"❌ Ошибки: {counts.get('failed', -1)}",
             "",
@@ -7272,7 +7272,7 @@ class NewsAdminBot:
                     source_status=status,
                     offset=offset,
                     target_status="scheduled",
-                    message_prefix="Пост переведён в готовые (scheduled).\n\n",
+                    message_prefix="Пост переведён в папку «На публикацию» (scheduled).\n\n",
                 )
                 return
 

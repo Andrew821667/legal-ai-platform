@@ -44,7 +44,7 @@ def build_auto_queue_text(
         "Автоочередь публикации",
         "",
         guide(
-            "Автоматическая очередь scheduled-постов с фильтрами по виду и теме.",
+            "Автоматическая очередь постов на публикацию с фильтрами по виду и теме.",
             [
                 "Используйте фильтры, чтобы быстро отобрать нужный тип публикаций.",
                 "Открывайте карточку поста для ручных правок или немедленной публикации.",
@@ -56,7 +56,7 @@ def build_auto_queue_text(
         f"Тема: {theme_label}",
         f"Автогенерация: {generate_morning} и {generate_evening}",
         f"Автопубликация: {publish_interval_label}",
-        f"Всего scheduled: {total}",
+        f"Всего на публикацию: {total}",
         f"Просрочено: {overdue}",
         "",
         "Текущая сетка:",
@@ -67,7 +67,7 @@ def build_auto_queue_text(
         "",
     ]
     if not rows:
-        lines.append("В scheduled сейчас нет постов.")
+        lines.append("В очереди публикации сейчас нет постов.")
         return "\n".join(lines)
 
     current_day = ""
@@ -113,7 +113,7 @@ def build_manual_queue_text(
 ) -> str:
     guide = screen_guide or (lambda _what, _actions: "")
     current_utc = now_utc or datetime.now(timezone.utc)
-    filter_label = "к публикации сейчас" if queue_filter == "due" else "все готовые"
+    filter_label = "к публикации сейчас" if queue_filter == "due" else "все на публикацию"
     theme_label = "Все темы" if theme_filter == "all" else pillar_display(theme_filter)
 
     if not rows:
@@ -129,7 +129,7 @@ def build_manual_queue_text(
             + "\n\n"
             f"Фильтр: {filter_label}\n"
             f"Тема: {theme_label}\n"
-            f"Готовые сейчас: {due_total} из {scheduled_total}\n\n"
+            f"К публикации сейчас: {due_total} из {scheduled_total}\n\n"
             "Сейчас записей нет."
         )
 
@@ -146,7 +146,7 @@ def build_manual_queue_text(
         "",
         f"Фильтр: {filter_label}",
         f"Тема: {theme_label}",
-        f"Готовые сейчас: {due_total} из {scheduled_total}",
+        f"К публикации сейчас: {due_total} из {scheduled_total}",
         "Режимы топ-3/топ-5 доступны только в фильтре «К публикации сейчас».",
         "",
     ]

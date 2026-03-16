@@ -402,7 +402,7 @@ def test_cb_posts_ready_transition_uses_helper(monkeypatch) -> None:
 
     assert bot.client.calls == [("42", {"status": "scheduled"})]
     assert invalidation_calls == [True]
-    assert helper_calls == [("scheduled", 0, "scheduled", "Пост переведён в готовые (scheduled).\n\n")]
+    assert helper_calls == [("scheduled", 0, "scheduled", "Пост переведён в папку «На публикацию» (scheduled).\n\n")]
 
 
 def test_cb_posts_review_transition_uses_helper(monkeypatch) -> None:
