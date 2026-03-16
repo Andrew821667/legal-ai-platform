@@ -6,6 +6,7 @@ from core_api.models import ContractJobStatus, LeadStatus, PostFeedbackSource, S
 def test_enum_values() -> None:
     assert LeadStatus.new.value == "new"
     assert ScheduledPostStatus.review.value == "review"
+    assert ScheduledPostStatus.ready.value == "ready"
     assert ScheduledPostStatus.scheduled.value == "scheduled"
     assert ContractJobStatus.processing.value == "processing"
     assert PostFeedbackSource.comment.value == "comment"

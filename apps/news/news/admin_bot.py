@@ -203,7 +203,7 @@ _STATE_DRAFT_DAY_PUBLISH = "draft_day_publish"
 _STATE_GENERATION_PREVIEWS = "generation_previews"
 _STATE_PENDING_DELETE_REASON = "pending_delete_reason"
 _CREATE_EDIT_STEPS = {"edit_title", "edit_text", "edit_source", "edit_link", "edit_ai"}
-_POST_LIST_STATUSES = ("draft", "review", "scheduled", "posted", "failed")
+_POST_LIST_STATUSES = ("draft", "review", "ready", "scheduled", "posted", "failed")
 _MANUAL_QUEUE_FILTERS = ("due", "all")
 _AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
 _REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
@@ -352,6 +352,8 @@ _POSTS_CALLBACK_PREFIXES = (
     "pf:",
     "rr:",
     "pr:",
+    "pg:",
+    "gr:",
     "ps:",
     "px:",
     "ba:",
@@ -542,6 +544,7 @@ def _status_label(status: str) -> str:
     mapping = {
         "draft": "📝 Авторские черновики",
         "review": "🟡 На проверке",
+        "ready": "🟢 Готовые",
         "scheduled": "✅ На публикацию",
         "posted": "📤 Опубликованные",
         "failed": "❌ Ошибки публикации",
@@ -553,6 +556,7 @@ def _status_badge(status: str) -> str:
     mapping = {
         "draft": "📝",
         "review": "🟡",
+        "ready": "🟢",
         "scheduled": "✅",
         "failed": "❌",
         "publishing": "⏳",
@@ -1614,10 +1618,15 @@ class NewsAdminBot:
         for row in rows:
             post_id = str(row.get("id"))
             try:
-                target_status = "scheduled" if action == "ready" else "review"
-                payload = {"status": target_status}
                 if action == "ready":
+                    target_status = "ready"
                     payload = self._ready_status_payload(row)
+                elif action == "schedule":
+                    target_status = "scheduled"
+                    payload = self._scheduled_status_payload(row)
+                else:
+                    target_status = "review"
+                    payload = {"status": target_status}
                 self.client.patch_post(post_id, payload).raise_for_status()
                 moved += 1
             except Exception:
@@ -1625,9 +1634,10 @@ class NewsAdminBot:
         if moved:
             self._invalidate_post_caches()
         total_after, rows_after = self._load_posts(status=status, offset=offset)
+        target_label = {"ready": "ready", "schedule": "scheduled", "review": "review"}[action]
         await self._safe_edit_message_text(
             query,
-            f"Готово: {moved} пост(ов) переведены в {'scheduled' if action == 'ready' else 'review'}.\n\n"
+            f"Готово: {moved} пост(ов) переведены в {target_label}.\n\n"
             + self._posts_text(total_after, rows_after, offset, status),
             reply_markup=self._posts_keyboard(total_after, rows_after, offset, status),
         )
@@ -2050,6 +2060,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
+            f"🟢 Готовые: {counts.get('ready', -1)}\n"
             f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n"
@@ -2090,6 +2101,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
+            f"🟢 Готовые: {counts.get('ready', -1)}\n"
             f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"⏳ В публикации: {counts.get('publishing', -1)}\n\n"
@@ -2111,7 +2123,8 @@ class NewsAdminBot:
     def _worklists_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
         worklist_buttons = [
             _inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0"),
-            _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:0"),
+            _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:all:all:0"),
+            _inline_button(f"🟢 Готовые ({counts.get('ready', 0)})", callback_data="pl:ready:0"),
             _inline_button(
                 f"✅ На публикацию ({counts.get('scheduled', 0)})",
                 callback_data="pl:scheduled:0",
@@ -2141,6 +2154,7 @@ class NewsAdminBot:
             + "\n\n"
             f"📝 Черновики: {counts.get('draft', -1)}\n"
             f"🟡 На проверке: {counts.get('review', -1)}\n"
+            f"🟢 Готовые: {counts.get('ready', -1)}\n"
             f"✅ На публикацию: {counts.get('scheduled', -1)}\n"
             f"📤 Опубликованные: {counts.get('posted', -1)}\n"
             f"❌ Ошибки: {counts.get('failed', -1)}\n\n"
@@ -2903,7 +2917,7 @@ class NewsAdminBot:
         rows.extend(
             [
                 [
-                    _inline_button("🟡 На проверке", callback_data="rv:all:0"),
+                    _inline_button("🟡 На проверке", callback_data="rv:all:all:all:0"),
                     _inline_button("📰 Источники", callback_data="sec:sources"),
                 ],
                 [
@@ -3231,6 +3245,7 @@ class NewsAdminBot:
             "",
             f"📝 Черновики: {counts.get('draft', -1)}",
             f"🟡 На проверке: {counts.get('review', -1)}",
+            f"🟢 Готовые: {counts.get('ready', -1)}",
             f"✅ На публикацию: {counts.get('scheduled', -1)}",
             f"📤 Опубликованные: {counts.get('posted', -1)}",
             f"❌ Ошибки: {counts.get('failed', -1)}",
@@ -3284,6 +3299,12 @@ class NewsAdminBot:
         return parsed.astimezone(timezone.utc)
 
     def _ready_status_payload(self, row: dict[str, Any]) -> dict[str, Any]:
+        publish_at = self._publish_at_utc(row)
+        if publish_at is None or publish_at <= datetime.now(timezone.utc):
+            publish_at = _compute_quick_publish_at("h1")
+        return {"status": "ready", "publish_at": publish_at.isoformat()}
+
+    def _scheduled_status_payload(self, row: dict[str, Any]) -> dict[str, Any]:
         publish_at = self._publish_at_utc(row)
         if publish_at is None or publish_at <= datetime.now(timezone.utc):
             publish_at = _compute_quick_publish_at("h1")
@@ -7271,8 +7292,38 @@ class NewsAdminBot:
                     query,
                     source_status=status,
                     offset=offset,
+                    target_status="ready",
+                    message_prefix="Пост переведён в папку «Готовые» (ready).\n\n",
+                )
+                return
+
+            if data.startswith("pg:"):
+                _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                offset = int(offset_raw)
+                post = self._get_post(post_id)
+                self.client.patch_post(post_id, self._scheduled_status_payload(post)).raise_for_status()
+                self._invalidate_post_caches()
+                await self._show_after_transition(
+                    query,
+                    source_status=status,
+                    offset=offset,
                     target_status="scheduled",
                     message_prefix="Пост переведён в папку «На публикацию» (scheduled).\n\n",
+                )
+                return
+
+            if data.startswith("gr:"):
+                _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                offset = int(offset_raw)
+                post = self._get_post(post_id)
+                self.client.patch_post(post_id, self._ready_status_payload(post)).raise_for_status()
+                self._invalidate_post_caches()
+                await self._show_after_transition(
+                    query,
+                    source_status=status,
+                    offset=offset,
+                    target_status="ready",
+                    message_prefix="Пост возвращён в папку «Готовые» (ready).\n\n",
                 )
                 return
 
@@ -7292,7 +7343,7 @@ class NewsAdminBot:
 
             if data.startswith("ba:"):
                 _, action, status, offset_raw = data.split(":", maxsplit=3)
-                if action not in {"ready", "review"}:
+                if action not in {"ready", "review", "schedule"}:
                     await query.message.reply_text("Неизвестное пакетное действие.")
                     return
                 offset = int(offset_raw)

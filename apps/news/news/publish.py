@@ -47,19 +47,19 @@ def _autofill_publish_at(row: dict[str, Any], *, queue_index: int, now_utc: date
     return fallback.isoformat()
 
 
-def _promote_review_posts_for_idle_queue(client: CoreClient, *, limit: int) -> int:
-    review_limit = max(limit, _REVIEW_AUTOFILL_MIN_LIMIT, _REVIEW_AUTOFILL_SCAN_LIMIT, 1)
-    review_response = client.list_posts(limit=review_limit, status="review", newest_first=False)
-    review_response.raise_for_status()
-    review_rows = list(review_response.json() or [])
-    if not review_rows:
+def _promote_ready_posts_for_idle_queue(client: CoreClient, *, limit: int) -> int:
+    ready_limit = max(limit, _REVIEW_AUTOFILL_MIN_LIMIT, _REVIEW_AUTOFILL_SCAN_LIMIT, 1)
+    ready_response = client.list_posts(limit=ready_limit, status="ready", newest_first=False)
+    ready_response.raise_for_status()
+    ready_rows = list(ready_response.json() or [])
+    if not ready_rows:
         return 0
 
     now_utc = datetime.now(timezone.utc)
     lookahead = now_utc + timedelta(hours=_REVIEW_AUTOFILL_LOOKAHEAD_HOURS)
     stale_cutoff = now_utc - timedelta(hours=_REVIEW_AUTOFILL_MAX_STALENESS_HOURS)
     candidate_rows = []
-    for row in review_rows:
+    for row in ready_rows:
         publish_at = _parse_post_datetime(row.get("publish_at"))
         if publish_at is None:
             continue
@@ -88,7 +88,7 @@ def _promote_review_posts_for_idle_queue(client: CoreClient, *, limit: int) -> i
         promoted += 1
 
     if promoted:
-        logger.info("review_posts_promoted_to_scheduled", extra={"count": promoted})
+        logger.info("ready_posts_promoted_to_scheduled", extra={"count": promoted})
     return promoted
 
 
@@ -261,13 +261,13 @@ def main() -> int:
     if claim_response.status_code == 204:
         promoted = 0
         try:
-            promoted = _promote_review_posts_for_idle_queue(client, limit=claim_limit)
+            promoted = _promote_ready_posts_for_idle_queue(client, limit=claim_limit)
         except Exception as exc:
-            logger.warning("review_autofill_failed", extra={"error": str(exc)})
+            logger.warning("ready_autofill_failed", extra={"error": str(exc)})
         if promoted:
             claim_response = client.claim_posts(limit=claim_limit)
             if claim_response.status_code == 204:
-                logger.info("no_due_posts", extra={"review_promoted": promoted})
+                logger.info("no_due_posts", extra={"ready_promoted": promoted})
                 return 0
         else:
             logger.info("no_due_posts")

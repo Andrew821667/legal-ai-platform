@@ -372,7 +372,7 @@ def test_cb_posts_ready_transition_uses_helper(monkeypatch) -> None:
 
     bot = NewsAdminBot()
     bot.client = _ClientStub()
-    query = _DummyQuery("pr:42:scheduled:0")
+    query = _DummyQuery("pr:42:review:0")
     update = _DummyUpdate(query)
     context = _DummyContext()
     helper_calls: list[tuple[str, int, str, str]] = []
@@ -394,7 +394,55 @@ def test_cb_posts_ready_transition_uses_helper(monkeypatch) -> None:
     monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
     monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(bot, "_get_post", lambda post_id: {"id": post_id, "status": "review"})
-    monkeypatch.setattr(bot, "_ready_status_payload", lambda post: {"status": "scheduled"})
+    monkeypatch.setattr(bot, "_ready_status_payload", lambda post: {"status": "ready"})
+    monkeypatch.setattr(bot, "_invalidate_post_caches", lambda *args, **kwargs: invalidation_calls.append(True))
+    monkeypatch.setattr(bot, "_show_after_transition", _show_after)
+
+    asyncio.run(bot.cb_posts(update, context))
+
+    assert bot.client.calls == [("42", {"status": "ready"})]
+    assert invalidation_calls == [True]
+    assert helper_calls == [("review", 0, "ready", "Пост переведён в папку «Готовые» (ready).\n\n")]
+
+
+def test_cb_posts_schedule_transition_uses_helper(monkeypatch) -> None:
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _ClientStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, object]]] = []
+
+        def patch_post(self, post_id: str, payload: dict[str, object]) -> _Response:
+            self.calls.append((post_id, payload))
+            return _Response()
+
+    bot = NewsAdminBot()
+    bot.client = _ClientStub()
+    query = _DummyQuery("pg:42:ready:0")
+    update = _DummyUpdate(query)
+    context = _DummyContext()
+    helper_calls: list[tuple[str, int, str, str]] = []
+    invalidation_calls: list[bool] = []
+
+    async def _ensure_admin(_update) -> bool:  # noqa: ANN001
+        return True
+
+    async def _show_after(  # noqa: ANN001
+        _query,
+        *,
+        source_status: str,
+        offset: int,
+        target_status: str,
+        message_prefix: str,
+    ) -> None:
+        helper_calls.append((source_status, offset, target_status, message_prefix))
+
+    monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
+    monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bot, "_get_post", lambda post_id: {"id": post_id, "status": "ready"})
+    monkeypatch.setattr(bot, "_scheduled_status_payload", lambda post: {"status": "scheduled"})
     monkeypatch.setattr(bot, "_invalidate_post_caches", lambda *args, **kwargs: invalidation_calls.append(True))
     monkeypatch.setattr(bot, "_show_after_transition", _show_after)
 
@@ -402,7 +450,7 @@ def test_cb_posts_ready_transition_uses_helper(monkeypatch) -> None:
 
     assert bot.client.calls == [("42", {"status": "scheduled"})]
     assert invalidation_calls == [True]
-    assert helper_calls == [("scheduled", 0, "scheduled", "Пост переведён в папку «На публикацию» (scheduled).\n\n")]
+    assert helper_calls == [("ready", 0, "scheduled", "Пост переведён в папку «На публикацию» (scheduled).\n\n")]
 
 
 def test_cb_posts_review_transition_uses_helper(monkeypatch) -> None:

@@ -78,7 +78,7 @@ def build_sources_text(
             badge = "☐"
             status = "выключен"
 
-        total = sum(int(row.get(item, 0)) for item in ("review", "scheduled", "posted", "failed"))
+        total = sum(int(row.get(item, 0)) for item in ("review", "ready", "scheduled", "posted", "failed"))
         lines.append(f"{index}. {badge} {name} [{kind}]")
         lines.append(f"   {status}; постов в истории: {total}")
 
@@ -162,6 +162,7 @@ def build_source_detail_text(
             "",
             "Посты в истории:",
             f"• На проверке: {counts.get('review', 0)}",
+            f"• Готовые: {counts.get('ready', 0)}",
             f"• На публикацию: {counts.get('scheduled', 0)}",
             f"• Опубликованные: {counts.get('posted', 0)}",
             f"• Ошибки: {counts.get('failed', 0)}",
@@ -208,6 +209,7 @@ def build_telegram_channel_detail_text(
         "",
         "Посты в истории:",
         f"• На проверке: {counts.get('review', 0)}",
+        f"• Готовые: {counts.get('ready', 0)}",
         f"• На публикацию: {counts.get('scheduled', 0)}",
         f"• Опубликованные: {counts.get('posted', 0)}",
         f"• Ошибки: {counts.get('failed', 0)}",

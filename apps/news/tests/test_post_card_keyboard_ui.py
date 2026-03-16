@@ -89,6 +89,7 @@ def test_build_post_card_keyboard_rows_resolves_back_targets() -> None:
         ("th_implementation", "th:implementation:4"),
         ("src_telegram", "src:telegram:4"),
         ("mq_due_regulation", "mq:due:regulation:4"),
+        ("ready", "pl:ready:4"),
         ("scheduled", "pl:scheduled:4"),
     ]
     for status, expected_callback in cases:
@@ -111,6 +112,49 @@ def test_build_post_card_keyboard_rows_resolves_back_targets() -> None:
             button_style_danger="danger",
         )
         assert expected_callback in _callbacks(rows)
+
+
+def test_build_post_card_keyboard_rows_for_ready_and_scheduled() -> None:
+    ready_rows = build_post_card_keyboard_rows(
+        post_id="p1",
+        status="ready",
+        offset=1,
+        two_column_rows=_two_column_rows,
+        callback_button=_inline_button,
+        is_auto_queue_context=lambda value: value.startswith("aq_"),
+        auto_queue_filters_from_context=_auto_filters,
+        is_calendar_context=lambda value: value.startswith("cal_"),
+        calendar_date_from_context=_calendar_date,
+        is_theme_context=lambda value: value.startswith("th_"),
+        theme_from_context=lambda value: value.removeprefix("th_"),
+        is_source_context=lambda value: value.startswith("src_"),
+        source_from_context=lambda value: value.removeprefix("src_"),
+        is_manual_queue_context=lambda value: value.startswith("mq_"),
+        queue_filters_from_context=_manual_filters,
+        button_style_danger="danger",
+    )
+    assert "pg:p1:ready:1" in _callbacks(ready_rows)
+    assert "rr:p1:ready:1" in _callbacks(ready_rows)
+
+    scheduled_rows = build_post_card_keyboard_rows(
+        post_id="p1",
+        status="scheduled",
+        offset=1,
+        two_column_rows=_two_column_rows,
+        callback_button=_inline_button,
+        is_auto_queue_context=lambda value: value.startswith("aq_"),
+        auto_queue_filters_from_context=_auto_filters,
+        is_calendar_context=lambda value: value.startswith("cal_"),
+        calendar_date_from_context=_calendar_date,
+        is_theme_context=lambda value: value.startswith("th_"),
+        theme_from_context=lambda value: value.removeprefix("th_"),
+        is_source_context=lambda value: value.startswith("src_"),
+        source_from_context=lambda value: value.removeprefix("src_"),
+        is_manual_queue_context=lambda value: value.startswith("mq_"),
+        queue_filters_from_context=_manual_filters,
+        button_style_danger="danger",
+    )
+    assert "gr:p1:scheduled:1" in _callbacks(scheduled_rows)
 
 
 def test_build_post_card_action_keyboards() -> None:

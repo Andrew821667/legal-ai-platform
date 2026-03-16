@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from news.publish import _autofill_publish_at, _promote_review_posts_for_idle_queue
+from news.publish import _autofill_publish_at, _promote_ready_posts_for_idle_queue
 
 
 class _FakeResponse:
@@ -18,14 +18,14 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    def __init__(self, *, review_rows) -> None:
-        self._review_rows = review_rows
+    def __init__(self, *, ready_rows) -> None:
+        self._ready_rows = ready_rows
         self.patched: list[tuple[str, dict[str, str]]] = []
 
     def list_posts(self, limit: int = 20, status: str | None = None, newest_first: bool = False, offset: int = 0):
         _ = (limit, newest_first, offset)
-        if status == "review":
-            return _FakeResponse(self._review_rows[:limit])
+        if status == "ready":
+            return _FakeResponse(self._ready_rows[:limit])
         raise AssertionError(f"unexpected status {status}")
 
     def patch_post(self, post_id: str, payload: dict[str, str]):
@@ -53,16 +53,16 @@ def test_autofill_publish_at_shifts_past_review_post_forward() -> None:
     assert datetime.fromisoformat(result) == now_utc + timedelta(hours=2)
 
 
-def test_promote_review_posts_for_idle_queue() -> None:
+def test_promote_ready_posts_for_idle_queue() -> None:
     now_utc = datetime.now(timezone.utc)
     client = _FakeClient(
-        review_rows=[
+        ready_rows=[
             {"id": "r1", "publish_at": (now_utc - timedelta(hours=1)).isoformat()},
             {"id": "r2", "publish_at": (now_utc + timedelta(hours=3)).isoformat()},
         ],
     )
 
-    promoted = _promote_review_posts_for_idle_queue(client, limit=1)
+    promoted = _promote_ready_posts_for_idle_queue(client, limit=1)
 
     assert promoted == 2
     assert [post_id for post_id, _ in client.patched] == ["r1", "r2"]
@@ -70,16 +70,16 @@ def test_promote_review_posts_for_idle_queue() -> None:
     assert client.patched[1][1]["status"] == "scheduled"
 
 
-def test_do_not_promote_stale_or_distant_review_posts_for_idle_queue() -> None:
+def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:
     now_utc = datetime.now(timezone.utc)
     client = _FakeClient(
-        review_rows=[
+        ready_rows=[
             {"id": "stale", "publish_at": (now_utc - timedelta(days=3)).isoformat()},
             {"id": "distant", "publish_at": (now_utc + timedelta(days=3)).isoformat()},
         ],
     )
 
-    promoted = _promote_review_posts_for_idle_queue(client, limit=3)
+    promoted = _promote_ready_posts_for_idle_queue(client, limit=3)
 
     assert promoted == 0
     assert client.patched == []

@@ -58,6 +58,11 @@ def build_post_card_keyboard_rows(
         rows.append([callback_button("🟡 На проверку", callback_data=f"rr:{post_id}:{status}:{offset}")])
     if status in ("review", "failed"):
         rows.append([callback_button("✅ В готовые", callback_data=f"pr:{post_id}:{status}:{offset}")])
+    if status == "ready":
+        rows.append([callback_button("🗓 На публикацию", callback_data=f"pg:{post_id}:{status}:{offset}")])
+        rows.append([callback_button("🟡 Вернуть на проверку", callback_data=f"rr:{post_id}:{status}:{offset}")])
+    if status == "scheduled":
+        rows.append([callback_button("🟢 Вернуть в готовые", callback_data=f"gr:{post_id}:{status}:{offset}")])
 
     rows.append([callback_button(*_post_card_back_button(status=status, offset=offset, is_auto_queue_context=is_auto_queue_context, auto_queue_filters_from_context=auto_queue_filters_from_context, is_calendar_context=is_calendar_context, calendar_date_from_context=calendar_date_from_context, is_theme_context=is_theme_context, theme_from_context=theme_from_context, is_source_context=is_source_context, source_from_context=source_from_context, is_manual_queue_context=is_manual_queue_context, queue_filters_from_context=queue_filters_from_context))])
     rows.append([callback_button("🏠 Рабочий стол", callback_data="refresh")])
@@ -81,6 +86,8 @@ def _post_card_back_button(
 ) -> tuple[str, str]:
     if status == "review":
         return ("🔙 К проверке", f"rv:all:all:all:{offset}")
+    if status == "ready":
+        return ("🔙 К готовым", f"pl:ready:{offset}")
     if is_auto_queue_context(status):
         queue_filter, theme_filter = auto_queue_filters_from_context(status)
         return ("🔙 К автоочереди", f"aq:{queue_filter}:{theme_filter}:{offset}")

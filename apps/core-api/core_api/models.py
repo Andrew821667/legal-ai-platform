@@ -81,6 +81,7 @@ class PaymentTransactionStatus(str, enum.Enum):
 class ScheduledPostStatus(str, enum.Enum):
     draft = "draft"
     review = "review"
+    ready = "ready"
     scheduled = "scheduled"
     publishing = "publishing"
     posted = "posted"

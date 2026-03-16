@@ -40,6 +40,8 @@ def build_posts_keyboard_rows(
         buttons.append([callback_button("🟡 На проверку (все на странице)", callback_data=f"ba:review:{status}:{offset}")])
     if rows and status in {"review", "failed"}:
         buttons.append([callback_button("✅ В готовые (все на странице)", callback_data=f"ba:ready:{status}:{offset}")])
+    if rows and status == "ready":
+        buttons.append([callback_button("🗓 На публикацию (все на странице)", callback_data=f"ba:schedule:{status}:{offset}")])
 
     nav: list[Any] = []
     prev_offset = max(0, offset - page_size)
