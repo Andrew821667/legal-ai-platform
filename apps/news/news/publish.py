@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 import json
 
@@ -15,6 +15,81 @@ from news.settings import settings
 
 setup_logging()
 logger = logging.getLogger(__name__)
+_REVIEW_AUTOFILL_MIN_LIMIT = 3
+_REVIEW_AUTOFILL_SCAN_LIMIT = 10
+_REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
+_REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
+
+
+def _parse_post_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _autofill_publish_at(row: dict[str, Any], *, queue_index: int, now_utc: datetime) -> str:
+    publish_at = _parse_post_datetime(row.get("publish_at"))
+    if publish_at is not None and publish_at > now_utc:
+        return publish_at.isoformat()
+    fallback = now_utc + timedelta(hours=max(1, queue_index + 1))
+    return fallback.isoformat()
+
+
+def _promote_review_posts_for_idle_queue(client: CoreClient, *, limit: int) -> int:
+    review_limit = max(limit, _REVIEW_AUTOFILL_MIN_LIMIT, _REVIEW_AUTOFILL_SCAN_LIMIT, 1)
+    review_response = client.list_posts(limit=review_limit, status="review", newest_first=False)
+    review_response.raise_for_status()
+    review_rows = list(review_response.json() or [])
+    if not review_rows:
+        return 0
+
+    now_utc = datetime.now(timezone.utc)
+    lookahead = now_utc + timedelta(hours=_REVIEW_AUTOFILL_LOOKAHEAD_HOURS)
+    stale_cutoff = now_utc - timedelta(hours=_REVIEW_AUTOFILL_MAX_STALENESS_HOURS)
+    candidate_rows = []
+    for row in review_rows:
+        publish_at = _parse_post_datetime(row.get("publish_at"))
+        if publish_at is None:
+            continue
+        if publish_at < stale_cutoff:
+            continue
+        if publish_at > lookahead:
+            continue
+        candidate_rows.append(row)
+
+    if not candidate_rows:
+        return 0
+
+    promoted = 0
+    for index, row in enumerate(candidate_rows):
+        post_id = str(row.get("id") or "").strip()
+        if not post_id:
+            continue
+        patch = client.patch_post(
+            post_id,
+            {
+                "status": "scheduled",
+                "publish_at": _autofill_publish_at(row, queue_index=index, now_utc=now_utc),
+            },
+        )
+        patch.raise_for_status()
+        promoted += 1
+
+    if promoted:
+        logger.info("review_posts_promoted_to_scheduled", extra={"count": promoted})
+    return promoted
 
 
 def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
@@ -184,8 +259,19 @@ def main() -> int:
 
     claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
-        logger.info("no_due_posts")
-        return 0
+        promoted = 0
+        try:
+            promoted = _promote_review_posts_for_idle_queue(client, limit=claim_limit)
+        except Exception as exc:
+            logger.warning("review_autofill_failed", extra={"error": str(exc)})
+        if promoted:
+            claim_response = client.claim_posts(limit=claim_limit)
+            if claim_response.status_code == 204:
+                logger.info("no_due_posts", extra={"review_promoted": promoted})
+                return 0
+        else:
+            logger.info("no_due_posts")
+            return 0
     claim_response.raise_for_status()
 
     posts = claim_response.json()
