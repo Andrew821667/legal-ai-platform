@@ -441,8 +441,15 @@ def test_cb_posts_schedule_transition_uses_helper(monkeypatch) -> None:
 
     monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
     monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
-    monkeypatch.setattr(bot, "_get_post", lambda post_id: {"id": post_id, "status": "ready"})
+    post_states = iter(
+        [
+            {"id": "42", "status": "ready"},
+            {"id": "42", "status": "scheduled"},
+        ]
+    )
+    monkeypatch.setattr(bot, "_get_post", lambda post_id: next(post_states))
     monkeypatch.setattr(bot, "_scheduled_status_payload", lambda post: {"status": "scheduled"})
+    monkeypatch.setattr(bot, "_rebalance_active_publish_queue", lambda *args, **kwargs: {"demoted": 0, "promoted": 0, "rescheduled": 0})
     monkeypatch.setattr(bot, "_invalidate_post_caches", lambda *args, **kwargs: invalidation_calls.append(True))
     monkeypatch.setattr(bot, "_show_after_transition", _show_after)
 
@@ -489,6 +496,7 @@ def test_cb_posts_review_transition_uses_helper(monkeypatch) -> None:
 
     monkeypatch.setattr(bot, "_ensure_admin", _ensure_admin)
     monkeypatch.setattr(bot, "_sync_ui_hints_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bot, "_rebalance_active_publish_queue", lambda *args, **kwargs: {"demoted": 0, "promoted": 0, "rescheduled": 0})
     monkeypatch.setattr(bot, "_invalidate_post_caches", lambda *args, **kwargs: invalidation_calls.append(True))
     monkeypatch.setattr(bot, "_show_after_transition", _show_after)
 

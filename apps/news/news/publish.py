@@ -8,6 +8,7 @@ import json
 
 import requests
 
+from news.active_queue import parse_post_datetime, rebalance_active_publish_queue
 from news.control_plane import publish_claim_limit
 from news.core_client import CoreClient
 from news.logging_config import setup_logging
@@ -19,28 +20,8 @@ _REVIEW_AUTOFILL_MIN_LIMIT = 3
 _REVIEW_AUTOFILL_SCAN_LIMIT = 10
 _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
-
-
-def _parse_post_datetime(value: object) -> datetime | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        text = str(value).strip()
-        if not text:
-            return None
-        try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
 def _autofill_publish_at(row: dict[str, Any], *, queue_index: int, now_utc: datetime) -> str:
-    publish_at = _parse_post_datetime(row.get("publish_at"))
+    publish_at = parse_post_datetime(row.get("publish_at"))
     if publish_at is not None and publish_at > now_utc:
         return publish_at.isoformat()
     fallback = now_utc + timedelta(hours=max(1, queue_index + 1))
@@ -60,7 +41,7 @@ def _promote_ready_posts_for_idle_queue(client: CoreClient, *, limit: int) -> in
     stale_cutoff = now_utc - timedelta(hours=_REVIEW_AUTOFILL_MAX_STALENESS_HOURS)
     candidate_rows = []
     for row in ready_rows:
-        publish_at = _parse_post_datetime(row.get("publish_at"))
+        publish_at = parse_post_datetime(row.get("publish_at"))
         if publish_at is None:
             continue
         if publish_at < stale_cutoff:
@@ -257,21 +238,17 @@ def main() -> int:
     except Exception as exc:
         logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
 
+    try:
+        rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
+        if any(rebalance.values()):
+            logger.info("active_publish_queue_rebalanced", extra=rebalance)
+    except Exception as exc:
+        logger.warning("active_publish_queue_rebalance_failed", extra={"error": str(exc)})
+
     claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
-        promoted = 0
-        try:
-            promoted = _promote_ready_posts_for_idle_queue(client, limit=claim_limit)
-        except Exception as exc:
-            logger.warning("ready_autofill_failed", extra={"error": str(exc)})
-        if promoted:
-            claim_response = client.claim_posts(limit=claim_limit)
-            if claim_response.status_code == 204:
-                logger.info("no_due_posts", extra={"ready_promoted": promoted})
-                return 0
-        else:
-            logger.info("no_due_posts")
-            return 0
+        logger.info("no_due_posts")
+        return 0
     claim_response.raise_for_status()
 
     posts = claim_response.json()

@@ -71,6 +71,7 @@ from news.callbacks import (
     theme_context as _theme_context,
     theme_from_context as _theme_from_context,
 )
+from news.active_queue import rebalance_active_publish_queue
 from news.feedback import classify_comment_signal, summarize_reaction_counts
 from news.generate import collect_generation_previews
 from news.llm_writer import build_manual_footer, compose_manual_post_html
@@ -1631,6 +1632,8 @@ class NewsAdminBot:
                 moved += 1
             except Exception:
                 logger.exception("batch_move_failed", extra={"post_id": post_id, "from_status": status})
+        if action == "schedule":
+            self._rebalance_active_publish_queue()
         if moved:
             self._invalidate_post_caches()
         total_after, rows_after = self._load_posts(status=status, offset=offset)
@@ -3260,6 +3263,18 @@ class NewsAdminBot:
         all_rows = self._list_posts_rows(status=status, newest_first=False, limit=100)
         total = len(all_rows)
         return total, all_rows[offset : offset + _POSTS_PAGE_SIZE]
+
+    def _rebalance_active_publish_queue(self, *, preferred_post_id: str | None = None) -> dict[str, int]:
+        try:
+            controls = self._load_controls()
+        except Exception:
+            logger.exception("active_publish_queue_controls_load_failed")
+            controls = []
+        return rebalance_active_publish_queue(
+            self.client,
+            control_rows=controls,
+            preferred_post_id=preferred_post_id,
+        )
 
     @staticmethod
     def _publish_at_utc(row: dict[str, Any]) -> datetime | None:
@@ -7302,14 +7317,26 @@ class NewsAdminBot:
                 offset = int(offset_raw)
                 post = self._get_post(post_id)
                 self.client.patch_post(post_id, self._scheduled_status_payload(post)).raise_for_status()
+                self._rebalance_active_publish_queue(preferred_post_id=post_id)
                 self._invalidate_post_caches()
-                await self._show_after_transition(
-                    query,
-                    source_status=status,
-                    offset=offset,
-                    target_status="scheduled",
-                    message_prefix="Пост переведён в папку «На публикацию» (scheduled).\n\n",
-                )
+                refreshed_post = self._get_post(post_id)
+                actual_status = str(refreshed_post.get("status") or "ready")
+                if actual_status == "scheduled":
+                    await self._show_after_transition(
+                        query,
+                        source_status=status,
+                        offset=offset,
+                        target_status="scheduled",
+                        message_prefix="Пост переведён в папку «На публикацию» (scheduled).\n\n",
+                    )
+                else:
+                    await self._show_after_transition(
+                        query,
+                        source_status=status,
+                        offset=offset,
+                        target_status="ready",
+                        message_prefix="Слот этого типа уже занят ближайшей публикацией. Пост оставлен в «Готовых».\n\n",
+                    )
                 return
 
             if data.startswith("gr:"):
@@ -7317,6 +7344,7 @@ class NewsAdminBot:
                 offset = int(offset_raw)
                 post = self._get_post(post_id)
                 self.client.patch_post(post_id, self._ready_status_payload(post)).raise_for_status()
+                self._rebalance_active_publish_queue()
                 self._invalidate_post_caches()
                 await self._show_after_transition(
                     query,
@@ -7331,6 +7359,8 @@ class NewsAdminBot:
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
                 offset = int(offset_raw)
                 self.client.patch_post(post_id, {"status": "review"}).raise_for_status()
+                if status in {"ready", "scheduled"}:
+                    self._rebalance_active_publish_queue()
                 self._invalidate_post_caches()
                 await self._show_after_transition(
                     query,
