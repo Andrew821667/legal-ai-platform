@@ -2554,14 +2554,14 @@ class NewsAdminBot:
             return {key: dict(value) for key, value in cached.items()}
 
         catalog = source_catalog(settings)
-        stats: dict[str, dict[str, int]] = {key: {"review": 0, "scheduled": 0, "posted": 0, "failed": 0} for key in catalog}
-        for status in ("review", "scheduled", "posted", "failed"):
+        stats: dict[str, dict[str, int]] = {key: {"review": 0, "ready": 0, "scheduled": 0, "posted": 0, "failed": 0} for key in catalog}
+        for status in ("review", "ready", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
                 source_url = str(row.get("source_url") or "")
                 source_feed_url = str(row.get("source_feed_url") or "")
                 domain = extract_domain(source_url)
                 if domain == "t.me":
-                    stats.setdefault("telegram_channels", {"review": 0, "scheduled": 0, "posted": 0, "failed": 0})
+                    stats.setdefault("telegram_channels", {"review": 0, "ready": 0, "scheduled": 0, "posted": 0, "failed": 0})
                     stats["telegram_channels"][status] = stats["telegram_channels"].get(status, 0) + 1
                     continue
                 for key, spec in catalog.items():
@@ -2573,7 +2573,7 @@ class NewsAdminBot:
                     elif spec.domain and domain and spec.domain == domain:
                         matched = True
                     if matched:
-                        stats.setdefault(key, {"review": 0, "scheduled": 0, "posted": 0, "failed": 0})
+                        stats.setdefault(key, {"review": 0, "ready": 0, "scheduled": 0, "posted": 0, "failed": 0})
                         stats[key][status] = stats[key].get(status, 0) + 1
                         break
         self._derived_cache_set(cache_key, {key: dict(value) for key, value in stats.items()})
@@ -2594,7 +2594,7 @@ class NewsAdminBot:
             return {key: dict(value) for key, value in cached.items()}
 
         stats: dict[str, dict[str, int]] = {}
-        for status in ("review", "scheduled", "posted", "failed"):
+        for status in ("review", "ready", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
                 source_url = str(row.get("source_url") or "")
                 if extract_domain(source_url) != "t.me":
@@ -2603,7 +2603,7 @@ class NewsAdminBot:
                 if not path_parts:
                     continue
                 slug = _telegram_channel_slug(path_parts[-1])
-                bucket = stats.setdefault(slug, {"review": 0, "scheduled": 0, "posted": 0, "failed": 0})
+                bucket = stats.setdefault(slug, {"review": 0, "ready": 0, "scheduled": 0, "posted": 0, "failed": 0})
                 bucket[status] = bucket.get(status, 0) + 1
         self._derived_cache_set(cache_key, {key: dict(value) for key, value in stats.items()})
         return stats
@@ -2669,7 +2669,7 @@ class NewsAdminBot:
         if filtered is None:
             spec = source_catalog(settings).get(source_key)
             rows: list[dict[str, Any]] = []
-            for status in ("review", "scheduled", "posted", "failed"):
+            for status in ("review", "ready", "scheduled", "posted", "failed"):
                 rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
             if source_key == "telegram_channels":
                 filtered = [row for row in rows if extract_domain(str(row.get("source_url") or "")) == "t.me"]
@@ -2720,7 +2720,7 @@ class NewsAdminBot:
             return dict(cached)
 
         counts: dict[str, int] = {theme_key: 0 for theme_key in GENERATION_THEME_DEFS}
-        for status in ("review", "scheduled", "posted", "failed"):
+        for status in ("review", "ready", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
                 title = str(row.get("title") or "")
                 text = str(row.get("text") or "")
@@ -2736,7 +2736,7 @@ class NewsAdminBot:
             return dict(cached)
 
         counts: dict[str, int] = {pillar: 0 for pillar in _PILLAR_LABELS}
-        for status in ("review", "scheduled", "posted", "failed"):
+        for status in ("review", "ready", "scheduled", "posted", "failed"):
             for row in self._list_posts_rows(status=status, newest_first=True, limit=100):
                 title = str(row.get("title") or "")
                 text = str(row.get("text") or "")
@@ -2818,7 +2818,7 @@ class NewsAdminBot:
         filtered = self._derived_cache_get(cache_key, ttl_seconds=_DERIVED_CACHE_TTL_SECONDS, force_refresh=force_refresh)
         if filtered is None:
             rows: list[dict[str, Any]] = []
-            for status in ("review", "scheduled", "posted", "failed"):
+            for status in ("review", "ready", "scheduled", "posted", "failed"):
                 rows.extend(self._list_posts_rows(status=status, newest_first=True, limit=100))
             filtered = []
             for row in rows:
@@ -3089,7 +3089,7 @@ class NewsAdminBot:
                 return payload
 
         counts: dict[str, int] = {}
-        statuses = ("draft", "review", "scheduled", "publishing", "posted", "failed")
+        statuses = ("draft", "review", "ready", "scheduled", "publishing", "posted", "failed")
         async def _count_status(status: str) -> tuple[str, int]:
             try:
                 rows = await asyncio.to_thread(
@@ -3129,6 +3129,7 @@ class NewsAdminBot:
             "Состояние очереди публикаций\n\n"
             f"draft: {counts['draft']}\n"
             f"review: {counts['review']}\n"
+            f"ready: {counts['ready']}\n"
             f"scheduled: {counts['scheduled']}\n"
             f"publishing: {counts['publishing']}\n"
             f"posted (посл.100): {counts['posted']}\n"

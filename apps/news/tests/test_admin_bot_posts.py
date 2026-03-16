@@ -464,6 +464,51 @@ def test_workspace_keyboard_contains_system_section() -> None:
     assert "uih:toggle" in callbacks
 
 
+def test_queue_snapshot_counts_ready_posts(monkeypatch) -> None:
+    bot = NewsAdminBot()
+
+    def _list_posts_rows(*, status: str, newest_first: bool, limit: int):
+        counts = {
+            "draft": [],
+            "review": [{"id": "r1"}],
+            "ready": [{"id": "ready1"}, {"id": "ready2"}],
+            "scheduled": [{"id": "s1", "publish_at": "2026-03-16T18:00:00+03:00"}],
+            "publishing": [],
+            "posted": [],
+            "failed": [],
+        }
+        return counts[status]
+
+    monkeypatch.setattr(bot, "_list_posts_rows", _list_posts_rows)
+    counts, next_publish = asyncio.run(bot._queue_snapshot())
+
+    assert counts["ready"] == 2
+    assert counts["scheduled"] == 1
+    assert next_publish == "2026-03-16T18:00:00+03:00"
+
+
+def test_source_stats_include_ready_posts(monkeypatch) -> None:
+    bot = NewsAdminBot()
+
+    def _list_posts_rows(*, status: str, newest_first: bool, limit: int):
+        rows = {
+            "review": [],
+            "ready": [{"source_url": "https://pravo.ru/story/1", "source_feed_url": "https://www.pravo.ru/rss/"}],
+            "scheduled": [],
+            "posted": [],
+            "failed": [],
+        }
+        return rows.get(status, [])
+
+    monkeypatch.setattr(bot, "_list_posts_rows", _list_posts_rows)
+    monkeypatch.setattr(bot, "_derived_cache_get", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bot, "_derived_cache_set", lambda *args, **kwargs: None)
+
+    stats = bot._source_stats(force_refresh=True)
+
+    assert stats["pravo_ru"]["ready"] == 1
+
+
 def test_system_keyboard_exposes_service_actions() -> None:
     bot = NewsAdminBot()
     markup = bot._system_keyboard()
