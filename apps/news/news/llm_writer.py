@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT
@@ -288,6 +289,51 @@ _PROMPT_LEAK_MARKERS = (
     "role\": \"system\"",
     "ты шеф-редактор telegram-канала",
 )
+_TEMPORAL_RECHECK_MARKERS = (
+    "ожидается",
+    "ожидают",
+    "ожидаемый",
+    "со дня на день",
+    "в ближайшие дни",
+    "в ближайшие недели",
+    "можно ждать",
+    "должна снизиться",
+    "должен снизиться",
+    "может снизиться",
+    "может вырасти",
+    "может измениться",
+)
+_RU_MONTHS = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+_CALENDAR_WINDOW_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
+    (re.compile(r"в(?:о)?\s+второй\s+половине\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)", re.IGNORECASE), 16),
+    (re.compile(r"к\s+концу\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)", re.IGNORECASE), 25),
+    (re.compile(r"в\s+конце\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)", re.IGNORECASE), 25),
+    (re.compile(r"до\s+конца\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)", re.IGNORECASE), 25),
+)
+_FACT_CHECK_SYSTEM_PROMPT = (
+    "Ты выпускающий редактор Telegram-канала по Legal AI. "
+    "Проверяешь уже написанный HTML-пост перед тем, как он попадет в review.\n"
+    "1) Не добавляй новых фактов.\n"
+    "2) Исправляй перепутанные роли и субъекты действия: кто сдает, кто арендует, кто покупает, кто продает, кто подал иск, кто ответчик, кто кредитор, кто заемщик.\n"
+    "3) Дата итогового поста важнее исходной временной формулировки. Если в тексте остались устаревшие прогнозы, near-term ожидания или дедлайны, перепиши их в нейтральный актуальный вид или убери.\n"
+    "4) Для weekly_review нельзя оставлять устаревшие прогнозы как будто они еще впереди.\n"
+    "5) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
+    "6) Верни строго JSON: "
+    '{"approved": true, "reason": "", "title": "исправленный заголовок", "text": "исправленный HTML-пост"}'
+)
 _FALLBACK_SUMMARY_META_PREFIXES = (
     "собери ",
     "обязательное требование",
@@ -343,6 +389,88 @@ class LLMNewsWriter:
         if self._use_max_tokens_param:
             return {"max_tokens": token_limit}
         return {"max_completion_tokens": token_limit}
+
+    @staticmethod
+    def _format_dt(dt: datetime | None) -> str:
+        if dt is None:
+            return "не указана"
+        normalized = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        return normalized.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    @staticmethod
+    def _plain_text(text: str) -> str:
+        return html.unescape(re.sub(r"<[^>]+>", " ", text or "")).lower()
+
+    @classmethod
+    def _calendar_window_is_elapsed(cls, text: str, target_publish_at: datetime) -> bool:
+        lowered = cls._plain_text(text)
+        for pattern, threshold_day in _CALENDAR_WINDOW_PATTERNS:
+            match = pattern.search(lowered)
+            if not match:
+                continue
+            month_value = _RU_MONTHS.get(match.group(1).lower())
+            if month_value is None:
+                continue
+            if month_value < target_publish_at.month:
+                return True
+            if month_value == target_publish_at.month and target_publish_at.day >= threshold_day:
+                return True
+        return False
+
+    @classmethod
+    def _temporal_guard_failure_reason(
+        cls,
+        text: str,
+        *,
+        target_publish_at: datetime | None,
+        source_published_at: datetime | None,
+        format_type: str,
+    ) -> str | None:
+        if target_publish_at is None:
+            return None
+        lowered = cls._plain_text(text)
+        if any(marker in lowered for marker in _TEMPORAL_RECHECK_MARKERS) and source_published_at is not None:
+            source_dt = source_published_at if source_published_at.tzinfo is not None else source_published_at.replace(tzinfo=timezone.utc)
+            if abs((target_publish_at.date() - source_dt.date()).days) <= 3:
+                return "needs_temporal_recheck:near_term_forecast"
+        if format_type == "weekly_review" and cls._calendar_window_is_elapsed(lowered, target_publish_at):
+            return "needs_temporal_recheck:elapsed_calendar_window"
+        return None
+
+    def _fact_check_post(
+        self,
+        *,
+        article: ArticleCandidate,
+        title: str,
+        text: str,
+        format_type: str,
+        target_publish_at: datetime | None,
+    ) -> tuple[str, str] | None:
+        prompt = (
+            f"Дата публикации итогового поста: {self._format_dt(target_publish_at)}\n"
+            f"Дата исходного материала: {self._format_dt(article.published_at)}\n"
+            f"Формат: {format_type}\n"
+            f"URL: {article.article_url}\n"
+            f"Заголовок источника: {article.title}\n\n"
+            f"Краткое содержание источника:\n{article.summary[:3500]}\n\n"
+            f"Текущий заголовок поста:\n{title}\n\n"
+            f"Текущий HTML-пост:\n{text}"
+        )
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": _FACT_CHECK_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            **self._completion_kwargs(format_type),
+        )
+        payload = self._extract_json(response.choices[0].message.content or "")
+        if payload.get("approved") is False:
+            return None
+        corrected_title = self._shorten_title(str(payload.get("title") or title), 110)
+        corrected_text = normalize_post_text(str(payload.get("text") or text))
+        return corrected_title, corrected_text
 
     @staticmethod
     def _allow_quality_fallback(format_type: str) -> bool:
@@ -1461,6 +1589,7 @@ class LLMNewsWriter:
         cta_type: str = "soft",
         pillar: str = "implementation",
         negative_feedback_context: str = "",
+        target_publish_at: datetime | None = None,
     ) -> dict[str, str] | None:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         inferred_rubric = self._infer_rubric_hint(article, pillar)
@@ -1470,6 +1599,8 @@ class LLMNewsWriter:
             f"URL статьи: {article.article_url}\n"
             f"Заголовок: {article.title}\n"
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
+            f"Дата публикации итогового поста: {target_publish_at.isoformat() if target_publish_at else 'не указана'}\n"
+            "Временной режим: считай дату публикации итогового поста главной. Не переноси в текст устаревшие прогнозы и ближайшие ожидания как будто они еще впереди.\n\n"
             f"Целевая смысловая корзина: {pillar}\n"
             f"Предполагаемая рубрика: {inferred_rubric}\n"
             f"Стилистика канала: {self._style_hint(format_type)}\n"
@@ -1521,6 +1652,37 @@ class LLMNewsWriter:
                 cta_type=cta_type,
                 pillar=pillar,
             )
+            fact_checked = self._fact_check_post(
+                article=article,
+                title=title,
+                text=text,
+                format_type=format_type,
+                target_publish_at=target_publish_at,
+            )
+            if fact_checked is None:
+                logger.info(
+                    "llm_post_rejected_by_fact_check",
+                    extra={"title": title[:80], "format_type": format_type, "article_url": article.article_url},
+                )
+                return None
+            title, text = fact_checked
+            temporal_failure = self._temporal_guard_failure_reason(
+                text,
+                target_publish_at=target_publish_at,
+                source_published_at=article.published_at,
+                format_type=format_type,
+            )
+            if temporal_failure is not None:
+                logger.info(
+                    "llm_post_rejected_by_temporal_guard",
+                    extra={
+                        "title": title[:80],
+                        "format_type": format_type,
+                        "article_url": article.article_url,
+                        "reason": temporal_failure,
+                    },
+                )
+                return None
             if not self._passes_quality_gate(text, format_type):
                 failure_reason = self._quality_gate_failure_reason(text, format_type) or "unknown"
                 try:

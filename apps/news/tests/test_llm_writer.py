@@ -26,6 +26,28 @@ class _FakeClient:
         self.chat = _FakeChat(content)
 
 
+class _SequenceFakeCompletions:
+    def __init__(self, contents: list[str]) -> None:
+        self._contents = list(contents)
+
+    def create(self, **_: object) -> object:
+        if not self._contents:
+            raise AssertionError("no more fake completions")
+        message = type("Message", (), {"content": self._contents.pop(0)})()
+        choice = type("Choice", (), {"message": message})()
+        return type("Response", (), {"choices": [choice]})()
+
+
+class _SequenceFakeChat:
+    def __init__(self, contents: list[str]) -> None:
+        self.completions = _SequenceFakeCompletions(contents)
+
+
+class _SequenceFakeClient:
+    def __init__(self, contents: list[str]) -> None:
+        self.chat = _SequenceFakeChat(contents)
+
+
 def test_looks_complete_prose_accepts_finished_text() -> None:
     text = "<b>Что произошло</b>\nТекст завершен.\n\n<b>Источник</b>: ссылка\n#LegalAI"
     assert LLMNewsWriter._looks_complete_prose(text)
@@ -257,6 +279,78 @@ def test_relevance_bias_hint_empty_for_noise() -> None:
         published_at=datetime.now(timezone.utc),
     )
     assert LLMNewsWriter._relevance_bias_hint(article, "tools") == ""
+
+
+def test_temporal_guard_rejects_near_term_forecast_same_day() -> None:
+    text = (
+        "<b>Что произошло</b>\n"
+        "Ожидается снижение ключевой ставки ЦБ на 0,5 п.п.\n\n"
+        "<b>Почему это важно</b>\n"
+        "Это повлияет на рынок.\n\n"
+        "<b>Что это значит для рынка</b>\n"
+        "Нужно следить за реакцией.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI"
+    )
+    reason = LLMNewsWriter._temporal_guard_failure_reason(
+        text,
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=timezone.utc),
+        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+        format_type="daily",
+    )
+    assert reason == "needs_temporal_recheck:near_term_forecast"
+
+
+def test_temporal_guard_rejects_elapsed_weekly_calendar_window() -> None:
+    text = (
+        "<b>Обзор недели</b>\n\n"
+        "<b>Ключевые сигналы недели</b>\n"
+        "1. Регулятор может принять следующий шаг во второй половине марта.\n"
+        "2. Пункт два.\n3. Пункт три.\n4. Пункт четыре.\n5. Пункт пять.\n6. Пункт шесть.\n7. Пункт семь.\n8. Пункт восемь.\n\n"
+        "<b>Что это значит для юрфункции</b>\n"
+        "Длинный блок про governance, качество и сроки.\n\n"
+        "<b>На что смотреть юристам</b>\n"
+        "Длинный блок про контроль качества и дедлайны.\n\n"
+        "<b>Что проверить у себя</b>\n"
+        "• Проверить процесс.\n• Обновить контур.\n• Назначить owner.\n• Проверить контроль.\n\n"
+        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+    )
+    reason = LLMNewsWriter._temporal_guard_failure_reason(
+        text,
+        target_publish_at=datetime(2026, 3, 29, 12, 0, tzinfo=timezone.utc),
+        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+        format_type="weekly_review",
+    )
+    assert reason == "needs_temporal_recheck:elapsed_calendar_window"
+
+
+def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _SequenceFakeClient(
+        [
+            """{"is_relevant": true, "reject_reason": "", "title": "Ипотечные квартиры и аренда", "rubric": "market", "lead": "Лид о рынке ипотеки и аренды.", "what_happened": "Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики арендуют жилье для покрытия кредитных платежей.", "business_effect": "Это влияет на рынок аренды и на поведение инвесторов в жилую недвижимость.", "legal_risks": "Нужно проверить договорный контур, раскрытие условий аренды и распределение рисков.", "next_steps": "Проверить продукт; сверить риски; обновить модель", "conclusion": "Вывод о том, что рынок меняет модель использования ипотечного жилья.", "hashtags": ["#LegalAI"]}""",
+            """{"approved": true, "reason": "", "title": "Ипотечные квартиры и аренда", "text": "<b>Ипотечные квартиры и аренда</b>\n\nЛид о рынке ипотеки и аренды, где поведение заемщиков уже влияет на структуру предложения и на логику инвестиционных решений.\n\n<b>Что произошло</b>\nДоля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье, чтобы покрывать кредитные платежи, а не сами снимают его. Это меняет картину предложения и поведение собственников на рынке.\n\n<b>Почему это важно</b>\nДля рынка это сигнал, что ипотечное жилье все чаще рассматривается как денежный поток, а не только как объект проживания. Это влияет на стратегию инвесторов, модель спроса и устойчивость арендных ставок.\n\n<b>Что это значит для рынка</b>\nЮристам и продуктовым командам важно смотреть на договорную модель аренды, режим раскрытия условий, риски по просрочке и то, как кредитные ограничения влияют на фактическое использование объекта. Ошибка в трактовке роли собственника здесь меняет весь смысл новости.\n\n<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"}""",
+        ]
+    )
+    writer.model = "fake"
+    writer._use_max_tokens_param = True
+    article = ArticleCandidate(
+        source_url="https://example.com/feed",
+        article_url="https://example.com/article",
+        title="Ипотечные квартиры и аренда",
+        summary="Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье для покрытия кредитных платежей.",
+        published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+    )
+    result = writer.generate_post(
+        article,
+        [],
+        format_type="daily",
+        cta_type="soft",
+        pillar="market",
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=timezone.utc),
+    )
+    assert result is not None
+    assert "сдают жилье" in result["text"]
+    assert "арендуют жилье" not in result["text"]
 
 
 def test_quality_gate_rejects_weak_daily_third_block() -> None:

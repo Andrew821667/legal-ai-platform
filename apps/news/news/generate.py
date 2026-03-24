@@ -290,14 +290,20 @@ def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[st
     for index, item in enumerate(highlights, start=1):
         title = _normalize_snippet(str(item.get("title") or f"Пункт {index}"), 110)
         text = _normalize_snippet(str(item.get("text") or ""), 220)
-        lines.append(f"{index}. {title} — {text}")
+        publish_raw = str(item.get("publish_at") or "").strip()
+        publish_label = publish_raw[:10] if publish_raw else "без даты"
+        lines.append(f"{index}. [{publish_label}] {title} — {text}")
 
     year, week, _ = now_utc.isocalendar()
+    week_end = now_utc.date()
     return ArticleCandidate(
         source_url="internal://weekly-review",
         article_url=f"internal://weekly-review/{year}-W{week}",
         title=f"Обзор недели по Legal AI и автоматизации юрфункции (W{week})",
         summary=(
+            f"Дата итогового обзора: {week_end.isoformat()}.\n"
+            f"Это weekly_review по материалам с начала недели ({start_of_week.isoformat()} — {week_end.isoformat()}).\n"
+            "Все прогнозы, сроки и ожидания нужно трактовать относительно даты итогового обзора, а не механически копировать из старых постов.\n"
             "Сигналы недели для итогового обзора:\n"
             + "\n".join(lines)
         ),
@@ -553,6 +559,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 rag_context = []
             pillar = pillar_for_article(article)
             try:
+                publish_at_utc = slot.publish_at_local.astimezone(timezone.utc)
                 generated = writer.generate_post(
                     article,
                     rag_context,
@@ -560,6 +567,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                     cta_type=cta_type,
                     pillar=pillar,
                     negative_feedback_context=negative_feedback_context,
+                    target_publish_at=publish_at_utc,
                 )
             except Exception as exc:
                 logger.warning(
@@ -661,7 +669,6 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 continue
 
             source_hash = build_source_hash(article.article_url, article.title, article.published_at)
-            publish_at_utc = slot.publish_at_local.astimezone(timezone.utc)
             preview = {
                 "title": generated["title"],
                 "text": generated["text"],
