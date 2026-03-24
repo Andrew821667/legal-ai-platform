@@ -309,6 +309,42 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         "GB",
     )
+    google_enterprise_ai_europe_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_enterprise_ai_europe_en",
+            '("enterprise AI" OR "AI workflow automation" OR "AI agents enterprise" OR "business AI platform" OR "AI copilot")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
+    google_legal_ops_europe_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_ops_europe_en",
+            '("legal operations AI" OR "contract automation" OR "AI for legal departments" OR "legaltech" OR "AI for lawyers")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
+    google_ai_vendors_europe_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_vendors_europe_en",
+            '("AI vendor" OR "AI platform" OR "AI product launch" OR "AI assistant release" OR "enterprise AI platform")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
+    google_ai_privacy_europe_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_privacy_europe_en",
+            '("AI privacy" OR "AI data protection" OR "AI governance" OR "GDPR AI" OR "AI compliance")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
     google_enterprise_ai_apac_en = build_google_news_rss_url(
         getattr(
             settings,
@@ -317,6 +353,123 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         ),
         getattr(settings, "google_news_lang_en", "en"),
         "AU",
+    )
+    google_ai_china_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_china_en",
+            '("China AI" OR "Chinese AI" OR "AI model China" OR "AI startup China" OR "AI platform China")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "HK",
+    )
+    google_enterprise_ai_china_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_enterprise_ai_china_en",
+            '("enterprise AI China" OR "AI agents China" OR "AI workflow China" OR "business AI China" OR "Chinese AI platform")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "HK",
+    )
+    google_legal_ai_china_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_ai_china_en",
+            '("legal AI China" OR "legaltech China" OR "AI for lawyers China" OR "AI contract review China" OR "legal operations China")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "HK",
+    )
+    google_ai_policy_china_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_policy_china_en",
+            '("China AI regulation" OR "China AI policy" OR "AI governance China" OR "generative AI China rules" OR "AI compliance China")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "HK",
+    )
+    google_ai_india_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_india_en",
+            '("India AI" OR "Indian AI" OR "AI startup India" OR "enterprise AI India" OR "AI platform India")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "IN",
+    )
+    google_enterprise_ai_india_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_enterprise_ai_india_en",
+            '("enterprise AI India" OR "AI copilots India" OR "AI workflow India" OR "AI agents India" OR "business AI India")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "IN",
+    )
+    google_legal_ai_india_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_ai_india_en",
+            '("legal AI India" OR "legaltech India" OR "AI for lawyers India" OR "AI contract review India" OR "legal operations India")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "IN",
+    )
+    google_ai_policy_india_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_policy_india_en",
+            '("India AI policy" OR "India AI regulation" OR "AI governance India" OR "AI compliance India" OR "AI privacy India")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "IN",
+    )
+    google_ai_japan_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_japan_en",
+            '("Japan AI" OR "Japanese AI" OR "enterprise AI Japan" OR "AI platform Japan" OR "AI regulation Japan")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "JP",
+    )
+    google_ai_korea_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_korea_en",
+            '("Korea AI" OR "South Korea AI" OR "enterprise AI Korea" OR "AI platform Korea" OR "AI regulation Korea")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "KR",
+    )
+    google_ai_singapore_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_singapore_en",
+            '("Singapore AI" OR "enterprise AI Singapore" OR "AI governance Singapore" OR "AI policy Singapore" OR "AI platform Singapore")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "SG",
+    )
+    google_ai_middle_east_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_middle_east_en",
+            '("Middle East AI" OR "UAE AI" OR "Saudi AI" OR "enterprise AI Middle East" OR "AI policy Gulf")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "AE",
+    )
+    google_ai_canada_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_ai_canada_en",
+            '("Canada AI" OR "Canadian AI" OR "enterprise AI Canada" OR "AI regulation Canada" OR "AI platform Canada")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "CA",
     )
     google_legal_ai_apac_en = build_google_news_rss_url(
         getattr(
@@ -531,6 +684,44 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             domain="news.google.com",
             priority=1.55,
         ),
+        "google_news_enterprise_ai_europe_en": SourceSpec(
+            key="google_news_enterprise_ai_europe_en",
+            name="Google News Enterprise AI Europe EN",
+            kind="search_rss",
+            note="Европейский слой по enterprise AI, AI workflow automation, agents и корпоративным AI-платформам.",
+            url=google_enterprise_ai_europe_en,
+            domain="news.google.com",
+            priority=1.05,
+            bucket="broad_ai",
+        ),
+        "google_news_legal_ops_europe_en": SourceSpec(
+            key="google_news_legal_ops_europe_en",
+            name="Google News Legal Ops Europe EN",
+            kind="search_rss",
+            note="Европейский слой по legal operations AI, contract automation и AI для юрфункции.",
+            url=google_legal_ops_europe_en,
+            domain="news.google.com",
+            priority=1.45,
+        ),
+        "google_news_ai_vendors_europe_en": SourceSpec(
+            key="google_news_ai_vendors_europe_en",
+            name="Google News AI Vendors Europe EN",
+            kind="search_rss",
+            note="Европейский слой по AI-вендорам, продуктовым релизам и enterprise AI platform сигнальным новостям.",
+            url=google_ai_vendors_europe_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_privacy_europe_en": SourceSpec(
+            key="google_news_ai_privacy_europe_en",
+            name="Google News AI Privacy Europe EN",
+            kind="search_rss",
+            note="Европейский слой по AI privacy, data protection, governance и compliance под GDPR-контекст.",
+            url=google_ai_privacy_europe_en,
+            domain="news.google.com",
+            priority=1.4,
+        ),
         "google_news_enterprise_ai_apac_en": SourceSpec(
             key="google_news_enterprise_ai_apac_en",
             name="Google News Enterprise AI APAC EN",
@@ -549,6 +740,132 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             url=google_legal_ai_apac_en,
             domain="news.google.com",
             priority=1.35,
+        ),
+        "google_news_ai_china_en": SourceSpec(
+            key="google_news_ai_china_en",
+            name="Google News AI China EN",
+            kind="search_rss",
+            note="Китайский слой по моделям, платформам, стартапам и applied AI-сигналам.",
+            url=google_ai_china_en,
+            domain="news.google.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "google_news_enterprise_ai_china_en": SourceSpec(
+            key="google_news_enterprise_ai_china_en",
+            name="Google News Enterprise AI China EN",
+            kind="search_rss",
+            note="Китайский слой по enterprise AI, AI agents, workflow automation и корпоративным AI-платформам.",
+            url=google_enterprise_ai_china_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "google_news_legal_ai_china_en": SourceSpec(
+            key="google_news_legal_ai_china_en",
+            name="Google News Legal AI China EN",
+            kind="search_rss",
+            note="Китайский слой по legal AI, legaltech, AI contract review и AI для юрфункции.",
+            url=google_legal_ai_china_en,
+            domain="news.google.com",
+            priority=1.3,
+        ),
+        "google_news_ai_policy_china_en": SourceSpec(
+            key="google_news_ai_policy_china_en",
+            name="Google News AI Policy China EN",
+            kind="search_rss",
+            note="Китайский слой по AI regulation, AI policy, governance и compliance.",
+            url=google_ai_policy_china_en,
+            domain="news.google.com",
+            priority=1.2,
+        ),
+        "google_news_ai_india_en": SourceSpec(
+            key="google_news_ai_india_en",
+            name="Google News AI India EN",
+            kind="search_rss",
+            note="Индийский слой по AI-стартапам, платформам, enterprise AI и локальному рынку.",
+            url=google_ai_india_en,
+            domain="news.google.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "google_news_enterprise_ai_india_en": SourceSpec(
+            key="google_news_enterprise_ai_india_en",
+            name="Google News Enterprise AI India EN",
+            kind="search_rss",
+            note="Индийский слой по enterprise AI, AI copilots, workflow automation и business AI.",
+            url=google_enterprise_ai_india_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "google_news_legal_ai_india_en": SourceSpec(
+            key="google_news_legal_ai_india_en",
+            name="Google News Legal AI India EN",
+            kind="search_rss",
+            note="Индийский слой по legal AI, legaltech, AI for lawyers и AI contract review.",
+            url=google_legal_ai_india_en,
+            domain="news.google.com",
+            priority=1.3,
+        ),
+        "google_news_ai_policy_india_en": SourceSpec(
+            key="google_news_ai_policy_india_en",
+            name="Google News AI Policy India EN",
+            kind="search_rss",
+            note="Индийский слой по AI policy, regulation, governance и privacy.",
+            url=google_ai_policy_india_en,
+            domain="news.google.com",
+            priority=1.15,
+        ),
+        "google_news_ai_japan_en": SourceSpec(
+            key="google_news_ai_japan_en",
+            name="Google News AI Japan EN",
+            kind="search_rss",
+            note="Японский слой по enterprise AI, AI-platform новостям и регулированию.",
+            url=google_ai_japan_en,
+            domain="news.google.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_korea_en": SourceSpec(
+            key="google_news_ai_korea_en",
+            name="Google News AI Korea EN",
+            kind="search_rss",
+            note="Корейский слой по enterprise AI, AI-platform новостям и локальному регулированию.",
+            url=google_ai_korea_en,
+            domain="news.google.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_singapore_en": SourceSpec(
+            key="google_news_ai_singapore_en",
+            name="Google News AI Singapore EN",
+            kind="search_rss",
+            note="Сингапурский слой по AI governance, enterprise AI и applied AI для бизнеса.",
+            url=google_ai_singapore_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_middle_east_en": SourceSpec(
+            key="google_news_ai_middle_east_en",
+            name="Google News AI Middle East EN",
+            kind="search_rss",
+            note="Ближневосточный слой по AI policy, enterprise AI и крупнейшим AI-инициативам региона.",
+            url=google_ai_middle_east_en,
+            domain="news.google.com",
+            priority=0.95,
+            bucket="broad_ai",
+        ),
+        "google_news_ai_canada_en": SourceSpec(
+            key="google_news_ai_canada_en",
+            name="Google News AI Canada EN",
+            kind="search_rss",
+            note="Канадский слой по AI regulation, enterprise AI, платформам и applied AI кейсам.",
+            url=google_ai_canada_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
         ),
         "ai_news_global": SourceSpec(
             key="ai_news_global",
@@ -774,8 +1091,25 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_ai_policy_global_en",
         "google_news_legal_ai_uk_en",
         "google_news_regulation_europe_en",
+        "google_news_enterprise_ai_europe_en",
+        "google_news_legal_ops_europe_en",
+        "google_news_ai_vendors_europe_en",
+        "google_news_ai_privacy_europe_en",
         "google_news_enterprise_ai_apac_en",
         "google_news_legal_ai_apac_en",
+        "google_news_ai_china_en",
+        "google_news_enterprise_ai_china_en",
+        "google_news_legal_ai_china_en",
+        "google_news_ai_policy_china_en",
+        "google_news_ai_india_en",
+        "google_news_enterprise_ai_india_en",
+        "google_news_legal_ai_india_en",
+        "google_news_ai_policy_india_en",
+        "google_news_ai_japan_en",
+        "google_news_ai_korea_en",
+        "google_news_ai_singapore_en",
+        "google_news_ai_middle_east_en",
+        "google_news_ai_canada_en",
         "ai_news_global",
         "venturebeat_ai",
         "the_decoder_ai",

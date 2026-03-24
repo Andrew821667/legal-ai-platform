@@ -68,8 +68,25 @@ def test_source_catalog_includes_extended_google_news_buckets() -> None:
     assert "google_news_ai_policy_global_en" in catalog
     assert "google_news_legal_ai_uk_en" in catalog
     assert "google_news_regulation_europe_en" in catalog
+    assert "google_news_enterprise_ai_europe_en" in catalog
+    assert "google_news_legal_ops_europe_en" in catalog
+    assert "google_news_ai_vendors_europe_en" in catalog
+    assert "google_news_ai_privacy_europe_en" in catalog
     assert "google_news_enterprise_ai_apac_en" in catalog
     assert "google_news_legal_ai_apac_en" in catalog
+    assert "google_news_ai_china_en" in catalog
+    assert "google_news_enterprise_ai_china_en" in catalog
+    assert "google_news_legal_ai_china_en" in catalog
+    assert "google_news_ai_policy_china_en" in catalog
+    assert "google_news_ai_india_en" in catalog
+    assert "google_news_enterprise_ai_india_en" in catalog
+    assert "google_news_legal_ai_india_en" in catalog
+    assert "google_news_ai_policy_india_en" in catalog
+    assert "google_news_ai_japan_en" in catalog
+    assert "google_news_ai_korea_en" in catalog
+    assert "google_news_ai_singapore_en" in catalog
+    assert "google_news_ai_middle_east_en" in catalog
+    assert "google_news_ai_canada_en" in catalog
     assert "ai_news_global" in catalog
     assert "venturebeat_ai" in catalog
     assert "the_decoder_ai" in catalog
