@@ -113,6 +113,10 @@ class Settings(BaseSettings):
     google_news_query_ai_products_en: str = '("AI product launch" OR "AI platform launch" OR "generative AI product" OR "AI assistant release" OR "AI tool launch")'
     google_news_query_ai_research_en: str = '("AI research" OR "foundation model release" OR "LLM benchmark" OR "reasoning model" OR "agent benchmark")'
     google_news_query_ai_policy_global_en: str = '("AI policy" OR "AI governance framework" OR "model safety policy" OR "AI standards" OR "AI risk management")'
+    google_news_query_legal_ai_uk_en: str = '("legal AI" OR legaltech OR "AI for lawyers" OR "contract automation" OR "legal operations AI" OR "in-house legal AI")'
+    google_news_query_regulation_europe_en: str = '("EU AI Act" OR "AI regulation" OR "AI governance" OR "AI compliance" OR "AI privacy law")'
+    google_news_query_enterprise_ai_apac_en: str = '("enterprise AI" OR "AI agents enterprise" OR "AI workflow automation" OR "business AI platform" OR "AI governance")'
+    google_news_query_legal_ai_apac_en: str = '("legal AI" OR legaltech OR "AI for lawyers" OR "AI contract review" OR "legal operations AI")'
     google_news_lang_ru: str = "ru"
     google_news_lang_en: str = "en"
     google_news_region_ru: str = "RU"

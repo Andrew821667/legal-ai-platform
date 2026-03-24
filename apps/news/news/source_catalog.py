@@ -291,6 +291,42 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
         getattr(settings, "google_news_lang_en", "en"),
         getattr(settings, "google_news_region_en", "US"),
     )
+    google_legal_ai_uk_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_ai_uk_en",
+            '("legal AI" OR legaltech OR "AI for lawyers" OR "contract automation" OR "legal operations AI" OR "in-house legal AI")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
+    google_regulation_europe_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_regulation_europe_en",
+            '("EU AI Act" OR "AI regulation" OR "AI governance" OR "AI compliance" OR "AI privacy law")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "GB",
+    )
+    google_enterprise_ai_apac_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_enterprise_ai_apac_en",
+            '("enterprise AI" OR "AI agents enterprise" OR "AI workflow automation" OR "business AI platform" OR "AI governance")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "AU",
+    )
+    google_legal_ai_apac_en = build_google_news_rss_url(
+        getattr(
+            settings,
+            "google_news_query_legal_ai_apac_en",
+            '("legal AI" OR legaltech OR "AI for lawyers" OR "AI contract review" OR "legal operations AI")',
+        ),
+        getattr(settings, "google_news_lang_en", "en"),
+        "AU",
+    )
     return {
         "google_news_ru": SourceSpec(
             key="google_news_ru",
@@ -477,6 +513,43 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             priority=1.1,
             bucket="broad_ai",
         ),
+        "google_news_legal_ai_uk_en": SourceSpec(
+            key="google_news_legal_ai_uk_en",
+            name="Google News Legal AI UK EN",
+            kind="search_rss",
+            note="Британский слой по legal AI, legaltech, AI for lawyers и contract automation.",
+            url=google_legal_ai_uk_en,
+            domain="news.google.com",
+            priority=1.45,
+        ),
+        "google_news_regulation_europe_en": SourceSpec(
+            key="google_news_regulation_europe_en",
+            name="Google News AI Regulation Europe EN",
+            kind="search_rss",
+            note="Европейский слой по EU AI Act, AI regulation, governance и AI compliance.",
+            url=google_regulation_europe_en,
+            domain="news.google.com",
+            priority=1.55,
+        ),
+        "google_news_enterprise_ai_apac_en": SourceSpec(
+            key="google_news_enterprise_ai_apac_en",
+            name="Google News Enterprise AI APAC EN",
+            kind="search_rss",
+            note="APAC-слой по enterprise AI, AI agents, workflow automation и governance.",
+            url=google_enterprise_ai_apac_en,
+            domain="news.google.com",
+            priority=1.0,
+            bucket="broad_ai",
+        ),
+        "google_news_legal_ai_apac_en": SourceSpec(
+            key="google_news_legal_ai_apac_en",
+            name="Google News Legal AI APAC EN",
+            kind="search_rss",
+            note="APAC-слой по legal AI, legaltech, AI contract review и legal operations.",
+            url=google_legal_ai_apac_en,
+            domain="news.google.com",
+            priority=1.35,
+        ),
         "ai_news_global": SourceSpec(
             key="ai_news_global",
             name="AI News Global",
@@ -506,6 +579,15 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             domain="the-decoder.com",
             priority=0.95,
             bucket="broad_ai",
+        ),
+        "artificial_lawyer": SourceSpec(
+            key="artificial_lawyer",
+            name="Artificial Lawyer",
+            kind="rss",
+            note="Международный профильный источник по legal innovation, legal AI и AI-продуктам для юррынка.",
+            url="https://www.artificiallawyer.com/feed/",
+            domain="artificiallawyer.com",
+            priority=1.5,
         ),
         "unite_ai": SourceSpec(
             key="unite_ai",
@@ -690,9 +772,14 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "google_news_ai_products_en",
         "google_news_ai_research_en",
         "google_news_ai_policy_global_en",
+        "google_news_legal_ai_uk_en",
+        "google_news_regulation_europe_en",
+        "google_news_enterprise_ai_apac_en",
+        "google_news_legal_ai_apac_en",
         "ai_news_global",
         "venturebeat_ai",
         "the_decoder_ai",
+        "artificial_lawyer",
         "marktechpost",
         "pravo_ru",
         "habr_news",
