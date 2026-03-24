@@ -332,6 +332,22 @@ _MARKET_MARKERS = (
     "inhouse",
     "инхаус",
 )
+_BROAD_AI_MARKERS = (
+    "enterprise ai",
+    "frontier",
+    "foundation model",
+    "reasoning model",
+    "multimodal",
+    "agentic",
+    "ai agent",
+    "copilot",
+    "assistant",
+    "model release",
+    "product launch",
+    "platform launch",
+    "benchmark",
+    "vendor",
+)
 _HARD_LEGAL_MARKERS = (
     "юрид",
     "юрист",
@@ -372,6 +388,7 @@ _OFFTOPIC_MARKERS = (
 )
 _LEGAL_DOMAINS = {"pravo.ru", "garant.ru", "consultant.ru"}
 _AI_TECH_DOMAINS = {"habr.com", "vc.ru"}
+_SPECIALIZED_CANDIDATE_THRESHOLD = 2.8
 _SPECIFICITY_MARKERS = (
     "ai act",
     "gdpr",
@@ -520,6 +537,7 @@ def specialized_relevance_score(article: ArticleCandidate) -> float:
     legal_hits = sum(1 for marker in _LEGAL_MARKERS if _marker_present(text, marker))
     ops_hits = sum(1 for marker in _OPS_MARKERS if _marker_present(text, marker))
     market_hits = sum(1 for marker in _MARKET_MARKERS if _marker_present(text, marker))
+    broad_ai_hits = sum(1 for marker in _BROAD_AI_MARKERS if _marker_present(text, marker))
     offtopic_hits = sum(1 for marker in _OFFTOPIC_MARKERS if _marker_present(text, marker))
 
     score = 0.0
@@ -531,26 +549,32 @@ def specialized_relevance_score(article: ArticleCandidate) -> float:
         score += 1.2 + min(ops_hits, 3) * 0.4
     if market_hits:
         score += min(market_hits, 2) * 0.5
+    if broad_ai_hits:
+        score += min(broad_ai_hits, 3) * 0.45
 
     if domain in _LEGAL_DOMAINS and (ai_hits or ops_hits):
         score += 1.3
     if domain in _AI_TECH_DOMAINS and (legal_hits or ops_hits or market_hits):
         score += 0.8
+    if domain in _AI_TECH_DOMAINS and ai_hits and broad_ai_hits:
+        score += 0.9
 
     if ai_hits and (legal_hits or ops_hits or market_hits):
         score += 1.6
+    elif ai_hits and broad_ai_hits >= 2:
+        score += 1.1
     elif legal_hits and ops_hits:
         score += 1.0
 
     if domain in _AI_TECH_DOMAINS and legal_hits == 0 and market_hits == 0:
-        score -= 6.0
+        score -= 3.8 if broad_ai_hits >= 2 else 6.0
     if domain not in _LEGAL_DOMAINS and legal_hits == 0 and market_hits == 0:
-        score -= 3.5
+        score -= 2.4 if broad_ai_hits >= 2 else 3.5
 
     if offtopic_hits and legal_hits == 0 and ops_hits == 0:
         score -= 4.5
     if ai_hits and legal_hits == 0 and ops_hits == 0 and market_hits == 0:
-        score -= 2.8
+        score -= 1.2 if broad_ai_hits >= 2 else 2.8
 
     return score
 
@@ -575,13 +599,16 @@ def passes_generation_scope(article: ArticleCandidate) -> bool:
     has_hard_legal = any(_marker_present(text, marker) for marker in _HARD_LEGAL_MARKERS)
     has_hard_market = any(_marker_present(text, marker) for marker in _HARD_MARKET_MARKERS)
     has_generation_ops = any(_marker_present(text, marker) for marker in _GENERATION_OPS_MARKERS)
+    broad_ai_hits = sum(1 for marker in _BROAD_AI_MARKERS if _marker_present(text, marker))
 
     if domain in _LEGAL_DOMAINS:
         return has_ai or (has_generation_ops and has_hard_legal)
+    if domain in _AI_TECH_DOMAINS and has_ai and broad_ai_hits >= 2:
+        return True
     return has_ai and (has_hard_legal or has_hard_market)
 
 
-def is_specialized_candidate(article: ArticleCandidate, *, threshold: float = 3.2) -> bool:
+def is_specialized_candidate(article: ArticleCandidate, *, threshold: float = _SPECIALIZED_CANDIDATE_THRESHOLD) -> bool:
     return passes_generation_scope(article) and specialized_relevance_score(article) >= threshold
 
 
@@ -685,7 +712,7 @@ def article_score(
 ) -> float:
     base = keyword_score(f"{article.title}\n{article.summary}")
     specialization = specialized_relevance_score(article)
-    if specialization < 3.2:
+    if specialization < _SPECIALIZED_CANDIDATE_THRESHOLD:
         return -1000.0 + specialization
 
     freshness_bonus = 0.0

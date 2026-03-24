@@ -82,6 +82,21 @@ def test_specialized_filter_rejects_ai_without_legal_context_from_tech_source() 
     assert not is_specialized_candidate(article)
 
 
+def test_specialized_filter_allows_broad_enterprise_ai_signal_from_tech_source() -> None:
+    now = datetime(2026, 3, 3, tzinfo=timezone.utc)
+    article = ArticleCandidate(
+        source_url="https://habr.com/ru/rss/news/?fl=ru",
+        article_url="https://habr.com/ru/news/enterprise-ai-copilot",
+        title="Enterprise AI-платформа выпустила reasoning copilot для корпоративных команд",
+        summary=(
+            "Вендор представил enterprise AI assistant с agentic workflow и multimodal reasoning. "
+            "Релиз позиционируется как platform launch для корпоративных процессов и vendor evaluation."
+        ),
+        published_at=now,
+    )
+    assert is_specialized_candidate(article)
+
+
 def test_choose_top_articles_limits_same_source() -> None:
     now = datetime(2026, 2, 25, tzinfo=timezone.utc)
     articles = [
