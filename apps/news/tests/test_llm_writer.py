@@ -233,6 +233,32 @@ def test_quality_gate_failure_reason_for_short_daily() -> None:
     assert reason.startswith("too_short:")
 
 
+def test_relevance_bias_hint_for_enterprise_ai_signal() -> None:
+    article = ArticleCandidate(
+        source_url="https://habr.com/ru/rss/news/?fl=ru",
+        article_url="https://habr.com/ru/news/enterprise-ai-copilot",
+        title="Enterprise AI-платформа выпустила reasoning copilot для корпоративных команд",
+        summary=(
+            "Вендор представил enterprise AI assistant с agentic workflow и multimodal reasoning. "
+            "Релиз влияет на vendor selection, governance и автоматизацию корпоративных процессов."
+        ),
+        published_at=datetime.now(timezone.utc),
+    )
+    hint = LLMNewsWriter._relevance_bias_hint(article, "tools")
+    assert "пограничный, но приоритетный AI-сигнал" in hint
+
+
+def test_relevance_bias_hint_empty_for_noise() -> None:
+    article = ArticleCandidate(
+        source_url="https://habr.com/ru/rss/news/?fl=ru",
+        article_url="https://habr.com/ru/news/misc-tech",
+        title="Новый USB-хаб для домашних рабочих мест",
+        summary="Материал про периферию для домашнего офиса без AI-контекста и бизнес-сигнала.",
+        published_at=datetime.now(timezone.utc),
+    )
+    assert LLMNewsWriter._relevance_bias_hint(article, "tools") == ""
+
+
 def test_quality_gate_rejects_weak_daily_third_block() -> None:
     text = (
         "<b>360 Business Law расширяет AI-сервис проверки договоров</b>\n\n"

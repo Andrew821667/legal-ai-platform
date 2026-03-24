@@ -216,6 +216,36 @@ _SPELLED_NUMBER_MARKERS = (
     "nine",
     "ten",
 )
+_RELEVANCE_BIAS_MARKERS = (
+    "enterprise ai",
+    "business ai",
+    "corporate ai",
+    "foundation model",
+    "frontier model",
+    "frontier ai",
+    "reasoning model",
+    "multimodal",
+    "agentic",
+    "ai agent",
+    "copilot",
+    "assistant",
+    "vendor",
+    "benchmark",
+    "product launch",
+    "platform launch",
+    "platform",
+    "governance",
+    "compliance",
+    "privacy",
+    "contract",
+    "legal ops",
+    "автоматизац",
+    "вендор",
+    "закуп",
+    "регулирован",
+    "локализац",
+    "персональн",
+)
 _DAILY_LEGAL_RUBRICS = {"ai_law", "compliance", "privacy", "contracts", "litigation", "regulation"}
 _DAILY_THIRD_BLOCK_HEADINGS = (
     "Юридический контур",
@@ -973,6 +1003,22 @@ class LLMNewsWriter:
         )
 
     @staticmethod
+    def _relevance_bias_hint(article: ArticleCandidate, pillar: str) -> str:
+        haystack = " ".join(
+            part for part in (article.title or "", article.summary or "", article.article_url or "") if part
+        ).lower()
+        hits = sum(1 for marker in _RELEVANCE_BIAS_MARKERS if marker in haystack)
+        if hits < 2:
+            return ""
+        if pillar in {"market", "tools", "implementation", "case", "regulation"}:
+            return (
+                "Это пограничный, но приоритетный AI-сигнал: если в статье есть влияние на выбор вендора, "
+                "архитектуру внедрения, enterprise AI-процессы, governance, закупку, договоры, данные "
+                "или автоматизацию бизнес-/юридических процессов, трактуй материал как релевантный."
+            )
+        return ""
+
+    @staticmethod
     def _looks_generic_legal_commentary(text: str) -> bool:
         normalized = re.sub(r"\s+", " ", html.unescape(text or "")).strip().lower()
         if not normalized:
@@ -1418,6 +1464,7 @@ class LLMNewsWriter:
     ) -> dict[str, str] | None:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         inferred_rubric = self._infer_rubric_hint(article, pillar)
+        relevance_bias_hint = self._relevance_bias_hint(article, pillar)
         user_prompt = (
             f"Источник: {article.source_url}\n"
             f"URL статьи: {article.article_url}\n"
@@ -1427,6 +1474,7 @@ class LLMNewsWriter:
             f"Предполагаемая рубрика: {inferred_rubric}\n"
             f"Стилистика канала: {self._style_hint(format_type)}\n"
             f"Приоритетный юридический угол: {self._infer_legal_focus_hint(article, pillar)}\n"
+            f"{relevance_bias_hint}\n"
             f"Шаблон юридического комментария для этой рубрики: {self._rubric_template_hint(inferred_rubric)}\n"
             f"{format_hint}\n"
             f"{_FORMAT_SHAPE_HINTS.get(format_type, '')}\n"
