@@ -74,7 +74,7 @@ stripe==7.9.0  # Stripe payment integration
 
 # Utilities
 python-dotenv==1.0.0
-requests==2.32.4
+requests==2.33.0
 tenacity==8.2.3
 python-dateutil==2.8.2
 
