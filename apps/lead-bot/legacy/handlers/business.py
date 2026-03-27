@@ -495,10 +495,18 @@ async def handle_business_connection(update: Update, context: ContextTypes.DEFAU
 async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка сообщений через Business аккаунт"""
     try:
-        if not update.business_message:
+        message = (
+            getattr(update, "business_message", None)
+            or getattr(update, "edited_business_message", None)
+            or (
+                getattr(update, "message", None)
+                if getattr(getattr(update, "message", None), "business_connection_id", None)
+                else None
+            )
+        )
+        if not message:
             return
-            
-        message = update.business_message
+
         if not _is_business_processing_allowed(message):
             return
 
@@ -1226,11 +1234,20 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
     except (sqlite3.Error, TelegramError, KeyError, AttributeError, ValueError, OSError) as e:
         logger.error(f"Error in handle_business_message: {e}", exc_info=True)
         try:
-            if update.business_message:
+            fallback_message = (
+                getattr(update, "business_message", None)
+                or getattr(update, "edited_business_message", None)
+                or (
+                    getattr(update, "message", None)
+                    if getattr(getattr(update, "message", None), "business_connection_id", None)
+                    else None
+                )
+            )
+            if fallback_message:
                 await context.bot.send_message(
-                    chat_id=update.business_message.chat.id,
+                    chat_id=fallback_message.chat.id,
                     text="❌ Произошла ошибка. Попробуйте позже.",
-                    business_connection_id=update.business_message.business_connection_id
+                    business_connection_id=fallback_message.business_connection_id
                 )
         except TelegramError:
             pass

@@ -145,13 +145,30 @@ def _acquire_single_instance_lock(lock_path: str = "data/lead-bot.lock") -> None
     atexit.register(_release_single_instance_lock)
 
 
+def _extract_business_update_message(update: Update) -> Any:
+    business_message = getattr(update, "business_message", None)
+    if business_message is not None:
+        return business_message
+
+    edited_business_message = getattr(update, "edited_business_message", None)
+    if edited_business_message is not None:
+        return edited_business_message
+
+    return None
+
+
 def _is_business_update(update: Update) -> bool:
-    return getattr(update, "business_message", None) is not None
+    if _extract_business_update_message(update) is not None:
+        return True
+
+    message = getattr(update, "message", None)
+    return getattr(message, "business_connection_id", None) not in {None, ""}
 
 
 def _extract_incoming_message(update: Update) -> Any:
-    if _is_business_update(update):
-        return update.business_message
+    business_message = _extract_business_update_message(update)
+    if business_message is not None:
+        return business_message
     return update.message
 
 
@@ -596,6 +613,14 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         if _is_business_update(update):
+            if (
+                getattr(update, "business_message", None) is None
+                and getattr(update, "edited_business_message", None) is None
+            ):
+                logger.info(
+                    "Treat update %s as business flow via message.business_connection_id",
+                    update.update_id,
+                )
             if await _try_handle_business_operator_message(update, context):
                 log_update_timing(update, started_at, ok=True)
                 return
@@ -772,7 +797,7 @@ async def business_connection_router(update: Update, context: ContextTypes.DEFAU
 
 
 async def business_message_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if getattr(update, "business_message", None) is None:
+    if _extract_business_update_message(update) is None:
         return
     await message_router(update, context)
 
@@ -1011,6 +1036,8 @@ def main() -> None:
                 "callback_query",
                 "business_connection",
                 "business_message",
+                "edited_business_message",
+                "deleted_business_messages",
             ],
         )
     except RuntimeError as lock_error:
