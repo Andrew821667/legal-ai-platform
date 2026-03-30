@@ -602,7 +602,7 @@ def passes_generation_scope(article: ArticleCandidate) -> bool:
     broad_ai_hits = sum(1 for marker in _BROAD_AI_MARKERS if _marker_present(text, marker))
 
     if domain in _LEGAL_DOMAINS:
-        return has_ai or (has_generation_ops and has_hard_legal)
+        return has_ai and (has_hard_legal or has_generation_ops or has_hard_market)
     if domain in _AI_TECH_DOMAINS and has_ai and broad_ai_hits >= 2:
         return True
     return has_ai and (has_hard_legal or has_hard_market)

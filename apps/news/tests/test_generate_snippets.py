@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import news.generate as generate_module
-from news.generate import _normalize_snippet
+from news.generate import _collect_history, _normalize_snippet
 from news.pipeline import ArticleCandidate
 
 
@@ -115,3 +115,55 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
     assert result.previews[0]["publication_kind"] == "humor"
     assert _FakeWriter.generate_calls == 1
     assert _FakeWriter.fallback_calls == 1
+
+
+def test_collect_history_does_not_block_non_irrelevant_failed_posts() -> None:
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return self._payload
+
+    class _FakeClient:
+        def list_posts(self, *, limit: int, status: str, newest_first: bool):
+            if status == "failed":
+                return _FakeResponse(
+                    [
+                        {
+                            "title": "Сетевой сбой",
+                            "text": "Пост не отправился из-за DNS-проблемы.",
+                            "source_url": "https://example.com/network-failure",
+                            "last_error": "Telegram request failed: DNS error",
+                            "publish_at": "",
+                            "feedback_snapshot": {},
+                            "id": "1",
+                        },
+                        {
+                            "title": "Удаленный оффтоп",
+                            "text": "Нерелевантный материал.",
+                            "source_url": "https://example.com/offtopic",
+                            "last_error": "deleted_irrelevant",
+                            "publish_at": "",
+                            "feedback_snapshot": {},
+                            "id": "2",
+                        },
+                    ]
+                )
+            return _FakeResponse([])
+
+    texts, source_urls, recent_pillar_counts, posted_items, negative_feedback_examples, occupied_slot_keys = _collect_history(
+        _FakeClient(),
+        timezone.utc,
+    )
+
+    assert "https://example.com/network-failure" not in source_urls
+    assert "https://example.com/offtopic" in source_urls
+    assert all(item.get("source_url") != "https://example.com/network-failure" for item in posted_items)
+    assert any(item.get("source_url") == "https://example.com/offtopic" for item in posted_items)
+    assert recent_pillar_counts == {}
+    assert occupied_slot_keys == set()
+    assert len(negative_feedback_examples) >= 0

@@ -931,10 +931,11 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             key="pravo_ru",
             name="Право.ru",
             kind="rss",
-            note="Юррынок, практика, судебка, legal ops",
+            note="Юррынок, практика и legal ops; используется как дополнительный общий legal-сигнал, а не как основной AI-источник",
             url="https://www.pravo.ru/rss/",
             domain="pravo.ru",
-            priority=1.8,
+            priority=1.15,
+            bucket="general_news",
         ),
         "garant": SourceSpec(
             key="garant",
@@ -983,7 +984,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="AI и автоматизация, только через жесткий topical filter",
             url="https://habr.com/ru/rss/news/?fl=ru",
             domain="habr.com",
-            priority=1.0,
+            priority=0.8,
+            bucket="general_news",
         ),
         "habr_hubs": SourceSpec(
             key="habr_hubs",
@@ -992,7 +994,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Технические и продуктовые материалы, только через жесткий topical filter",
             url="https://habr.com/ru/rss/hubs/",
             domain="habr.com",
-            priority=0.95,
+            priority=0.75,
+            bucket="general_news",
         ),
         "vc": SourceSpec(
             key="vc",
@@ -1001,7 +1004,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Enterprise AI, продукты и legal tech, только через topical filter",
             url="https://vc.ru/rss/all",
             domain="vc.ru",
-            priority=1.0,
+            priority=0.8,
+            bucket="general_news",
         ),
         "tass": SourceSpec(
             key="tass",
@@ -1010,7 +1014,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Общий новостной поток, допускается только через topical/legal filter",
             url="https://tass.ru/rss/v2.xml",
             domain="tass.ru",
-            priority=0.85,
+            priority=0.45,
+            bucket="general_news",
         ),
         "lenta": SourceSpec(
             key="lenta",
@@ -1019,7 +1024,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Общий новостной поток, используется только через topical/legal filter",
             url="https://lenta.ru/rss/news",
             domain="lenta.ru",
-            priority=0.7,
+            priority=0.35,
+            bucket="general_news",
         ),
         "interfax": SourceSpec(
             key="interfax",
@@ -1028,7 +1034,8 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             note="Технологии и наука, только через topical/legal filter",
             url="https://www.interfax.ru/rss.asp",
             domain="interfax.ru",
-            priority=0.95,
+            priority=0.55,
+            bucket="general_news",
         ),
         "telegram_channels": SourceSpec(
             key="telegram_channels",
@@ -1115,13 +1122,8 @@ def parse_active_source_keys(settings: Any) -> list[str]:
         "the_decoder_ai",
         "artificial_lawyer",
         "marktechpost",
-        "pravo_ru",
         "habr_news",
-        "habr_hubs",
         "vc",
-        "tass",
-        "lenta",
-        "interfax",
     ]
 
 

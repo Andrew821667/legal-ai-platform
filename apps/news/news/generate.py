@@ -134,6 +134,16 @@ def _broad_ai_limit(control_rows: list[dict[str, Any]]) -> int:
     return 1
 
 
+def _general_news_limit(control_rows: list[dict[str, Any]]) -> int:
+    row_map = {str(row.get("key") or ""): row for row in control_rows}
+    generate_row = row_map.get("news.generate.enabled") or {}
+    config = generate_row.get("config") or {}
+    value = config.get("general_news_limit")
+    if isinstance(value, int) and value >= 0:
+        return value
+    return 2
+
+
 def _collect_history(
     client: CoreClient,
     local_tz: ZoneInfo,
@@ -160,17 +170,18 @@ def _collect_history(
         for row in rows:
             title = (row.get("title") or "").strip()
             text = (row.get("text") or "").strip()
-            if text:
-                texts.append(text)
-
-            url = canonicalize_url(row.get("source_url") or "")
-            if url:
-                source_urls.add(url)
-
             if status == "failed":
                 last_error = str(row.get("last_error") or "").strip().lower()
+                # Only "deleted_irrelevant" failures should keep blocking the same URL/text.
+                # Other failures are transport/editorial/runtime issues and should be eligible
+                # for regeneration after the pipeline evolves or infrastructure recovers.
                 if not last_error.startswith("deleted_irrelevant"):
                     continue
+                if text:
+                    texts.append(text)
+                url = canonicalize_url(row.get("source_url") or "")
+                if url:
+                    source_urls.add(url)
                 posted_items.append(
                     {
                         "title": title,
@@ -182,6 +193,13 @@ def _collect_history(
                     }
                 )
                 continue
+
+            if text:
+                texts.append(text)
+
+            url = canonicalize_url(row.get("source_url") or "")
+            if url:
+                source_urls.add(url)
 
             if status in {"review", "scheduled", "publishing"}:
                 publish_raw = str(row.get("publish_at") or "").strip()
@@ -403,6 +421,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     ) = _collect_history(core_client, local_tz)
     enabled_generation_themes = _enabled_generation_themes(control_rows)
     broad_ai_limit = _broad_ai_limit(control_rows)
+    general_news_limit = _general_news_limit(control_rows)
     feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
     negative_feedback_context = (
         render_negative_feedback_context(negative_feedback_examples) if feedback_guard_enabled else ""
@@ -446,7 +465,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         priority_domains=priority_domains,
         source_priority_weights=source_priorities,
         source_bucket_weights=source_buckets,
-        max_bucket_counts={"broad_ai": broad_ai_limit},
+        max_bucket_counts={"broad_ai": broad_ai_limit, "general_news": general_news_limit},
         max_per_source=settings.news_max_per_source,
         recent_pillar_counts=recent_pillar_counts,
         target_pillar_shares=default_pillar_targets(),

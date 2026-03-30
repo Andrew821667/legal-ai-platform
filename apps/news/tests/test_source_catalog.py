@@ -134,6 +134,16 @@ def test_source_bucket_map_marks_broad_ai_sources() -> None:
     assert buckets[canonicalize_source_url(source_catalog(settings)["google_news_frontier_en"].url)] == "broad_ai"
 
 
+def test_source_bucket_map_marks_general_news_sources() -> None:
+    settings = Settings(news_source_keys="pravo_ru,habr_news,lenta,interfax", news_source_urls="")
+    catalog = source_catalog(settings)
+    buckets = source_bucket_map(settings)
+    assert buckets[canonicalize_source_url(catalog["pravo_ru"].url)] == "general_news"
+    assert buckets[canonicalize_source_url(catalog["habr_news"].url)] == "general_news"
+    assert buckets[canonicalize_source_url(catalog["lenta"].url)] == "general_news"
+    assert buckets[canonicalize_source_url(catalog["interfax"].url)] == "general_news"
+
+
 def test_telegram_channel_bucket_map_marks_broad_ai_channels() -> None:
     buckets = telegram_channel_bucket_map(["@allthingslegal", "@ai_newz"])
     assert buckets["https://t.me/allthingslegal"] == "core"

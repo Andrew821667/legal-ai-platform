@@ -13,6 +13,7 @@ from news.pipeline import (
     normalize_rubric_to_pillar,
     normalize_post_text,
     parse_schedule_slots,
+    passes_generation_scope,
     select_rag_examples,
 )
 
@@ -95,6 +96,18 @@ def test_specialized_filter_allows_broad_enterprise_ai_signal_from_tech_source()
         published_at=now,
     )
     assert is_specialized_candidate(article)
+
+
+def test_generation_scope_rejects_general_legal_story_without_ai_marker() -> None:
+    now = datetime(2026, 3, 30, tzinfo=timezone.utc)
+    article = ArticleCandidate(
+        source_url="https://www.pravo.ru/rss/",
+        article_url="https://pravo.ru/story/262920/",
+        title="Верховный суд рассмотрит споры по субаренде и персональным данным",
+        summary="Обзор предстоящих дел по гражданским и административным спорам без технологической тематики.",
+        published_at=now,
+    )
+    assert not passes_generation_scope(article)
 
 
 def test_choose_top_articles_limits_same_source() -> None:
@@ -197,6 +210,50 @@ def test_choose_top_articles_limits_broad_ai_bucket() -> None:
     selected_urls = {item.article_url for item in selected}
     assert "https://t.me/allthingslegal/1" in selected_urls
     assert len({"https://example.com/frontier-1", "https://example.com/enterprise-2"} & selected_urls) == 1
+
+
+def test_choose_top_articles_limits_general_news_bucket() -> None:
+    now = datetime(2026, 2, 25, tzinfo=timezone.utc)
+    articles = [
+        ArticleCandidate(
+            source_url="https://www.pravo.ru/rss/",
+            article_url="https://pravo.ru/story/1",
+            title="AI в договорной работе для юротделов",
+            summary="Практический legal ops кейс по автоматизации redline и workflow для инхаус-команд.",
+            published_at=now,
+        ),
+        ArticleCandidate(
+            source_url="https://habr.com/ru/rss/news/?fl=ru",
+            article_url="https://habr.com/ru/news/1",
+            title="Enterprise AI-платформа выпустила copilot для договорной работы",
+            summary="Новый AI assistant для legal workflow, contract review и in-house legal automation.",
+            published_at=now,
+        ),
+        ArticleCandidate(
+            source_url="https://www.artificiallawyer.com/feed/",
+            article_url="https://www.artificiallawyer.com/post-1",
+            title="Legal AI vendor launches enterprise review workflow",
+            summary="Legal AI platform expands contract review and legal operations automation for enterprise teams.",
+            published_at=now,
+        ),
+    ]
+
+    selected = choose_top_articles(
+        articles,
+        limit=3,
+        now_utc=now,
+        source_bucket_weights={
+            canonicalize_source_url("https://www.pravo.ru/rss/"): "general_news",
+            canonicalize_source_url("https://habr.com/ru/rss/news/?fl=ru"): "general_news",
+            canonicalize_source_url("https://www.artificiallawyer.com/feed/"): "core",
+        },
+        max_bucket_counts={"general_news": 1},
+    )
+
+    assert len(selected) == 2
+    selected_urls = {item.article_url for item in selected}
+    assert "https://www.artificiallawyer.com/post-1" in selected_urls
+    assert len({"https://pravo.ru/story/1", "https://habr.com/ru/news/1"} & selected_urls) == 1
 
 
 def test_select_rag_examples_returns_related_texts() -> None:
