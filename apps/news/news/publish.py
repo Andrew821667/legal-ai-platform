@@ -20,6 +20,40 @@ _REVIEW_AUTOFILL_MIN_LIMIT = 3
 _REVIEW_AUTOFILL_SCAN_LIMIT = 10
 _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
+
+
+def _demote_stale_scheduled_posts(client: CoreClient, *, scan_limit: int = 100) -> int:
+    scheduled_response = client.list_posts(limit=max(scan_limit, 1), status="scheduled", newest_first=False)
+    scheduled_response.raise_for_status()
+    scheduled_rows = list(scheduled_response.json() or [])
+    if not scheduled_rows:
+        return 0
+
+    now_utc = datetime.now(timezone.utc)
+    stale_cutoff = now_utc - timedelta(minutes=max(settings.news_publish_max_overdue_minutes, 1))
+    demoted = 0
+
+    for row in scheduled_rows:
+        publish_at = parse_post_datetime(row.get("publish_at"))
+        if publish_at is None or publish_at >= stale_cutoff:
+            continue
+        post_id = str(row.get("id") or "").strip()
+        if not post_id:
+            continue
+        client.patch_post(post_id, {"status": "ready"}).raise_for_status()
+        demoted += 1
+
+    if demoted:
+        logger.info(
+            "stale_scheduled_posts_demoted_to_ready",
+            extra={
+                "count": demoted,
+                "max_overdue_minutes": settings.news_publish_max_overdue_minutes,
+            },
+        )
+    return demoted
+
+
 def _autofill_publish_at(row: dict[str, Any], *, queue_index: int, now_utc: datetime) -> str:
     publish_at = parse_post_datetime(row.get("publish_at"))
     if publish_at is not None and publish_at > now_utc:
@@ -237,6 +271,13 @@ def main() -> int:
             return 0
     except Exception as exc:
         logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
+
+    try:
+        stale_demoted = _demote_stale_scheduled_posts(client)
+        if stale_demoted:
+            logger.info("stale_scheduled_posts_processed", extra={"count": stale_demoted})
+    except Exception as exc:
+        logger.warning("stale_scheduled_posts_demote_failed", extra={"error": str(exc)})
 
     try:
         rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)

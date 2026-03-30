@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from news.publish import _autofill_publish_at, _promote_ready_posts_for_idle_queue
+from news.publish import _autofill_publish_at, _demote_stale_scheduled_posts, _promote_ready_posts_for_idle_queue
+from news.settings import settings
 
 
 class _FakeResponse:
@@ -18,14 +19,17 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    def __init__(self, *, ready_rows) -> None:
+    def __init__(self, *, ready_rows=None, scheduled_rows=None) -> None:
         self._ready_rows = ready_rows
+        self._scheduled_rows = scheduled_rows
         self.patched: list[tuple[str, dict[str, str]]] = []
 
     def list_posts(self, limit: int = 20, status: str | None = None, newest_first: bool = False, offset: int = 0):
         _ = (limit, newest_first, offset)
         if status == "ready":
             return _FakeResponse(self._ready_rows[:limit])
+        if status == "scheduled":
+            return _FakeResponse(self._scheduled_rows[:limit])
         raise AssertionError(f"unexpected status {status}")
 
     def patch_post(self, post_id: str, payload: dict[str, str]):
@@ -83,3 +87,24 @@ def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:
 
     assert promoted == 0
     assert client.patched == []
+
+
+def test_demote_stale_scheduled_posts_to_ready() -> None:
+    now_utc = datetime.now(timezone.utc)
+    client = _FakeClient(
+        scheduled_rows=[
+            {"id": "old", "publish_at": (now_utc - timedelta(hours=7)).isoformat()},
+            {"id": "fresh", "publish_at": (now_utc - timedelta(hours=2)).isoformat()},
+            {"id": "future", "publish_at": (now_utc + timedelta(hours=2)).isoformat()},
+        ],
+    )
+
+    original = settings.news_publish_max_overdue_minutes
+    settings.news_publish_max_overdue_minutes = 360
+    try:
+        demoted = _demote_stale_scheduled_posts(client)
+    finally:
+        settings.news_publish_max_overdue_minutes = original
+
+    assert demoted == 1
+    assert client.patched == [("old", {"status": "ready"})]
