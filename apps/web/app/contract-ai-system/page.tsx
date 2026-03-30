@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, contractAISsoUrl } from "@/lib/links";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
@@ -69,6 +69,7 @@ const launchFormats = [
 export default function ContractAISystemPage() {
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
+  const ssoUrl = contractAISsoUrl();
   return (
     <main className="bg-slate-950 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
@@ -90,15 +91,25 @@ export default function ContractAISystemPage() {
             />
           </div>
           {contractAIExternal ? (
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-3">
               <a
                 href={contractAIHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:border-emerald-300"
               >
-                🖥 Открыть внешний сервис проверки договоров
+                Открыть сервис проверки договоров
               </a>
+              {ssoUrl ? (
+                <a
+                  href={contractAIHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex rounded-lg border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300"
+                >
+                  Войти через Legal AI PRO (SSO)
+                </a>
+              ) : null}
             </div>
           ) : null}
         </div>

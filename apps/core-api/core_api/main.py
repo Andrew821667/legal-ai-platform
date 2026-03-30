@@ -13,6 +13,7 @@ from core_api.logging_config import setup_logging
 from core_api.routers import (
     admin,
     automation_controls,
+    contract_ai_bridge,
     contract_jobs,
     events,
     health,
@@ -47,6 +48,7 @@ app.include_router(automation_controls.router)
 app.include_router(scheduled_posts.router)
 app.include_router(reader.router)
 app.include_router(contract_jobs.router)
+app.include_router(contract_ai_bridge.router)
 app.include_router(special_consultations.router)
 app.include_router(workers.router)
 app.include_router(admin.router)

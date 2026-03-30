@@ -67,6 +67,10 @@ from handlers.callbacks import (
     handle_lead_magnet_callback,
     handle_profile_callback,
 )
+from handlers.contract_analysis import (
+    handle_contract_analysis_cancel,
+    handle_contract_analysis_start,
+)
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from handlers.user import (
@@ -768,7 +772,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
 
         data = query.data or ""
-        if data.startswith("menu_"):
+        if data == "menu_contract_ai":
+            await handle_contract_analysis_start(update, context)
+        elif data.startswith("menu_"):
             await handle_business_menu_callback(update, context)
         elif data.startswith("consent_"):
             await handle_consent_callback(update, context)
@@ -782,6 +788,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_cleanup_callback(update, context)
         elif data.startswith("admin_"):
             await handle_admin_panel_callback(update, context)
+        elif data in ("contract_upload", "menu_contract_ai"):
+            await handle_contract_analysis_start(update, context)
+        elif data == "contract_cancel":
+            await handle_contract_analysis_cancel(update, context)
         else:
             await query.answer("Неизвестное действие")
         log_update_timing(update, started_at, ok=True)

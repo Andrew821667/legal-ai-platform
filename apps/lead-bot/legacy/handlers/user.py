@@ -53,6 +53,7 @@ from .user_lead_flow import (
     maybe_handle_pending_lead_magnet,
     maybe_handle_repeat_loop,
 )
+from .contract_analysis import handle_contract_document, CONTRACT_ANALYSIS_WAITING_KEY
 from .user_non_text import handle_non_text_input as _handle_non_text_input
 from .user_profile_edit import handle_profile_edit_input
 from .user_routing import (
@@ -157,6 +158,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     action="non_text_requires_pdn",
                 )
                 return
+            # Перехватываем документ если пользователь в режиме анализа договора
+            if context.user_data.get(CONTRACT_ANALYSIS_WAITING_KEY):
+                handled = await handle_contract_document(update, context, user_data)
+                if handled:
+                    return
             await _handle_non_text_input(update, context, user_data, lead, allow_lead_processing)
             return
 

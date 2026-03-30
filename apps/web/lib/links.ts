@@ -17,6 +17,7 @@ const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_a
 const READER_BOT_USERNAME = (process.env.NEXT_PUBLIC_READER_BOT_USERNAME || "legal_ai_news_reader_bot").trim();
 const CHANNEL_USERNAME = (process.env.NEXT_PUBLIC_CHANNEL_USERNAME || "legal_ai_pro").trim();
 const CONTRACT_AI_SYSTEM_URL = (process.env.NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL || "").trim();
+const CORE_API_URL = (process.env.NEXT_PUBLIC_CORE_API_URL || "").trim();
 
 export const EXTERNAL_LINKS = {
   leadBot: `https://t.me/${LEAD_BOT_USERNAME}`,
@@ -40,6 +41,21 @@ export function contractAIEntryHref(hash?: string): string {
 
 export function contractAIEntryIsExternal(): boolean {
   return Boolean(EXTERNAL_LINKS.contractAI);
+}
+
+/**
+ * URL для SSO-входа в Contract-AI-System через core-api proxy.
+ * core-api получает SSO-токен от Contract-AI-System и возвращает redirect_url.
+ */
+export function contractAISsoUrl(): string {
+  return CORE_API_URL ? `${CORE_API_URL}/api/v1/contract-ai/sso` : "";
+}
+
+/**
+ * URL для проверки статуса Contract-AI-System.
+ */
+export function contractAIStatusUrl(): string {
+  return CORE_API_URL ? `${CORE_API_URL}/api/v1/contract-ai/status` : "";
 }
 
 export function leadBotDeepLink(start?: string): string {

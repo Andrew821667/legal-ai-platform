@@ -33,9 +33,13 @@ class Settings(BaseSettings):
     contract_ai_bridge_enabled_default: bool = False
     contract_ai_bridge_deployment: str = "docker_local_macbook"
     contract_ai_bridge_mode: str = "offline"
+    contract_ai_bridge_secret: str = ""
     contract_ai_bridge_status_url: str = ""
-    contract_ai_bridge_demo_link_url: str = ""
     contract_ai_bridge_analysis_url: str = ""
+    contract_ai_bridge_progress_url: str = ""
+    contract_ai_bridge_result_url: str = ""
+    contract_ai_bridge_sso_url: str = ""
+    contract_ai_bridge_demo_link_url: str = ""
 
 
 @lru_cache
