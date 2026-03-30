@@ -120,8 +120,8 @@ def test_manual_queue_context_helpers() -> None:
     assert not _is_manual_queue_context("scheduled")
     assert _auto_queue_context("daily") == "aq_daily_all"
     assert _auto_queue_context("daily", "regulation") == "aq_daily_regulation"
-    assert _auto_queue_filter_from_context("aq_humor") == "humor"
-    assert _auto_queue_filters_from_context("aq_humor_market") == ("humor", "market")
+    assert _auto_queue_filter_from_context("aq_humor") == "practice"
+    assert _auto_queue_filters_from_context("aq_humor_market") == ("practice", "market")
     assert _is_auto_queue_context("aq_all")
 
 

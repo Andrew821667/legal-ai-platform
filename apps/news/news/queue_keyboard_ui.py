@@ -31,7 +31,7 @@ def build_auto_queue_keyboard_rows(
         ("daily", "Ежедневные"),
         ("weekly_review", "Обзоры"),
         ("longread", "Лонгриды"),
-        ("humor", "Практика недели"),
+        ("practice", "Практика недели"),
         ("other", "Прочее"),
     ]
     for index in range(0, len(filter_rows), 2):

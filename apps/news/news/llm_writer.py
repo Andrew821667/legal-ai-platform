@@ -23,7 +23,8 @@ _FORMAT_HINTS = {
     "daily": "Формат daily: 1100-1700 символов, плотный ежедневный пост по новости для канала о Legal AI.",
     "weekly_review": "Формат weekly_review: 3200-3900 символов, 8-10 пунктов, без обрезки текста, это обзор недели по Legal AI и автоматизации юрфункции.",
     "longread": "Формат longread: 3200-4300 символов, это действительно длинный воскресный разбор с сильной практической частью и четкой логикой.",
-    "humor": "Формат humor: 1100-1700 символов, это субботний практический разбор по Legal AI и юрфункции, без юмора и без развлекательной подачи.",
+    "practice": "Формат practice: 1100-1700 символов, это субботний практический разбор по Legal AI и юрфункции, без юмора и без развлекательной подачи.",
+    "humor": "Формат practice: 1100-1700 символов, это субботний практический разбор по Legal AI и юрфункции, без юмора и без развлекательной подачи.",
 }
 _FORMAT_SHAPE_HINTS = {
     "daily": (
@@ -40,8 +41,12 @@ _FORMAT_SHAPE_HINTS = {
         "-> «Что делать» -> «Вывод» -> источник. Это должен быть цельный, действительно длинный разбор; "
         "не используй слово «лонгрид» или longread в заголовке."
     ),
+    "practice": (
+        "Структура practice: короткий лид -> «Ситуация недели» -> «Где узкое место» -> «Что взять в работу» "
+        "-> источник. Это практический субботний формат, а не юмор."
+    ),
     "humor": (
-        "Структура humor: короткий лид -> «Ситуация недели» -> «Где узкое место» -> «Что взять в работу» "
+        "Структура practice: короткий лид -> «Ситуация недели» -> «Где узкое место» -> «Что взять в работу» "
         "-> источник. Это практический субботний формат, а не юмор."
     ),
 }
@@ -53,6 +58,7 @@ _FORMAT_MIN_CHARS = {
     "daily": 900,
     "weekly_review": 2800,
     "longread": 2800,
+    "practice": 1000,
     "humor": 1000,
 }
 _FORMAT_MAX_OUTPUT_TOKENS = {
@@ -63,6 +69,7 @@ _FORMAT_MAX_OUTPUT_TOKENS = {
     "daily": 1200,
     "weekly_review": 2200,
     "longread": 2300,
+    "practice": 1000,
     "humor": 1000,
 }
 _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
@@ -73,6 +80,7 @@ _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
     "daily": {"what": 520, "effect": 360, "risks": 320, "step": 95, "steps": 3, "hashtags": 3},
     "weekly_review": {"what": 1500, "effect": 520, "risks": 420, "step": 160, "steps": 4, "hashtags": 4},
     "longread": {"what": 1300, "effect": 850, "risks": 700, "step": 130, "steps": 5, "hashtags": 4},
+    "practice": {"what": 520, "effect": 360, "risks": 300, "step": 100, "steps": 3, "hashtags": 3},
     "humor": {"what": 520, "effect": 360, "risks": 300, "step": 100, "steps": 3, "hashtags": 3},
 }
 _CTA_LIBRARY = {
@@ -106,6 +114,7 @@ _AUTO_FOOTER_MODE_BY_FORMAT = {
     "daily": "none",
     "weekly_review": "none",
     "longread": "soft",
+    "practice": "none",
     "humor": "none",
 }
 _MANUAL_FOOTER_LIBRARY = {
@@ -124,6 +133,7 @@ _CHANNEL_STYLE_HINTS = {
     "daily": "Редакционный тон: коротко, плотно, без рекламного хвоста. Это информационный пост, а не продающий.",
     "weekly_review": "Редакционный тон: обзор недели. Никакого CTA, только редакционный вывод и ощущение собранного материала.",
     "longread": "Редакционный тон: экспертный воскресный разбор. Допустим мягкий следующий шаг, но без навязчивой продажи.",
+    "practice": "Редакционный тон: субботний практический формат, короткий и прикладной. CTA не нужен.",
     "humor": "Редакционный тон: субботний практический формат, короткий и прикладной. CTA не нужен.",
 }
 _FOOTER_DECISION_SYSTEM_PROMPT = NEWS_FOOTER_DECISION_SYSTEM_PROMPT
@@ -647,7 +657,7 @@ class LLMNewsWriter:
         normalized = re.sub(r"\s+", " ", (title or "").strip())
         if format_type == "longread":
             normalized = re.sub(r"^\s*(?:лонгрид|longread)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
-        if format_type == "humor":
+        if format_type in {"practice", "humor"}:
             normalized = re.sub(r"^\s*(?:юмор|humor|шутка)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
         normalized = normalized.strip(" -–—:;,.")
         if not normalized:
@@ -761,7 +771,7 @@ class LLMNewsWriter:
             return "<b>Источник</b>: внутренняя подборка сигналов недели"
         if article_url.startswith("internal://longread"):
             return "<b>Источник</b>: внутренняя подборка материалов для лонгрида"
-        if article_url.startswith("internal://humor"):
+        if article_url.startswith("internal://practice") or article_url.startswith("internal://humor"):
             return "<b>Источник</b>: внутренняя подборка сигналов недели"
         return f'<b>Источник</b>: <a href="{safe_article_url}">оригинал статьи</a>'
 

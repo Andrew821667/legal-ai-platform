@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from news.settings import settings
 from news.strategy import build_schedule_window, publication_kind_from_format_type
 
-ACTIVE_PUBLICATION_KINDS = ("daily", "weekly_review", "longread", "humor")
+ACTIVE_PUBLICATION_KINDS = ("daily", "weekly_review", "longread", "practice")
 ACTIVE_QUEUE_SCAN_LIMIT = 100
 
 

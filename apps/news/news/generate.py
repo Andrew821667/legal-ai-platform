@@ -359,7 +359,7 @@ def _build_longread_candidate(
     )
 
 
-def _build_humor_candidate(now_utc: datetime, selected_articles: list[ArticleCandidate]) -> ArticleCandidate | None:
+def _build_practice_candidate(now_utc: datetime, selected_articles: list[ArticleCandidate]) -> ArticleCandidate | None:
     materials = selected_articles[:4]
     if not materials:
         return None
@@ -367,8 +367,8 @@ def _build_humor_candidate(now_utc: datetime, selected_articles: list[ArticleCan
     for index, article in enumerate(materials, start=1):
         lines.append(f"{index}. {article.title} — {_normalize_snippet(article.summary, 180)}")
     return ArticleCandidate(
-        source_url="internal://humor",
-        article_url=f"internal://humor/{now_utc.date().isoformat()}",
+        source_url="internal://practice",
+        article_url=f"internal://practice/{now_utc.date().isoformat()}",
         title="Практика недели: где Legal AI упирается в реальную работу",
         summary=(
             "Сделай субботний практический пост по сигналам недели. "
@@ -527,8 +527,8 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 synthetic_slot = True
                 if article is None:
                     break
-            elif publication_kind == "humor":
-                article = _build_humor_candidate(now_utc, selected_articles)
+            elif publication_kind == "practice":
+                article = _build_practice_candidate(now_utc, selected_articles)
                 synthetic_slot = True
                 if article is None:
                     break

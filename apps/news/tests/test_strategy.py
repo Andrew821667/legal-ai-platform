@@ -20,7 +20,7 @@ def test_build_publish_plan_uses_new_publication_grid() -> None:
     assert [item.publication_kind for item in plan[:4]] == ["daily", "daily", "daily", "daily"]
     assert plan[0].publish_at_local.strftime("%H:%M") == "09:00"
     assert plan[1].publish_at_local.strftime("%H:%M") == "18:00"
-    assert all(item.format_type in {"daily", "weekly_review", "longread", "humor"} for item in plan)
+    assert all(item.format_type in {"daily", "weekly_review", "longread", "practice"} for item in plan)
 
 
 def test_build_publish_plan_skips_occupied_slots() -> None:
@@ -41,7 +41,7 @@ def test_build_schedule_window_includes_friday_review_saturday_humor_and_sunday_
     now = datetime(2026, 3, 6, 8, 0, tzinfo=ZoneInfo("Europe/Moscow"))  # Friday
     slots = build_schedule_window(now, days=3, future_only=True)
 
-    assert [item.publication_kind for item in slots] == ["daily", "weekly_review", "daily", "humor", "longread"]
+    assert [item.publication_kind for item in slots] == ["daily", "weekly_review", "daily", "practice", "longread"]
     assert slots[1].publish_at_local.strftime("%H:%M") == "15:00"
     assert slots[2].publish_at_local.strftime("%H:%M") == "18:00"
     assert slots[3].publish_at_local.strftime("%H:%M") == "11:00"
@@ -76,5 +76,6 @@ def test_publication_kind_from_format_type_maps_new_and_legacy_values() -> None:
     assert publication_kind_from_format_type("weekly_review") == "weekly_review"
     assert publication_kind_from_format_type("digest") == "weekly_review"
     assert publication_kind_from_format_type("deep") == "longread"
-    assert publication_kind_from_format_type("humor") == "humor"
+    assert publication_kind_from_format_type("humor") == "practice"
+    assert publication_kind_from_format_type("practice") == "practice"
     assert publication_kind_from_format_type("manual_promo_offer") == "other"

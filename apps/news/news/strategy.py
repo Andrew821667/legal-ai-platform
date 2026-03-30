@@ -7,19 +7,19 @@ from typing import Any
 from news.pipeline import parse_schedule_slots
 from news.settings import settings
 
-PUBLICATION_KIND_ORDER = ("daily", "weekly_review", "longread", "humor", "other")
+PUBLICATION_KIND_ORDER = ("daily", "weekly_review", "longread", "practice", "other")
 PUBLICATION_KIND_LABELS = {
     "daily": "Ежедневный пост",
     "weekly_review": "Обзор недели",
     "longread": "Лонгрид",
-    "humor": "Практика недели",
+    "practice": "Практика недели",
     "other": "Прочее",
 }
 PUBLICATION_KIND_BADGES = {
     "daily": "🗞",
     "weekly_review": "🧭",
     "longread": "📚",
-    "humor": "🧩",
+    "practice": "🧩",
     "other": "📌",
 }
 
@@ -34,13 +34,13 @@ _FORMAT_TYPE_BY_KIND = {
     "daily": "daily",
     "weekly_review": "weekly_review",
     "longread": "longread",
-    "humor": "humor",
+    "practice": "practice",
 }
 _CTA_TYPE_BY_KIND = {
     "daily": "soft",
     "weekly_review": "soft",
     "longread": "mid",
-    "humor": "soft",
+    "practice": "soft",
 }
 _LONGREAD_TOPIC_FALLBACK = (
     "AI для intake и первичной квалификации обращений",
@@ -110,8 +110,8 @@ def publication_kind_from_format_type(format_type: str | None) -> str:
         return "weekly_review"
     if normalized in {"longread", "deep"}:
         return "longread"
-    if normalized == "humor":
-        return "humor"
+    if normalized in {"practice", "humor"}:
+        return "practice"
     return "other"
 
 
@@ -151,7 +151,7 @@ def schedule_alias_meta(alias: str) -> dict[str, str]:
         },
         "humor": {
             "label": "Субботняя практика недели",
-            "kind": "humor",
+            "kind": "practice",
             "window": "Суббота, 10:00-12:00",
         },
     }
@@ -335,7 +335,7 @@ def _day_slots(current_day: date, config: ScheduleConfig) -> list[tuple[str, tup
             slots.append(("weekly_review", config.weekly_review_slot, config.weekly_review_enabled))
         return slots
     if weekday == 5:
-        return [("humor", config.humor_slot, config.humor_enabled)]
+        return [("practice", config.humor_slot, config.humor_enabled)]
     return [("longread", config.longread_slot, config.longread_enabled)]
 
 

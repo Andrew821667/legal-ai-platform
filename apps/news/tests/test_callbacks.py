@@ -67,7 +67,7 @@ def test_context_helpers() -> None:
     assert queue_filters_from_context("mq_due_implementation") == ("due", "implementation")
     assert is_manual_queue_context("mq_due_all")
     assert auto_queue_context("daily", "market") == "aq_daily_market"
-    assert auto_queue_filters_from_context("aq_humor_market") == ("humor", "market")
+    assert auto_queue_filters_from_context("aq_humor_market") == ("practice", "market")
     assert is_auto_queue_context("aq_all_all")
     cal_context = calendar_context("2026-03-01")
     assert cal_context == "cal_20260301"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "humor", "other")
+AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "practice", "other")
 MANUAL_QUEUE_FILTERS = ("due", "all")
 REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
 QUEUE_THEME_FILTERS = ("all", "regulation", "case", "implementation", "tools", "market")
@@ -79,8 +79,10 @@ def parse_review_filter_callback(data: str) -> tuple[str, str, str, int]:
     offset = 0
     if len(parts) >= 2 and parts[1] in REVIEW_SOURCE_FILTERS:
         review_filter = parts[1]
-    if len(parts) >= 3 and parts[2] in AUTO_QUEUE_FILTERS:
-        kind_filter = parts[2]
+    if len(parts) >= 3:
+        legacy_kind = "practice" if parts[2] == "humor" else parts[2]
+        if legacy_kind in AUTO_QUEUE_FILTERS:
+            kind_filter = legacy_kind
     if len(parts) >= 4 and parts[3] in QUEUE_THEME_FILTERS:
         theme_filter = parts[3]
     if len(parts) >= 5:
@@ -189,6 +191,8 @@ def is_manual_queue_context(context: str) -> bool:
 
 
 def auto_queue_context(queue_filter: str, theme_filter: str = "all") -> str:
+    if queue_filter == "humor":
+        queue_filter = "practice"
     normalized = queue_filter if queue_filter in AUTO_QUEUE_FILTERS else "all"
     normalized_theme = theme_filter if theme_filter in QUEUE_THEME_FILTERS else "all"
     return f"aq_{normalized}_{normalized_theme}"
@@ -197,7 +201,10 @@ def auto_queue_context(queue_filter: str, theme_filter: str = "all") -> str:
 def auto_queue_filters_from_context(context: str) -> tuple[str, str]:
     normalized = context.removeprefix("aq_")
     parts = normalized.split("_", 1)
-    queue_filter = parts[0] if parts and parts[0] in AUTO_QUEUE_FILTERS else "all"
+    raw_queue = parts[0] if parts else "all"
+    if raw_queue == "humor":
+        raw_queue = "practice"
+    queue_filter = raw_queue if raw_queue in AUTO_QUEUE_FILTERS else "all"
     theme_filter = parts[1] if len(parts) == 2 and parts[1] in QUEUE_THEME_FILTERS else "all"
     return queue_filter, theme_filter
 
@@ -215,7 +222,7 @@ def parse_auto_queue_callback(data: str) -> tuple[str, str, int]:
     if len(parts) == 2:
         return "all", "all", int(parts[1])
     if len(parts) >= 4:
-        queue_filter = parts[1]
+        queue_filter = "practice" if parts[1] == "humor" else parts[1]
         if queue_filter not in AUTO_QUEUE_FILTERS:
             queue_filter = "all"
         theme_filter = parts[2]
@@ -223,7 +230,7 @@ def parse_auto_queue_callback(data: str) -> tuple[str, str, int]:
             theme_filter = "all"
         return queue_filter, theme_filter, int(parts[3])
     if len(parts) >= 3:
-        queue_filter = parts[1]
+        queue_filter = "practice" if parts[1] == "humor" else parts[1]
         if queue_filter not in AUTO_QUEUE_FILTERS:
             queue_filter = "all"
         return queue_filter, "all", int(parts[2])

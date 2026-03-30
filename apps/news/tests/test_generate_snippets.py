@@ -99,8 +99,8 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
         lambda *_args, **_kwargs: [
             SimpleNamespace(
                 publish_at_local=datetime.now(timezone.utc),
-                publication_kind="humor",
-                format_type="humor",
+                publication_kind="practice",
+                format_type="practice",
                 cta_type="soft",
                 longread_topic=None,
             )
@@ -112,7 +112,7 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
     result = generate_module.collect_generation_previews(1)
 
     assert len(result.previews) == 1
-    assert result.previews[0]["publication_kind"] == "humor"
+    assert result.previews[0]["publication_kind"] == "practice"
     assert _FakeWriter.generate_calls == 1
     assert _FakeWriter.fallback_calls == 1
 
