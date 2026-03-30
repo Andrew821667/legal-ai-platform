@@ -1,50 +1,222 @@
-# legal-ai-platform
+# Legal AI Platform
 
-Монорепозиторий платформы лидогенерации Legal AI.
+**AI-платформа для юридического бизнеса** — лидогенерация, анализ договоров, новостная аналитика и автоматизация коммуникаций через единый контур Telegram-ботов, веб-сайта и API.
 
-## Компоненты
-- `apps/core-api` — единый backend (FastAPI + Postgres), включая контуры лидов, contract jobs и `special paid consultation` orders/payments
-- `apps/lead-bot` — Telegram-бот захвата лидов
-- `apps/news` — генератор, паблишер и admin-бот новостей
-- `apps/news/legacy` — reader-бот канала (персонализация/поиск/сохранённое)
-- `apps/contract-worker` — воркер анализа договоров (MacBook)
-- `apps/contract-ai` — локальный reference-контур; реальный `Contract_AI_System` ведется отдельно в `https://github.com/Andrew821667/Contract-AI-System-` и не является частью текущего production pipeline этого монорепо
-- `apps/web` — сайт
-- `packages/shared` — общие схемы/типы
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green.svg)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
+[![Monorepo](https://img.shields.io/badge/UV-Workspace-purple.svg)](https://docs.astral.sh/uv/)
 
-Документация по анализу договоров:
-- `docs/contract-analyzer.md` — алгоритм и формат результата `contract-worker`.
+---
 
-Актуальные source-of-truth документы:
-- `docs/README.md` — карта документации и разделение между текущими документами и архивом;
-- `docs/project-control-checklist.md` — текущий статус и остаток работ;
-- `docs/architecture.md` — runtime-архитектура;
-- `docs/runbook.md` — эксплуатация и деплой.
+## Что это
 
-## Быстрый старт (dev)
+Legal AI Platform — это продуктовая экосистема для юридического рынка. Платформа объединяет AI-анализ договоров, автоматическую лидогенерацию через Telegram, новостную аналитику и веб-витрину в единую систему с общим бэкендом и базой пользователей.
+
+### Бизнес-модель
+
+```
+Пользователь                                    Результат
+    │                                                │
+    ├── Telegram-бот ──── AI-консультация ──────── Квалифицированный лид
+    │                  └── Анализ договора ──────── Отчёт о рисках
+    │
+    ├── Веб-сайт ──────── Лендинги продуктов ───── Заявка на пилот
+    │                  └── SSO в Contract AI ────── Бесшовный вход
+    │
+    ├── Новостной бот ─── Персональная лента ───── Вовлечение / nurturing
+    │
+    └── Mini App ──────── Инструменты / кейсы ──── Конверсия в клиента
+```
+
+---
+
+## Продукты платформы
+
+### Telegram Lead Bot
+
+AI-ассистент для консультирования и квалификации клиентов:
+
+- Автономные консультации через GPT-4o-mini
+- Квалификация лидов: боль, бюджет, срочность, размер команды
+- Lead magnet система: консультация, чек-лист, демо-анализ
+- **Анализ договоров прямо в Telegram** — пользователь отправляет файл и получает отчёт с рисками и рекомендациями
+- Гибридный режим: бот + передача живому юристу
+- Уведомления администратору о горячих лидах
+
+### Contract AI Integration
+
+Бесшовная интеграция с [Contract AI System](https://github.com/Andrew821667/Contract-AI-System-):
+
+- **Bridge API** — proxy-слой в core-api для обращений к Contract AI System
+- **SSO** — единый вход: пользователь платформы автоматически авторизуется в Contract AI
+- **Telegram flow** — загрузка договора в бот, отслеживание прогресса, краткий отчёт
+- **Статус-мониторинг** — проверка доступности Contract AI System (online/busy/offline)
+
+### Новостная система
+
+Автоматическая генерация и публикация юридических AI-новостей:
+
+- Мониторинг источников + LLM-фильтрация релевантности
+- Генерация постов для Telegram-канала
+- Reader-бот с персонализированной лентой и поиском
+- Admin-бот для управления публикациями
+
+### Веб-сайт
+
+Next.js-сайт с продуктовыми лендингами:
+
+- Маршруты для юристов и бизнеса
+- Страница Contract AI System с SSO-входом
+- Mini App для Telegram WebApp (инструменты, кейсы, решения)
+- CTA-фреймворк с deep links в ботов
+
+---
+
+## Архитектура
+
+Монорепозиторий на UV workspace:
+
+```
+legal-ai-platform/
+├── apps/
+│   ├── core-api/              # Единый FastAPI бэкенд
+│   │   ├── routers/           # 12 роутеров (leads, contracts, bridge, admin...)
+│   │   ├── models/            # SQLAlchemy + Alembic миграции
+│   │   └── auth.py            # API Key авторизация
+│   │
+│   ├── lead-bot/              # Telegram-бот лидогенерации
+│   │   ├── handlers/          # 27 модулей обработчиков
+│   │   │   ├── contract_analysis.py  # Анализ договоров через bridge
+│   │   │   ├── user.py              # Основной user flow
+│   │   │   └── business.py          # Business-mode (B2B)
+│   │   ├── core_api_bridge.py # Синхронизация с core-api
+│   │   └── ai_brain.py        # GPT-4o-mini интеграция
+│   │
+│   ├── news/                  # Генератор + паблишер + admin-бот новостей
+│   ├── news/legacy/           # Reader-бот (персонализация, поиск)
+│   ├── contract-worker/       # Воркер анализа (standalone)
+│   ├── contract-ai/           # Reference-контур Contract AI System
+│   │
+│   └── web/                   # Next.js 16 сайт
+│       ├── app/               # App Router (10+ маршрутов)
+│       ├── components/        # React-компоненты
+│       └── lib/links.ts       # Маршрутизация + SSO helpers
+│
+├── packages/
+│   ├── shared/                # Общие схемы и типы
+│   └── prompts/               # Shared промпты
+│
+├── infra/
+│   ├── compose/               # Docker Compose (dev + prod)
+│   └── scripts/               # Deploy, backup, тесты
+│
+├── docs/                      # Документация (30+ файлов)
+├── pyproject.toml             # UV workspace root
+└── Makefile                   # lint, test, dev, prod, deploy
+```
+
+---
+
+## Технологический стек
+
+| Слой | Технологии |
+|------|-----------|
+| **Backend** | Python 3.11, FastAPI, SQLAlchemy, Pydantic v2, Alembic |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS, Framer Motion |
+| **Telegram** | python-telegram-bot 20.7, GPT-4o-mini |
+| **Database** | PostgreSQL 16 |
+| **LLM** | GPT-4o-mini (бот), DeepSeek/Claude/GPT-4o (анализ через Contract AI) |
+| **Infra** | Docker Compose, UV workspace, Ruff, pytest |
+| **Monitoring** | Telegram alerts, structured logging |
+
+---
+
+## Быстрый старт
+
+### Dev-окружение
+
 ```bash
+# Зависимости
 uv sync
+
+# Инфраструктура (PostgreSQL)
 docker compose -f infra/compose/docker-compose.dev.yml up --build
+
+# Или по компонентам:
+make dev        # Всё сразу
+make lint       # Линтинг (runtime-критичные правила)
+make test       # Тесты
 ```
 
-Важно:
-- после любого изменения Python-зависимостей в workspace-пакетах нужно регенерировать корневой `uv.lock` командой `uv lock`;
-- для `apps/lead-bot` это критично: `python-telegram-bot[job-queue]` ставится через `apps/lead-bot/pyproject.toml`, а не через legacy `requirements.txt`;
-- `special paid consultation` живет в `core-api` как отдельный продуктовый слой и не заменяет бесплатную консультацию по умолчанию;
-- production-deploy не пересобирает `lead-bot` автоматически, потому что в `infra/compose/docker-compose.prod.yml` используется готовый образ `LEAD_BOT_IMAGE`.
-- если менялись migration/модели `apps/core-api`, сначала нужно обновить `CORE_API_IMAGE`, потом выполнить Alembic миграции, и только после этого перезапускать `lead-bot`;
-- `infra/scripts/deploy.sh` теперь делает это в правильном порядке: `docker compose pull` -> `alembic upgrade head` -> restart сервисов.
+### Production
 
-## Полезные команды
 ```bash
-make lint
-make lint-full
-make test
-make dev
-make prod
-make deploy
-make integration-test
+make prod       # Собрать и запустить production stack
+make deploy     # Pull → migrate → restart
 ```
 
-`make lint` теперь проверяет runtime-критичные правила Ruff (ошибки, влияющие на надежность/поведение).
-Полный технический аудит стиля и форматирования запускается отдельно через `make lint-full`.
+### Конфигурация
+
+```bash
+cp .env.example .env
+# Минимум: TELEGRAM_BOT_TOKEN, OPENAI_API_KEY, DATABASE_URL
+# Для Contract AI: CONTRACT_AI_BRIDGE_SECRET, CONTRACT_AI_BRIDGE_*_URL
+```
+
+---
+
+## Интеграция с Contract AI System
+
+Платформа взаимодействует с [Contract AI System](https://github.com/Andrew821667/Contract-AI-System-) через Bridge API:
+
+```
+Telegram-бот                   core-api                    Contract AI System
+     │                            │                              │
+     │  файл договора             │                              │
+     ├──────────────────────────► │  POST /contract-ai/analyze   │
+     │                            ├─────────────────────────────►│
+     │                            │                              │ анализ...
+     │  прогресс 40%...           │  GET /contract-ai/progress   │
+     │◄────────────────────────── │◄─────────────────────────────│
+     │                            │                              │
+     │  краткий отчёт             │  GET /contract-ai/summary    │
+     │◄────────────────────────── │◄─────────────────────────────│
+     │                            │                              │
+```
+
+Веб-сайт использует SSO для бесшовного входа в Contract AI System.
+
+---
+
+## Связанные проекты
+
+- **[Contract AI System](https://github.com/Andrew821667/Contract-AI-System-)** — AI-collaborative contract operating system. Полнотекстовый анализ договоров, мультимодельный LLM-каскад, агентная оркестрация.
+
+---
+
+## Документация
+
+| Документ | Описание |
+|----------|----------|
+| `docs/architecture.md` | Runtime-архитектура |
+| `docs/runbook.md` | Эксплуатация и деплой |
+| `docs/contract-analyzer.md` | Алгоритм анализа договоров |
+| `docs/project-control-checklist.md` | Статус и остаток работ |
+
+---
+
+## Автор
+
+**Андрей Попов** — юрист (24 года практики) и разработчик AI-систем для автоматизации юридической работы.
+
+- GitHub: [@Andrew821667](https://github.com/Andrew821667)
+- Проект: [Legal AI PRO](https://legalaipro.ru)
+
+---
+
+## Лицензия
+
+MIT License — см. [LICENSE](LICENSE)
