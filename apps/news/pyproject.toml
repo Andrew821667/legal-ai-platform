@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "shared",
     "prompts",
-    "requests>=2.32",
+    "requests>=2.33.0",
     "pydantic-settings>=2.7",
     "openai>=1.0.0",
     "feedparser>=6.0.11",

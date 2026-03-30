@@ -13,7 +13,7 @@ dependencies = [
     "pydantic-settings>=2.7",
     "python-dotenv>=1.0",
     "python-multipart>=0.0.20",
-    "requests>=2.32",
+    "requests>=2.33.0",
     "psutil>=6.1",
 ]
 
