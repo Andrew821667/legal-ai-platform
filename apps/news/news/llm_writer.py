@@ -22,8 +22,8 @@ _FORMAT_HINTS = {
     "digest": "Формат digest: 1200-1900 символов, структурируй как недельный обзор с 5-7 пунктами внутри блока 'Что произошло'.",
     "daily": "Формат daily: 1100-1700 символов, плотный ежедневный пост по новости для канала о Legal AI.",
     "weekly_review": "Формат weekly_review: 3200-3900 символов, 8-10 пунктов, без обрезки текста, это обзор недели по Legal AI и автоматизации юрфункции.",
-    "longread": "Формат longread: 2600-3600 символов, это воскресный разбор темы с сильной практической частью и четкой логикой.",
-    "humor": "Формат humor: 900-1500 символов, легкий субботний пост с профессиональным юмором про Legal AI и юрфункцию, без клоунады.",
+    "longread": "Формат longread: 3200-4300 символов, это действительно длинный воскресный разбор с сильной практической частью и четкой логикой.",
+    "humor": "Формат humor: 1100-1700 символов, это субботний практический разбор по Legal AI и юрфункции, без юмора и без развлекательной подачи.",
 }
 _FORMAT_SHAPE_HINTS = {
     "daily": (
@@ -37,11 +37,12 @@ _FORMAT_SHAPE_HINTS = {
     ),
     "longread": (
         "Структура longread: сильный лид -> «Контекст» -> «Практический смысл» -> «Риски и ограничения» "
-        "-> «Что делать» -> «Вывод» -> источник. Нужна цельная логика без обрывов."
+        "-> «Что делать» -> «Вывод» -> источник. Это должен быть цельный, действительно длинный разбор; "
+        "не используй слово «лонгрид» или longread в заголовке."
     ),
     "humor": (
-        "Структура humor: короткий лид -> «Ситуация недели» -> «Почему это смешно» -> «Где здесь практический смысл» "
-        "-> источник. Юмор профессиональный, без клоунады."
+        "Структура humor: короткий лид -> «Ситуация недели» -> «Где узкое место» -> «Что взять в работу» "
+        "-> источник. Это практический субботний формат, а не юмор."
     ),
 }
 _FORMAT_MIN_CHARS = {
@@ -51,8 +52,8 @@ _FORMAT_MIN_CHARS = {
     "digest": 950,
     "daily": 900,
     "weekly_review": 2800,
-    "longread": 2000,
-    "humor": 700,
+    "longread": 2800,
+    "humor": 1000,
 }
 _FORMAT_MAX_OUTPUT_TOKENS = {
     "signal": 900,
@@ -61,7 +62,7 @@ _FORMAT_MAX_OUTPUT_TOKENS = {
     "digest": 1500,
     "daily": 1200,
     "weekly_review": 2200,
-    "longread": 1800,
+    "longread": 2300,
     "humor": 1000,
 }
 _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
@@ -71,30 +72,30 @@ _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
     "digest": {"what": 900, "effect": 420, "risks": 360, "step": 95, "steps": 4, "hashtags": 4},
     "daily": {"what": 520, "effect": 360, "risks": 320, "step": 95, "steps": 3, "hashtags": 3},
     "weekly_review": {"what": 1500, "effect": 520, "risks": 420, "step": 160, "steps": 4, "hashtags": 4},
-    "longread": {"what": 1000, "effect": 650, "risks": 540, "step": 110, "steps": 4, "hashtags": 4},
-    "humor": {"what": 420, "effect": 280, "risks": 220, "step": 90, "steps": 3, "hashtags": 3},
+    "longread": {"what": 1300, "effect": 850, "risks": 700, "step": 130, "steps": 5, "hashtags": 4},
+    "humor": {"what": 520, "effect": 360, "risks": 300, "step": 100, "steps": 3, "hashtags": 3},
 }
 _CTA_LIBRARY = {
     "soft": {
-        "regulation": "Если хотите разобрать, как такой регуляторный риск влияет на вашу AI-, privacy- или compliance-функцию, напишите в {bot_link}.",
-        "case": "Если хотите понять, как такой сценарий внедрения применим в вашей юрфункции, напишите в {bot_link}.",
-        "implementation": "Если хотите примерить такой сценарий автоматизации на договорную работу, заявки или внутренние процессы, напишите в {bot_link}.",
-        "tools": "Если хотите оценить, подходит ли такой инструмент для юротдела или практики, напишите в {bot_link}.",
-        "market": "Если хотите перевести этот рыночный сигнал в план действий для вашей юрфункции или продукта, напишите в {bot_link}.",
+        "regulation": "Если хотите разобрать, как такой регуляторный риск влияет на вашу AI-, privacy- или compliance-функцию, обсудите это с {assistant_link}.",
+        "case": "Если хотите понять, как такой сценарий внедрения применим в вашей юрфункции, обсудите это с {assistant_link}.",
+        "implementation": "Если хотите примерить такой сценарий автоматизации на договорную работу, заявки или внутренние процессы, обсудите это с {assistant_link}.",
+        "tools": "Если хотите оценить, подходит ли такой инструмент для юротдела или практики, обсудите это с {assistant_link}.",
+        "market": "Если хотите перевести этот рыночный сигнал в план действий для вашей юрфункции или продукта, обсудите это с {assistant_link}.",
     },
     "mid": {
-        "regulation": "Если нужен прикладной разбор рисков, роли юристов и контура контроля для внедрения AI, напишите в {bot_link}.",
-        "case": "Если хотите разобрать ваш процесс и собрать пилот внедрения по такому кейсу, напишите в {bot_link}.",
-        "implementation": "Если хотите разобрать ваш контур автоматизации и выбрать реальный формат внедрения для юротдела, напишите в {bot_link}.",
-        "tools": "Если нужен отбор инструмента, пилот и юридические ограничения по данным и ответственности, напишите в {bot_link}.",
-        "market": "Если хотите понять, как этот тренд влияет на ваши процессы, продукт и архитектуру Legal AI, напишите в {bot_link}.",
+        "regulation": "Если нужен прикладной разбор рисков, роли юристов и контура контроля для внедрения AI, обсудите это с {assistant_link}.",
+        "case": "Если хотите разобрать ваш процесс и собрать пилот внедрения по такому кейсу, обсудите это с {assistant_link}.",
+        "implementation": "Если хотите разобрать ваш контур автоматизации и выбрать реальный формат внедрения для юротдела, обсудите это с {assistant_link}.",
+        "tools": "Если нужен отбор инструмента, пилот и юридические ограничения по данным и ответственности, обсудите это с {assistant_link}.",
+        "market": "Если хотите понять, как этот тренд влияет на ваши процессы, продукт и архитектуру Legal AI, обсудите это с {assistant_link}.",
     },
     "hard": {
-        "regulation": "Если нужен проектный формат: аудит риска, регламенты, процесс и контроль качества AI в юрфункции, напишите в {bot_link}.",
-        "case": "Если готовы переходить от идеи к проекту внедрения, соберем архитектуру и план запуска в {bot_link}.",
-        "implementation": "Если нужен проект автоматизации заявок, договорной работы или типовых юридических процессов, напишите в {bot_link}.",
-        "tools": "Если нужен подбор стека, интеграция и запуск пилота для юротдела, напишите в {bot_link}.",
-        "market": "Если хотите из этого тренда собрать полезный продукт или сервис для юридической функции, напишите в {bot_link}.",
+        "regulation": "Если нужен проектный формат: аудит риска, регламенты, процесс и контроль качества AI в юрфункции, обсудите это с {assistant_link}.",
+        "case": "Если готовы переходить от идеи к проекту внедрения, обсудите следующий шаг с {assistant_link}.",
+        "implementation": "Если нужен проект автоматизации заявок, договорной работы или типовых юридических процессов, обсудите это с {assistant_link}.",
+        "tools": "Если нужен подбор стека, интеграция и запуск пилота для юротдела, обсудите это с {assistant_link}.",
+        "market": "Если хотите из этого тренда собрать полезный продукт или сервис для юридической функции, обсудите это с {assistant_link}.",
     },
 }
 _AUTO_FOOTER_MODE_BY_FORMAT = {
@@ -108,22 +109,22 @@ _AUTO_FOOTER_MODE_BY_FORMAT = {
     "humor": "none",
 }
 _MANUAL_FOOTER_LIBRARY = {
-    "promo_offer": "Если хотите обсудить внедрение Legal AI под ваш кейс и понять, с чего начать, напишите в {bot_link}.",
-    "product_review": "Если хотите сравнить такие инструменты под задачи юротдела и выбрать рабочий стек без лишних лицензий, напишите в {bot_link}.",
-    "case_story": "Если хотите собрать похожий сценарий автоматизации под вашу юрфункцию, напишите в {bot_link}.",
+    "promo_offer": "Если хотите обсудить внедрение Legal AI под ваш кейс и понять, с чего начать, обсудите это с {assistant_link}.",
+    "product_review": "Если хотите сравнить такие инструменты под задачи юротдела и выбрать рабочий стек без лишних лицензий, обсудите это с {assistant_link}.",
+    "case_story": "Если хотите собрать похожий сценарий автоматизации под вашу юрфункцию, обсудите это с {assistant_link}.",
     "opinion": "",
-    "problem_breakdown": "Если хотите разобрать узкое место в заявках, договорах или внутренних процессах и быстро собрать пилот, напишите в {bot_link}.",
-    "checklist": "Если хотите адаптировать этот чек-лист под ваш юридический процесс или команду, напишите в {bot_link}.",
-    "faq": "Если хотите разобрать ваши вопросы по AI и юридической функции на вашем кейсе, напишите в {bot_link}.",
-    "announcement": "Если тема для вас актуальна и нужен понятный следующий шаг по внедрению, напишите в {bot_link}.",
+    "problem_breakdown": "Если хотите разобрать узкое место в заявках, договорах или внутренних процессах и быстро собрать пилот, обсудите это с {assistant_link}.",
+    "checklist": "Если хотите адаптировать этот чек-лист под ваш юридический процесс или команду, обсудите это с {assistant_link}.",
+    "faq": "Если хотите разобрать ваши вопросы по AI и юридической функции на вашем кейсе, обсудите это с {assistant_link}.",
+    "announcement": "Если тема для вас актуальна и нужен понятный следующий шаг по внедрению, обсудите это с {assistant_link}.",
     "digest": "",
-    "service_page": "Если хотите обсудить услугу, формат проекта и ближайший план внедрения, напишите в {bot_link}.",
+    "service_page": "Если хотите обсудить услугу, формат проекта и ближайший план внедрения, обсудите это с {assistant_link}.",
 }
 _CHANNEL_STYLE_HINTS = {
     "daily": "Редакционный тон: коротко, плотно, без рекламного хвоста. Это информационный пост, а не продающий.",
     "weekly_review": "Редакционный тон: обзор недели. Никакого CTA, только редакционный вывод и ощущение собранного материала.",
     "longread": "Редакционный тон: экспертный воскресный разбор. Допустим мягкий следующий шаг, но без навязчивой продажи.",
-    "humor": "Редакционный тон: профессиональная ирония без клоунады. CTA не нужен.",
+    "humor": "Редакционный тон: субботний практический формат, короткий и прикладной. CTA не нужен.",
 }
 _FOOTER_DECISION_SYSTEM_PROMPT = NEWS_FOOTER_DECISION_SYSTEM_PROMPT
 _DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
@@ -585,6 +586,17 @@ class LLMNewsWriter:
         return f'<a href="{safe_url}">{link_text}</a>'
 
     @classmethod
+    def _assistant_link(cls, case: str = "nom") -> str:
+        forms = {
+            "nom": "Ассистент Legal AI PRO",
+            "dat": "Ассистенту Legal AI PRO",
+            "ins": "Ассистентом Legal AI PRO",
+        }
+        link_text = html.escape(forms.get(case, forms["nom"]))
+        safe_url = html.escape(cls._helper_bot_url(), quote=True)
+        return f'<a href="{safe_url}">{link_text}</a>'
+
+    @classmethod
     def _finalize_footer_html(cls, footer_text: str) -> str:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
         if not content:
@@ -595,23 +607,52 @@ class LLMNewsWriter:
 
         helper_label = cls._helper_bot_label()
         helper_username = cls._helper_bot_username()
-        content = re.sub(r"@legal_ai_helper_new_bot", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"@{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"t\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
+        assistant_token = "__ASSISTANT__"
+        content = re.sub(r"@legal_ai_helper_new_bot", assistant_token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
+        content = re.sub(re.escape(helper_label), assistant_token, content, flags=re.IGNORECASE)
 
         footer_html = html.escape(content)
-        label_escaped = html.escape(helper_label)
-        link_html = cls._bot_link()
-        if label_escaped in footer_html:
-            footer_html = footer_html.replace(label_escaped, link_html)
-        elif link_html not in footer_html:
-            suffix = f"Напишите в {link_html}."
+        footer_html = re.sub(
+            rf"(?:написать|напишите|пишите|обратиться|обратитесь)\s+(?:в|через)?\s*{assistant_token}",
+            lambda _match: f"напишите {cls._assistant_link('dat')}",
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = re.sub(
+            rf"(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите)\s+(?:это\s+)?с\s+{assistant_token}",
+            lambda match: re.sub(rf"{assistant_token}$", cls._assistant_link("ins"), match.group(0)),
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = re.sub(
+            rf"\bс\s+{assistant_token}\b",
+            f"с {cls._assistant_link('ins')}",
+            footer_html,
+            flags=re.IGNORECASE,
+        )
+        footer_html = footer_html.replace(assistant_token, cls._assistant_link("nom"))
+        if cls._assistant_link("nom") not in footer_html and cls._assistant_link("ins") not in footer_html and cls._assistant_link("dat") not in footer_html:
+            suffix = f"Обсудить это можно с {cls._assistant_link('ins')}."
             if footer_html.endswith((".", "!", "?", "…")):
                 footer_html = f"{footer_html} {suffix}"
             else:
                 footer_html = f"{footer_html}. {suffix}" if footer_html else suffix
         return re.sub(r"\s+", " ", footer_html).strip()
+
+    @classmethod
+    def _normalize_title_for_format(cls, title: str, format_type: str, fallback_title: str) -> str:
+        normalized = re.sub(r"\s+", " ", (title or "").strip())
+        if format_type == "longread":
+            normalized = re.sub(r"^\s*(?:лонгрид|longread)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
+        if format_type == "humor":
+            normalized = re.sub(r"^\s*(?:юмор|humor|шутка)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
+        normalized = normalized.strip(" -–—:;,.")
+        if not normalized:
+            normalized = re.sub(r"^\s*(?:лонгрид|longread|юмор|humor|шутка)\s*[:\-–—]?\s*", "", fallback_title, flags=re.IGNORECASE).strip()
+        return normalized or fallback_title
 
     @classmethod
     def _style_hint(cls, format_type: str) -> str:
@@ -624,7 +665,7 @@ class LLMNewsWriter:
     def _cta_text(cls, cta_type: str, pillar: str) -> str:
         templates = _CTA_LIBRARY.get(cta_type, _CTA_LIBRARY["soft"])
         template = templates.get(pillar, templates.get("implementation", next(iter(templates.values()))))
-        return template.format(bot_link=cls._bot_link())
+        return template.format(assistant_link="Ассистентом Legal AI PRO")
 
     @classmethod
     def _auto_footer_text(cls, format_type: str, cta_type: str, pillar: str) -> str:
@@ -1232,7 +1273,8 @@ class LLMNewsWriter:
         pillar: str,
     ) -> tuple[str, str, str]:
         limits = _FORMAT_FIELD_LIMITS.get(format_type, _FORMAT_FIELD_LIMITS["standard"])
-        title = self._shorten_title(self._sanitize_generated_field(data.get("title") or fallback_title), 110)
+        raw_title = self._sanitize_generated_field(data.get("title") or fallback_title)
+        title = self._shorten_title(self._normalize_title_for_format(raw_title, format_type, fallback_title), 110)
         default_rubric = _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai")
         rubric = self._shorten(self._sanitize_generated_field(data.get("rubric") or default_rubric), 100)
         what_happened = self._shorten(
@@ -1348,8 +1390,8 @@ class LLMNewsWriter:
                 f"<b>{escaped_title}</b>\n\n"
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
                 + f"<b>Ситуация недели</b>\n{escaped_what_happened}\n\n"
-                + f"<b>Почему это смешно</b>\n{escaped_business_effect}\n\n"
-                + f"<b>Где здесь практический смысл</b>\n{escaped_legal_risks}\n\n"
+                + f"<b>Где узкое место</b>\n{escaped_business_effect}\n\n"
+                + f"<b>Что взять в работу</b>\n{escaped_legal_risks}\n\n"
                 + f"{source_block}\n"
                 + f"{hashtags_line}"
             )
@@ -1400,7 +1442,7 @@ class LLMNewsWriter:
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
             "daily": ("Что произошло", "Почему это важно", "Источник"),
-            "humor": ("Ситуация недели", "Почему это смешно", "Где здесь практический смысл", "Источник"),
+            "humor": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
         }
         required_markers = format_markers.get(
             format_type,
@@ -1749,7 +1791,7 @@ def build_manual_footer(post_kind: str) -> str:
     template = _MANUAL_FOOTER_LIBRARY.get(post_kind)
     if not template:
         return ""
-    return template.format(bot_link=LLMNewsWriter._bot_link())
+    return template.format(assistant_link="Ассистентом Legal AI PRO")
 
 
 def compose_manual_post_html(title: str, body: str, post_kind: str, *, footer_text: str | None = None) -> str:
@@ -1772,5 +1814,5 @@ def compose_manual_post_html(title: str, body: str, post_kind: str, *, footer_te
     if body_html:
         parts.append(body_html)
     if footer:
-        parts.append(f"<b>Следующий шаг</b>\n{footer}")
+        parts.append(f"<b>Следующий шаг</b>\n{LLMNewsWriter._finalize_footer_html(footer)}")
     return normalize_post_text("\n\n".join(part for part in parts if part))

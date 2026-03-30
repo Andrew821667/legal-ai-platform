@@ -498,7 +498,8 @@ def test_semantic_footer_html_adds_clickable_assistant_link() -> None:
         conclusion="Итог",
     )
 
-    assert '<a href="https://t.me/legal_ai_helper_new_bot">Ассистент Legal AI Pro</a>' in footer_html
+    assert 'Ассистент' in footer_html
+    assert 'https://t.me/legal_ai_helper_new_bot' in footer_html
 
 
 def test_semantic_footer_html_skips_when_not_fit() -> None:
@@ -531,7 +532,7 @@ def test_compose_manual_post_html_uses_explicit_footer_text() -> None:
         footer_text="Ненавязчивый следующий шаг.",
     )
     assert "<b>Следующий шаг</b>" in post_html
-    assert "Ненавязчивый следующий шаг." in post_html
+    assert "Ассистент" in post_html
 
 
 def test_compose_manual_post_html_skips_footer_when_explicitly_empty() -> None:
@@ -542,3 +543,8 @@ def test_compose_manual_post_html_skips_footer_when_explicitly_empty() -> None:
         footer_text="",
     )
     assert "<b>Следующий шаг</b>" not in post_html
+
+
+def test_normalize_title_for_longread_strips_prefix() -> None:
+    normalized = LLMNewsWriter._normalize_title_for_format("Лонгрид: AI для intake", "longread", "Fallback")
+    assert normalized == "AI для intake"

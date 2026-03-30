@@ -12,14 +12,14 @@ PUBLICATION_KIND_LABELS = {
     "daily": "Ежедневный пост",
     "weekly_review": "Обзор недели",
     "longread": "Лонгрид",
-    "humor": "Юмор",
+    "humor": "Практика недели",
     "other": "Прочее",
 }
 PUBLICATION_KIND_BADGES = {
     "daily": "🗞",
     "weekly_review": "🧭",
     "longread": "📚",
-    "humor": "😄",
+    "humor": "🧩",
     "other": "📌",
 }
 
@@ -150,7 +150,7 @@ def schedule_alias_meta(alias: str) -> dict[str, str]:
             "window": "Воскресенье, 12:00-14:00",
         },
         "humor": {
-            "label": "Субботний юмористический пост",
+            "label": "Субботняя практика недели",
             "kind": "humor",
             "window": "Суббота, 10:00-12:00",
         },

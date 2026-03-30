@@ -62,7 +62,7 @@ def build_auto_queue_text(
         "Текущая сетка:",
         f"• Пн-Пт: {schedule_daily_morning_label} и {schedule_daily_evening_label}",
         f"• Пятница: обзор недели в {schedule_weekly_review_label}",
-        f"• Суббота: юмор в {schedule_humor_label}",
+        f"• Суббота: практика недели в {schedule_humor_label}",
         f"• Воскресенье: лонгрид в {schedule_longread_label}",
         "",
     ]

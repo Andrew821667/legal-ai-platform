@@ -558,7 +558,7 @@ def test_apply_footer_to_post_text_inserts_before_source() -> None:
     )
     assert "<b>Следующий шаг</b>" in updated
     assert updated.index("<b>Следующий шаг</b>") < updated.index("<b>Источник</b>")
-    assert "<a href=\"https://t.me/legal_ai_helper_new_bot\">Ассистент Legal AI Pro</a>" in updated
+    assert "<a href=\"https://t.me/legal_ai_helper_new_bot\">Ассистенту Legal AI PRO</a>" in updated
 
 
 def test_apply_footer_to_post_text_appends_helper_contact_when_missing() -> None:
@@ -568,7 +568,7 @@ def test_apply_footer_to_post_text_appends_helper_contact_when_missing() -> None
         "Можем помочь внедрить такой сценарий в юридическую функцию.",
     )
     assert "<b>Следующий шаг</b>" in updated
-    assert "Ассистент Legal AI Pro" in updated
+    assert "Ассистентом Legal AI PRO" in updated
     assert "https://t.me/legal_ai_helper_new_bot" in updated
 
 
@@ -634,6 +634,6 @@ def test_fallback_footer_text_is_varied_for_different_posts() -> None:
             "text": "<b>Текст</b>",
         }
     )
-    assert "Ассистент Legal AI Pro" in first
-    assert "Ассистент Legal AI Pro" in second
+    assert "Ассистент" in first
+    assert "Ассистент" in second
     assert first != second

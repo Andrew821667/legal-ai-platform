@@ -61,8 +61,8 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
         def fallback_post(self, *_: object, **__: object):
             _FakeWriter.fallback_calls += 1
             return {
-                "title": "Субботний пост",
-                "text": "<b>Субботний пост</b>\n\n<b>Ситуация недели</b>\nТест.\n\n<b>Почему это смешно</b>\nТест.\n\n<b>Где здесь практический смысл</b>\nТест.\n\n<b>Источник</b>: ссылка\n#LegalAI",
+                "title": "Практика недели",
+                "text": "<b>Практика недели</b>\n\n<b>Ситуация недели</b>\nТест.\n\n<b>Где узкое место</b>\nТест.\n\n<b>Что взять в работу</b>\nТест.\n\n<b>Источник</b>: ссылка\n#LegalAI",
                 "rubric": "legal_ops",
             }
 

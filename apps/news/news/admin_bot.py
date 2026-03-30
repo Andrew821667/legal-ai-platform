@@ -1965,7 +1965,7 @@ class NewsAdminBot:
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"Обзор недели: {schedule_slot_label(schedule.weekly_review_slot)}",
             f"Лонгрид: {schedule_slot_label(schedule.longread_slot)}",
-            f"Юмор: {schedule_slot_label(schedule.humor_slot)}",
+            f"Практика недели: {schedule_slot_label(schedule.humor_slot)}",
             f"Сбор feedback: {'🟢' if feedback_collect else '🔴'}",
             f"Защита по feedback: {'🟢' if feedback_guard else '🔴'}",
             f"Discussion group для feedback: {'🟢 настроена' if discussion_ready else '🔴 не настроена'}",
@@ -2900,7 +2900,7 @@ class NewsAdminBot:
             f"Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}\n"
             f"Обзор недели: пятница {schedule_slot_label(schedule.weekly_review_slot)}\n"
             f"Лонгрид: воскресенье {schedule_slot_label(schedule.longread_slot)}\n"
-            f"Юмор: суббота {schedule_slot_label(schedule.humor_slot)}\n\n"
+            f"Практика недели: суббота {schedule_slot_label(schedule.humor_slot)}\n\n"
             f"Комментарии/feedback: {'🟢 linked discussion group указана в контуре' if discussion_ready else '🟡 треды в Telegram могут работать, но для сбора feedback нужно указать linked discussion group в env'}\n\n"
             "Контур ограничен темами Legal AI, автоматизации юрфункции, legal tech и AI-регулирования.\n"
             "Общие AI-новости без связи с юридической функцией должны отсеиваться на этапе отбора.\n\n"
@@ -3442,7 +3442,7 @@ class NewsAdminBot:
             f"• Ежедневные по будням: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"• Обзор недели: пятница {schedule_slot_label(schedule.weekly_review_slot)}",
             f"• Лонгрид: воскресенье {schedule_slot_label(schedule.longread_slot)}",
-            f"• Юмор: суббота {schedule_slot_label(schedule.humor_slot)}",
+            f"• Практика недели: суббота {schedule_slot_label(schedule.humor_slot)}",
             "",
             "Ритм автопилота:",
             f"• Генерация: {generate_morning} и {generate_evening}",
@@ -3491,7 +3491,7 @@ class NewsAdminBot:
             "Сетка:",
             f"• Будни: {schedule_slot_label(schedule.daily_morning_slot)} и {schedule_slot_label(schedule.daily_evening_slot)}",
             f"• Пятница: обзор недели в {schedule_slot_label(schedule.weekly_review_slot)}",
-            f"• Суббота: юмор в {schedule_slot_label(schedule.humor_slot)}",
+            f"• Суббота: практика недели в {schedule_slot_label(schedule.humor_slot)}",
             f"• Воскресенье: лонгрид в {schedule_slot_label(schedule.longread_slot)}",
             "",
         ]
@@ -3800,7 +3800,7 @@ class NewsAdminBot:
             "Настройка автоматической сетки публикаций",
             "",
             _screen_guide(
-                "Управление расписанием типов публикаций (будни, weekly, longread, humor).",
+                "Управление расписанием типов публикаций (будни, weekly, longread, weekend practice).",
                 [
                     "Откройте конкретный тип публикации, чтобы включить/выключить и выбрать время.",
                     "Пул тем лонгридов меняется отдельно через «Темы лонгридов».",
@@ -3811,7 +3811,7 @@ class NewsAdminBot:
             f"• Будни вечером: {'вкл' if schedule.daily_evening_enabled else 'выкл'} — {schedule_slot_label(schedule.daily_evening_slot)}",
             f"• Пятничный обзор: {'вкл' if schedule.weekly_review_enabled else 'выкл'} — {schedule_slot_label(schedule.weekly_review_slot)}",
             f"• Воскресный лонгрид: {'вкл' if schedule.longread_enabled else 'выкл'} — {schedule_slot_label(schedule.longread_slot)}",
-            f"• Субботний юмор: {'вкл' if schedule.humor_enabled else 'выкл'} — {schedule_slot_label(schedule.humor_slot)}",
+            f"• Субботняя практика недели: {'вкл' if schedule.humor_enabled else 'выкл'} — {schedule_slot_label(schedule.humor_slot)}",
             "",
             "Лонгриды вращаются по тематическому пулу из 10 тем. Каждую позицию ниже можно открыть и перестроить без правки кода.",
         ]
@@ -4859,6 +4859,16 @@ class NewsAdminBot:
         return f"https://t.me/{cls._helper_bot_username()}"
 
     @classmethod
+    def _assistant_link(cls, case: str = "nom") -> str:
+        forms = {
+            "nom": "Ассистент Legal AI PRO",
+            "dat": "Ассистенту Legal AI PRO",
+            "ins": "Ассистентом Legal AI PRO",
+        }
+        safe_url = html.escape(cls._helper_bot_url(), quote=True)
+        return f'<a href="{safe_url}">{html.escape(forms.get(case, forms["nom"]))}</a>'
+
+    @classmethod
     def _footer_has_helper_contact(cls, text: str) -> bool:
         normalized = (text or "").lower()
         mention = cls._helper_bot_mention().lower()
@@ -4870,23 +4880,16 @@ class NewsAdminBot:
     @classmethod
     def _ensure_footer_has_helper_contact(cls, footer_text: str) -> str:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
-        helper_label = cls._helper_bot_label()
         helper_username = cls._helper_bot_username()
-        helper_mention = cls._helper_bot_mention()
-        helper_url = cls._helper_bot_url()
-        helper_short_url = f"t.me/{helper_username}"
         if not content:
-            return f"Если тема для вас актуальна, напишите в {helper_label}."
-        content = re.sub(r"@legal_ai_helper_new_bot", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"@{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
-        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", helper_label, content, flags=re.IGNORECASE)
-        content = content.replace(helper_mention, helper_label)
-        content = content.replace(helper_url, helper_label)
-        content = content.replace(helper_short_url, helper_label)
+            return "Если тема для вас актуальна, обсудите это с Ассистентом Legal AI PRO."
+        content = re.sub(r"@legal_ai_helper_new_bot", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
         if cls._footer_has_helper_contact(content):
             return content
-        suffix = f"Напишите в {helper_label}."
+        suffix = "Обсудить это можно с Ассистентом Legal AI PRO."
         if content.endswith((".", "!", "?", "…")):
             return f"{content} {suffix}"
         return f"{content}. {suffix}"
@@ -4937,6 +4940,7 @@ class NewsAdminBot:
                         "Если пост нейтральный или регуляторный, footer должен оставаться мягким, но все равно связывать тему с практикой внедрения и возможностью написать в бота. "
                         "Избегай однообразного старта каждого footer. Не повторяй из поста в пост одну и ту же формулу. "
                         "Не начинай каждый раз с 'Если хотите'. Разнообразь заход, сохраняя деловой тон. "
+                        "Избегай тавтологии и повторов контакта. Лучше формулы вроде «обсудить это с ассистентом», чем механическое «написать в бота» дважды. "
                         "Верни только текст footer на 1-2 предложения, без заголовка 'Следующий шаг', без markdown и без JSON."
                     ),
                 },
@@ -4951,7 +4955,7 @@ class NewsAdminBot:
                         f"Пожелание по формулировке: {variant_hint}\n\n"
                         f"Текст поста:\n{text}\n\n"
                         "Сформируй только footer. "
-                        f"Он должен логично вытекать из смысла поста и аккуратно предлагать написать в {helper_label}, "
+                        f"Он должен логично вытекать из смысла поста и аккуратно предлагать обсудить тему с {helper_label}, "
                         "если читатель хочет внедрить похожую автоматизацию или AI-сценарий."
                     ),
                 },
@@ -4975,40 +4979,36 @@ class NewsAdminBot:
             return normalize_post_text(text)
 
         helper_username = cls._helper_bot_username()
-        helper_mention = cls._helper_bot_mention()
         helper_label = cls._helper_bot_label()
+        assistant_token = "__ASSISTANT__"
+        footer_text = re.sub(r"@legal_ai_helper_new_bot", assistant_token, footer_text, flags=re.IGNORECASE)
+        footer_text = re.sub(rf"@{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
+        footer_text = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
+        footer_text = re.sub(rf"t\\.me/{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
+        footer_text = re.sub(re.escape(helper_label), assistant_token, footer_text, flags=re.IGNORECASE)
+
         footer_html = html.escape(footer_text)
-        bot_url = html.escape(cls._helper_bot_url(), quote=True)
-        label_escaped = html.escape(helper_label)
         footer_html = re.sub(
-            rf"@{re.escape(helper_username)}",
-            helper_label,
+            rf"(?:написать|напишите|пишите|обратиться|обратитесь)\s+(?:в|через)?\s*{assistant_token}",
+            f"напишите {cls._assistant_link('dat')}",
             footer_html,
             flags=re.IGNORECASE,
         )
         footer_html = re.sub(
-            rf"https?://t\\.me/{re.escape(helper_username)}",
-            helper_label,
+            rf"\bс\s+{assistant_token}\b",
+            f"с {cls._assistant_link('ins')}",
             footer_html,
             flags=re.IGNORECASE,
         )
-        footer_html = re.sub(
-            rf"t\\.me/{re.escape(helper_username)}",
-            helper_label,
-            footer_html,
-            flags=re.IGNORECASE,
-        )
-        footer_html = footer_html.replace(html.escape(helper_mention), label_escaped)
+        footer_html = footer_html.replace(assistant_token, cls._assistant_link("nom"))
         footer_html = re.sub(r"\s+", " ", footer_html).strip()
         footer_html = footer_html.rstrip(" ,;")
-        link_html = f'<a href="{bot_url}">{label_escaped}</a>'
-        if label_escaped in footer_html:
-            footer_html = footer_html.replace(label_escaped, link_html)
-        elif link_html not in footer_html:
+        if cls._assistant_link("nom") not in footer_html and cls._assistant_link("ins") not in footer_html and cls._assistant_link("dat") not in footer_html:
+            suffix = f"Обсудить это можно с {cls._assistant_link('ins')}."
             if footer_html.endswith((".", "!", "?", "…")):
-                footer_html = f"{footer_html} {link_html}"
+                footer_html = f"{footer_html} {suffix}"
             else:
-                footer_html = f"{footer_html}. {link_html}" if footer_html else link_html
+                footer_html = f"{footer_html}. {suffix}" if footer_html else suffix
 
         footer_block = f"<b>Следующий шаг</b>\n{footer_html}"
         source_index = text.find("<b>Источник</b>")

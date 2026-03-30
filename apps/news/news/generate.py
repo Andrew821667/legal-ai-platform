@@ -330,10 +330,11 @@ def _build_longread_candidate(
     return ArticleCandidate(
         source_url="internal://longread",
         article_url=f"internal://longread/{now_utc.date().isoformat()}",
-        title=f"Лонгрид: {topic}",
+        title=topic,
         summary=(
             f"Тема лонгрида: {topic}.\n"
-            "Собери плотный воскресный longread по теме, опираясь на эти сигналы недели:\n"
+            "Собери плотный воскресный разбор темы, опираясь на эти сигналы недели. "
+            "Это должен быть действительно длинный, цельный и практичный материал без слова «лонгрид» в заголовке.\n"
             + "\n".join(lines)
         ),
         published_at=now_utc,
@@ -350,10 +351,11 @@ def _build_humor_candidate(now_utc: datetime, selected_articles: list[ArticleCan
     return ArticleCandidate(
         source_url="internal://humor",
         article_url=f"internal://humor/{now_utc.date().isoformat()}",
-        title="Субботний юмористический пост о Legal AI",
+        title="Практика недели: где Legal AI упирается в реальную работу",
         summary=(
-            "Сделай легкий субботний пост с профессиональным юмором про Legal AI, юридическую автоматизацию и типичные боли юрфункции. "
-            "Опирайся на реальные сигналы недели, но без клоунады и без потери профессионального тона.\n"
+            "Сделай субботний практический пост по сигналам недели. "
+            "Нужен короткий, плотный разбор повторяющегося узкого места во внедрении Legal AI, договорной автоматизации или работе юрфункции. "
+            "Никакого юмора и иронической подачи: только практическая ситуация, где ломается процесс, и что из этого взять в работу.\n"
             + "\n".join(lines)
         ),
         published_at=now_utc,
