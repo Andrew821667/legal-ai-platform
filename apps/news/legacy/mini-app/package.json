@@ -30,5 +30,11 @@
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"
+  },
+  "overrides": {
+    "picomatch": "2.3.2",
+    "tinyglobby": {
+      "picomatch": "4.0.4"
+    }
   }
 }
