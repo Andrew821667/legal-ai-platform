@@ -520,6 +520,26 @@ def test_system_keyboard_exposes_service_actions() -> None:
     assert "automation" not in callbacks
 
 
+def test_worklists_keyboard_uses_full_width_rows() -> None:
+    bot = NewsAdminBot()
+    markup = bot._worklists_keyboard(
+        {"draft": 3, "review": 7, "ready": 6, "scheduled": 4, "posted": 21, "failed": 2}
+    )
+    payload = markup.to_dict()
+    rows = payload.get("inline_keyboard") or []
+    expected_callbacks = [
+        "pl:draft:0",
+        "rv:all:all:all:0",
+        "pl:ready:0",
+        "pl:scheduled:0",
+        "pl:posted:0",
+        "pl:failed:0",
+    ]
+    worklist_rows = rows[:6]
+    assert [row[0].get("callback_data") for row in worklist_rows] == expected_callbacks
+    assert all(len(row) == 1 for row in worklist_rows)
+
+
 def test_automation_keyboard_exposes_reader_cta_ab_menu() -> None:
     bot = NewsAdminBot()
     markup = bot._automation_keyboard([])

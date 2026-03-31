@@ -2124,23 +2124,26 @@ class NewsAdminBot:
         return InlineKeyboardMarkup(rows)
 
     def _worklists_keyboard(self, counts: dict[str, int]) -> InlineKeyboardMarkup:
-        worklist_buttons = [
-            _inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0"),
-            _inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:all:all:0"),
-            _inline_button(f"🟢 Готовые ({counts.get('ready', 0)})", callback_data="pl:ready:0"),
-            _inline_button(
-                f"✅ На публикацию ({counts.get('scheduled', 0)})",
-                callback_data="pl:scheduled:0",
-                style=_BUTTON_STYLE_SUCCESS,
-            ),
-            _inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0"),
-            _inline_button(
-                f"❌ Ошибки ({counts.get('failed', 0)})",
-                callback_data="pl:failed:0",
-                style=_BUTTON_STYLE_DANGER,
-            ),
+        rows = [
+            [_inline_button(f"📝 Черновики ({counts.get('draft', 0)})", callback_data="pl:draft:0")],
+            [_inline_button(f"🟡 На проверке ({counts.get('review', 0)})", callback_data="rv:all:all:all:0")],
+            [_inline_button(f"🟢 Готовые ({counts.get('ready', 0)})", callback_data="pl:ready:0")],
+            [
+                _inline_button(
+                    f"✅ На публикацию ({counts.get('scheduled', 0)})",
+                    callback_data="pl:scheduled:0",
+                    style=_BUTTON_STYLE_SUCCESS,
+                )
+            ],
+            [_inline_button(f"📤 Опубликованные ({counts.get('posted', 0)})", callback_data="pl:posted:0")],
+            [
+                _inline_button(
+                    f"❌ Ошибки ({counts.get('failed', 0)})",
+                    callback_data="pl:failed:0",
+                    style=_BUTTON_STYLE_DANGER,
+                )
+            ],
         ]
-        rows = self._two_column_rows(worklist_buttons)
         rows.extend(self._submenu_nav_rows(back_callback="refresh", back_label="🔙 Назад"))
         return InlineKeyboardMarkup(rows)
 
