@@ -607,6 +607,28 @@ class LLMNewsWriter:
         return f'<a href="{safe_url}">{link_text}</a>'
 
     @classmethod
+    def _dedupe_assistant_sentences(cls, content: str, assistant_token: str) -> str:
+        raw_sentences = [part.strip() for part in re.split(r"(?<=[.!?…])\s+", content) if part.strip()]
+        if len(raw_sentences) <= 1:
+            return content
+
+        deduped: list[str] = []
+        seen_assistant_cta = False
+        for sentence in raw_sentences:
+            normalized = sentence.strip()
+            lowered = normalized.lower()
+            has_assistant = assistant_token in normalized
+            is_assistant_cta = has_assistant and bool(
+                re.search(r"\b(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите|написать|напишите|пишите|обратиться|обратитесь)\b", lowered)
+            )
+            if is_assistant_cta and seen_assistant_cta:
+                continue
+            if is_assistant_cta:
+                seen_assistant_cta = True
+            deduped.append(normalized)
+        return " ".join(deduped).strip()
+
+    @classmethod
     def _finalize_footer_html(cls, footer_text: str) -> str:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
         if not content:
@@ -623,6 +645,8 @@ class LLMNewsWriter:
         content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
         content = re.sub(rf"t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
         content = re.sub(re.escape(helper_label), assistant_token, content, flags=re.IGNORECASE)
+        content = re.sub(r"ассистент(?:ом|у|а|е)?\s+legal\s+ai\s+pro", assistant_token, content, flags=re.IGNORECASE)
+        content = cls._dedupe_assistant_sentences(content, assistant_token)
 
         footer_html = html.escape(content)
         footer_html = re.sub(

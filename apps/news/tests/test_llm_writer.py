@@ -502,6 +502,32 @@ def test_semantic_footer_html_adds_clickable_assistant_link() -> None:
     assert 'https://t.me/legal_ai_helper_new_bot' in footer_html
 
 
+def test_semantic_footer_html_dedupes_duplicate_assistant_cta() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _FakeClient(
+        '{"include_footer": true, "footer_text": "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом Legal AI Pro. Напишите в Ассистент Legal AI Pro.", "fit_reason": "implementation fit"}'
+    )
+    writer.model = "deepseek-chat"
+    writer._use_max_tokens_param = True
+
+    footer_html = writer._semantic_footer_html(
+        title="Проверка договоров с AI",
+        rubric="legal_ops",
+        pillar="implementation",
+        format_type="daily",
+        cta_type="soft",
+        lead="Короткий лид",
+        what_happened="Описание фактов",
+        business_effect="Описание эффекта",
+        legal_risks="Описание ограничений",
+        conclusion="Итог",
+    )
+
+    assert footer_html.count("Ассистентом Legal AI PRO") == 1
+    assert "Напишите" not in footer_html
+    assert 'href="https://t.me/legal_ai_helper_new_bot"' in footer_html
+
+
 def test_semantic_footer_html_skips_when_not_fit() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer.client = _FakeClient('{"include_footer": false, "footer_text": "", "fit_reason": "no service match"}')
