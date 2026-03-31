@@ -74,7 +74,7 @@ from news.callbacks import (
 from news.active_queue import rebalance_active_publish_queue
 from news.feedback import classify_comment_signal, summarize_reaction_counts
 from news.generate import collect_generation_previews
-from news.llm_writer import build_manual_footer, compose_manual_post_html
+from news.llm_writer import LLMNewsWriter, build_manual_footer, compose_manual_post_html
 from news.logging_config import setup_logging
 from news.pipeline import (
     GENERATION_THEME_DEFS,
@@ -4977,38 +4977,9 @@ class NewsAdminBot:
         footer_text = cls._ensure_footer_has_helper_contact(footer_text)
         if not footer_text:
             return normalize_post_text(text)
-
-        helper_username = cls._helper_bot_username()
-        helper_label = cls._helper_bot_label()
-        assistant_token = "__ASSISTANT__"
-        footer_text = re.sub(r"@legal_ai_helper_new_bot", assistant_token, footer_text, flags=re.IGNORECASE)
-        footer_text = re.sub(rf"@{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
-        footer_text = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
-        footer_text = re.sub(rf"t\\.me/{re.escape(helper_username)}", assistant_token, footer_text, flags=re.IGNORECASE)
-        footer_text = re.sub(re.escape(helper_label), assistant_token, footer_text, flags=re.IGNORECASE)
-
-        footer_html = html.escape(footer_text)
-        footer_html = re.sub(
-            rf"(?:написать|напишите|пишите|обратиться|обратитесь)\s+(?:в|через)?\s*{assistant_token}",
-            f"напишите {cls._assistant_link('dat')}",
-            footer_html,
-            flags=re.IGNORECASE,
-        )
-        footer_html = re.sub(
-            rf"\bс\s+{assistant_token}\b",
-            f"с {cls._assistant_link('ins')}",
-            footer_html,
-            flags=re.IGNORECASE,
-        )
-        footer_html = footer_html.replace(assistant_token, cls._assistant_link("nom"))
-        footer_html = re.sub(r"\s+", " ", footer_html).strip()
-        footer_html = footer_html.rstrip(" ,;")
-        if cls._assistant_link("nom") not in footer_html and cls._assistant_link("ins") not in footer_html and cls._assistant_link("dat") not in footer_html:
-            suffix = f"Обсудить это можно с {cls._assistant_link('ins')}."
-            if footer_html.endswith((".", "!", "?", "…")):
-                footer_html = f"{footer_html} {suffix}"
-            else:
-                footer_html = f"{footer_html}. {suffix}" if footer_html else suffix
+        footer_html = LLMNewsWriter._finalize_footer_html(footer_text)
+        if not footer_html:
+            return normalize_post_text(text)
 
         footer_block = f"<b>Следующий шаг</b>\n{footer_html}"
         source_index = text.find("<b>Источник</b>")

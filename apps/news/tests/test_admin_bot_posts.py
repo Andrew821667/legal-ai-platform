@@ -572,6 +572,17 @@ def test_apply_footer_to_post_text_appends_helper_contact_when_missing() -> None
     assert "https://t.me/legal_ai_helper_new_bot" in updated
 
 
+def test_apply_footer_to_post_text_dedupes_duplicate_assistant_cta() -> None:
+    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    updated = NewsAdminBot._apply_footer_to_post_text(
+        original,
+        "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом Legal AI Pro. Напишите в Ассистент Legal AI Pro.",
+    )
+    assert updated.count("Напишите в Ассистент Legal AI Pro") == 0
+    assert updated.count("Ассистентом Legal AI PRO") == 1
+    assert 'href="https://t.me/legal_ai_helper_new_bot"' in updated
+
+
 def test_post_card_keyboard_has_add_footer_button() -> None:
     bot = NewsAdminBot()
     markup = bot._post_card_keyboard("123", "review", 0)
