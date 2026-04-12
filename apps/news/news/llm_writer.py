@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT
+from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT, build_news_writer_system_prompt
 from news.pipeline import ArticleCandidate, RAGExample, normalize_post_text
 from news.settings import settings
 
@@ -258,12 +258,44 @@ _RELEVANCE_BIAS_MARKERS = (
     "локализац",
     "персональн",
 )
+_ADOPTION_SIGNAL_MARKERS = (
+    "legal ai",
+    "legaltech",
+    "legal ops",
+    "contract automation",
+    "contract review",
+    "redlining",
+    "workflow",
+    "automation",
+    "agentic",
+    "copilot",
+    "assistant",
+    "vendor",
+    "platform",
+    "product launch",
+    "rollout",
+    "pilot",
+    "enterprise ai",
+    "governance",
+    "privacy",
+    "compliance",
+    "in-house",
+    "legal department",
+    "юрфунк",
+    "автоматизац",
+    "договор",
+    "вендор",
+    "пилот",
+    "маршрутизац",
+    "procurement",
+)
 _DAILY_LEGAL_RUBRICS = {"ai_law", "compliance", "privacy", "contracts", "litigation", "regulation"}
 _DAILY_THIRD_BLOCK_HEADINGS = (
     "Юридический контур",
     "Что это значит для юрфункции",
     "Что это значит для команд",
     "Что это значит для рынка",
+    "Где это можно применить",
     "На что смотреть дальше",
 )
 _DAILY_HEADING_MARKERS = ("Что произошло", "Почему это важно",) + _DAILY_THIRD_BLOCK_HEADINGS + ("Источник",)
@@ -274,6 +306,16 @@ _GENERIC_LEGAL_PATTERNS = (
     "стоит учитывать риски",
     "важно учитывать риски",
     "нужно проверить юридические аспекты",
+)
+_GENERIC_ADOPTION_PATTERNS = (
+    "можно использовать в работе",
+    "можно использовать у себя",
+    "можно внедрить в работу",
+    "можно внедрить у себя",
+    "можно применять в работе",
+    "подходит для внедрения",
+    "интересно для внедрения",
+    "может быть полезно командам",
 )
 _PROMPT_LEAK_MARKERS = (
     "верни строго json",
@@ -394,6 +436,39 @@ class LLMNewsWriter:
         self.client = OpenAI(**client_kwargs)
         self.model = settings.news_model
         self._use_max_tokens_param = "deepseek" in (settings.openai_base_url or "").lower()
+
+    @staticmethod
+    def _article_haystack(article: ArticleCandidate) -> str:
+        return " ".join(
+            part for part in (article.title or "", article.summary or "", article.article_url or "", article.source_url or "") if part
+        ).lower()
+
+    @classmethod
+    def _should_enable_adoption_module(cls, article: ArticleCandidate, pillar: str, format_type: str) -> bool:
+        if format_type == "weekly_review":
+            return False
+        if pillar in {"implementation", "case", "tools"}:
+            return True
+        haystack = cls._article_haystack(article)
+        if pillar == "market" and any(marker in haystack for marker in ("vendor", "platform", "assistant", "copilot", "agentic", "procurement", "product")):
+            return True
+        return any(marker in haystack for marker in _ADOPTION_SIGNAL_MARKERS)
+
+    @classmethod
+    def _build_writer_system_prompt(cls, *, adoption_module_enabled: bool) -> str:
+        return build_news_writer_system_prompt(adoption_module_enabled=adoption_module_enabled)
+
+    @staticmethod
+    def _build_prompt_module_note(*, adoption_module_enabled: bool) -> str:
+        return (
+            "Активные модули для этого материала:\n"
+            "- [base]: всегда включен.\n"
+            + (
+                "- [adoption_pattern]: включен. Если материал сам дает практический сценарий, верни adoption_fit и adoption_patterns.\n"
+                if adoption_module_enabled
+                else "- [adoption_pattern]: выключен. Не придумывай паттерны применения и верни adoption_fit = none, adoption_patterns = [].\n"
+            )
+        )
 
     def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
         token_limit = _FORMAT_MAX_OUTPUT_TOKENS.get(format_type, _FORMAT_MAX_OUTPUT_TOKENS["standard"])
@@ -725,7 +800,15 @@ class LLMNewsWriter:
         business_effect: str,
         legal_risks: str,
         conclusion: str,
+        adoption_fit: str | None = None,
+        adoption_patterns: list[str] | None = None,
     ) -> str:
+        normalized_fit = (adoption_fit or "").strip().lower()
+        normalized_patterns = adoption_patterns if adoption_patterns is not None else None
+        if normalized_fit == "none":
+            return ""
+        if normalized_fit in {"weak", "strong"} and normalized_patterns == []:
+            return ""
         if not hasattr(self, "client"):
             fallback = self._auto_footer_text(format_type, cta_type, pillar)
             return self._finalize_footer_html(fallback) if fallback else ""
@@ -741,6 +824,8 @@ class LLMNewsWriter:
                 f"Почему важно: {business_effect or '—'}",
                 f"Правовой/практический блок: {legal_risks or '—'}",
                 f"Вывод: {conclusion or '—'}",
+                f"Adoption fit: {normalized_fit or '—'}",
+                f"Adoption patterns: {'; '.join(normalized_patterns) if normalized_patterns else '—'}",
             ) if part
         )
         completion_kwargs: dict[str, Any]
@@ -1079,6 +1164,44 @@ class LLMNewsWriter:
             return "Юридический контур", html.escape(legal_risks)
         return "На что смотреть дальше", html.escape(conclusion_or_effect or business_effect or html.unescape(steps_block))
 
+    @classmethod
+    def _extract_adoption_patterns(cls, data: dict[str, Any]) -> tuple[str, list[str]]:
+        fit = str(data.get("adoption_fit") or "none").strip().lower()
+        if fit not in {"none", "weak", "strong"}:
+            fit = "none"
+
+        raw_patterns = data.get("adoption_patterns")
+        if not isinstance(raw_patterns, list):
+            return fit, []
+
+        patterns: list[str] = []
+        seen: set[str] = set()
+        for item in raw_patterns[:3]:
+            cleaned = cls._sanitize_generated_field(item)
+            cleaned = cls._shorten(cleaned, 180, prefer_sentence=True) or cls._shorten(cleaned, 180)
+            lowered = cleaned.lower().strip(" .")
+            if not cleaned or len(cleaned.split()) < 5:
+                continue
+            if any(marker in lowered for marker in _GENERIC_ADOPTION_PATTERNS):
+                continue
+            signature = cls._normalize_signature(cleaned)
+            if not signature or signature in seen:
+                continue
+            seen.add(signature)
+            if not cleaned.endswith((".", "!", "?", "…")) and len(cleaned.split()) >= 6:
+                cleaned = f"{cleaned}."
+            patterns.append(cleaned)
+        if not patterns:
+            return "none", []
+        return fit if fit in {"weak", "strong"} else "weak", patterns
+
+    @staticmethod
+    def _adoption_block_html(patterns: list[str]) -> str:
+        if not patterns:
+            return ""
+        escaped = [html.escape(item) for item in patterns]
+        return "\n".join(f"• {item}" for item in escaped)
+
     @staticmethod
     def _infer_rubric_hint(article: ArticleCandidate, pillar: str) -> str:
         haystack = " ".join(
@@ -1373,6 +1496,8 @@ class LLMNewsWriter:
             prefer_sentence=True,
         )
         escaped_conclusion = html.escape(conclusion)
+        adoption_fit, adoption_patterns = self._extract_adoption_patterns(data)
+        adoption_block = self._adoption_block_html(adoption_patterns)
         cta_line = self._semantic_footer_html(
             title=title,
             rubric=rubric,
@@ -1384,6 +1509,8 @@ class LLMNewsWriter:
             business_effect=business_effect,
             legal_risks=legal_risks,
             conclusion=conclusion,
+            adoption_fit=adoption_fit,
+            adoption_patterns=adoption_patterns,
         )
         source_block = self._source_block(article_url, format_type)
         hashtags_line = " ".join(html.escape(tag) for tag in hashtags[:4])
@@ -1412,6 +1539,7 @@ class LLMNewsWriter:
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
                 + f"<b>Контекст</b>\n{escaped_what_happened}\n\n"
                 + f"<b>Практический смысл</b>\n{escaped_business_effect}\n\n"
+                + (f"<b>Где это можно применить</b>\n{adoption_block}\n\n" if adoption_block else "")
                 + f"<b>Риски и ограничения</b>\n{escaped_legal_risks}\n\n"
                 + f"<b>Что делать</b>\n{steps_block}\n\n"
                 + (f"<b>Вывод</b>\n{escaped_conclusion}\n\n" if escaped_conclusion else "")
@@ -1430,14 +1558,17 @@ class LLMNewsWriter:
                 + f"{hashtags_line}"
             )
         elif format_type == "daily":
-            daily_heading, daily_body = self._daily_tail_block(
-                rubric=rubric,
-                pillar=pillar,
-                business_effect=business_effect,
-                legal_risks=legal_risks,
-                conclusion=conclusion,
-                steps_block=steps_block,
-            )
+            if adoption_block:
+                daily_heading, daily_body = "Где это можно применить", adoption_block
+            else:
+                daily_heading, daily_body = self._daily_tail_block(
+                    rubric=rubric,
+                    pillar=pillar,
+                    business_effect=business_effect,
+                    legal_risks=legal_risks,
+                    conclusion=conclusion,
+                    steps_block=steps_block,
+                )
             body = (
                 f"<b>{escaped_title}</b>\n\n"
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
@@ -1453,6 +1584,7 @@ class LLMNewsWriter:
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
                 + f"<b>Что произошло</b>\n{escaped_what_happened}\n\n"
                 + f"<b>Бизнес-эффект</b>\n{escaped_business_effect}\n\n"
+                + (f"<b>Где это можно применить</b>\n{adoption_block}\n\n" if adoption_block else "")
                 + f"<b>Юридические риски</b>\n{escaped_legal_risks}\n\n"
                 + f"<b>Что делать</b>\n{steps_block}\n\n"
                 + (f"<b>Вывод</b>\n{escaped_conclusion}\n\n" if escaped_conclusion else "")
@@ -1670,6 +1802,8 @@ class LLMNewsWriter:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         inferred_rubric = self._infer_rubric_hint(article, pillar)
         relevance_bias_hint = self._relevance_bias_hint(article, pillar)
+        adoption_module_enabled = self._should_enable_adoption_module(article, pillar, format_type)
+        system_prompt = self._build_writer_system_prompt(adoption_module_enabled=adoption_module_enabled)
         user_prompt = (
             f"Источник: {article.source_url}\n"
             f"URL статьи: {article.article_url}\n"
@@ -1677,6 +1811,7 @@ class LLMNewsWriter:
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
             f"Дата публикации итогового поста: {target_publish_at.isoformat() if target_publish_at else 'не указана'}\n"
             "Временной режим: считай дату публикации итогового поста главной. Не переноси в текст устаревшие прогнозы и ближайшие ожидания как будто они еще впереди.\n\n"
+            f"{self._build_prompt_module_note(adoption_module_enabled=adoption_module_enabled)}\n"
             f"Целевая смысловая корзина: {pillar}\n"
             f"Предполагаемая рубрика: {inferred_rubric}\n"
             f"Стилистика канала: {self._style_hint(format_type)}\n"
@@ -1694,7 +1829,7 @@ class LLMNewsWriter:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.35,

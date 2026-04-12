@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from news.llm_writer import LLMNewsWriter, compose_manual_post_html
 from news.pipeline import ArticleCandidate
+from prompts.news import build_news_writer_system_prompt
 
 
 class _FakeCompletions:
@@ -127,6 +128,69 @@ def test_structured_formats_disable_low_quality_fallback() -> None:
     assert not LLMNewsWriter._allow_quality_fallback("weekly_review")
     assert not LLMNewsWriter._allow_quality_fallback("longread")
     assert LLMNewsWriter._allow_quality_fallback("standard")
+
+
+def test_build_news_writer_system_prompt_toggles_optional_module() -> None:
+    enabled = build_news_writer_system_prompt(adoption_module_enabled=True)
+    disabled = build_news_writer_system_prompt(adoption_module_enabled=False)
+
+    assert "Модуль [adoption_pattern]" in enabled
+    assert "включен" in enabled
+    assert "adoption_fit" in enabled
+    assert "выключен" in disabled
+
+
+def test_daily_format_prefers_adoption_block_when_present() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    title, text, rubric = writer._format_post(
+        {
+            "title": "Новый AI-инструмент для договорной работы",
+            "rubric": "legal_ops",
+            "lead": "На рынке появился новый инструмент для команд, которые хотят ускорить проверку договоров.",
+            "what_happened": "Вендор выпустил AI-функцию для сравнения версий, выявления red flags и подготовки summary по договору.",
+            "business_effect": "Это сокращает время первичной проверки и помогает командам быстрее разбирать типовые документы.",
+            "legal_risks": "Юристам все равно нужно проверить режим данных, ограничения на output и договорную ответственность поставщика.",
+            "conclusion": "Практический интерес здесь связан с автоматизацией повторяющихся шагов в договорной работе.",
+            "adoption_fit": "strong",
+            "adoption_patterns": [
+                "Первичная AI-проверка типовых договоров и выделение red flags до ручной ревизии юриста",
+                "Подготовка короткого summary для внутреннего заказчика перед согласованием документа",
+            ],
+        },
+        "https://example.com/article",
+        "Новый AI-инструмент для договорной работы",
+        format_type="daily",
+        cta_type="soft",
+        pillar="tools",
+    )
+    assert title == "Новый AI-инструмент для договорной работы"
+    assert rubric == "legal_ops"
+    assert "Где это можно применить" in text
+    assert "Первичная AI-проверка типовых договоров" in text
+    assert "Что это значит для команд" not in text
+
+
+def test_standard_format_skips_footer_without_adoption_patterns() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    _, text, _ = writer._format_post(
+        {
+            "title": "Регулятор опубликовал новый обзор по AI",
+            "rubric": "regulation",
+            "lead": "Появился новый обзор регулятора по AI и данным.",
+            "what_happened": "Регулятор выпустил обзор подходов к надзору за AI-системами и связанными данными.",
+            "business_effect": "Для рынка это сигнал об усилении внимания к governance и контролю поставщиков.",
+            "legal_risks": "Юристам важно проверить режим данных, внутренний контроль и договорный контур с вендорами.",
+            "conclusion": "Новость важна как регуляторный сигнал, но без прямого прикладного сценария.",
+            "adoption_fit": "none",
+            "adoption_patterns": [],
+        },
+        "https://example.com/article",
+        "Регулятор опубликовал новый обзор по AI",
+        format_type="standard",
+        cta_type="soft",
+        pillar="market",
+    )
+    assert "Следующий шаг" not in text
 
 
 def test_quality_gate_rejects_prompt_leak_markers() -> None:
