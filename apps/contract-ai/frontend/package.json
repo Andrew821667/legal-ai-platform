@@ -16,7 +16,7 @@
     "next": "15.5.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "axios": "1.13.6",
+    "axios": "1.15.0",
     "@tanstack/react-query": "^5.14.2",
     "zustand": "^4.4.7",
     "socket.io-client": "^4.5.4",
