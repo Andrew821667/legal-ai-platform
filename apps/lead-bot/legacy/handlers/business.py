@@ -536,6 +536,8 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         pending_contact = context.user_data.get(BUSINESS_PENDING_CONTACT_KEY) or {}
         has_pending_contact = bool(pending_contact)
         
+        forced_welcome_sent = False
+
         # Обработка команды /start для бизнес-чата
         if text == "/start":
             _clear_business_contact_state(context)
@@ -638,6 +640,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id,
             )
+            forced_welcome_sent = True
             logger.info("[Business] Welcome sent on forced new session for user %s", user_id)
             if not _should_process_after_forced_welcome(text):
                 return
@@ -645,7 +648,7 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
 
         # На первом сообщении-приветствии в business-режиме отдаем
         # фиксированное приветствие без участия LLM.
-        if text and _looks_like_plain_greeting(text):
+        if text and not forced_welcome_sent and _looks_like_plain_greeting(text):
             await context.bot.send_message(
                 chat_id=message.chat.id,
                 text=content.build_business_welcome_message(message.from_user.first_name),

@@ -54,3 +54,42 @@ async def test_handle_business_message_accepts_message_with_business_connection(
     await business.handle_business_message(update, context)
 
     assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_forced_business_welcome_does_not_duplicate_greeting_welcome(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[dict] = []
+
+    monkeypatch.setattr(business, "_is_business_processing_allowed", lambda message: True)
+    monkeypatch.setattr(business.database.db, "create_or_update_user", lambda **kwargs: 101)
+    monkeypatch.setattr(business.database.db, "get_chat_mode", lambda chat_id: "bot")
+    monkeypatch.setattr(business.database.db, "get_conversation_history", lambda user_id, limit=1: [])
+    monkeypatch.setattr(business.database.db, "clear_conversation_history", lambda user_id: None)
+    monkeypatch.setattr(business.database.db, "reset_user_funnel_state", lambda user_id: None)
+    monkeypatch.setattr(business, "_should_process_after_forced_welcome", lambda text: True)
+    monkeypatch.setattr(
+        business.database.db,
+        "get_lead_by_user_id",
+        lambda user_id: (_ for _ in ()).throw(SystemExit("stop-after-welcome")),
+    )
+
+    async def _fake_send_message(**kwargs):
+        sent.append(kwargs)
+
+    update = SimpleNamespace(
+        business_message=SimpleNamespace(
+            text="Привет! Нужна помощь с автоматизацией договоров",
+            from_user=SimpleNamespace(id=42, username="u42", first_name="Андрей", last_name=None),
+            business_connection_id="bc-123",
+            chat=SimpleNamespace(id=5001),
+        ),
+        edited_business_message=None,
+        message=None,
+    )
+    context = SimpleNamespace(bot=SimpleNamespace(send_message=_fake_send_message), user_data={})
+
+    with pytest.raises(SystemExit, match="stop-after-welcome"):
+        await business.handle_business_message(update, context)
+
+    assert len(sent) == 1
+    assert "Legal AI PRO" in sent[0]["text"]
