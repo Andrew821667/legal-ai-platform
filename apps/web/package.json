@@ -15,22 +15,22 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-        "bcryptjs": "^2.4.3",
-        "@types/bcryptjs": "^2.4.6",
+        "bcryptjs": "^3.0.3",
+        "@types/bcryptjs": "^3.0.0",
     "@tailwindcss/postcss": "^4.1.17",
-    "@types/node": "^24.10.0",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "^10.4.21",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.24",
-    "lucide-react": "^0.553.0",
+    "lucide-react": "^1.8.0",
     "next": "^16.2.3",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.4.1",
     "tailwindcss": "^4.1.17",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
