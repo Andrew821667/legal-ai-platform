@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from news.publish import _autofill_publish_at, _demote_stale_scheduled_posts, _promote_ready_posts_for_idle_queue
+from news.publish import (
+    TelegramRequestError,
+    _autofill_publish_at,
+    _demote_stale_scheduled_posts,
+    _promote_ready_posts_for_idle_queue,
+    _retryable_publish_patch,
+)
 from news.settings import settings
 
 
@@ -108,3 +114,42 @@ def test_demote_stale_scheduled_posts_to_ready() -> None:
 
     assert demoted == 1
     assert client.patched == [("old", {"status": "ready"})]
+
+
+def test_retryable_publish_patch_requeues_transient_telegram_failure() -> None:
+    original = settings.news_retry_failed_after_minutes
+    settings.news_retry_failed_after_minutes = 15
+    try:
+        now_utc = datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc)
+        patch = _retryable_publish_patch(
+            {"attempts": 0, "max_attempts": 3},
+            TelegramRequestError("dns fail", retryable=True),
+            now_utc=now_utc,
+        )
+    finally:
+        settings.news_retry_failed_after_minutes = original
+
+    assert patch is not None
+    assert patch["status"] == "scheduled"
+    assert patch["attempts"] == 1
+    assert datetime.fromisoformat(patch["publish_at"]) == now_utc + timedelta(minutes=15)
+
+
+def test_retryable_publish_patch_stops_after_max_attempts() -> None:
+    patch = _retryable_publish_patch(
+        {"attempts": 2, "max_attempts": 3},
+        TelegramRequestError("dns fail", retryable=True),
+        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc),
+    )
+
+    assert patch is None
+
+
+def test_retryable_publish_patch_ignores_non_retryable_error() -> None:
+    patch = _retryable_publish_patch(
+        {"attempts": 0, "max_attempts": 3},
+        TelegramRequestError("bad request", retryable=False),
+        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc),
+    )
+
+    assert patch is None

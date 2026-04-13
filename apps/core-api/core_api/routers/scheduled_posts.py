@@ -387,6 +387,7 @@ def patch_scheduled_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     prev_status = post.status
+    attempts_updated = False
 
     if payload.title is not None:
         post.title = payload.title
@@ -394,6 +395,9 @@ def patch_scheduled_post(
         post.text = payload.text
     if payload.publish_at is not None:
         post.publish_at = payload.publish_at
+    if payload.attempts is not None:
+        post.attempts = payload.attempts
+        attempts_updated = True
     if payload.format_type is not None:
         post.format_type = payload.format_type
     if payload.cta_type is not None:
@@ -415,7 +419,7 @@ def patch_scheduled_post(
         post.last_error = payload.last_error
 
     post.updated_at = datetime.now(timezone.utc)
-    if payload.status == ScheduledPostStatus.failed and prev_status != ScheduledPostStatus.failed:
+    if payload.status == ScheduledPostStatus.failed and prev_status != ScheduledPostStatus.failed and not attempts_updated:
         post.attempts += 1
 
     db.add(post)

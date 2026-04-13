@@ -233,6 +233,7 @@ class ScheduledPostPatch(BaseModel):
     title: str | None = None
     text: str | None = None
     publish_at: datetime | None = None
+    attempts: int | None = None
     format_type: str | None = None
     cta_type: str | None = None
     telegram_message_id: int | None = None

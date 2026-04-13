@@ -22,6 +22,12 @@ _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
 
 
+class TelegramRequestError(RuntimeError):
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+
+
 def _demote_stale_scheduled_posts(client: CoreClient, *, scan_limit: int = 100) -> int:
     scheduled_response = client.list_posts(limit=max(scan_limit, 1), status="scheduled", newest_first=False)
     scheduled_response.raise_for_status()
@@ -136,6 +142,7 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
 
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
     last_error: Exception | None = None
+    last_error_retryable = False
 
     for attempt in range(1, retries + 1):
         try:
@@ -151,20 +158,60 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
                 time.sleep(retry_after)
                 continue
 
+            if response.status_code >= 500:
+                raise TelegramRequestError(
+                    f"Telegram HTTP {response.status_code}",
+                    retryable=True,
+                )
             response.raise_for_status()
             body = response.json()
             if not body.get("ok", False):
                 description = body.get("description") or "unknown telegram error"
-                raise RuntimeError(f"Telegram API error: {description}")
+                raise TelegramRequestError(f"Telegram API error: {description}", retryable=False)
             return body
+        except TelegramRequestError as exc:
+            last_error = exc
+            last_error_retryable = exc.retryable
+            if attempt < retries and exc.retryable:
+                time.sleep(attempt)
+                continue
+            break
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_error = exc
+            last_error_retryable = True
+            if attempt < retries:
+                time.sleep(attempt)
+                continue
+            break
         except Exception as exc:
             last_error = exc
+            last_error_retryable = False
             if attempt < retries:
                 time.sleep(attempt)
                 continue
             break
 
-    raise RuntimeError(f"Telegram request failed: {last_error}")
+    raise TelegramRequestError(f"Telegram request failed: {last_error}", retryable=last_error_retryable)
+
+
+def _retryable_publish_patch(post: dict[str, Any], exc: Exception, *, now_utc: datetime) -> dict[str, Any] | None:
+    attempts = int(post.get("attempts") or 0)
+    max_attempts = max(int(post.get("max_attempts") or 0), 1)
+    next_attempt = attempts + 1
+
+    retryable = isinstance(exc, TelegramRequestError) and exc.retryable
+    if not retryable:
+        return None
+    if next_attempt >= max_attempts:
+        return None
+
+    retry_at = now_utc + timedelta(minutes=max(settings.news_retry_failed_after_minutes, 1))
+    return {
+        "status": "scheduled",
+        "publish_at": retry_at.isoformat(),
+        "attempts": next_attempt,
+        "last_error": str(exc)[:500],
+    }
 
 
 def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
@@ -314,6 +361,23 @@ def main() -> int:
         except Exception as exc:
             consecutive_errors += 1
             logger.exception("post_publish_failed", extra={"post_id": post_id, "error": str(exc)})
+            retry_patch = _retryable_publish_patch(post, exc, now_utc=datetime.now(timezone.utc))
+            if retry_patch is not None:
+                retry = client.patch_post(post_id, retry_patch)
+                if retry.status_code >= 400:
+                    logger.error("post_retry_patch_error", extra={"post_id": post_id, "status": retry.status_code})
+                else:
+                    logger.warning(
+                        "post_publish_retry_scheduled",
+                        extra={
+                            "post_id": post_id,
+                            "retry_at": retry_patch["publish_at"],
+                            "attempts": retry_patch["attempts"],
+                            "max_attempts": post.get("max_attempts"),
+                        },
+                    )
+                    continue
+
             fail = client.patch_post(post_id, {"status": "failed", "last_error": str(exc)[:500]})
             if fail.status_code >= 400:
                 logger.error("post_failed_patch_error", extra={"post_id": post_id, "status": fail.status_code})
