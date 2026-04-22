@@ -33,7 +33,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
       ADMIN_SECURITY_STORE_PATH: ${ADMIN_SECURITY_STORE_PATH:-/app/data/web-admin-security.json}
       TZ: ${TZ:-Europe/Moscow}
@@ -72,9 +72,14 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
       MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://legalaipro.ru}
+      CORE_API_WORKERS: ${CORE_API_WORKERS:-4}
       TZ: ${TZ:-Europe/Moscow}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      default:
+        aliases:
+          - legal-ai-core-api
     ports:
       - "${CORE_API_BIND_HOST:-127.0.0.1}:${CORE_API_PUBLISH_PORT:-8000}:8000"
     security_opt:
@@ -113,7 +118,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     dns:
       - 1.1.1.1
@@ -143,7 +148,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
       TZ: ${TZ:-Europe/Moscow}
@@ -171,7 +176,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
       TZ: ${TZ:-Europe/Moscow}
@@ -199,7 +204,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.publish_loop
@@ -223,7 +228,7 @@ services:
     env_file:
       - ../../.env
     environment:
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: ["uv", "run", "python", "-m", "news.admin_bot"]
     depends_on:
@@ -254,7 +259,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_bot"]
     depends_on:
@@ -287,7 +292,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
       READER_BOT_USERNAME: ${READER_BOT_USERNAME:-legal_ai_news_reader_bot}
       NEWS_HELPER_BOT_USERNAME: ${NEWS_HELPER_BOT_USERNAME:-legal_ai_helper_new_bot}
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_digest_loop"]
     depends_on:
@@ -301,7 +306,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import json, os, sys, urllib.request; key=os.getenv('API_KEY_NEWS') or ''; req=urllib.request.Request('http://core-api:8000/api/v1/workers/status', headers={'X-API-Key': key} if key else {}); data=json.loads(urllib.request.urlopen(req, timeout=8).read().decode()); rows=[row for row in data.get('workers', []) if row.get('worker_id') == 'news-reader-digest']; ok=bool(rows and rows[0].get('active')); sys.exit(0 if ok else 1)",
+          "import json, os, sys, urllib.request; key=os.getenv('API_KEY_NEWS') or ''; base=(os.getenv('CORE_API_URL') or 'http://core-api:8000').rstrip('/'); req=urllib.request.Request(base + '/api/v1/workers/status', headers={'X-API-Key': key} if key else {}); data=json.loads(urllib.request.urlopen(req, timeout=8).read().decode()); rows=[row for row in data.get('workers', []) if row.get('worker_id') == 'news-reader-digest']; ok=bool(rows and rows[0].get('active')); sys.exit(0 if ok else 1)",
         ]
       interval: 30s
       timeout: 10s

@@ -17,4 +17,4 @@ RUN addgroup --system appgroup && adduser --system --ingroup appgroup --home /ap
 
 EXPOSE 8000
 USER appuser
-CMD ["sh", "-lc", "cd /app/apps/core-api && uv run --package core-api alembic upgrade head && cd /app && uv run --package core-api uvicorn core_api.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+CMD ["sh", "-lc", "cd /app/apps/core-api && uv run --package core-api alembic upgrade head && cd /app && uv run --package core-api uvicorn core_api.main:app --host 0.0.0.0 --port 8000 --workers ${CORE_API_WORKERS:-4}"]

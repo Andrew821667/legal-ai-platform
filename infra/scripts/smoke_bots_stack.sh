@@ -12,7 +12,7 @@ if [ -f ".env" ]; then
 fi
 
 COMPOSE_FILE="${SMOKE_COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
-CORE_API_URL="${CORE_API_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}"
+CORE_API_URL="${SMOKE_CORE_API_URL:-${CORE_API_HOST_URL:-${CORE_API_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}}"
 API_KEY_ADMIN="${API_KEY_ADMIN:-}"
 SMOKE_BUILD="${SMOKE_BUILD:-1}"
 SMOKE_SKIP_UP="${SMOKE_SKIP_UP:-0}"

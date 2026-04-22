@@ -26,6 +26,45 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 - `reader-bot` в таком запуске требует `READER_BOT_TOKEN` в корневом `.env`.
 - Для отправки feedback-сигналов ридера в `core-api` также обязательны `API_KEY_NEWS` (scope `news`/`admin`) и, желательно, `READER_BOT_USERNAME` (deeplink вида `/start post_<uuid>`).
 
+## Mac Mini: раздельные контуры пользователей
+
+Текущая схема Mac Mini нормальна, если контуры явно разделены:
+- `legalai` — публичный контур без VPN: сайт, mini-app, contract-система, Cloudflare tunnel;
+- `aiwork` — bot/news контур с VPN: lead-bot, news admin, генерация, ingest, публикации, reader;
+- `core-api` + `postgres` — общий источник состояния, к которому оба контура обращаются по стабильным адресам.
+
+Критичные правила:
+- не запускать `core-api` вручную через `docker run`, если можно поднять его из compose: ручной запуск теряет настройки при пересборке и усложняет диагностику;
+- `CORE_API_WORKERS` задает число uvicorn worker'ов; production default в образе — `4`;
+- `CORE_API_DOCKER_URL` — адрес API внутри docker-сети; unified compose подставляет его в контейнерный `CORE_API_URL`;
+- `CORE_API_HOST_URL` / `CORE_API_PUBLISH_PORT` — адрес для smoke/deploy-проверок с хоста, например `http://127.0.0.1:8100`;
+- контейнер `core-api` имеет сетевой alias `legal-ai-core-api`, чтобы отдельный bot-compose мог ходить к нему по одному имени в общей docker network.
+
+Рекомендуемые env для Mac Mini:
+```bash
+CORE_API_WORKERS=4
+CORE_API_BIND_HOST=127.0.0.1
+CORE_API_PUBLISH_PORT=8100
+CORE_API_DOCKER_URL=http://legal-ai-core-api:8000
+CORE_API_HOST_URL=http://127.0.0.1:8100
+```
+
+Если bot-compose живет отдельным файлом, он должен быть подключен к той же docker network, где находится `legal-ai-core-api`, и использовать `CORE_API_URL=http://legal-ai-core-api:8000` внутри контейнеров ботов.
+
+Проверка после деплоя:
+```bash
+infra/scripts/macmini_deploy_check.sh
+```
+
+DNS/Cloudflare:
+- если домен еще не активировался в Cloudflare, сначала проверить `dig legalaipro.ru DS @a.dns.ripn.net +short`;
+- пока DS-запись есть в реестре `.ru`, Cloudflare-зона может оставаться pending даже при правильных NS;
+- после удаления DS проверить apex, `www` и `contract` уже на целевом домене.
+
+Безопасность:
+- реальные значения токенов, API-ключей, DB password и tunnel token не должны попадать в git или runbook;
+- если такие значения передавались в чатах/логах/скриншотах, запланировать ротацию по `docs/secret-rotation-checklist.md`.
+
 ## Contract_AI_System на локальном MacBook (Docker)
 
 Если `Contract-AI-System` запущен отдельным Docker-контуром на этом же MacBook, в `core-api` это должно быть отражено через `automation_controls`.

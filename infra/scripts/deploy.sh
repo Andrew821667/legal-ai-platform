@@ -4,7 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 COMPOSE="docker compose -f infra/compose/docker-compose.prod.yml"
+CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-${CORE_API_HOST_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}"
 
 if [ -n "${1:-}" ]; then
   git pull origin "$1"
@@ -40,5 +48,5 @@ $COMPOSE up -d --build --no-deps news-reader-bot || true
 $COMPOSE up -d --no-deps caddy || true
 
 sleep 5
-curl -sf http://localhost:8000/health >/dev/null
+curl -sf "${CORE_API_HEALTH_URL%/}/health" >/dev/null
 echo "Deploy complete"
