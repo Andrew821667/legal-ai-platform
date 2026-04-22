@@ -51,11 +51,14 @@ echo "[4/6] Compose service status"
 
 echo "[5/6] Docker network aliases for core-api"
 core_container="$("${COMPOSE[@]}" ps -q core-api || true)"
+if [ -z "$core_container" ]; then
+  core_container="$(docker ps -q --filter name='^/legal-ai-core-api$' || true)"
+fi
 if [ -n "$core_container" ]; then
   docker inspect "$core_container" \
     --format '{{range $name, $net := .NetworkSettings.Networks}}{{println $name}}{{println $net.Aliases}}{{end}}'
 else
-  echo "WARN: core-api container was not found through $COMPOSE_FILE"
+  echo "WARN: core-api container was not found through $COMPOSE_FILE or by name legal-ai-core-api"
 fi
 
 echo "[6/6] Recent critical bot/core logs"
