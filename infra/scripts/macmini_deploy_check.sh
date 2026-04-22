@@ -56,7 +56,7 @@ if [ -z "$core_container" ]; then
 fi
 if [ -n "$core_container" ]; then
   docker inspect "$core_container" \
-    --format '{{range $name, $net := .NetworkSettings.Networks}}{{println $name}}{{println $net.Aliases}}{{end}}'
+    --format '{{range $name, $net := .NetworkSettings.Networks}}{{println $name}}{{printf "Aliases: %v\n" $net.Aliases}}{{printf "DNSNames: %v\n" $net.DNSNames}}{{end}}'
 else
   echo "WARN: core-api container was not found through $COMPOSE_FILE or by name legal-ai-core-api"
 fi
