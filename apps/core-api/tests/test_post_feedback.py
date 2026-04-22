@@ -65,7 +65,7 @@ def test_lookup_post_by_telegram_message_and_feedback_snapshot() -> None:
             publish_at=datetime.now(timezone.utc) - timedelta(hours=1),
             status=ScheduledPostStatus.posted,
             telegram_message_id=777,
-            channel_username="@legal_ai_pro",
+            channel_username="@ai_verdict",
             posted_at=datetime.now(timezone.utc) - timedelta(minutes=30),
         )
         db.add(post)
@@ -77,7 +77,7 @@ def test_lookup_post_by_telegram_message_and_feedback_snapshot() -> None:
 
     try:
         lookup = client.get(
-            "/api/v1/scheduled-posts/lookup/by-telegram-message?message_id=777&channel_username=%40legal_ai_pro",
+            "/api/v1/scheduled-posts/lookup/by-telegram-message?message_id=777&channel_username=%40ai_verdict",
             headers={"X-API-Key": raw_key},
         )
         assert lookup.status_code == 200
@@ -104,7 +104,7 @@ def test_lookup_post_by_telegram_message_and_feedback_snapshot() -> None:
                 "source": "reaction_count",
                 "signal_key": "reaction_count",
                 "signal_value": 0,
-                "telegram_chat_id": "@legal_ai_pro",
+                "telegram_chat_id": "@ai_verdict",
                 "telegram_message_id": 777,
                 "payload": {
                     "total_count": 7,

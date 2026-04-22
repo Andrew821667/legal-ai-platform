@@ -13,7 +13,7 @@ const nextConfig = {
             value: 'legal-ai-website-iota.vercel.app',
           },
         ],
-        destination: 'https://legalaipro.ru/:path*',
+        destination: 'https://ai-verdict.ru/:path*',
         permanent: true, // 301 redirect
       },
       {
@@ -25,7 +25,7 @@ const nextConfig = {
             value: '(.+)\\.vercel\\.app',
           },
         ],
-        destination: 'https://legalaipro.ru/:path*',
+        destination: 'https://ai-verdict.ru/:path*',
         permanent: true, // 301 redirect
       },
     ];

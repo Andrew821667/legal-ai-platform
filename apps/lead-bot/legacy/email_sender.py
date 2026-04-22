@@ -493,7 +493,7 @@ class EmailSender:
             </p>
         </div>
         <div class="footer">
-            <p>Это письмо отправлено в ответ на ваш запрос через Telegram-бот Legal AI PRO.</p>
+            <p>Это письмо отправлено в ответ на ваш запрос через Telegram-бот AI Verdict.</p>
         </div>
     </div>
 </body>

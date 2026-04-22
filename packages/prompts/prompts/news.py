@@ -98,7 +98,7 @@ NEWS_WRITER_OUTPUT_SCHEMA_PROMPT = """
   "conclusion": "1-2 предложения итогового вывода",
   "adoption_fit": "none|weak|strong",
   "adoption_patterns": ["опционально: 1-3 коротких прикладных паттерна применения"],
-  "hashtags": ["#LegalAI", "#AI", "#LegalTech"]
+  "hashtags": ["#AIVerdict", "#AI", "#LegalTech"]
 }
 
 Ставь "is_relevant": false, если статья явно не относится напрямую или практически не применима ни к одному из сценариев:
@@ -141,7 +141,7 @@ NEWS_WRITER_SYSTEM_PROMPT = build_news_writer_system_prompt()
 
 
 NEWS_FOOTER_DECISION_SYSTEM_PROMPT = """
-Ты редактор Telegram-канала Legal AI PRO.
+Ты редактор Telegram-канала AI Verdict.
 
 Твоя задача: решить, нужен ли footer «Следующий шаг» для конкретного поста.
 

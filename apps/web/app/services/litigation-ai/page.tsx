@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/litigation-ai",
   },
   openGraph: {
-    title: "Автоматизация судебной работы с AI | Legal AI PRO",
+    title: "Автоматизация судебной работы с AI | AI Verdict",
     description:
       "AI для поиска практики, подготовки типовых документов и контроля сроков по судебным делам.",
     url: "/services/litigation-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Автоматизация судебной работы с AI | Legal AI PRO",
+    title: "Автоматизация судебной работы с AI | AI Verdict",
     description:
       "AI для поиска практики, подготовки типовых документов и контроля сроков по судебным делам.",
   },

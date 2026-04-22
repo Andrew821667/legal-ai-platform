@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/outsourcing-ai",
   },
   openGraph: {
-    title: "Юридический аутсорсинг с AI | Legal AI PRO",
+    title: "Юридический аутсорсинг с AI | AI Verdict",
     description:
       "Сочетаем экспертную юридическую работу и AI-инструменты для снижения нагрузки на команду.",
     url: "/services/outsourcing-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Юридический аутсорсинг с AI | Legal AI PRO",
+    title: "Юридический аутсорсинг с AI | AI Verdict",
     description:
       "Сочетаем экспертную юридическую работу и AI-инструменты для снижения нагрузки на команду.",
   },

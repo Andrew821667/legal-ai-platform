@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import AdminPanel from "@/components/AdminPanel";
 
 export const metadata: Metadata = {
-  title: "Admin | Legal AI PRO",
+  title: "Admin | AI Verdict",
   robots: {
     index: false,
     follow: false,

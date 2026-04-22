@@ -15,12 +15,12 @@ def test_normalize_snippet_strips_markup_source_and_footer() -> None:
         "<b>Следующий шаг</b>\n"
         "Если хотите, напишите в @legal_ai_helper_new_bot.\n\n"
         "<b>Источник</b>: ссылка\n"
-        "#LegalAI #AI #LegalTech"
+        "#AIVerdict #AI #LegalTech"
     )
     normalized = _normalize_snippet(raw, 260)
     assert "<b>" not in normalized
     assert "Источник" not in normalized
-    assert "#LegalAI" not in normalized
+    assert "#AIVerdict" not in normalized
     assert "@legal_ai_helper_new_bot" not in normalized
     assert "Полезный абзац" in normalized
 
@@ -62,7 +62,7 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
             _FakeWriter.fallback_calls += 1
             return {
                 "title": "Практика недели",
-                "text": "<b>Практика недели</b>\n\n<b>Ситуация недели</b>\nТест.\n\n<b>Где узкое место</b>\nТест.\n\n<b>Что взять в работу</b>\nТест.\n\n<b>Источник</b>: ссылка\n#LegalAI",
+                "text": "<b>Практика недели</b>\n\n<b>Ситуация недели</b>\nТест.\n\n<b>Где узкое место</b>\nТест.\n\n<b>Что взять в работу</b>\nТест.\n\n<b>Источник</b>: ссылка\n#AIVerdict",
                 "rubric": "legal_ops",
             }
 

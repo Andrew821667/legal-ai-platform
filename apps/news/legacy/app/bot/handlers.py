@@ -89,7 +89,7 @@ def get_channel_moderator() -> ChannelModeration:
 @router.channel_post()
 async def moderate_channel_comment(message: Message):
     """
-    Модерация комментариев к постам в канале @legal_ai_pro.
+    Модерация комментариев к постам в канале @ai_verdict.
 
     Обрабатывает все новые комментарии и применяет правила модерации:
     - Фильтрация спама и запрещенных слов
@@ -1723,7 +1723,7 @@ def format_analytics_report(
     """
     period_days = stats.get("period_days", 7)
 
-    report = f"""📊 <b>Аналитика канала @legal_ai_pro</b>
+    report = f"""📊 <b>Аналитика канала @ai_verdict</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>За последние {period_days} дней:</b>
@@ -1767,7 +1767,7 @@ def format_analytics_report(
             report += f"   📊 Quality: {post['quality_score']}\n"
             if post['telegram_message_id']:
                 msg_id = post['telegram_message_id']
-                report += f'   🔗 <a href="https://t.me/legal_ai_pro/{msg_id}">Перейти к посту</a>\n'
+                report += f'   🔗 <a href="https://t.me/ai_verdict/{msg_id}">Перейти к посту</a>\n'
             report += "\n"
 
     # Худшие посты
@@ -4191,7 +4191,7 @@ VIEWS И FORWARDS:
 
         prompt = f"""Ты - эксперт по аналитике Telegram каналов и контент-маркетингу.
 
-Проанализируй следующие данные аналитики канала @legal_ai_pro (новости о внедрении ИИ в юриспруденцию и бизнес):
+Проанализируй следующие данные аналитики канала @ai_verdict (новости о внедрении ИИ в юриспруденцию и бизнес):
 
 {analytics_data}
 

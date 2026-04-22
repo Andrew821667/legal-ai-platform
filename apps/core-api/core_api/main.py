@@ -29,7 +29,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-app = FastAPI(title="Legal AI Core API", version="1.0.0")
+app = FastAPI(title="AI Verdict Core API", version="1.0.0")
 app.state.started_at = datetime.now(timezone.utc)
 
 origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
@@ -57,5 +57,5 @@ app.include_router(admin.router)
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled exception", extra={"path": str(request.url.path)})
-    send_telegram_alert(f"🔴 Legal AI Core API error on {request.url.path}: {type(exc).__name__}")
+    send_telegram_alert(f"🔴 AI Verdict Core API error on {request.url.path}: {type(exc).__name__}")
     return JSONResponse({"detail": "Internal server error"}, status_code=500)

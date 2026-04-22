@@ -4,22 +4,22 @@ import AboutTeam from "@/components/AboutTeam";
 export const metadata: Metadata = {
   title: "О команде",
   description:
-    "Как команда Legal AI PRO подходит к автоматизации юридической функции: процессы, данные, контроль и внедрение.",
+    "Как команда AI Verdict подходит к автоматизации юридической функции: процессы, данные, контроль и внедрение.",
   alternates: {
     canonical: "/team",
   },
   openGraph: {
-    title: "О команде | Legal AI PRO",
+    title: "О команде | AI Verdict",
     description:
-      "Подход команды Legal AI PRO к внедрению AI в юридические процессы.",
+      "Подход команды AI Verdict к внедрению AI в юридические процессы.",
     url: "/team",
     type: "profile",
   },
   twitter: {
     card: "summary",
-    title: "О команде | Legal AI PRO",
+    title: "О команде | AI Verdict",
     description:
-      "Подход команды Legal AI PRO к внедрению AI в юридические процессы.",
+      "Подход команды AI Verdict к внедрению AI в юридические процессы.",
   },
   robots: {
     index: true,

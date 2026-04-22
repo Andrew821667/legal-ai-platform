@@ -5,12 +5,12 @@ import { regions } from "@/lib/regionsData";
 export const metadata: Metadata = {
   title: "Регионы",
   description:
-    "Региональные страницы Legal AI PRO: Москва, Санкт-Петербург и ключевые аграрные регионы России.",
+    "Региональные страницы AI Verdict: Москва, Санкт-Петербург и ключевые аграрные регионы России.",
   alternates: {
     canonical: "/regions",
   },
   openGraph: {
-    title: "Регионы | Legal AI PRO",
+    title: "Регионы | AI Verdict",
     description:
       "Выберите регион и посмотрите, как AI может усилить юридическую функцию вашей компании.",
     url: "/regions",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Регионы | Legal AI PRO",
+    title: "Регионы | AI Verdict",
     description:
       "Выберите регион и посмотрите, как AI может усилить юридическую функцию вашей компании.",
   },

@@ -189,7 +189,7 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Ассистент Legal AI Pro
+                  Ассистент AI Verdict
                 </a>
               </div>
             </div>
@@ -203,7 +203,7 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  @legal_ai_pro
+                  @ai_verdict
                 </a>
               </div>
             </div>

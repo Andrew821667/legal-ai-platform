@@ -7,7 +7,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "Setting up cron jobs for Legal AI News Bot..."
+echo "Setting up cron jobs for AI Verdict News Bot..."
 echo "Schedule: 09:00, 14:00, 18:00 MSK (3 times per day)"
 echo ""
 
@@ -20,7 +20,7 @@ chmod +x "$PROJECT_DIR/scripts/run_daily_workflow.sh"
 # 18:00 MSK = 15:00 UTC
 
 CRON_JOBS="
-# Legal AI News Bot - Daily Workflow (3 times per day)
+# AI Verdict News Bot - Daily Workflow (3 times per day)
 0 6 * * * $PROJECT_DIR/scripts/run_daily_workflow.sh  # 09:00 MSK - Morning
 0 11 * * * $PROJECT_DIR/scripts/run_daily_workflow.sh # 14:00 MSK - Afternoon
 0 15 * * * $PROJECT_DIR/scripts/run_daily_workflow.sh # 18:00 MSK - Evening
@@ -31,11 +31,11 @@ if crontab -l >/dev/null 2>&1; then
     echo "Found existing crontab"
 
     # Проверяем наличие наших задач
-    if crontab -l | grep -q "Legal AI News Bot"; then
+    if crontab -l | grep -q "AI Verdict News Bot"; then
         echo "⚠️  Cron jobs already exist!"
         echo ""
         echo "Current cron jobs:"
-        crontab -l | grep -A 3 "Legal AI News Bot"
+        crontab -l | grep -A 3 "AI Verdict News Bot"
         echo ""
         read -p "Do you want to replace them? (y/N): " -n 1 -r
         echo
@@ -45,7 +45,7 @@ if crontab -l >/dev/null 2>&1; then
         fi
 
         # Удаляем старые задачи
-        crontab -l | grep -v "Legal AI News Bot" | grep -v "$PROJECT_DIR/scripts/run_daily_workflow.sh" | crontab -
+        crontab -l | grep -v "AI Verdict News Bot" | grep -v "$PROJECT_DIR/scripts/run_daily_workflow.sh" | crontab -
     fi
 fi
 
@@ -55,7 +55,7 @@ fi
 echo "✅ Cron jobs installed successfully!"
 echo ""
 echo "Installed schedule:"
-crontab -l | grep -A 3 "Legal AI News Bot"
+crontab -l | grep -A 3 "AI Verdict News Bot"
 echo ""
 echo "Logs will be saved to: $PROJECT_DIR/logs/cron_workflow_*.log"
 echo ""

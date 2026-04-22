@@ -159,19 +159,19 @@ class Config:
         self.AVAILABLE_SERVICE_MODULES: list[str] = [item.strip() for item in modules_raw.split(',') if item.strip()]
 
         # Compliance / документы
-        self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://legalaipro.ru/privacy')
+        self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
             'TRANSBORDER_CONSENT_URL',
-            'https://legalaipro.ru/transborder-consent',
+            'https://ai-verdict.ru/transborder-consent',
         )
-        self.USER_AGREEMENT_URL: str = os.getenv('USER_AGREEMENT_URL', 'https://legalaipro.ru/user-agreement')
-        self.AI_POLICY_URL: str = os.getenv('AI_POLICY_URL', 'https://legalaipro.ru/ai-policy')
+        self.USER_AGREEMENT_URL: str = os.getenv('USER_AGREEMENT_URL', 'https://ai-verdict.ru/user-agreement')
+        self.AI_POLICY_URL: str = os.getenv('AI_POLICY_URL', 'https://ai-verdict.ru/ai-policy')
         self.MARKETING_CONSENT_URL: str = os.getenv(
             'MARKETING_CONSENT_URL',
-            'https://legalaipro.ru/marketing-consent',
+            'https://ai-verdict.ru/marketing-consent',
         )
-        self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'privacy@legalaipro.ru')
-        self.OPERATOR_NAME: str = os.getenv('OPERATOR_NAME', 'Legal AI PRO').strip()
+        self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'privacy@ai-verdict.ru')
+        self.OPERATOR_NAME: str = os.getenv('OPERATOR_NAME', 'AI Verdict').strip()
         self.OPERATOR_INN: str = os.getenv('OPERATOR_INN', '').strip()
         self.OPERATOR_DETAILS: str = os.getenv('OPERATOR_DETAILS', '').strip()
         self.CONVERSATION_RETENTION_DAYS: int = max(
@@ -259,7 +259,7 @@ class Config:
         self.SMTP_USER: str = os.getenv('SMTP_USER', '')
         self.SMTP_PASSWORD: str = os.getenv('SMTP_PASSWORD', '')
         self.FROM_EMAIL: str = os.getenv('FROM_EMAIL', '')
-        self.FROM_NAME: str = os.getenv('FROM_NAME', 'Legal AI Bot')
+        self.FROM_NAME: str = os.getenv('FROM_NAME', 'AI Verdict Bot')
 
     def validate(self):
         """Валидация конфигурации"""

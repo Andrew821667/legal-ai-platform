@@ -6,13 +6,13 @@ import YandexMetrika from "@/components/YandexMetrika";
 import StructuredData from "@/components/StructuredData";
 import { reportLegalProfileWarnings } from "@/lib/legalProfile";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://legalaipro.ru";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Автоматизация юридической работы | Legal AI PRO",
-    template: "%s | Legal AI PRO",
+    default: "Автоматизация юридической работы | AI Verdict",
+    template: "%s | AI Verdict",
   },
   description:
     "Помогаем юридическим командам внедрять AI-сценарии для intake заявок, договорной и судебной работы, комплаенса, legal ops и типовых процессов.",
@@ -26,9 +26,9 @@ export const metadata: Metadata = {
     "внедрение ИИ в юридический отдел",
     "анализ договоров ИИ",
   ],
-  authors: [{ name: "Legal AI PRO" }],
-  creator: "Legal AI PRO",
-  publisher: "Legal AI PRO",
+  authors: [{ name: "AI Verdict" }],
+  creator: "AI Verdict",
+  publisher: "AI Verdict",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
@@ -37,22 +37,22 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ru_RU",
     url: siteUrl,
-    title: "Автоматизация юридической работы | Legal AI PRO",
+    title: "Автоматизация юридической работы | AI Verdict",
     description:
       "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
-    siteName: "Legal AI PRO",
+    siteName: "AI Verdict",
     images: [
       {
         url: `${siteUrl}/opengraph-image`,
         width: 1200,
         height: 630,
-        alt: "Legal AI PRO",
+        alt: "AI Verdict",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Автоматизация юридической работы | Legal AI PRO",
+    title: "Автоматизация юридической работы | AI Verdict",
     description:
       "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
     images: [`${siteUrl}/twitter-image`],

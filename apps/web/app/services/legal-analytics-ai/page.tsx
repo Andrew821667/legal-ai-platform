@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/legal-analytics-ai",
   },
   openGraph: {
-    title: "Юридическая аналитика с AI | Legal AI PRO",
+    title: "Юридическая аналитика с AI | AI Verdict",
     description:
       "Преобразуем юридические данные в дашборды и метрики для управленческих решений.",
     url: "/services/legal-analytics-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Юридическая аналитика с AI | Legal AI PRO",
+    title: "Юридическая аналитика с AI | AI Verdict",
     description:
       "Преобразуем юридические данные в дашборды и метрики для управленческих решений.",
   },

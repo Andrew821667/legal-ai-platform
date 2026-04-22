@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Автоматические тесты для Legal AI Telegram Bot
+Автоматические тесты для AI Verdict Telegram Bot
 """
 import asyncio
 import logging

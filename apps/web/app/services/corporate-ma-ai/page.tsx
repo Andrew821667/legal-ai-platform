@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/corporate-ma-ai",
   },
   openGraph: {
-    title: "Корпоративное право и M&A с AI | Legal AI PRO",
+    title: "Корпоративное право и M&A с AI | AI Verdict",
     description:
       "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
     url: "/services/corporate-ma-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Корпоративное право и M&A с AI | Legal AI PRO",
+    title: "Корпоративное право и M&A с AI | AI Verdict",
     description:
       "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
   },

@@ -1,4 +1,4 @@
-# Legal AI News - Telegram Mini App
+# AI Verdict News - Telegram Mini App
 
 Modern web interface for managing AI News Aggregator via Telegram Mini Apps.
 

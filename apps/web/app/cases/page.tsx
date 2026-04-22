@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/cases",
   },
   openGraph: {
-    title: "Сценарии внедрения Legal AI | Legal AI PRO",
+    title: "Сценарии внедрения Legal AI | AI Verdict",
     description:
       "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
     url: "/cases",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Сценарии внедрения Legal AI | Legal AI PRO",
+    title: "Сценарии внедрения Legal AI | AI Verdict",
     description:
       "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
   },

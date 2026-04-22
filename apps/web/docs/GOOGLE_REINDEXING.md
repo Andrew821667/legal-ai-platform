@@ -1,7 +1,7 @@
 # 🔍 Инструкция по переиндексации сайта в Google
 
 ## Проблема
-Google индексирует старый домен Vercel (`legal-ai-website-iota.vercel.app`) вместо нового домена `legalaipro.ru`.
+Google индексирует старый домен Vercel (`legal-ai-website-iota.vercel.app`) вместо нового домена `ai-verdict.ru`.
 
 ## ✅ Что уже исправлено в коде
 
@@ -23,7 +23,7 @@ Settings → Environment Variables
 
 Добавьте:
 ```bash
-NEXT_PUBLIC_SITE_URL=https://legalaipro.ru
+NEXT_PUBLIC_SITE_URL=https://ai-verdict.ru
 ```
 
 Пересоберите проект после добавления переменной.
@@ -32,11 +32,11 @@ NEXT_PUBLIC_SITE_URL=https://legalaipro.ru
 
 ### 2. Google Search Console - Добавить новый домен
 
-#### Шаг 1: Добавить property для legalaipro.ru
+#### Шаг 1: Добавить property для ai-verdict.ru
 1. Откройте [Google Search Console](https://search.google.com/search-console)
 2. Нажмите "Add Property"
 3. Выберите "URL prefix"
-4. Введите: `https://legalaipro.ru`
+4. Введите: `https://ai-verdict.ru`
 5. Подтвердите владение одним из способов:
    - **DNS verification** (рекомендуется):
      - Добавьте TXT запись в DNS вашего домена
@@ -56,7 +56,7 @@ NEXT_PUBLIC_SITE_URL=https://legalaipro.ru
 #### Шаг 2: Отправить sitemap
 После подтверждения владения:
 1. Перейдите в раздел **Sitemaps**
-2. Введите: `https://legalaipro.ru/sitemap.xml`
+2. Введите: `https://ai-verdict.ru/sitemap.xml`
 3. Нажмите **Submit**
 
 ---
@@ -88,23 +88,23 @@ NEXT_PUBLIC_SITE_URL=https://legalaipro.ru
 
 После деплоя изменений:
 
-1. Откройте [Google Search Console](https://search.google.com/search-console) для `legalaipro.ru`
+1. Откройте [Google Search Console](https://search.google.com/search-console) для `ai-verdict.ru`
 2. Используйте **URL Inspection** tool
-3. Проверьте URL: `https://legalaipro.ru`
+3. Проверьте URL: `https://ai-verdict.ru`
 4. Нажмите **Request Indexing**
 5. Повторите для важных страниц:
-   - `https://legalaipro.ru/#features`
-   - `https://legalaipro.ru/#calculator`
-   - `https://legalaipro.ru/#services`
+   - `https://ai-verdict.ru/#features`
+   - `https://ai-verdict.ru/#calculator`
+   - `https://ai-verdict.ru/#services`
 
 ---
 
 ### 5. Yandex.Webmaster (для российской аудитории)
 
 1. Откройте [Yandex.Webmaster](https://webmaster.yandex.ru)
-2. Добавьте сайт `https://legalaipro.ru`
+2. Добавьте сайт `https://ai-verdict.ru`
 3. Подтвердите владение (meta tag или DNS)
-4. Отправьте sitemap: `https://legalaipro.ru/sitemap.xml`
+4. Отправьте sitemap: `https://ai-verdict.ru/sitemap.xml`
 5. В разделе "Индексирование" → "Переобход страниц" отправьте главную страницу
 
 ---
@@ -119,7 +119,7 @@ curl -I https://legal-ai-website-iota.vercel.app
 
 # Должен вернуть:
 # HTTP/2 301
-# location: https://legalaipro.ru/
+# location: https://ai-verdict.ru/
 ```
 
 Если редирект не работает - убедитесь что изменения в `next.config.js` задеплоены на Vercel.
@@ -136,7 +136,7 @@ Google переиндексирует сайт в течение **1-4 неде�
 
 2. **Search в Google**:
    ```
-   site:legalaipro.ru
+   site:ai-verdict.ru
    ```
    Должен показывать новый сайт
 
@@ -164,10 +164,10 @@ Google переиндексирует сайт в течение **1-4 неде�
 Уведомите поисковики о новой sitemap:
 ```bash
 # Google
-https://www.google.com/ping?sitemap=https://legalaipro.ru/sitemap.xml
+https://www.google.com/ping?sitemap=https://ai-verdict.ru/sitemap.xml
 
 # Yandex
-https://webmaster.yandex.ru/ping?sitemap=https://legalaipro.ru/sitemap.xml
+https://webmaster.yandex.ru/ping?sitemap=https://ai-verdict.ru/sitemap.xml
 ```
 
 ---
@@ -176,11 +176,11 @@ https://webmaster.yandex.ru/ping?sitemap=https://legalaipro.ru/sitemap.xml
 
 После деплоя проверьте что все метатеги корректны:
 
-1. Откройте `https://legalaipro.ru`
+1. Откройте `https://ai-verdict.ru`
 2. View Page Source (Ctrl+U)
 3. Проверьте наличие:
-   - `<link rel="canonical" href="https://legalaipro.ru/" />`
-   - `<meta property="og:url" content="https://legalaipro.ru/" />`
+   - `<link rel="canonical" href="https://ai-verdict.ru/" />`
+   - `<meta property="og:url" content="https://ai-verdict.ru/" />`
    - `<meta name="robots" content="index, follow" />`
 
 Или используйте инструменты:

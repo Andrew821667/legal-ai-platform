@@ -15,21 +15,21 @@ import {
 
 export const metadata: Metadata = {
   title: "Условия использования",
-  description: "Условия использования сайта legalaipro.ru. Правила предоставления услуг по разработке AI-решений для автоматизации юридической работы.",
+  description: "Условия использования сайта ai-verdict.ru. Правила предоставления услуг по разработке AI-решений для автоматизации юридической работы.",
   alternates: {
     canonical: "/terms",
   },
   openGraph: {
-    title: "Условия использования | Legal AI PRO",
+    title: "Условия использования | AI Verdict",
     description:
-      "Правила использования сайта и оказания услуг Legal AI PRO.",
+      "Правила использования сайта и оказания услуг AI Verdict.",
     url: "/terms",
     type: "article",
   },
   twitter: {
     card: "summary",
-    title: "Условия использования | Legal AI PRO",
-    description: "Правила использования сайта и оказания услуг Legal AI PRO.",
+    title: "Условия использования | AI Verdict",
+    description: "Правила использования сайта и оказания услуг AI Verdict.",
   },
   robots: {
     index: true,
@@ -47,7 +47,7 @@ export default function TermsOfService() {
             Условия использования
           </h1>
           <p className="text-lg text-slate-600">
-            Настоящие Условия использования регулируют порядок использования сайта legalaipro.ru 
+            Настоящие Условия использования регулируют порядок использования сайта ai-verdict.ru
             и получения услуг по автоматизации юридической работы
           </p>
           <p className="text-sm text-slate-500 mt-4">

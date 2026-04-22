@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/compliance-ai",
   },
   openGraph: {
-    title: "Автоматизация комплаенса с AI | Legal AI PRO",
+    title: "Автоматизация комплаенса с AI | AI Verdict",
     description:
       "Помогаем выстроить системный комплаенс-контроль и снизить риски нарушений.",
     url: "/services/compliance-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Автоматизация комплаенса с AI | Legal AI PRO",
+    title: "Автоматизация комплаенса с AI | AI Verdict",
     description:
       "Помогаем выстроить системный комплаенс-контроль и снизить риски нарушений.",
   },

@@ -1,8 +1,8 @@
 const FALLBACKS = {
-  brand: "Legal AI PRO",
+  brand: "AI Verdict",
   operatorName: "Попов Андрей",
   operatorStatus: "самозанятый",
-  siteUrl: "https://legalaipro.ru",
+  siteUrl: "https://ai-verdict.ru",
   contactEmail: "a.popov.gv@gmail.com",
   contactPhone: "+7 909 233-09-09",
   contactTelegram: "@legal_ai_helper_new_bot",

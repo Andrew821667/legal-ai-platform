@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Legal AI PRO";
+export const alt = "AI Verdict";
 export const size = {
   width: 1200,
   height: 630,
@@ -24,7 +24,7 @@ export default function Image() {
           fontFamily: "Arial",
         }}
       >
-        <div style={{ fontSize: 30, opacity: 0.9 }}>Legal AI PRO</div>
+        <div style={{ fontSize: 30, opacity: 0.9 }}>AI Verdict</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.1, maxWidth: 980 }}>
@@ -35,7 +35,7 @@ export default function Image() {
           </div>
         </div>
 
-        <div style={{ fontSize: 26, color: "#fbbf24" }}>legalaipro.ru</div>
+        <div style={{ fontSize: 26, color: "#fbbf24" }}>ai-verdict.ru</div>
       </div>
     ),
     {

@@ -142,10 +142,10 @@ class Settings(BaseSettings):
     reader_bot_token: str = Field(default="")
     reader_bot_username: str = Field(default="legal_ai_news_reader_bot")
     news_helper_bot_username: str = Field(default="legal_ai_helper_new_bot")
-    reader_miniapp_base_url: str = Field(default="https://legalaipro.ru/miniapp")
-    reader_contract_ai_url: str = Field(default="https://contract.legalaipro.ru")
-    reader_for_lawyers_url: str = Field(default="https://legalaipro.ru/for-lawyers")
-    reader_for_business_url: str = Field(default="https://legalaipro.ru/for-business")
+    reader_miniapp_base_url: str = Field(default="https://ai-verdict.ru/miniapp")
+    reader_contract_ai_url: str = Field(default="https://contract.ai-verdict.ru")
+    reader_for_lawyers_url: str = Field(default="https://ai-verdict.ru/for-lawyers")
+    reader_for_business_url: str = Field(default="https://ai-verdict.ru/for-business")
 
     # Core API bridge (единый контур данных/feedback)
     core_api_url: str = Field(default="http://core-api:8000")
@@ -307,7 +307,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = Field(default="change-in-production")
     allowed_hosts: str = Field(default="localhost,127.0.0.1")
-    cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000,https://legalaipro.ru")
+    cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000,https://ai-verdict.ru")
     miniapp_auth_max_age_seconds: int = Field(default=3600)
 
     # Monitoring

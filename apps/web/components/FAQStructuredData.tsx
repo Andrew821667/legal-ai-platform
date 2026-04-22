@@ -5,7 +5,7 @@ interface FAQStructuredDataProps {
 }
 
 export default function FAQStructuredData({
-  siteUrl = "https://legalaipro.ru",
+  siteUrl = "https://ai-verdict.ru",
 }: FAQStructuredDataProps) {
   const schema = {
     "@context": "https://schema.org",

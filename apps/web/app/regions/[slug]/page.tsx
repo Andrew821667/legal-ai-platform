@@ -31,14 +31,14 @@ export async function generateMetadata({
       canonical: `/regions/${region.slug}`,
     },
     openGraph: {
-      title: `Legal AI в ${region.name} | Legal AI PRO`,
+      title: `Legal AI в ${region.name} | AI Verdict`,
       description: `AI-решения для юридических команд в регионе ${region.name}.`,
       url: `/regions/${region.slug}`,
       type: "article",
     },
     twitter: {
       card: "summary",
-      title: `Legal AI в ${region.name} | Legal AI PRO`,
+      title: `Legal AI в ${region.name} | AI Verdict`,
       description: `AI-решения для юридических команд в регионе ${region.name}.`,
     },
     robots: {

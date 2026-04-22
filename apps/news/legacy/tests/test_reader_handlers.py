@@ -18,7 +18,7 @@ def _publication(**overrides) -> ReaderPublication:
         "title": '«Тестовый» заголовок',
         "text": "Первый абзац — с цитатой…",
         "source_url": "https://example.com/article",
-        "channel_username": "legal_ai_pro",
+        "channel_username": "ai_verdict",
         "telegram_message_id": 321,
         "publish_at": datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc),
         "status": "posted",
@@ -40,12 +40,12 @@ def test_get_article_keyboard_includes_source_links() -> None:
     keyboard = get_article_keyboard(
         "pub-1",
         source_url="https://example.com/original",
-        channel_post_url="https://t.me/legal_ai_pro/42",
+        channel_post_url="https://t.me/ai_verdict/42",
     )
 
     buttons = [button for row in keyboard.inline_keyboard for button in row]
     assert any(button.text == "🌐 Статья" and button.url == "https://example.com/original" for button in buttons)
-    assert any(button.text == "📣 Пост в канале" and button.url == "https://t.me/legal_ai_pro/42" for button in buttons)
+    assert any(button.text == "📣 Пост в канале" and button.url == "https://t.me/ai_verdict/42" for button in buttons)
 
 
 def test_build_article_detail_text_truncates_and_sanitizes() -> None:
@@ -60,8 +60,8 @@ def test_build_article_detail_text_truncates_and_sanitizes() -> None:
 
 
 def test_reader_publication_channel_post_url() -> None:
-    article = _publication(channel_username="@legal_ai_pro", telegram_message_id=777)
-    assert article.channel_post_url == "https://t.me/legal_ai_pro/777"
+    article = _publication(channel_username="@ai_verdict", telegram_message_id=777)
+    assert article.channel_post_url == "https://t.me/ai_verdict/777"
 
 
 def test_build_weekly_digest_text_uses_llm_summary(monkeypatch) -> None:

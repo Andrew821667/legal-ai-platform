@@ -214,7 +214,7 @@ def setup_cors(app):
         "http://localhost:3000",  # React development
         "http://localhost:8000",  # FastAPI development
         "https://contract-ai.example.com",  # Production frontend
-        "https://legal-ai-website.example.com",  # Legal AI website
+        "https://legal-ai-website.example.com",  # AI Verdict website
     ]
 
     # Add production origins from settings if available

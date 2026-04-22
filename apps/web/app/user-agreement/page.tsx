@@ -13,7 +13,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Пользовательское соглашение",
-  description: "Базовые условия использования сайта, ботов и материалов Legal AI PRO.",
+  description: "Базовые условия использования сайта, ботов и материалов AI Verdict.",
   alternates: {
     canonical: LEGAL_DOC_LINKS.userAgreement,
   },

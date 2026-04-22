@@ -92,4 +92,4 @@ async def test_forced_business_welcome_does_not_duplicate_greeting_welcome(monke
         await business.handle_business_message(update, context)
 
     assert len(sent) == 1
-    assert "Legal AI PRO" in sent[0]["text"]
+    assert "AI Verdict" in sent[0]["text"]

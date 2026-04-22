@@ -79,7 +79,7 @@ send_alert_once() {
 
 # 1) Базовый health
 if ! api_get "${API_BASE}/health/detailed" >/dev/null; then
-  send_alert_once "health_detailed_failed" "🔴 Legal AI Platform: health check failed!"
+  send_alert_once "health_detailed_failed" "🔴 AI Verdict Platform: health check failed!"
   exit 1
 fi
 

@@ -3232,7 +3232,7 @@ class NewsAdminBot:
         generate_limit = self._configured_generate_limit()
         retention_days = self._configured_review_retention_days()
         lines = [
-            "Рабочий стол модератора Legal AI PRO",
+            "Рабочий стол модератора AI Verdict",
             "",
             _screen_guide(
                 "Сводка состояния редакторского контура на текущий момент.",
@@ -4730,7 +4730,7 @@ class NewsAdminBot:
                 {
                     "role": "system",
                     "content": (
-                        "Ты редактор Telegram-канала Legal AI PRO.\n"
+                        "Ты редактор Telegram-канала AI Verdict.\n"
                         "Нужно решить, нужен ли футер «Следующий шаг» для ручного поста.\n"
                         "Добавляй футер только если пост реально стыкуется с услугами:\n"
                         "автоматизация юридической функции, внедрение Legal AI, legal ops, privacy/compliance/governance,\n"
@@ -4849,7 +4849,7 @@ class NewsAdminBot:
     @staticmethod
     def _helper_bot_label() -> str:
         label = (settings.news_helper_bot_label or "").strip()
-        return label or "Ассистент Legal AI Pro"
+        return label or "Ассистент AI Verdict"
 
     @classmethod
     def _helper_bot_mention(cls) -> str:
@@ -4864,9 +4864,9 @@ class NewsAdminBot:
     @classmethod
     def _assistant_link(cls, case: str = "nom") -> str:
         forms = {
-            "nom": "Ассистент Legal AI PRO",
-            "dat": "Ассистенту Legal AI PRO",
-            "ins": "Ассистентом Legal AI PRO",
+            "nom": "Ассистент AI Verdict",
+            "dat": "Ассистенту AI Verdict",
+            "ins": "Ассистентом AI Verdict",
         }
         safe_url = html.escape(cls._helper_bot_url(), quote=True)
         return f'<a href="{safe_url}">{html.escape(forms.get(case, forms["nom"]))}</a>'
@@ -4885,14 +4885,14 @@ class NewsAdminBot:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
         helper_username = cls._helper_bot_username()
         if not content:
-            return "Если тема для вас актуальна, обсудите это с Ассистентом Legal AI PRO."
-        content = re.sub(r"@legal_ai_helper_new_bot", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
-        content = re.sub(rf"@{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
-        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
-        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", "Ассистент Legal AI PRO", content, flags=re.IGNORECASE)
+            return "Если тема для вас актуальна, обсудите это с Ассистентом AI Verdict."
+        content = re.sub(r"@legal_ai_helper_new_bot", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
         if cls._footer_has_helper_contact(content):
             return content
-        suffix = "Обсудить это можно с Ассистентом Legal AI PRO."
+        suffix = "Обсудить это можно с Ассистентом AI Verdict."
         if content.endswith((".", "!", "?", "…")):
             return f"{content} {suffix}"
         return f"{content}. {suffix}"
@@ -4933,7 +4933,7 @@ class NewsAdminBot:
                 {
                     "role": "system",
                     "content": (
-                        "Ты редактор Telegram-канала Legal AI PRO. "
+                        "Ты редактор Telegram-канала AI Verdict. "
                         "Сформируй только footer для уже готового поста. "
                         "Footer должен быть коротким, деловым, ненавязчивым и логично продолжать именно этот материал. "
                         "Смысл footer: показать, что мы можем помочь внедрить похожую автоматизацию или AI-сценарий в юридической функции клиента. "
@@ -4995,7 +4995,7 @@ class NewsAdminBot:
     def _draft_post_with_llm(self, title: str, source_material: str, post_kind: str, *, source_mode: str = "ai", theme: str = "") -> str:
         client = self._get_openai_client()
         system_prompt = (
-            "Ты редактор Telegram-канала Legal AI PRO. "
+            "Ты редактор Telegram-канала AI Verdict. "
             "Собери профессиональный, плотный по смыслу пост на русском языке. "
             "Тон: деловой, уверенный, без воды и кликбейта. "
             "Не выдумывай факты, которых нет в тезисах пользователя. "
@@ -5151,7 +5151,7 @@ class NewsAdminBot:
         counts, _ = await self._queue_snapshot()
         if intro:
             text = (
-                "Рабочий стол контент-бота Legal AI PRO\n\n"
+                "Рабочий стол контент-бота AI Verdict\n\n"
                 "Это единый вход в редакторский контур: автопилот, очереди постов, календарь, источники, тематики и ручное создание постов.\n\n"
                 + text
             )

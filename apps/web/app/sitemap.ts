@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 import { regions } from "@/lib/regionsData";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://legalaipro.ru";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
   const lastModified = new Date(process.env.NEXT_PUBLIC_SITE_UPDATED_AT || "2026-03-06");
 
   const staticPages: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]; priority: number }> = [

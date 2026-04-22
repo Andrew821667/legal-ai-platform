@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/tax-compliance-ai",
   },
   openGraph: {
-    title: "Налоговый комплаенс с AI | Legal AI PRO",
+    title: "Налоговый комплаенс с AI | AI Verdict",
     description:
       "Помогаем юридической и финансовой функции быстрее реагировать на изменения налоговой практики.",
     url: "/services/tax-compliance-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Налоговый комплаенс с AI | Legal AI PRO",
+    title: "Налоговый комплаенс с AI | AI Verdict",
     description:
       "Помогаем юридической и финансовой функции быстрее реагировать на изменения налоговой практики.",
   },

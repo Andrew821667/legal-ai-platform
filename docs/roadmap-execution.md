@@ -81,7 +81,7 @@
 ## Следующий крупный контур: Contract_AI_System как флагманский модуль
 
 Цель:
-- встроить `Contract_AI_System` в `Legal AI PRO` как договорный product-entry, лид-магнит и Telegram-first сценарий.
+- встроить `Contract_AI_System` в `AI Verdict` как договорный product-entry, лид-магнит и Telegram-first сценарий.
 
 Результат:
 - единая семантика сайта, mini-app и ботов;

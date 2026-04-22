@@ -1,5 +1,5 @@
 [Unit]
-Description=Legal AI Telegram Bot
+Description=AI Verdict Telegram Bot
 After=network.target
 
 [Service]

@@ -70,8 +70,8 @@ services:
       - ../../.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://legalaipro.ru,http://localhost:3000}
-      MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://legalaipro.ru}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://ai-verdict.ru,http://localhost:3000}
+      MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://ai-verdict.ru}
       CORE_API_WORKERS: ${CORE_API_WORKERS:-4}
       TZ: ${TZ:-Europe/Moscow}
     extra_hosts:
@@ -334,7 +334,7 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
-      CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.legalaipro.ru}
+      CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.ai-verdict.ru}
       CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:8080}
     extra_hosts:
       - "host.docker.internal:host-gateway"

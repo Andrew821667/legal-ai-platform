@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Согласие на трансграничную передачу данных",
-  description: "Условия включения AI-режима и трансграничной передачи данных в Legal AI PRO.",
+  description: "Условия включения AI-режима и трансграничной передачи данных в AI Verdict.",
   alternates: {
     canonical: LEGAL_DOC_LINKS.transborderConsent,
   },

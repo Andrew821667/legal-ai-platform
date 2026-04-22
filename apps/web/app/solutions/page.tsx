@@ -5,7 +5,7 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 export const metadata: Metadata = {
   title: "Решения",
   description:
-    "Решения Legal AI PRO: автоматизация юридической функции, legal ops, интеграции и сценарии внедрения для юристов и бизнеса.",
+    "Решения AI Verdict: автоматизация юридической функции, legal ops, интеграции и сценарии внедрения для юристов и бизнеса.",
   alternates: { canonical: "/solutions" },
 };
 

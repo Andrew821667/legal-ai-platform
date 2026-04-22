@@ -127,4 +127,4 @@ def test_unhandled_exception_calls_telegram_alert(monkeypatch) -> None:
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
     assert calls
-    assert "Legal AI Core API error on" in calls[0]
+    assert "AI Verdict Core API error on" in calls[0]

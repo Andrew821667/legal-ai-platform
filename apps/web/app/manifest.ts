@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Legal AI PRO",
-    short_name: "Legal AI PRO",
+    name: "AI Verdict",
+    short_name: "AI Verdict",
     description:
       "AI-автоматизация юридической работы: договоры, судебная работа, комплаенс.",
     start_url: "/",

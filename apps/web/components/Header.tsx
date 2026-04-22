@@ -94,7 +94,7 @@ export default function Header() {
                 </g>
               </svg>
               <span className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors">
-                Legal AI PRO
+                AI Verdict
               </span>
             </Link>
           </div>

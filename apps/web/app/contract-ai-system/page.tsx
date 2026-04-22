@@ -6,7 +6,7 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 export const metadata: Metadata = {
   title: "Contract_AI_System",
   description:
-    "Флагманский внешний сервис Legal AI PRO для проверки договоров: бесплатный вход, демонстрационный разбор, пилот и рабочий контур.",
+    "Флагманский внешний сервис AI Verdict для проверки договоров: бесплатный вход, демонстрационный разбор, пилот и рабочий контур.",
   alternates: { canonical: "/contract-ai-system" },
 };
 
@@ -107,7 +107,7 @@ export default function ContractAISystemPage() {
                   rel="noopener noreferrer"
                   className="inline-flex rounded-lg border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300"
                 >
-                  Войти через Legal AI PRO (SSO)
+                  Войти через AI Verdict (SSO)
                 </a>
               ) : null}
             </div>
@@ -194,7 +194,7 @@ export default function ContractAISystemPage() {
           <h2 className="text-2xl font-semibold text-white">Следующий шаг</h2>
           <p className="mt-3 max-w-3xl text-slate-200">
             Если хотите разобрать ваш договорный процесс и проверить, где ИИ даст максимальный эффект, передайте кейс в
-            Ассистент Legal AI PRO. Получите понятный формат пилота без лишней архитектурной сложности.
+            Ассистент AI Verdict. Получите понятный формат пилота без лишней архитектурной сложности.
           </p>
           <div className="mt-6">
             <CtaFrameworkPanel

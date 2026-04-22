@@ -1,4 +1,4 @@
-title = "Legal AI Platform gitleaks config"
+title = "AI Verdict Platform gitleaks config"
 
 [allowlist]
 description = "Known placeholder secrets in examples and docs"

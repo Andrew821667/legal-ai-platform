@@ -580,8 +580,8 @@ async def _show_solutions(target: Message, user_id: int) -> None:
     )
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton(text="⚖️ Для юристов", url=(settings.reader_for_lawyers_url or "").strip() or "https://legalaipro.ru/for-lawyers"),
-            InlineKeyboardButton(text="🏢 Для бизнеса", url=(settings.reader_for_business_url or "").strip() or "https://legalaipro.ru/for-business"),
+            InlineKeyboardButton(text="⚖️ Для юристов", url=(settings.reader_for_lawyers_url or "").strip() or "https://ai-verdict.ru/for-lawyers"),
+            InlineKeyboardButton(text="🏢 Для бизнеса", url=(settings.reader_for_business_url or "").strip() or "https://ai-verdict.ru/for-business"),
         ],
     ]
     if miniapp_url:
@@ -1089,7 +1089,7 @@ async def _open_miniapp(
     )
 
     await target.answer(
-        "🧩 <b>Открыть Mini App Legal AI PRO</b>\n\n"
+        "🧩 <b>Открыть Mini App AI Verdict</b>\n\n"
         "В mini-app доступен быстрый маршрут: контент -> инструменты -> внедрение.",
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -1248,7 +1248,7 @@ async def start_onboarding(message: Message, state: FSMContext, db: AsyncSession
     ])
 
     await message.answer(
-        "👋 <b>Добро пожаловать в Legal AI News!</b>\n\n"
+        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
         "Давайте настроим вашу персональную ленту новостей.\n\n"
         "<b>1️⃣ Какие темы вас интересуют?</b> (выберите несколько)",
         parse_mode="HTML",
@@ -1314,7 +1314,7 @@ async def ask_expertise(callback: CallbackQuery, state: FSMContext, db: AsyncSes
     ])
 
     await callback.message.edit_text(
-        "👋 <b>Добро пожаловать в Legal AI News!</b>\n\n"
+        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
         "Давайте настроим вашу персональную ленту новостей.\n\n"
         "<b>2️⃣ Ваш уровень экспертизы?</b>",
         parse_mode="HTML",
@@ -1339,7 +1339,7 @@ async def save_expertise(callback: CallbackQuery, state: FSMContext):
     ])
 
     await callback.message.edit_text(
-        "👋 <b>Добро пожаловать в Legal AI News!</b>\n\n"
+        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
         "Давайте настроим вашу персональную ленту новостей.\n\n"
         "<b>3️⃣ Как часто получать дайджесты?</b>",
         parse_mode="HTML",
@@ -1950,7 +1950,7 @@ async def generate_automation_idea_callback(callback: CallbackQuery, db: AsyncSe
     if helper_username:
         helper_line = (
             f"\n\nНужен разбор под ваш кейс? "
-            f"Открыть диалог можно через <a href=\"https://t.me/{helper_username}\">Ассистент Legal AI PRO</a>."
+            f"Открыть диалог можно через <a href=\"https://t.me/{helper_username}\">Ассистент AI Verdict</a>."
         )
 
     await callback.message.answer(

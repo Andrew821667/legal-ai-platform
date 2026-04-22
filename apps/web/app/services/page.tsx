@@ -4,12 +4,12 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Услуги Legal AI",
   description:
-    "Услуги Legal AI PRO: договоры, судебная работа, M&A, комплаенс, налоги, аналитика и кастомные AI-решения для юротдела.",
+    "Услуги AI Verdict: договоры, судебная работа, M&A, комплаенс, налоги, аналитика и кастомные AI-решения для юротдела.",
   alternates: {
     canonical: "/services",
   },
   openGraph: {
-    title: "Услуги Legal AI | Legal AI PRO",
+    title: "Услуги Legal AI | AI Verdict",
     description:
       "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика и другие услуги.",
     url: "/services",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Услуги Legal AI | Legal AI PRO",
+    title: "Услуги Legal AI | AI Verdict",
     description:
       "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика и другие услуги.",
   },
@@ -82,7 +82,7 @@ export default function ServicesPage() {
     <main className="min-h-screen bg-slate-50">
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-          Услуги Legal AI PRO
+          Услуги AI Verdict
         </h1>
         <p className="text-lg text-slate-600 mb-10">
           Выберите направление и посмотрите, как AI может помочь вашему

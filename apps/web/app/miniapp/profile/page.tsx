@@ -192,7 +192,7 @@ export default function MiniAppProfilePage() {
         rel="noopener noreferrer"
         className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
       >
-        Связаться с Ассистентом Legal AI Pro
+        Связаться с Ассистентом AI Verdict
       </MiniTrackedLink>
 
       <MiniAppCtaFlowCard

@@ -6,7 +6,7 @@ import { TelegramProvider } from '@/components/TelegramProvider'
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })
 
 export const metadata: Metadata = {
-  title: 'Legal AI News',
+  title: 'AI Verdict News',
   description: 'AI-powered legal news aggregator and analytics with channel analytics',
 }
 

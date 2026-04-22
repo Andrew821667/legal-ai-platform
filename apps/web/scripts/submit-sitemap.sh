@@ -2,7 +2,7 @@
 
 # Скрипт для отправки sitemap в поисковые системы
 
-SITE_URL="https://legalaipro.ru"
+SITE_URL="https://ai-verdict.ru"
 SITEMAP_URL="${SITE_URL}/sitemap.xml"
 
 echo "🚀 Отправка sitemap в поисковые системы..."

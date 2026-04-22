@@ -292,7 +292,7 @@ def test_normalize_post_text_removes_markdown_artifacts() -> None:
         "* Пункт 1\n"
         "```markdown\nтехнический блок\n```\n"
         "Подробнее: [источник](https://example.com)\n"
-        "#LegalAI #LegalTech"
+        "#AIVerdict #LegalTech"
     )
     normalized = normalize_post_text(text)
     assert "**" not in normalized

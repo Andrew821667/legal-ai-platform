@@ -50,12 +50,12 @@ class _SequenceFakeClient:
 
 
 def test_looks_complete_prose_accepts_finished_text() -> None:
-    text = "<b>Что произошло</b>\nТекст завершен.\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    text = "<b>Что произошло</b>\nТекст завершен.\n\n<b>Источник</b>: ссылка\n#AIVerdict"
     assert LLMNewsWriter._looks_complete_prose(text)
 
 
 def test_looks_complete_prose_rejects_incomplete_tail() -> None:
-    text = "<b>Что произошло</b>\nТекст оборван потому\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    text = "<b>Что произошло</b>\nТекст оборван потому\n\n<b>Источник</b>: ссылка\n#AIVerdict"
     assert not LLMNewsWriter._looks_complete_prose(text)
 
 
@@ -69,7 +69,7 @@ def test_blocks_look_complete_rejects_truncated_internal_paragraph() -> None:
         "<b>Что произошло</b>\nAnthropic попала в политический конфликт вокруг оборонных поставок и Пента\n\n"
         "<b>Почему это важно</b>\nЭто влияет на выбор поставщиков и корпоративные AI-стратегии.\n\n"
         "<b>Что это значит для рынка</b>\nРынок начнет жестче смотреть на политические риски AI-вендоров.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI"
+        "<b>Источник</b>: ссылка\n#AIVerdict"
     )
     assert not LLMNewsWriter._blocks_look_complete(text)
 
@@ -81,7 +81,7 @@ def test_blocks_look_complete_ignores_title_line_without_period() -> None:
         "<b>Почему это важно</b>\nДля юрфункции это полезно как карта рынка и ориентир для vendor due diligence.\n\n"
         "<b>Что это значит для рынка</b>\nКомпании начнут сравнивать платформы не только по точности, но и по governance, SLA и режиму данных.\n\n"
         "<b>Источник</b>: ссылка\n"
-        "#LegalAI #AI #LegalTech"
+        "#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._blocks_look_complete(text)
 
@@ -118,7 +118,7 @@ def test_passes_quality_gate_accepts_daily_with_contextual_third_block() -> None
         "<b>Почему это важно</b>\nДля рынка это сигнал, что выбор AI-вендора становится не только техническим, но и политическим вопросом. Корпоративные клиенты и их юридические команды будут смотреть не только на качество модели, но и на устойчивость поставщика, его регуляторный контур, режим доступа к данным и риск ограничений в стратегических секторах.\n\n"
         "<b>Что это значит для рынка</b>\nДальше стоит смотреть, как это повлияет на закупки, комплаенс-проверки и стратегию корпоративных клиентов. Если конфликт продолжится, крупные компании начнут жестче проверять contractual safeguards, governance-модель вендора, распределение ответственности и способность поставщика обслуживать критически важные сценарии без политических сбоев.\n\n"
         "<b>Источник</b>: ссылка\n"
-        "#LegalAI #AI #LegalTech"
+        "#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._passes_quality_gate(text, "daily")
 
@@ -201,7 +201,7 @@ def test_quality_gate_rejects_prompt_leak_markers() -> None:
         "<b>Что это значит для юрфункции</b>\nСтилистика канала: деловой тон и плотный анализ.\n\n"
         "<b>На что смотреть юристам</b>\nПроверить контур ответственности поставщика.\n\n"
         "<b>Что проверить у себя</b>\n• Обновить KPI.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI"
+        "<b>Источник</b>: ссылка\n#AIVerdict"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "prompt_leak:стилистика канала"
 
@@ -215,7 +215,7 @@ def test_quality_gate_rejects_format_instruction_leak() -> None:
         "<b>Что это значит для юрфункции</b>\nФормат weekly_review: 8-10 пунктов и плотная аналитика.\n\n"
         "<b>На что смотреть юристам</b>\nПроверить контур ответственности поставщика.\n\n"
         "<b>Что проверить у себя</b>\n• Обновить KPI.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI"
+        "<b>Источник</b>: ссылка\n#AIVerdict"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "prompt_leak:формат weekly_review"
 
@@ -236,7 +236,7 @@ def test_quality_gate_rejects_weekly_with_few_points() -> None:
         "• Обновить контрактные safeguards для вендоров.\n"
         "• Проверить режим данных и права на output.\n"
         "• Назначить ответственных за human-in-the-loop.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+        "<b>Источник</b>: ссылка\n#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "weak_weekly_points:4"
 
@@ -260,7 +260,7 @@ def test_quality_gate_rejects_weekly_with_escaped_markup() -> None:
         "• Обновить contractual safeguards.\n"
         "• Назначить owner за контроль output.\n"
         "• Проверить privacy и security-контур.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+        "<b>Источник</b>: ссылка\n#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "escaped_markup"
 
@@ -353,7 +353,7 @@ def test_temporal_guard_rejects_near_term_forecast_same_day() -> None:
         "Это повлияет на рынок.\n\n"
         "<b>Что это значит для рынка</b>\n"
         "Нужно следить за реакцией.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI"
+        "<b>Источник</b>: ссылка\n#AIVerdict"
     )
     reason = LLMNewsWriter._temporal_guard_failure_reason(
         text,
@@ -376,7 +376,7 @@ def test_temporal_guard_rejects_elapsed_weekly_calendar_window() -> None:
         "Длинный блок про контроль качества и дедлайны.\n\n"
         "<b>Что проверить у себя</b>\n"
         "• Проверить процесс.\n• Обновить контур.\n• Назначить owner.\n• Проверить контроль.\n\n"
-        "<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"
+        "<b>Источник</b>: ссылка\n#AIVerdict #AI #LegalTech"
     )
     reason = LLMNewsWriter._temporal_guard_failure_reason(
         text,
@@ -391,8 +391,8 @@ def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer.client = _SequenceFakeClient(
         [
-            """{"is_relevant": true, "reject_reason": "", "title": "Ипотечные квартиры и аренда", "rubric": "market", "lead": "Лид о рынке ипотеки и аренды.", "what_happened": "Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики арендуют жилье для покрытия кредитных платежей.", "business_effect": "Это влияет на рынок аренды и на поведение инвесторов в жилую недвижимость.", "legal_risks": "Нужно проверить договорный контур, раскрытие условий аренды и распределение рисков.", "next_steps": "Проверить продукт; сверить риски; обновить модель", "conclusion": "Вывод о том, что рынок меняет модель использования ипотечного жилья.", "hashtags": ["#LegalAI"]}""",
-            """{"approved": true, "reason": "", "title": "Ипотечные квартиры и аренда", "text": "<b>Ипотечные квартиры и аренда</b>\n\nЛид о рынке ипотеки и аренды, где поведение заемщиков уже влияет на структуру предложения и на логику инвестиционных решений.\n\n<b>Что произошло</b>\nДоля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье, чтобы покрывать кредитные платежи, а не сами снимают его. Это меняет картину предложения и поведение собственников на рынке.\n\n<b>Почему это важно</b>\nДля рынка это сигнал, что ипотечное жилье все чаще рассматривается как денежный поток, а не только как объект проживания. Это влияет на стратегию инвесторов, модель спроса и устойчивость арендных ставок.\n\n<b>Что это значит для рынка</b>\nЮристам и продуктовым командам важно смотреть на договорную модель аренды, режим раскрытия условий, риски по просрочке и то, как кредитные ограничения влияют на фактическое использование объекта. Ошибка в трактовке роли собственника здесь меняет весь смысл новости.\n\n<b>Источник</b>: ссылка\n#LegalAI #AI #LegalTech"}""",
+            """{"is_relevant": true, "reject_reason": "", "title": "Ипотечные квартиры и аренда", "rubric": "market", "lead": "Лид о рынке ипотеки и аренды.", "what_happened": "Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики арендуют жилье для покрытия кредитных платежей.", "business_effect": "Это влияет на рынок аренды и на поведение инвесторов в жилую недвижимость.", "legal_risks": "Нужно проверить договорный контур, раскрытие условий аренды и распределение рисков.", "next_steps": "Проверить продукт; сверить риски; обновить модель", "conclusion": "Вывод о том, что рынок меняет модель использования ипотечного жилья.", "hashtags": ["#AIVerdict"]}""",
+            """{"approved": true, "reason": "", "title": "Ипотечные квартиры и аренда", "text": "<b>Ипотечные квартиры и аренда</b>\n\nЛид о рынке ипотеки и аренды, где поведение заемщиков уже влияет на структуру предложения и на логику инвестиционных решений.\n\n<b>Что произошло</b>\nДоля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье, чтобы покрывать кредитные платежи, а не сами снимают его. Это меняет картину предложения и поведение собственников на рынке.\n\n<b>Почему это важно</b>\nДля рынка это сигнал, что ипотечное жилье все чаще рассматривается как денежный поток, а не только как объект проживания. Это влияет на стратегию инвесторов, модель спроса и устойчивость арендных ставок.\n\n<b>Что это значит для рынка</b>\nЮристам и продуктовым командам важно смотреть на договорную модель аренды, режим раскрытия условий, риски по просрочке и то, как кредитные ограничения влияют на фактическое использование объекта. Ошибка в трактовке роли собственника здесь меняет весь смысл новости.\n\n<b>Источник</b>: ссылка\n#AIVerdict #AI #LegalTech"}""",
         ]
     )
     writer.model = "fake"
@@ -428,7 +428,7 @@ def test_quality_gate_rejects_weak_daily_third_block() -> None:
         "<b>Юридический контур</b>\n"
         "Нужно проработать договорной контур с вендором.\n\n"
         "<b>Источник</b>: ссылка\n"
-        "#LegalAI #AI #LegalTech"
+        "#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "daily") == "weak_daily_third_block:47"
 
@@ -544,7 +544,7 @@ def test_generic_legal_commentary_detection() -> None:
 def test_semantic_footer_html_adds_clickable_assistant_link() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer.client = _FakeClient(
-        '{"include_footer": true, "footer_text": "Эту практику можно применить у вас в юрфункции. Напишите в Ассистент Legal AI Pro.", "fit_reason": "case fit"}'
+        '{"include_footer": true, "footer_text": "Эту практику можно применить у вас в юрфункции. Напишите в Ассистент AI Verdict.", "fit_reason": "case fit"}'
     )
     writer.model = "deepseek-chat"
     writer._use_max_tokens_param = True
@@ -569,7 +569,7 @@ def test_semantic_footer_html_adds_clickable_assistant_link() -> None:
 def test_semantic_footer_html_dedupes_duplicate_assistant_cta() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer.client = _FakeClient(
-        '{"include_footer": true, "footer_text": "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом Legal AI Pro. Напишите в Ассистент Legal AI Pro.", "fit_reason": "implementation fit"}'
+        '{"include_footer": true, "footer_text": "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом AI Verdict. Напишите в Ассистент AI Verdict.", "fit_reason": "implementation fit"}'
     )
     writer.model = "deepseek-chat"
     writer._use_max_tokens_param = True
@@ -587,7 +587,7 @@ def test_semantic_footer_html_dedupes_duplicate_assistant_cta() -> None:
         conclusion="Итог",
     )
 
-    assert footer_html.count("Ассистентом Legal AI PRO") == 1
+    assert footer_html.count("Ассистентом AI Verdict") == 1
     assert "Напишите" not in footer_html
     assert 'href="https://t.me/legal_ai_helper_new_bot"' in footer_html
 

@@ -5,7 +5,7 @@ import { LEGAL_CONTACT_EMAIL } from "@/lib/legalProfile";
 export const metadata: Metadata = {
   title: "О платформе",
   description:
-    "О платформе Legal AI PRO: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
+    "О платформе AI Verdict: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
   alternates: { canonical: "/about" },
 };
 
@@ -24,7 +24,7 @@ export default function AboutPage() {
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             О платформе и подходе
           </span>
-          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">Legal AI PRO</h1>
+          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">AI Verdict</h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
             Строим единую систему, где контент, продукт и внедрение работают вместе: от экспертного контекста и
             проверки договоров до управляемых юридических процессов в компании.
@@ -51,7 +51,7 @@ export default function AboutPage() {
               <h3 className="font-semibold text-amber-300">Telegram</h3>
               <p className="mt-2 text-sm text-slate-300">
                 <a href={leadBotDeepLink("web_about_contacts")} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
-                  Ассистент Legal AI Pro
+                  Ассистент AI Verdict
                 </a>
               </p>
             </article>
@@ -59,7 +59,7 @@ export default function AboutPage() {
               <h3 className="font-semibold text-amber-300">Канал</h3>
               <p className="mt-2 text-sm text-slate-300">
                 <a href={EXTERNAL_LINKS.channel} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
-                  @legal_ai_pro
+                  @ai_verdict
                 </a>
               </p>
             </article>

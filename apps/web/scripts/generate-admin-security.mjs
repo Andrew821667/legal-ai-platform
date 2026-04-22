@@ -30,7 +30,7 @@ if (!password) {
   process.exit(1);
 }
 
-const issuer = process.env.ADMIN_PANEL_TOTP_ISSUER || "Legal AI PRO";
+const issuer = process.env.ADMIN_PANEL_TOTP_ISSUER || "AI Verdict";
 const accountName = process.env.ADMIN_PANEL_TOTP_ACCOUNT || "admin";
 const totpSecret = generateTotpSecret();
 const sessionSecret = randomBytes(32).toString("base64url");

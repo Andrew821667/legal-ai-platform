@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Legal AI PRO";
+export const alt = "AI Verdict";
 export const size = {
   width: 1200,
   height: 630,
@@ -25,7 +25,7 @@ export default function Image() {
           gap: "18px",
         }}
       >
-        <div style={{ fontSize: 28, color: "#fbbf24" }}>Legal AI PRO</div>
+        <div style={{ fontSize: 28, color: "#fbbf24" }}>AI Verdict</div>
         <div style={{ fontSize: 58, fontWeight: 700, lineHeight: 1.1 }}>
           AI для юридических команд
         </div>

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/land-law-ai",
   },
   openGraph: {
-    title: "Автоматизация земельного права с AI | Legal AI PRO",
+    title: "Автоматизация земельного права с AI | AI Verdict",
     description:
       "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
     url: "/services/land-law-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Автоматизация земельного права с AI | Legal AI PRO",
+    title: "Автоматизация земельного права с AI | AI Verdict",
     description:
       "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
   },

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 
 export const metadata: Metadata = {
-  title: "Платформа Legal AI PRO",
+  title: "Платформа AI Verdict",
   description:
     "Платформа для автоматизации юридической функции: бесплатный вход, флагманский Contract_AI_System для проверки договоров и этапные сценарии внедрения.",
   alternates: {
@@ -82,7 +82,7 @@ export default function Home() {
             Платформа автоматизации юридической работы
           </span>
           <h1 className="mt-6 max-w-4xl text-3xl font-semibold leading-tight text-white sm:text-4xl md:text-5xl">
-            Legal AI PRO: от бесплатной консультации и проверки договора к пилоту и рабочему внедрению
+            AI Verdict: от бесплатной консультации и проверки договора к пилоту и рабочему внедрению
           </h1>
           <p className="mt-6 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
             Помогаем перейти от разрозненных ИИ-экспериментов к управляемой практике: сначала бесплатно помогаем

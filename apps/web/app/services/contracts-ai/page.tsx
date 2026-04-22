@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/contracts-ai",
   },
   openGraph: {
-    title: "Автоматизация договоров с AI | Legal AI PRO",
+    title: "Автоматизация договоров с AI | AI Verdict",
     description:
       "Сокращаем время на договорную работу и уменьшаем риск ошибок в документах.",
     url: "/services/contracts-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Автоматизация договоров с AI | Legal AI PRO",
+    title: "Автоматизация договоров с AI | AI Verdict",
     description:
       "Сокращаем время на договорную работу и уменьшаем риск ошибок в документах.",
   },

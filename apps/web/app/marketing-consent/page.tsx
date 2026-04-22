@@ -10,7 +10,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Согласие на рассылки",
-  description: "Условия получения информационных и маркетинговых сообщений от Legal AI PRO.",
+  description: "Условия получения информационных и маркетинговых сообщений от AI Verdict.",
   alternates: {
     canonical: LEGAL_DOC_LINKS.marketingConsent,
   },
@@ -20,7 +20,7 @@ export default function MarketingConsentPage() {
   return (
     <LegalPageFrame
       title="Согласие на информационные и маркетинговые сообщения"
-      description="Какие сообщения может отправлять Legal AI PRO и как от них отказаться."
+      description="Какие сообщения может отправлять AI Verdict и как от них отказаться."
       updatedAt={LEGAL_UPDATED_AT}
     >
       <section className="rounded-xl bg-white p-8 shadow-sm">

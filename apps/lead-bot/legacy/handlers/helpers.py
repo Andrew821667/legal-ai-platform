@@ -346,7 +346,7 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         # Отправляем на email (если настроен SMTP)
         if config.SMTP_USER and config.SMTP_PASSWORD:
             try:
-                email_subject = f"[Legal AI Bot] Новый лид: {lead.get('name') or user_data.get('first_name')}"
+                email_subject = f"[AI Verdict Bot] Новый лид: {lead.get('name') or user_data.get('first_name')}"
                 email_body = notification_message
 
                 email_sender.email_sender.send_email(

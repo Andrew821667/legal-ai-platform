@@ -993,7 +993,7 @@ def build_reader_miniapp_deeplink(
     query_string = urlencode(query)
     base_url = (get_settings().miniapp_public_base_url or "").strip().rstrip("/")
     if not base_url.lower().startswith("https://"):
-        base_url = "https://legalaipro.ru"
+        base_url = "https://ai-verdict.ru"
     url = f"{base_url}{path}" if not query_string else f"{base_url}{path}?{query_string}"
 
     event = ReaderMiniAppEvent(

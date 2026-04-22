@@ -213,7 +213,7 @@ _DEFAULT_CONTROLS: tuple[dict[str, Any], ...] = (
         "description": "Проверка подписки на основной канал перед выдачей продвинутых магнитов/демо.",
         "enabled": True,
         "config": {
-            "channel_username": "legal_ai_pro",
+            "channel_username": "ai_verdict",
             "required_for": ["sample_report", "quick_demo", "demo_link"],
         },
     },

@@ -120,7 +120,7 @@ def get_confirm_keyboard(action: str, draft_id: int) -> InlineKeyboardMarkup:
 
 def get_reader_keyboard(
     source_url: str,
-    channel_username: str = "legal_ai_pro",
+    channel_username: str = "ai_verdict",
     post_id: int = None
 ) -> InlineKeyboardMarkup:
     """

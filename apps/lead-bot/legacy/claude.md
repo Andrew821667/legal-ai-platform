@@ -1,8 +1,8 @@
-# Legal AI Telegram Bot - Техническое задание для Claude Code
+# AI Verdict Telegram Bot - Техническое задание для Claude Code
 
 ## 📋 ОБЗОР ПРОЕКТА
 
-**Название:** Legal AI Telegram Bot
+**Название:** AI Verdict Telegram Bot
 **Репозиторий:** https://github.com/Andrew821667/legal-ai-bot
 **Цель:** AI-powered Telegram бот для консультирования клиентов по юридическим AI-решениям, квалификации лидов и сбора контактов
 
@@ -811,7 +811,7 @@ Python: 3.9+
 ```bash
 #!/bin/bash
 
-# Legal AI Telegram Bot - Deployment Script
+# AI Verdict Telegram Bot - Deployment Script
 
 echo "🚀 Starting deployment..."
 
@@ -868,7 +868,7 @@ echo "📊 Check logs: journalctl -u telegram-bot -f"
 
 ```ini
 [Unit]
-Description=Legal AI Telegram Bot
+Description=AI Verdict Telegram Bot
 After=network.target
 
 [Service]

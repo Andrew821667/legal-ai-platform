@@ -137,7 +137,7 @@ _CHANNEL_STYLE_HINTS = {
     "humor": "Редакционный тон: субботний практический формат, короткий и прикладной. CTA не нужен.",
 }
 _FOOTER_DECISION_SYSTEM_PROMPT = NEWS_FOOTER_DECISION_SYSTEM_PROMPT
-_DEFAULT_HASHTAGS = ["#LegalAI", "#LegalTech", "#AI"]
+_DEFAULT_HASHTAGS = ["#AIVerdict", "#LegalTech", "#AI"]
 _DEFAULT_RUBRIC_BY_PILLAR = {
     "regulation": "regulation",
     "case": "legal_ops",
@@ -658,7 +658,7 @@ class LLMNewsWriter:
     @staticmethod
     def _helper_bot_label() -> str:
         label = (settings.news_helper_bot_label or "").strip()
-        return label or "Ассистент Legal AI Pro"
+        return label or "Ассистент AI Verdict"
 
     @classmethod
     def _helper_bot_url(cls) -> str:
@@ -673,9 +673,9 @@ class LLMNewsWriter:
     @classmethod
     def _assistant_link(cls, case: str = "nom") -> str:
         forms = {
-            "nom": "Ассистент Legal AI PRO",
-            "dat": "Ассистенту Legal AI PRO",
-            "ins": "Ассистентом Legal AI PRO",
+            "nom": "Ассистент AI Verdict",
+            "dat": "Ассистенту AI Verdict",
+            "ins": "Ассистентом AI Verdict",
         }
         link_text = html.escape(forms.get(case, forms["nom"]))
         safe_url = html.escape(cls._helper_bot_url(), quote=True)
@@ -774,7 +774,7 @@ class LLMNewsWriter:
     def _cta_text(cls, cta_type: str, pillar: str) -> str:
         templates = _CTA_LIBRARY.get(cta_type, _CTA_LIBRARY["soft"])
         template = templates.get(pillar, templates.get("implementation", next(iter(templates.values()))))
-        return template.format(assistant_link="Ассистентом Legal AI PRO")
+        return template.format(assistant_link="Ассистентом AI Verdict")
 
     @classmethod
     def _auto_footer_text(cls, format_type: str, cta_type: str, pillar: str) -> str:
@@ -1960,7 +1960,7 @@ def build_manual_footer(post_kind: str) -> str:
     template = _MANUAL_FOOTER_LIBRARY.get(post_kind)
     if not template:
         return ""
-    return template.format(assistant_link="Ассистентом Legal AI PRO")
+    return template.format(assistant_link="Ассистентом AI Verdict")
 
 
 def compose_manual_post_html(title: str, body: str, post_kind: str, *, footer_text: str | None = None) -> str:

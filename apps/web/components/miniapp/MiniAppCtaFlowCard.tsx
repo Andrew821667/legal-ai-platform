@@ -66,7 +66,7 @@ export default function MiniAppCtaFlowCard({
           rel="noopener noreferrer"
           className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-medium text-sky-200 hover:border-sky-300 transition-colors"
         >
-          🛠 Обсудить пилот через Ассистент Legal AI PRO
+          🛠 Обсудить пилот через Ассистент AI Verdict
         </MiniTrackedLink>
       </div>
     </article>

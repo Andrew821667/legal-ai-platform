@@ -9,7 +9,7 @@ import asyncio
 
 sys.path.insert(0, 'seo-tools')
 
-SITE_URL = 'https://legalaipro.ru'
+SITE_URL = 'https://ai-verdict.ru'
 
 
 def dataclass_to_dict(obj):

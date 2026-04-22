@@ -5,7 +5,7 @@ import { LEGAL_BRAND, LEGAL_DOC_LINKS, LEGAL_UPDATED_AT } from "@/lib/legalProfi
 
 export const metadata: Metadata = {
   title: "Политика использования ИИ",
-  description: "Принципы использования AI-функций и ограничения ответственности в Legal AI PRO.",
+  description: "Принципы использования AI-функций и ограничения ответственности в AI Verdict.",
   alternates: {
     canonical: LEGAL_DOC_LINKS.aiPolicy,
   },
@@ -15,7 +15,7 @@ export default function AiPolicyPage() {
   return (
     <LegalPageFrame
       title="Политика использования ИИ"
-      description="Как в Legal AI PRO применяются AI-инструменты и какие ограничения нужно учитывать."
+      description="Как в AI Verdict применяются AI-инструменты и какие ограничения нужно учитывать."
       updatedAt={LEGAL_UPDATED_AT}
     >
       <section className="rounded-xl bg-white p-8 shadow-sm">

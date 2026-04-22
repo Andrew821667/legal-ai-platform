@@ -1,4 +1,4 @@
-# Legal AI Telegram Bot
+# AI Verdict Telegram Bot
 
 > ⚠️ Этот README относится к историческому standalone-контуру.
 > Для актуального запуска в монорепозитории используйте корневой README (`/README.md`) и runbook (`/docs/runbook.md`).

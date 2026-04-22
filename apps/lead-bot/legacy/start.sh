@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Legal AI Telegram Bot - Start Script
+# AI Verdict Telegram Bot - Start Script
 # Скрипт для локального запуска бота
 
 # Определение директории скрипта
@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 cd "$SCRIPT_DIR"
 
-echo "🤖 Starting Legal AI Telegram Bot..."
+echo "🤖 Starting AI Verdict Telegram Bot..."
 echo "📁 Working directory: $SCRIPT_DIR"
 
 # Проверка наличия .env файла

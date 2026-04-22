@@ -35,7 +35,7 @@
 
 #### Поле "Title" (большой текст):
 ```
-Legal AI PRO
+AI Verdict
 ```
 
 #### Поле "Subtitle" или "Description":
@@ -138,7 +138,7 @@ ls -la /Users/andrew/Desktop/legal-ai-website/public/og-image.png
 ### Шаг 4: Добавьте текст
 
 1. Слева **"Text"** → **"Add a heading"**
-2. Напишите: **Legal AI PRO**
+2. Напишите: **AI Verdict**
 3. Сделайте текст крупным (60-80pt)
 4. Цвет: белый (#ffffff) или золотой (#fbbf24)
 
@@ -245,9 +245,9 @@ images: [
 
 **О:** После деплоя проверьте:
 
-1. **Откройте:** https://www.opengraph.xyz/url/https://legalaipro.ru
+1. **Откройте:** https://www.opengraph.xyz/url/https://ai-verdict.ru
 2. Должно показать вашу картинку
-3. Или вставьте ссылку https://legalaipro.ru в Telegram - должно показать превью с картинкой
+3. Или вставьте ссылку https://ai-verdict.ru в Telegram - должно показать превью с картинкой
 
 ---
 
@@ -302,7 +302,7 @@ git commit -m "SEO improvements: keywords + Schema.org + FAQ + og-image"
 git push origin main
 ```
 
-Vercel автоматически задеплоит на https://legalaipro.ru (3-5 минут)
+Vercel автоматически задеплоит на https://ai-verdict.ru (3-5 минут)
 
 ---
 

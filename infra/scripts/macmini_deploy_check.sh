@@ -11,7 +11,7 @@ if [ -f ".env" ]; then
   set +a
 fi
 
-DOMAIN="${DOMAIN:-legalaipro.ru}"
+DOMAIN="${DOMAIN:-ai-verdict.ru}"
 CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-${CORE_API_HOST_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"

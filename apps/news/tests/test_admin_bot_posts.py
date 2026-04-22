@@ -570,7 +570,7 @@ def test_apply_footer_to_post_text_inserts_before_source() -> None:
         "<b>Заголовок</b>\n\n"
         "<b>Что произошло</b>\nТекст.\n\n"
         "<b>Источник</b>: <a href=\"https://example.com\">оригинал статьи</a>\n"
-        "#LegalAI"
+        "#AIVerdict"
     )
     updated = NewsAdminBot._apply_footer_to_post_text(
         original,
@@ -578,28 +578,28 @@ def test_apply_footer_to_post_text_inserts_before_source() -> None:
     )
     assert "<b>Следующий шаг</b>" in updated
     assert updated.index("<b>Следующий шаг</b>") < updated.index("<b>Источник</b>")
-    assert "<a href=\"https://t.me/legal_ai_helper_new_bot\">Ассистенту Legal AI PRO</a>" in updated
+    assert "<a href=\"https://t.me/legal_ai_helper_new_bot\">Ассистенту AI Verdict</a>" in updated
 
 
 def test_apply_footer_to_post_text_appends_helper_contact_when_missing() -> None:
-    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#AIVerdict"
     updated = NewsAdminBot._apply_footer_to_post_text(
         original,
         "Можем помочь внедрить такой сценарий в юридическую функцию.",
     )
     assert "<b>Следующий шаг</b>" in updated
-    assert "Ассистентом Legal AI PRO" in updated
+    assert "Ассистентом AI Verdict" in updated
     assert "https://t.me/legal_ai_helper_new_bot" in updated
 
 
 def test_apply_footer_to_post_text_dedupes_duplicate_assistant_cta() -> None:
-    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#LegalAI"
+    original = "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка\n#AIVerdict"
     updated = NewsAdminBot._apply_footer_to_post_text(
         original,
-        "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом Legal AI Pro. Напишите в Ассистент Legal AI Pro.",
+        "Если для вашей команды тоже актуальна автоматизация проверки договоров, обсудите возможные сценарии с Ассистентом AI Verdict. Напишите в Ассистент AI Verdict.",
     )
-    assert updated.count("Напишите в Ассистент Legal AI Pro") == 0
-    assert updated.count("Ассистентом Legal AI PRO") == 1
+    assert updated.count("Напишите в Ассистент AI Verdict") == 0
+    assert updated.count("Ассистентом AI Verdict") == 1
     assert 'href="https://t.me/legal_ai_helper_new_bot"' in updated
 
 

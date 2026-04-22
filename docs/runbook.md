@@ -22,7 +22,7 @@ docker-compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --
 
 Примечания:
 - `core-api` контейнер сам выполняет `alembic upgrade head` при старте, поэтому чистая локальная БД поднимается без отдельного ручного шага миграций.
-- Для локального full-stack используйте `infra/caddy/Caddyfile.local`: он слушает только `:80` и не пытается получать боевой TLS-сертификат для `legalaipro.ru`.
+- Для локального full-stack используйте `infra/caddy/Caddyfile.local`: он слушает только `:80` и не пытается получать боевой TLS-сертификат для `ai-verdict.ru`.
 - `reader-bot` в таком запуске требует `READER_BOT_TOKEN` в корневом `.env`.
 - Для отправки feedback-сигналов ридера в `core-api` также обязательны `API_KEY_NEWS` (scope `news`/`admin`) и, желательно, `READER_BOT_USERNAME` (deeplink вида `/start post_<uuid>`).
 
@@ -58,7 +58,7 @@ infra/scripts/macmini_deploy_check.sh
 ```
 
 DNS/Cloudflare:
-- если домен еще не активировался в Cloudflare, сначала проверить `dig legalaipro.ru DS @a.dns.ripn.net +short`;
+- если домен еще не активировался в Cloudflare, сначала проверить `dig ai-verdict.ru DS @a.dns.ripn.net +short`;
 - пока DS-запись есть в реестре `.ru`, Cloudflare-зона может оставаться pending даже при правильных NS;
 - после удаления DS проверить apex, `www` и `contract` уже на целевом домене.
 
@@ -322,7 +322,7 @@ uv run --package news python -m news.admin_bot
 
 Минимальные env для feedback:
 ```bash
-TELEGRAM_CHANNEL_USERNAME=@legal_ai_pro
+TELEGRAM_CHANNEL_USERNAME=@ai_verdict
 NEWS_DISCUSSION_CHAT_ID=-100...
 # или NEWS_DISCUSSION_CHAT_USERNAME=...
 ```
@@ -398,19 +398,19 @@ python -u -m app.reader_bot
   - `CORE_API_READ_CACHE_TTL_MS=10000`
   - `CORE_API_READ_CACHE_STALE_MS=120000`
 - чтобы разделы `Проверить/Решения` открывали корректные маршруты, при необходимости задайте:
-  - `READER_CONTRACT_AI_URL` (по умолчанию `https://contract.legalaipro.ru`);
-  - `READER_FOR_LAWYERS_URL` (по умолчанию `https://legalaipro.ru/for-lawyers`);
-  - `READER_FOR_BUSINESS_URL` (по умолчанию `https://legalaipro.ru/for-business`).
+  - `READER_CONTRACT_AI_URL` (по умолчанию `https://contract.ai-verdict.ru`);
+  - `READER_FOR_LAWYERS_URL` (по умолчанию `https://ai-verdict.ru/for-lawyers`);
+  - `READER_FOR_BUSINESS_URL` (по умолчанию `https://ai-verdict.ru/for-business`).
 
 Разделение доменов (рекомендуется):
-- `legalaipro.ru` — основной сайт платформы;
-- `contract.legalaipro.ru` — отдельный контур Contract_AI_System.
+- `ai-verdict.ru` — основной сайт платформы;
+- `contract.ai-verdict.ru` — отдельный контур Contract_AI_System.
 
 Для `caddy` в `docker-compose.prod.yml` предусмотрены env:
-- `CONTRACT_DOMAIN` (по умолчанию `contract.legalaipro.ru`);
+- `CONTRACT_DOMAIN` (по умолчанию `contract.ai-verdict.ru`);
 - `CONTRACT_AI_UPSTREAM` (по умолчанию `host.docker.internal:8080`).
 
-Перед запуском убедитесь, что у DNS есть запись `A/AAAA` для `contract.legalaipro.ru`, а upstream доступен из контейнера `caddy`.
+Перед запуском убедитесь, что у DNS есть запись `A/AAAA` для `contract.ai-verdict.ru`, а upstream доступен из контейнера `caddy`.
 - доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:
   - `discover`, `validate`, `solutions`, `profile`, `search`;
   - `miniapp_content`, `miniapp_tools`, `miniapp_solutions`, `miniapp_profile`.

@@ -9,7 +9,7 @@ import { ROUTES } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Mini App",
-  description: "Мини-приложение Legal AI PRO: контент, инструменты, решения и персональный контур.",
+  description: "Мини-приложение AI Verdict: контент, инструменты, решения и персональный контур.",
 };
 
 export default function MiniAppLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +23,7 @@ export default function MiniAppLayout({ children }: { children: React.ReactNode 
           <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Legal AI PRO</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">AI Verdict</p>
                 <h1 className="text-lg font-semibold text-white">Mini App</h1>
               </div>
               <Link

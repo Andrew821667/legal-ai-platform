@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/services/custom-ai",
   },
   openGraph: {
-    title: "Кастомные AI-решения для юротдела | Legal AI PRO",
+    title: "Кастомные AI-решения для юротдела | AI Verdict",
     description:
       "Создаем AI-инструменты под ваши процессы, а не под шаблонный рынок.",
     url: "/services/custom-ai",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Кастомные AI-решения для юротдела | Legal AI PRO",
+    title: "Кастомные AI-решения для юротдела | AI Verdict",
     description:
       "Создаем AI-инструменты под ваши процессы, а не под шаблонный рынок.",
   },
