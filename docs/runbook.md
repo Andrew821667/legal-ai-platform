@@ -47,6 +47,7 @@ CORE_API_BIND_HOST=127.0.0.1
 CORE_API_PUBLISH_PORT=8100
 CORE_API_DOCKER_URL=http://legal-ai-core-api:8000
 CORE_API_HOST_URL=http://127.0.0.1:8100
+COMPOSE_PROJECT=compose
 ```
 
 Если bot-compose живет отдельным файлом, он должен быть подключен к той же docker network, где находится `legal-ai-core-api`, и использовать `CORE_API_URL=http://legal-ai-core-api:8000` внутри контейнеров ботов.

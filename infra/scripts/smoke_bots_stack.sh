@@ -12,6 +12,7 @@ if [ -f ".env" ]; then
 fi
 
 COMPOSE_FILE="${SMOKE_COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"
 CORE_API_URL="${SMOKE_CORE_API_URL:-${CORE_API_HOST_URL:-${CORE_API_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}}"
 API_KEY_ADMIN="${API_KEY_ADMIN:-}"
 SMOKE_BUILD="${SMOKE_BUILD:-1}"
@@ -67,15 +68,24 @@ if [ "${#SERVICES[@]}" -eq 0 ]; then
   exit 1
 fi
 
+if [ -n "$COMPOSE_PROJECT" ]; then
+  COMPOSE=(docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE")
+else
+  COMPOSE=(docker compose -f "$COMPOSE_FILE")
+fi
+
 echo "[1/9] Compose file: ${COMPOSE_FILE}"
+if [ -n "$COMPOSE_PROJECT" ]; then
+  echo "Compose project: ${COMPOSE_PROJECT}"
+fi
 echo "Services: ${SERVICES[*]}"
 
 if [ "${SMOKE_SKIP_UP}" != "1" ]; then
   echo "[2/9] Starting services..."
   if [ "${SMOKE_BUILD}" = "1" ]; then
-    docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICES[@]}"
+    "${COMPOSE[@]}" up -d --build "${SERVICES[@]}"
   else
-    docker compose -f "${COMPOSE_FILE}" up -d "${SERVICES[@]}"
+    "${COMPOSE[@]}" up -d "${SERVICES[@]}"
   fi
 else
   echo "[2/9] Skipping compose up (SMOKE_SKIP_UP=1)"
@@ -93,11 +103,11 @@ done
 echo "OK: core-api health is up"
 
 echo "[4/9] Checking required services are running..."
-running_services="$(docker compose -f "${COMPOSE_FILE}" ps --status running --services)"
+running_services="$("${COMPOSE[@]}" ps --status running --services)"
 for svc in "${SERVICES[@]}"; do
   if ! printf '%s\n' "${running_services}" | grep -Fx "${svc}" >/dev/null; then
     echo "ERROR: service not running: ${svc}"
-    docker compose -f "${COMPOSE_FILE}" ps
+    "${COMPOSE[@]}" ps
     exit 1
   fi
 done
@@ -134,7 +144,7 @@ fi
 echo "[9/9] Checking recent logs for critical startup/runtime issues..."
 declare -a LOG_SERVICES=("lead-bot" "news-admin-bot" "news-reader-bot" "news-generate" "news-telegram-ingest" "news-publish" "news-reader-digest")
 for svc in "${LOG_SERVICES[@]}"; do
-  logs="$(docker compose -f "${COMPOSE_FILE}" logs --since "${SMOKE_LOG_SINCE}" --tail=300 "${svc}" || true)"
+  logs="$("${COMPOSE[@]}" logs --since "${SMOKE_LOG_SINCE}" --tail=300 "${svc}" || true)"
   if echo "${logs}" | grep -Eqi "NameResolutionError|Connection refused|Failed to establish a new connection|401 Client Error|Unauthorized|Conflict: terminated by other getUpdates request|Network is unreachable"; then
     echo "ERROR: critical log pattern found in ${svc} (last ${SMOKE_LOG_SINCE})"
     echo "----- ${svc} logs tail -----"
