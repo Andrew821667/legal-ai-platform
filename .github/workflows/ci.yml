@@ -139,6 +139,12 @@ jobs:
             dockerfile: apps/core-api/Dockerfile
           - image_name: lead-bot
             dockerfile: apps/lead-bot/legacy/Dockerfile
+          - image_name: web
+            dockerfile: apps/web/Dockerfile
+          - image_name: news
+            dockerfile: apps/news/Dockerfile
+          - image_name: news-reader
+            dockerfile: apps/news/legacy/Dockerfile.reader
     steps:
       - uses: actions/checkout@v6
       - id: image_owner
@@ -156,3 +162,47 @@ jobs:
           tags: |
             ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-${{ matrix.image_name }}:latest
             ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-${{ matrix.image_name }}:${{ github.sha }}
+
+  deploy-macmini:
+    needs: [build-and-push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_MACMINI_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Sync deploy files
+        env:
+          MACMINI_HOST: ${{ vars.MACMINI_TAILSCALE_HOST }}
+        run: |
+          set -euo pipefail
+          : "${MACMINI_HOST:?Set MACMINI_TAILSCALE_HOST, for example 100.78.58.52}"
+          ssh -o StrictHostKeyChecking=accept-new legalai@"$MACMINI_HOST" \
+            "cd /Users/legalai/projects/legal-ai-platform && git pull --ff-only origin main"
+          scp docker-compose.bots.yml aiwork@"$MACMINI_HOST":/Users/aiwork/legal-ai-platform/docker-compose.bots.yml
+
+      - id: image_owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy on Mac Mini
+        env:
+          MACMINI_HOST: ${{ vars.MACMINI_TAILSCALE_HOST }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          IMAGE_OWNER: ${{ steps.image_owner.outputs.value }}
+          CORE_API_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-core-api:${{ github.sha }}
+          WEB_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-web:${{ github.sha }}
+          LEAD_BOT_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-lead-bot:${{ github.sha }}
+          NEWS_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-news:${{ github.sha }}
+          NEWS_READER_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-news-reader:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=accept-new andrej@"$MACMINI_HOST" \
+            "GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' CORE_API_IMAGE='$CORE_API_IMAGE' WEB_IMAGE='$WEB_IMAGE' LEAD_BOT_IMAGE='$LEAD_BOT_IMAGE' NEWS_IMAGE='$NEWS_IMAGE' NEWS_READER_IMAGE='$NEWS_READER_IMAGE' PUBLIC_APP_DIR=/Users/legalai/projects/legal-ai-platform BOT_APP_DIR=/Users/aiwork/legal-ai-platform /Users/legalai/projects/legal-ai-platform/infra/scripts/deploy_macmini.sh"

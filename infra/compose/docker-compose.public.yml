@@ -1,0 +1,145 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: legal-ai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c effective_cache_size=1GB
+      -c max_connections=30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legalai_app} -d ${POSTGRES_DB:-legalai_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+    memswap_limit: 1g
+    restart: unless-stopped
+
+  core-api:
+    image: ${CORE_API_IMAGE:-legal-ai-core-api:local}
+    build:
+      context: ../..
+      dockerfile: apps/core-api/Dockerfile
+    container_name: legal-ai-core-api
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://ai-verdict.ru,http://localhost:3000}
+      MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://ai-verdict.ru}
+      CORE_API_WORKERS: ${CORE_API_WORKERS:-4}
+      TZ: ${TZ:-Europe/Moscow}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      default:
+        aliases:
+          - legal-ai-core-api
+    ports:
+      - "${CORE_API_BIND_HOST:-127.0.0.1}:${CORE_API_PUBLISH_PORT:-8100}:8000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').getcode() == 200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+    memswap_limit: 512m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  web:
+    image: ${WEB_IMAGE:-compose-web}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    container_name: legal-ai-web
+    env_file:
+      - ../../.env
+    environment:
+      CORE_API_URL: ${CORE_API_DOCKER_URL:-http://legal-ai-core-api:8000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ai-verdict.ru}
+      ADMIN_SECURITY_STORE_PATH: ${ADMIN_SECURITY_STORE_PATH:-/app/data/web-admin-security.json}
+      TZ: ${TZ:-Europe/Moscow}
+    depends_on:
+      core-api:
+        condition: service_healthy
+    volumes:
+      - web_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    mem_limit: 384m
+    memswap_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: legal-ai-caddy
+    environment:
+      CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.ai-verdict.ru}
+      CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${CADDY_LOCAL_HTTP_PORT:-8088}:8088"
+    volumes:
+      - ${CADDYFILE_PATH:-../caddy/Caddyfile.tunnel}:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      core-api:
+        condition: service_healthy
+    mem_limit: 128m
+    memswap_limit: 128m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  postgres_data:
+  web_data:
+  caddy_data:
+  caddy_config:

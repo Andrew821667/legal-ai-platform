@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     reader_bot_token: str = Field(default="")
     reader_bot_username: str = Field(default="legal_ai_news_reader_bot")
     news_helper_bot_username: str = Field(default="legal_ai_helper_new_bot")
-    reader_miniapp_base_url: str = Field(default="https://ai-verdict.ru/miniapp")
+    reader_miniapp_base_url: str = Field(default="https://ai-verdict.ru")
     reader_contract_ai_url: str = Field(default="https://contract.ai-verdict.ru")
     reader_for_lawyers_url: str = Field(default="https://ai-verdict.ru/for-lawyers")
     reader_for_business_url: str = Field(default="https://ai-verdict.ru/for-business")
