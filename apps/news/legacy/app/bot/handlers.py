@@ -2951,9 +2951,10 @@ async def callback_settings_budget(callback: CallbackQuery, db: AsyncSession):
 # ====================
 
 @router.callback_query(F.data == "show_personal_posts")
-async def callback_show_personal_posts(callback: CallbackQuery, db: AsyncSession):
+async def callback_show_personal_posts(callback: CallbackQuery, state: FSMContext, db: AsyncSession):
     """Показать меню личных постов."""
     await callback.answer()
+    await state.clear()
 
     from app.modules.personal_posts_manager import get_user_posts
 
@@ -2987,9 +2988,10 @@ async def callback_show_personal_posts(callback: CallbackQuery, db: AsyncSession
 
 
 @router.callback_query(F.data == "create_personal_post")
-async def callback_create_personal_post(callback: CallbackQuery):
+async def callback_create_personal_post(callback: CallbackQuery, state: FSMContext):
     """Выбор способа создания поста."""
     await callback.answer()
+    await state.clear()
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Написать самостоятельно", callback_data="post_manual")],
@@ -3020,18 +3022,51 @@ class PersonalPostStates(StatesGroup):
     waiting_comment = State()
 
 
+PERSONAL_POST_ENRICH_TIMEOUT_SECONDS = 25
+
+
+@router.message(PersonalPostStates.waiting_manual_text, Command("cancel"))
+@router.message(PersonalPostStates.waiting_ai_ideas, Command("cancel"))
+@router.message(PersonalPostStates.waiting_ai_feedback, Command("cancel"))
+@router.message(PersonalPostStates.waiting_voice, Command("cancel"))
+@router.message(PersonalPostStates.waiting_edit_text, Command("cancel"))
+@router.message(PersonalPostStates.waiting_comment, Command("cancel"))
+async def cancel_personal_post_flow(message: Message, state: FSMContext):
+    """Отменить создание/редактирование личной заметки."""
+    await state.clear()
+    await message.answer("❌ Действие отменено.", reply_markup=get_main_menu_keyboard())
+
+
+@router.callback_query(F.data == "personal_post_cancel")
+async def callback_personal_post_cancel(callback: CallbackQuery, state: FSMContext):
+    """Отменить создание/редактирование личной заметки кнопкой."""
+    await state.clear()
+    await callback.message.edit_text(
+        "❌ Действие отменено.",
+        reply_markup=get_main_menu_keyboard()
+    )
+    await callback.answer("Отменено")
+
+
 @router.callback_query(F.data == "post_manual")
 async def callback_post_manual(callback: CallbackQuery, state: FSMContext):
     """Начать создание поста вручную."""
     await callback.answer()
 
+    await state.clear()
     await state.set_state(PersonalPostStates.waiting_manual_text)
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отменить", callback_data="personal_post_cancel")],
+    ])
 
     await callback.message.edit_text(
         "📝 <b>Написать заметку</b>\n\n"
         "Напишите текст вашей заметки. Можно использовать Markdown форматирование.\n\n"
-        "Отправьте текст сообщением, и я сохраню его.",
-        parse_mode="HTML"
+        "Отправьте текст сообщением, и я сохраню его.\n\n"
+        "Для отмены отправьте /cancel.",
+        parse_mode="HTML",
+        reply_markup=keyboard
     )
 
 
@@ -3040,7 +3075,14 @@ async def process_manual_post(message: Message, state: FSMContext, db: AsyncSess
     """Обработать текст ручного поста."""
     from app.modules.personal_posts_manager import create_personal_post, enrich_post_with_metadata
 
-    content = message.text
+    content = (message.text or "").strip()
+    if not content:
+        await message.answer("❌ Отправьте текст заметки или /cancel для отмены.")
+        return
+    if content.startswith("/"):
+        await state.clear()
+        await message.answer("❌ Создание заметки сброшено.", reply_markup=get_main_menu_keyboard())
+        return
 
     # Показываем индикатор typing
     await message.bot.send_chat_action(message.chat.id, "typing")
@@ -3052,12 +3094,17 @@ async def process_manual_post(message: Message, state: FSMContext, db: AsyncSess
         db=db,
         creation_method="manual"
     )
+    await db.commit()
+    await state.clear()
 
     # Обогащаем метаданными в фоне
-    await message.answer("⏳ Сохраняю и анализирую вашу заметку...")
+    await message.answer("✅ Заметка сохранена. Анализирую теги и категорию...")
 
     try:
-        await enrich_post_with_metadata(post, db)
+        await asyncio.wait_for(
+            enrich_post_with_metadata(post, db),
+            timeout=PERSONAL_POST_ENRICH_TIMEOUT_SECONDS,
+        )
 
         tags_str = ", ".join(post.tags[:5]) if post.tags else "нет"
 
@@ -3077,15 +3124,21 @@ async def process_manual_post(message: Message, state: FSMContext, db: AsyncSess
             reply_markup=keyboard
         )
 
+    except TimeoutError:
+        logger.warning("post_enrichment_timeout", post_id=post.id)
+        await message.answer(
+            f"✅ Заметка сохранена (ID: {post.id}).\n\n"
+            "⚠️ Анализ тегов занял слишком много времени, поэтому я не держу диалог в ожидании.",
+            reply_markup=get_main_menu_keyboard()
+        )
     except Exception as e:
         logger.error("post_enrichment_failed", error=str(e))
+        await db.rollback()
         await message.answer(
             f"✅ Заметка сохранена (ID: {post.id})\n\n"
             "⚠️ Не удалось проанализировать автоматически, но данные сохранены.",
             reply_markup=get_main_menu_keyboard()
         )
-
-    await state.clear()
 
 
 @router.callback_query(F.data == "post_ai_assisted")
@@ -3858,12 +3911,18 @@ async def callback_edit_post(callback: CallbackQuery, state: FSMContext, db: Asy
     await state.update_data(editing_post_id=post_id)
     await state.set_state(PersonalPostStates.waiting_edit_text)
 
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отменить", callback_data="personal_post_cancel")],
+    ])
+
     await callback.message.edit_text(
         f"✏️ <b>Редактирование заметки</b>\n\n"
         f"<b>Текущий текст:</b>\n{post.content}\n\n"
         f"{'─' * 30}\n\n"
-        f"Отправьте новый текст сообщением. Я заменю содержимое заметки и обновлю теги.",
-        parse_mode="HTML"
+        f"Отправьте новый текст сообщением. Я заменю содержимое заметки и обновлю теги.\n\n"
+        f"Для отмены отправьте /cancel.",
+        parse_mode="HTML",
+        reply_markup=keyboard
     )
     await callback.answer()
 
@@ -3872,6 +3931,15 @@ async def callback_edit_post(callback: CallbackQuery, state: FSMContext, db: Asy
 async def process_edit_post(message: Message, state: FSMContext, db: AsyncSession):
     """Обработать отредактированный текст."""
     from app.modules.personal_posts_manager import enrich_post_with_metadata
+
+    new_content = (message.text or "").strip()
+    if not new_content:
+        await message.answer("❌ Отправьте новый текст заметки или /cancel для отмены.")
+        return
+    if new_content.startswith("/"):
+        await state.clear()
+        await message.answer("❌ Редактирование сброшено.", reply_markup=get_main_menu_keyboard())
+        return
 
     # Получаем ID редактируемого поста из FSM
     data = await state.get_data()
@@ -3897,16 +3965,21 @@ async def process_edit_post(message: Message, state: FSMContext, db: AsyncSessio
         return
 
     # Обновляем контент
-    post.content = message.text
+    post.content = new_content
     post.updated_at = datetime.utcnow()
+    await db.commit()
+    await state.clear()
 
     # Показываем индикатор typing
     await message.bot.send_chat_action(message.chat.id, "typing")
-    await message.answer("⏳ Обновляю заметку и перегенерирую теги...")
+    await message.answer("✅ Заметка сохранена. Обновляю теги и категорию...")
 
     try:
         # Обогащаем метаданными заново
-        await enrich_post_with_metadata(post, db)
+        await asyncio.wait_for(
+            enrich_post_with_metadata(post, db),
+            timeout=PERSONAL_POST_ENRICH_TIMEOUT_SECONDS,
+        )
 
         tags_str = ", ".join(post.tags[:5]) if post.tags else "нет"
 
@@ -3925,14 +3998,25 @@ async def process_edit_post(message: Message, state: FSMContext, db: AsyncSessio
             reply_markup=keyboard
         )
 
+    except TimeoutError:
+        logger.warning("post_edit_enrichment_timeout", post_id=post.id)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="👁 Посмотреть заметку", callback_data=f"view_post:{post.id}")],
+            [InlineKeyboardButton(text="📋 К списку заметок", callback_data="list_personal_posts")],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main_menu")]
+        ])
+        await message.answer(
+            "✅ Заметка обновлена.\n\n"
+            "⚠️ Анализ тегов занял слишком много времени, поэтому я не держу диалог в ожидании.",
+            reply_markup=keyboard
+        )
     except Exception as e:
         logger.error("post_edit_enrichment_error", error=str(e), post_id=post.id)
+        await db.rollback()
         await message.answer(
             f"⚠️ Заметка обновлена, но не удалось обогатить метаданными.\n\nОшибка: {str(e)}",
             parse_mode="HTML"
         )
-
-    await state.clear()
 
 
 @router.callback_query(F.data == "noop")
@@ -3942,9 +4026,10 @@ async def callback_noop(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == "back_to_main_menu")
-async def callback_back_to_main_menu(callback: CallbackQuery):
+async def callback_back_to_main_menu(callback: CallbackQuery, state: FSMContext):
     """Вернуться в главное меню."""
     await callback.answer()
+    await state.clear()
 
     await callback.message.edit_text(
         "🏠 <b>Главное меню</b>\n\n"
