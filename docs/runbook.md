@@ -48,9 +48,17 @@ CORE_API_PUBLISH_PORT=8100
 CORE_API_DOCKER_URL=http://legal-ai-core-api:8000
 CORE_API_HOST_URL=http://127.0.0.1:8100
 COMPOSE_PROJECT=compose
+MINIAPP_PUBLIC_BASE_URL=https://ai-verdict.ru
+READER_MINIAPP_BASE_URL=https://ai-verdict.ru
 ```
 
 Если bot-compose живет отдельным файлом, он должен быть подключен к той же docker network, где находится `legal-ai-core-api`, и использовать `CORE_API_URL=http://legal-ai-core-api:8000` внутри контейнеров ботов.
+
+CI/CD:
+- GitHub Actions собирает runtime-образы в GHCR: `core-api`, `web`, `lead-bot`, `news`, `news-reader`;
+- на Mac Mini в `.env` должны быть заданы `CORE_API_IMAGE`, `WEB_IMAGE`, `LEAD_BOT_IMAGE`, `NEWS_IMAGE`, `NEWS_READER_IMAGE`;
+- если GHCR package остается private, Mac Mini должен быть заранее залогинен в `ghcr.io` или запускать `infra/scripts/deploy_macmini.sh` с `GHCR_USERNAME`/`GHCR_TOKEN`;
+- деплой из GitHub Actions включается только при `ENABLE_MACMINI_DEPLOY=true` и настроенных Tailscale OAuth secrets.
 
 Проверка после деплоя:
 ```bash
@@ -58,9 +66,12 @@ infra/scripts/macmini_deploy_check.sh
 ```
 
 DNS/Cloudflare:
-- если домен еще не активировался в Cloudflare, сначала проверить `dig ai-verdict.ru DS @a.dns.ripn.net +short`;
-- пока DS-запись есть в реестре `.ru`, Cloudflare-зона может оставаться pending даже при правильных NS;
-- после удаления DS проверить apex, `www` и `contract` уже на целевом домене.
+- целевая зона: `ai-verdict.ru`;
+- сайт и mini-app используют base `https://ai-verdict.ru`, mini-app живет на маршрутах `/miniapp...`;
+- Contract_AI_System использует тот же зарегистрированный домен через поддомен `contract.ai-verdict.ru`;
+- если используется Cloudflare Tunnel, в регистраторе нужно перевести NS домена на nameservers Cloudflare и убрать конфликтующие DNSSEC/DS записи;
+- если домен остается на DNS Рег.ру, нужно вручную создать записи для apex, `www` и `contract` на выбранный публичный вход; Cloudflare Tunnel без Cloudflare DNS требует отдельной CNAME/ALIAS-схемы у регистратора;
+- проверка: `dig ai-verdict.ru NS +short`, `dig ai-verdict.ru A +short`, `dig www.ai-verdict.ru A +short`, `dig contract.ai-verdict.ru A +short`.
 
 Безопасность:
 - реальные значения токенов, API-ключей, DB password и tunnel token не должны попадать в git или runbook;
@@ -408,7 +419,7 @@ python -u -m app.reader_bot
 
 Для `caddy` в `docker-compose.prod.yml` предусмотрены env:
 - `CONTRACT_DOMAIN` (по умолчанию `contract.ai-verdict.ru`);
-- `CONTRACT_AI_UPSTREAM` (по умолчанию `host.docker.internal:8080`).
+- `CONTRACT_AI_UPSTREAM` (по умолчанию `host.docker.internal:3000`).
 
 Перед запуском убедитесь, что у DNS есть запись `A/AAAA` для `contract.ai-verdict.ru`, а upstream доступен из контейнера `caddy`.
 - доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:

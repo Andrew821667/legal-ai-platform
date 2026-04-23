@@ -1,0 +1,171 @@
+services:
+  lead-bot:
+    image: ${LEAD_BOT_IMAGE:-legal-ai-lead-bot:local}
+    container_name: aiwork-lead-bot
+    env_file:
+      - .env
+    environment:
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TZ: ${TZ:-Europe/Moscow}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - lead_bot_data:/app/data
+      - lead_bot_logs:/app/logs
+    networks:
+      - legalai_net
+    mem_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-generate:
+    image: ${NEWS_IMAGE:-compose-news-generate:latest}
+    container_name: aiwork-news-generate
+    env_file:
+      - .env
+    environment:
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
+      NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      uv run --package news python -m news.generate_loop
+    volumes:
+      - news_data:/app/data
+    networks:
+      - legalai_net
+    mem_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-telegram-ingest:
+    image: ${NEWS_IMAGE:-compose-news-telegram-ingest:latest}
+    container_name: aiwork-news-telegram-ingest
+    env_file:
+      - .env
+    environment:
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
+      NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      uv run --package news python -m news.telegram_ingest_loop
+    volumes:
+      - news_data:/app/data
+    networks:
+      - legalai_net
+    mem_limit: 320m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-publish:
+    image: ${NEWS_IMAGE:-compose-news-publish:latest}
+    container_name: aiwork-news-publish
+    env_file:
+      - .env
+    environment:
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TZ: ${TZ:-Europe/Moscow}
+    command: >
+      uv run --package news python -m news.publish_loop
+    networks:
+      - legalai_net
+    mem_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-admin-bot:
+    image: ${NEWS_IMAGE:-compose-news-admin-bot:latest}
+    container_name: aiwork-news-admin-bot
+    env_file:
+      - .env
+    environment:
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["uv", "run", "python", "-m", "news.admin_bot"]
+    networks:
+      - legalai_net
+    mem_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-reader-bot:
+    image: ${NEWS_READER_IMAGE:-compose-news-reader-bot:latest}
+    container_name: aiwork-news-reader-bot
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@legal-ai-postgres:5432/${POSTGRES_DB:-legalai_platform}
+      POSTGRES_HOST: legal-ai-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["python", "-u", "-m", "app.reader_bot"]
+    networks:
+      - legalai_net
+    mem_limit: 384m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  news-reader-digest:
+    image: ${NEWS_READER_IMAGE:-compose-news-reader-digest:latest}
+    container_name: aiwork-news-reader-digest
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@legal-ai-postgres:5432/${POSTGRES_DB:-legalai_platform}
+      POSTGRES_HOST: legal-ai-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-legalai_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-legalai_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_local_only}
+      CORE_API_URL: http://legal-ai-core-api:8000
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["python", "-u", "-m", "app.reader_digest_loop"]
+    networks:
+      - legalai_net
+    mem_limit: 320m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  lead_bot_data:
+  lead_bot_logs:
+  news_data:
+
+networks:
+  legalai_net:
+    external: true
+    name: compose_default

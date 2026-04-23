@@ -13,12 +13,10 @@ import logging
 from typing import Any
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
-from core_api.db import get_db
 from core_api.models import Scope
 
 logger = logging.getLogger(__name__)
@@ -108,7 +106,7 @@ def contract_ai_sso(
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except requests.RequestException as e:
         logger.error("Contract AI SSO failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}")
+        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}") from e
 
 
 # ─── POST /analyze ───────────────────────────────────────────
@@ -149,7 +147,7 @@ def contract_ai_analyze(
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except requests.RequestException as e:
         logger.error("Contract AI analyze failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}")
+        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}") from e
 
 
 # ─── GET /progress/{job_id} ─────────────────────────────────
@@ -177,7 +175,7 @@ def contract_ai_progress(
             return resp.json()
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except requests.RequestException as e:
-        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}")
+        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}") from e
 
 
 # ─── GET /result/{job_id} ───────────────────────────────────
@@ -205,7 +203,7 @@ def contract_ai_result(
             return resp.json()
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except requests.RequestException as e:
-        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}")
+        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}") from e
 
 
 # ─── GET /result/{job_id}/summary ────────────────────────────
@@ -233,4 +231,4 @@ def contract_ai_summary(
             return resp.json()
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     except requests.RequestException as e:
-        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}")
+        raise HTTPException(status_code=503, detail=f"Contract AI unreachable: {e}") from e

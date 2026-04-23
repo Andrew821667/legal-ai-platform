@@ -1,4 +1,4 @@
-.PHONY: lint lint-full test dev prod deploy integration-test smoke-bots seed backup logs
+.PHONY: lint lint-full test dev prod deploy deploy-macmini integration-test smoke-bots seed backup logs
 
 lint:
 	uv run ruff check apps/ packages/ --select F,B904,B905,UP031
@@ -22,6 +22,9 @@ prod:
 
 deploy:
 	./infra/scripts/deploy.sh
+
+deploy-macmini:
+	./infra/scripts/deploy_macmini.sh
 
 integration-test:
 	./infra/scripts/integration_test.sh

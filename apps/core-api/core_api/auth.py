@@ -3,8 +3,9 @@ from __future__ import annotations
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select, update
@@ -34,6 +35,7 @@ class ActiveApiKeyRecord:
 class ActiveApiKeyCache:
     def __init__(self) -> None:
         self._items: list[ActiveApiKeyRecord] = []
+        self._verified_keys: dict[str, ApiKeyIdentity] = {}
         self._last_refresh: float = 0.0
         self._lock = threading.Lock()
 
@@ -52,12 +54,25 @@ class ActiveApiKeyCache:
                         ActiveApiKeyRecord(id=row.id, key_hash=row.key_hash, scope=row.scope, name=row.name)
                         for row in rows
                     ]
+                    self._verified_keys.clear()
                     self._last_refresh = time.time()
         return self._items
+
+    def get_verified(self, raw_key: str) -> ApiKeyIdentity | None:
+        return self._verified_keys.get(self._fingerprint(raw_key))
+
+    def remember_verified(self, raw_key: str, identity: ApiKeyIdentity) -> None:
+        with self._lock:
+            self._verified_keys[self._fingerprint(raw_key)] = identity
 
     def invalidate(self) -> None:
         with self._lock:
             self._last_refresh = 0.0
+            self._verified_keys.clear()
+
+    @staticmethod
+    def _fingerprint(raw_key: str) -> str:
+        return sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 cache = ActiveApiKeyCache()
@@ -72,16 +87,28 @@ def get_api_key_identity(request: Request, db: Session = Depends(get_db)) -> Api
     if not raw_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-API-Key")
 
+    cached_identity = cache.get_verified(raw_key)
+    if cached_identity is not None:
+        db.execute(
+            update(ApiKey)
+            .where(ApiKey.id == cached_identity.id)
+            .values(last_used_at=datetime.now(timezone.utc))
+        )
+        db.commit()
+        return cached_identity
+
     active_keys = cache.get_items(db)
     for row in active_keys:
         if verify_api_key(raw_key, row.key_hash):
+            identity = ApiKeyIdentity(id=row.id, scope=row.scope, name=row.name)
+            cache.remember_verified(raw_key, identity)
             db.execute(
                 update(ApiKey)
                 .where(ApiKey.id == row.id)
                 .values(last_used_at=datetime.now(timezone.utc))
             )
             db.commit()
-            return ApiKeyIdentity(id=row.id, scope=row.scope, name=row.name)
+            return identity
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 

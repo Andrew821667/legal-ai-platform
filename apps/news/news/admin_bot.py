@@ -203,6 +203,19 @@ _STATE_PENDING_DAY_PUBLISH_REASON = "pending_day_publish_reason"
 _STATE_DRAFT_DAY_PUBLISH = "draft_day_publish"
 _STATE_GENERATION_PREVIEWS = "generation_previews"
 _STATE_PENDING_DELETE_REASON = "pending_delete_reason"
+_TEXT_FLOW_STATES = (
+    _STATE_PENDING_EDIT,
+    _STATE_DRAFT_EDIT,
+    _STATE_PENDING_PUBLISH_REASON,
+    _STATE_DRAFT_PUBLISH,
+    _STATE_PENDING_BATCH_PUBLISH_REASON,
+    _STATE_DRAFT_BATCH_PUBLISH,
+    _STATE_PENDING_CREATE,
+    _STATE_DRAFT_CREATE,
+    _STATE_PENDING_DAY_PUBLISH_REASON,
+    _STATE_DRAFT_DAY_PUBLISH,
+    _STATE_PENDING_DELETE_REASON,
+)
 _CREATE_EDIT_STEPS = {"edit_title", "edit_text", "edit_source", "edit_link", "edit_ai"}
 _POST_LIST_STATUSES = ("draft", "review", "ready", "scheduled", "posted", "failed")
 _MANUAL_QUEUE_FILTERS = ("due", "all")
@@ -1476,6 +1489,9 @@ class NewsAdminBot:
                     await query.message.reply_text(text, reply_markup=reply_markup)
                     return True
             raise
+
+    def _clear_text_flow_states(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        clear_context_states(context.user_data, _TEXT_FLOW_STATES)
 
     async def _show_status_scope_message(
         self,
@@ -5302,21 +5318,9 @@ class NewsAdminBot:
             )
 
     async def cmd_new_post(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        _ = context
         if not await self._ensure_admin(update):
             return
-        context.user_data.pop(_STATE_PENDING_EDIT, None)
-        context.user_data.pop(_STATE_DRAFT_EDIT, None)
-        context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
-        context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
-        context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
-        context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
-        context.user_data.pop(_STATE_PENDING_CREATE, None)
-        draft = context.user_data.get(_STATE_DRAFT_CREATE)
-        if draft:
-            await self._show_create_draft(update.effective_message, draft)
-            return
-        context.user_data.pop(_STATE_DRAFT_CREATE, None)
+        self._clear_text_flow_states(context)
         await self._show_create_start(update)
 
     async def cmd_sections(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -5396,16 +5400,7 @@ class NewsAdminBot:
     async def cmd_cancel_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_admin(update):
             return
-        context.user_data.pop(_STATE_PENDING_EDIT, None)
-        context.user_data.pop(_STATE_DRAFT_EDIT, None)
-        context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
-        context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
-        context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
-        context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
-        context.user_data.pop(_STATE_PENDING_CREATE, None)
-        context.user_data.pop(_STATE_DRAFT_CREATE, None)
-        context.user_data.pop(_STATE_PENDING_DAY_PUBLISH_REASON, None)
-        context.user_data.pop(_STATE_DRAFT_DAY_PUBLISH, None)
+        self._clear_text_flow_states(context)
         await update.effective_message.reply_text(
             "Режимы редактирования/создания/публикации отменены.",
             reply_markup=_main_menu_markup(),
@@ -5602,8 +5597,7 @@ class NewsAdminBot:
 
         try:
             if data == "cn:start":
-                context.user_data.pop(_STATE_PENDING_CREATE, None)
-                context.user_data.pop(_STATE_DRAFT_CREATE, None)
+                self._clear_text_flow_states(context)
                 await self._safe_edit_message_text(
                     query,
                     "Создание нового поста\n\n"
@@ -5613,8 +5607,8 @@ class NewsAdminBot:
                 return
 
             if data == "cn:manual":
+                self._clear_text_flow_states(context)
                 context.user_data[_STATE_PENDING_CREATE] = {"mode": "manual", "step": "kind"}
-                context.user_data.pop(_STATE_DRAFT_CREATE, None)
                 await self._safe_edit_message_text(
                     query,
                     "Новый пост: шаг 1 из 5\n\n"
@@ -5624,8 +5618,8 @@ class NewsAdminBot:
                 return
 
             if data == "cn:ai":
+                self._clear_text_flow_states(context)
                 context.user_data[_STATE_PENDING_CREATE] = {"mode": "ai", "step": "kind"}
-                context.user_data.pop(_STATE_DRAFT_CREATE, None)
                 await self._safe_edit_message_text(
                     query,
                     "Новый пост через LLM: шаг 1 из 5\n\n"
@@ -5635,8 +5629,8 @@ class NewsAdminBot:
                 return
 
             if data == "cn:transcript":
+                self._clear_text_flow_states(context)
                 context.user_data[_STATE_PENDING_CREATE] = {"mode": "transcript", "step": "kind"}
-                context.user_data.pop(_STATE_DRAFT_CREATE, None)
                 await self._safe_edit_message_text(
                     query,
                     "Новый пост из транскриба: шаг 1 из 5\n\n"
@@ -5820,8 +5814,7 @@ class NewsAdminBot:
                 return
 
             if data == "cn:cancel":
-                context.user_data.pop(_STATE_PENDING_CREATE, None)
-                context.user_data.pop(_STATE_DRAFT_CREATE, None)
+                self._clear_text_flow_states(context)
                 controls = self._load_controls(force_refresh=True)
                 counts, _ = await self._queue_snapshot()
                 await self._safe_edit_message_text(
@@ -7408,40 +7401,32 @@ class NewsAdminBot:
 
             if data.startswith("pm:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                self._clear_text_flow_states(context)
                 context.user_data[_STATE_PENDING_EDIT] = {
                     "post_id": post_id,
                     "mode": "manual",
                     "offset": int(offset_raw),
                     "status": status,
                 }
-                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
-                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
-                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
-                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
-                context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Пришлите новый текст поста одним сообщением.\n"
-                    "Команда /cancel_edit — отмена."
+                    "Команды /cancel или /cancel_edit — отмена."
                 )
                 return
 
             if data.startswith("pa:"):
                 _, post_id, status, offset_raw = data.split(":", maxsplit=3)
+                self._clear_text_flow_states(context)
                 context.user_data[_STATE_PENDING_EDIT] = {
                     "post_id": post_id,
                     "mode": "ai",
                     "offset": int(offset_raw),
                     "status": status,
                 }
-                context.user_data.pop(_STATE_PENDING_PUBLISH_REASON, None)
-                context.user_data.pop(_STATE_DRAFT_PUBLISH, None)
-                context.user_data.pop(_STATE_PENDING_BATCH_PUBLISH_REASON, None)
-                context.user_data.pop(_STATE_DRAFT_BATCH_PUBLISH, None)
-                context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 await query.message.reply_text(
                     "Напишите инструкцию для LLM-редактирования.\n"
                     "Пример: «Сделай короче, добавь более сильный CTA и оставь юридические риски».\n"
-                    "Команда /cancel_edit — отмена."
+                    "Команды /cancel или /cancel_edit — отмена."
                 )
                 return
 
@@ -7511,6 +7496,18 @@ class NewsAdminBot:
             return
 
         message_text = (update.effective_message.text or "").strip()
+        normalized_text = _normalize_button_text(message_text).lower()
+        if message_text in {"/cancel", "/cancel_edit"} or normalized_text in {"отмена", "отменить", "cancel"}:
+            await self.cmd_cancel_edit(update, context)
+            return
+        if _button_text_equals(message_text, _MAIN_MENU_CREATE) or _button_text_equals(message_text, "➕ Создать"):
+            await self.cmd_new_post(update, context)
+            return
+        if _button_text_equals(message_text, _MAIN_MENU_WORKSPACE):
+            self._clear_text_flow_states(context)
+            await self.cmd_panel(update, context)
+            return
+
         pending_day_publish_reason = context.user_data.get(_STATE_PENDING_DAY_PUBLISH_REASON)
         if pending_day_publish_reason:
             reason = _normalize_operator_note(message_text)
@@ -7967,6 +7964,7 @@ class NewsAdminBot:
         app.add_handler(CommandHandler("posts", self.cmd_posts))
         app.add_handler(CommandHandler("queue", self.cmd_queue))
         app.add_handler(CommandHandler("workers", self.cmd_workers))
+        app.add_handler(CommandHandler("cancel", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("cancel_edit", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("help", self.cmd_help))
         app.add_handler(
