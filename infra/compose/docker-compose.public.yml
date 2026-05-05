@@ -79,6 +79,10 @@ services:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL: ${NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL}
+        NEXT_PUBLIC_CORE_API_URL: ${NEXT_PUBLIC_CORE_API_URL:-https://ai-verdict.ru}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ai-verdict.ru}
     container_name: legal-ai-web
     env_file:
       - ../../.env
@@ -114,14 +118,18 @@ services:
     image: caddy:2-alpine
     container_name: legal-ai-caddy
     environment:
+      DOMAIN: ${DOMAIN:-ai-verdict.ru}
+      ACME_EMAIL: ${ACME_EMAIL:-a.popov.gv@gmail.com}
       CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.ai-verdict.ru}
       CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:3000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
+      - "80:80"
+      - "443:443"
       - "127.0.0.1:${CADDY_LOCAL_HTTP_PORT:-8088}:8088"
     volumes:
-      - ${CADDYFILE_PATH:-../caddy/Caddyfile.tunnel}:/etc/caddy/Caddyfile
+      - ${CADDYFILE_PATH:-../caddy/Caddyfile.public}:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
