@@ -773,7 +773,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         data = query.data or ""
         if data == "menu_contract_ai":
-            await handle_contract_analysis_start(update, context)
+            await handle_business_menu_callback(update, context)
         elif data.startswith("menu_"):
             await handle_business_menu_callback(update, context)
         elif data.startswith("consent_"):
@@ -788,7 +788,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_cleanup_callback(update, context)
         elif data.startswith("admin_"):
             await handle_admin_panel_callback(update, context)
-        elif data in ("contract_upload", "menu_contract_ai"):
+        elif data == "contract_upload":
             await handle_contract_analysis_start(update, context)
         elif data == "contract_cancel":
             await handle_contract_analysis_cancel(update, context)

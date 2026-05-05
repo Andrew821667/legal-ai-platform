@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ROUTES, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 
 type CtaFrameworkPanelProps = {
@@ -17,6 +17,7 @@ export default function CtaFrameworkPanel({
   className = "",
   variant = "validate-first",
 }: CtaFrameworkPanelProps) {
+  const contractAIHref = contractAIEntryHref("demo");
   const primaryMap: Record<NonNullable<CtaFrameworkPanelProps["variant"]>, "discover" | "validate" | "consult"> = {
     "discover-first": "discover",
     "validate-first": "validate",
@@ -49,7 +50,7 @@ export default function CtaFrameworkPanel({
           🧠 Узнать
         </a>
         <a
-          href={readerBotDeepLink("validate")}
+          href={contractAIHref}
           target="_blank"
           rel="noopener noreferrer"
           className={classFor("validate")}

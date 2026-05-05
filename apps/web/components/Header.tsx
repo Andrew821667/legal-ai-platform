@@ -19,7 +19,7 @@ export default function Header() {
 
   const mainNavigation = [
     { name: "Решения", href: "/solutions" },
-    { name: "Contract_AI_System", href: "/contract-ai-system" },
+    { name: "Contract_AI_System", href: contractAIEntryHref() },
     { name: "Контент / Кейсы", href: "/content-cases" },
     { name: "О платформе", href: "/about" },
   ];
