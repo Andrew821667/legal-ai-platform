@@ -43,6 +43,10 @@ def _iso_days_ago(days: int) -> str:
     return (datetime.now().astimezone() - timedelta(days=days)).isoformat()
 
 
+def _iso_days_from_now(days: int) -> str:
+    return (datetime.now().astimezone() + timedelta(days=days)).isoformat()
+
+
 def test_cleanup_expired_editorial_posts_removes_stale_draft_and_review() -> None:
     client = _FakeClient(
         {
@@ -66,6 +70,33 @@ def test_cleanup_expired_editorial_posts_removes_stale_draft_and_review() -> Non
     assert ("draft-old", {"status": "failed", "last_error": "expired_editorial_cleanup"}) in client.patched
     assert ("review-old", {"status": "failed", "last_error": "expired_editorial_cleanup"}) in client.patched
     assert all(post_id != "weekly-keep" for post_id, _ in client.patched)
+
+
+def test_cleanup_expired_editorial_posts_keeps_future_scheduled_review() -> None:
+    client = _FakeClient(
+        {
+            ("draft", 0): [],
+            ("review", 0): [
+                {
+                    "id": "future-review",
+                    "created_at": _iso_days_ago(6),
+                    "publish_at": _iso_days_from_now(1),
+                    "format_type": "daily",
+                },
+                {
+                    "id": "past-review",
+                    "created_at": _iso_days_ago(6),
+                    "publish_at": _iso_days_ago(1),
+                    "format_type": "daily",
+                },
+            ],
+        }
+    )
+
+    cleaned = _cleanup_expired_editorial_posts(client, retention_days=3)
+
+    assert cleaned == 1
+    assert client.patched == [("past-review", {"status": "failed", "last_error": "expired_editorial_cleanup"})]
 
 
 def test_cleanup_expired_editorial_posts_scans_later_pages_for_shorter_retention() -> None:
