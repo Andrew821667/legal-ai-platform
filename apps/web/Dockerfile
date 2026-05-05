@@ -9,10 +9,17 @@ FROM node:22-slim AS builder
 
 WORKDIR /app/apps/web
 
-COPY --from=deps /app/apps/web/node_modules ./node_modules
-COPY apps/web ./
+ARG NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL
+ARG NEXT_PUBLIC_CORE_API_URL
+ARG NEXT_PUBLIC_SITE_URL
 
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL=${NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL}
+ENV NEXT_PUBLIC_CORE_API_URL=${NEXT_PUBLIC_CORE_API_URL}
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+
+COPY --from=deps /app/apps/web/node_modules ./node_modules
+COPY apps/web ./
 
 RUN npm run build
 

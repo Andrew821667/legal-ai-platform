@@ -102,7 +102,7 @@ export default function ContractAISystemPage() {
               </a>
               {ssoUrl ? (
                 <a
-                  href={contractAIHref}
+                  href={ssoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex rounded-lg border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300"

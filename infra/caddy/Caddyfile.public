@@ -1,0 +1,73 @@
+{
+    email {$ACME_EMAIL}
+}
+
+:8088 {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "SAMEORIGIN"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    handle /api/v1/* {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health/detailed {
+        reverse_proxy core-api:8000
+    }
+
+    handle {
+        reverse_proxy web:3000
+    }
+}
+
+http://{$DOMAIN}, http://www.{$DOMAIN}, http://{$CONTRACT_DOMAIN} {
+    redir https://{host}{uri} 308
+}
+
+https://{$CONTRACT_DOMAIN} {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "SAMEORIGIN"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    reverse_proxy {$CONTRACT_AI_UPSTREAM}
+}
+
+https://{$DOMAIN}, https://www.{$DOMAIN} {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "SAMEORIGIN"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    handle /api/v1/* {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health {
+        reverse_proxy core-api:8000
+    }
+
+    handle /health/detailed {
+        reverse_proxy core-api:8000
+    }
+
+    handle {
+        reverse_proxy web:3000
+    }
+}

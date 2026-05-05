@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     news_telegram_ingest_evening_slot: str = "16:30"
     news_telegram_ingest_morning_options: str = "06:30,07:00,07:30,08:30,09:30"
     news_telegram_ingest_evening_options: str = "15:30,16:00,16:30,17:30,18:30"
-    lead_bot_username: str = "LegalAI_Popov_Andrew"
+    lead_bot_username: str = "AI_Verdict_Popov_Andrew"
     news_helper_bot_username: str = "legal_ai_helper_new_bot"
     news_helper_bot_label: str = "Ассистент AI Verdict"
     tz_name: str = "Europe/Moscow"
