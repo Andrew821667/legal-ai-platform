@@ -1,4 +1,4 @@
-.PHONY: lint lint-full test dev prod deploy deploy-macmini integration-test smoke-bots seed backup logs
+.PHONY: lint lint-full test test-core-api test-news dev prod deploy deploy-macmini integration-test smoke-bots seed backup logs
 
 lint:
 	uv run ruff check apps/ packages/ --select F,B904,B905,UP031
@@ -8,7 +8,13 @@ lint-full:
 	uv run ruff format --check apps/ packages/
 
 test:
-	uv run pytest apps/core-api/tests/ -v
+	./infra/scripts/test_core_api.sh
+
+test-core-api:
+	./infra/scripts/test_core_api.sh
+
+test-news:
+	uv run pytest apps/news/tests/ -q
 
 dev:
 	docker compose -f infra/compose/docker-compose.dev.yml up --build

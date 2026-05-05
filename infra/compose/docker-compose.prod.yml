@@ -1,3 +1,6 @@
+x-telegram-api-extra-hosts: &telegram-api-extra-hosts
+  - "api.telegram.org:${TELEGRAM_API_HOST_IP:-149.154.167.220}"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -123,6 +126,7 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy
@@ -154,6 +158,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.generate_loop
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy
@@ -182,6 +187,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.telegram_ingest_loop
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy
@@ -208,6 +214,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.publish_loop
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy
@@ -231,6 +238,7 @@ services:
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: ["uv", "run", "python", "-m", "news.admin_bot"]
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy
@@ -262,6 +270,7 @@ services:
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: ["python", "-u", "-m", "app.reader_bot"]
+    extra_hosts: *telegram-api-extra-hosts
     depends_on:
       postgres:
         condition: service_healthy

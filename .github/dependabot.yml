@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -13,6 +14,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/apps/web"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -24,9 +26,13 @@ updates:
     groups:
       web-runtime:
         dependency-type: "production"
+        update-types:
+          - "patch"
+          - "minor"
 
   - package-ecosystem: "pip"
     directory: "/"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -38,6 +44,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/apps/core-api"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -49,6 +56,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/apps/news"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -60,6 +68,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/apps/lead-bot"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -71,6 +80,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/apps/lead-bot/legacy"
+    open-pull-requests-limit: 2
     schedule:
       interval: "weekly"
       day: "monday"
@@ -82,6 +92,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/web"
+    open-pull-requests-limit: 1
     schedule:
       interval: "weekly"
       day: "monday"
@@ -93,6 +104,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/core-api"
+    open-pull-requests-limit: 1
     schedule:
       interval: "weekly"
       day: "monday"
@@ -104,6 +116,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/lead-bot/legacy"
+    open-pull-requests-limit: 1
     schedule:
       interval: "weekly"
       day: "monday"
@@ -115,6 +128,7 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/news"
+    open-pull-requests-limit: 1
     schedule:
       interval: "weekly"
       day: "monday"
