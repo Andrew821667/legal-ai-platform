@@ -56,6 +56,11 @@ def _cleanup_reason_for_post(row: dict[str, object]) -> str:
     return "expired_editorial_cleanup"
 
 
+def _post_publish_at_is_future(row: dict[str, object], now_local: datetime) -> bool:
+    publish_at = _parse_post_datetime(str(row.get("publish_at") or ""))
+    return publish_at is not None and publish_at > now_local
+
+
 def _collect_expired_editorial_posts(
     client: CoreClient,
     *,
@@ -80,6 +85,8 @@ def _collect_expired_editorial_posts(
             post_id = str(row.get("id") or "").strip()
             created_at = _parse_post_datetime(str(row.get("created_at") or ""))
             if not post_id or created_at is None:
+                continue
+            if _post_publish_at_is_future(row, now_local):
                 continue
             cutoff = now_local - timedelta(days=_retention_days_for_post(row, retention_days))
             if created_at > cutoff:
