@@ -11,6 +11,7 @@ import requests
 from news.active_queue import parse_post_datetime, rebalance_active_publish_queue
 from news.control_plane import publish_claim_limit
 from news.core_client import CoreClient
+from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.settings import settings
 
@@ -300,6 +301,10 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
     return primary_message_id
 
 
+def _normalize_text_before_publish(text: str) -> str:
+    return LLMNewsWriter.normalize_post_footer_blocks(text)
+
+
 def main() -> int:
     if not settings.api_key_news:
         logger.error("API_KEY_NEWS is required")
@@ -345,15 +350,20 @@ def main() -> int:
     for post in posts:
         post_id = post["id"]
         try:
-            message_id = _send_to_telegram(post["text"], post.get("media_urls"))
+            original_text = str(post.get("text") or "")
+            normalized_text = _normalize_text_before_publish(original_text)
+            message_id = _send_to_telegram(normalized_text, post.get("media_urls"))
+            patch_payload: dict[str, Any] = {
+                "status": "posted",
+                "last_error": None,
+                "telegram_message_id": message_id or None,
+                "posted_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if normalized_text != original_text.strip():
+                patch_payload["text"] = normalized_text
             patch = client.patch_post(
                 post_id,
-                {
-                    "status": "posted",
-                    "last_error": None,
-                    "telegram_message_id": message_id or None,
-                    "posted_at": datetime.now(timezone.utc).isoformat(),
-                },
+                patch_payload,
             )
             patch.raise_for_status()
             consecutive_errors = 0

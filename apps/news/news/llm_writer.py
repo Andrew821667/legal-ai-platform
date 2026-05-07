@@ -118,7 +118,7 @@ _AUTO_FOOTER_MODE_BY_FORMAT = {
     "humor": "none",
 }
 _MANUAL_FOOTER_LIBRARY = {
-    "promo_offer": "Если хотите обсудить внедрение Legal AI под ваш кейс и понять, с чего начать, обсудите это с {assistant_link}.",
+    "promo_offer": "Если хотите понять, с чего начать внедрение Legal AI под ваш кейс, обсудите это с {assistant_link}.",
     "product_review": "Если хотите сравнить такие инструменты под задачи юротдела и выбрать рабочий стек без лишних лицензий, обсудите это с {assistant_link}.",
     "case_story": "Если хотите собрать похожий сценарий автоматизации под вашу юрфункцию, обсудите это с {assistant_link}.",
     "opinion": "",
@@ -127,8 +127,17 @@ _MANUAL_FOOTER_LIBRARY = {
     "faq": "Если хотите разобрать ваши вопросы по AI и юридической функции на вашем кейсе, обсудите это с {assistant_link}.",
     "announcement": "Если тема для вас актуальна и нужен понятный следующий шаг по внедрению, обсудите это с {assistant_link}.",
     "digest": "",
-    "service_page": "Если хотите обсудить услугу, формат проекта и ближайший план внедрения, обсудите это с {assistant_link}.",
+    "service_page": "Если хотите уточнить услугу, формат проекта и ближайший план внедрения, обсудите это с {assistant_link}.",
 }
+_FOOTER_BLOCK_RE = re.compile(
+    r"(?:\n\n)?<b>Следующий шаг</b>\n.*?(?=(?:\n\n<b>Следующий шаг</b>|\n\n<b>Источник</b>|\n<b>Источник</b>|\n\n#|$))",
+    re.DOTALL,
+)
+_ASSISTANT_TOKEN = "__ASSISTANT__"
+_ASSISTANT_CTA_VERB_RE = re.compile(
+    r"\b(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите|написать|напишите|пишите|обратиться|обратитесь)\b",
+    re.IGNORECASE,
+)
 _CHANNEL_STYLE_HINTS = {
     "daily": "Редакционный тон: коротко, плотно, без рекламного хвоста. Это информационный пост, а не продающий.",
     "weekly_review": "Редакционный тон: обзор недели. Никакого CTA, только редакционный вывод и ощущение собранного материала.",
@@ -682,20 +691,47 @@ class LLMNewsWriter:
         return f'<a href="{safe_url}">{link_text}</a>'
 
     @classmethod
+    def _tokenize_assistant_mentions(cls, text: str, token: str = _ASSISTANT_TOKEN) -> str:
+        content = html.unescape(str(text or ""))
+        helper_label = cls._helper_bot_label()
+        helper_username = cls._helper_bot_username()
+        helper_url = cls._helper_bot_url()
+        content = re.sub(
+            rf"<a\b[^>]*href=[\"'](?:{re.escape(helper_url)}|https?://t\.me/{re.escape(helper_username)})[\"'][^>]*>.*?</a>",
+            token,
+            content,
+            flags=re.IGNORECASE,
+        )
+        content = re.sub(r"<[^>]+>", " ", content)
+        content = re.sub(r"@legal_ai_helper_new_bot", token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"@{re.escape(helper_username)}", token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"{re.escape(helper_url)}", token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", token, content, flags=re.IGNORECASE)
+        content = re.sub(rf"t\.me/{re.escape(helper_username)}", token, content, flags=re.IGNORECASE)
+        content = re.sub(re.escape(helper_label), token, content, flags=re.IGNORECASE)
+        content = re.sub(r"асс?истент(?:ом|у|а|е)?(?:\s+AI\s+Verdict|\s+Legal\s+AI\s+Pro)?", token, content, flags=re.IGNORECASE)
+        return re.sub(r"\s+", " ", content).strip()
+
+    @classmethod
+    def _trim_repeated_assistant_mentions_in_sentence(cls, sentence: str, assistant_token: str) -> str:
+        if sentence.count(assistant_token) <= 1:
+            return sentence
+        keep_until = sentence.find(assistant_token) + len(assistant_token)
+        return sentence[:keep_until].rstrip(" ,;:") + "."
+
+    @classmethod
     def _dedupe_assistant_sentences(cls, content: str, assistant_token: str) -> str:
         raw_sentences = [part.strip() for part in re.split(r"(?<=[.!?…])\s+", content) if part.strip()]
         if len(raw_sentences) <= 1:
-            return content
+            return cls._trim_repeated_assistant_mentions_in_sentence(content, assistant_token)
 
         deduped: list[str] = []
         seen_assistant_cta = False
         for sentence in raw_sentences:
-            normalized = sentence.strip()
+            normalized = cls._trim_repeated_assistant_mentions_in_sentence(sentence.strip(), assistant_token)
             lowered = normalized.lower()
             has_assistant = assistant_token in normalized
-            is_assistant_cta = has_assistant and bool(
-                re.search(r"\b(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите|написать|напишите|пишите|обратиться|обратитесь)\b", lowered)
-            )
+            is_assistant_cta = has_assistant and bool(_ASSISTANT_CTA_VERB_RE.search(lowered))
             if is_assistant_cta and seen_assistant_cta:
                 continue
             if is_assistant_cta:
@@ -704,52 +740,97 @@ class LLMNewsWriter:
         return " ".join(deduped).strip()
 
     @classmethod
-    def _finalize_footer_html(cls, footer_text: str) -> str:
+    def _normalize_footer_token_text(cls, footer_text: str, *, require_contact: bool = True) -> str:
         content = re.sub(r"\s+", " ", (footer_text or "").strip())
         if not content:
             return ""
         content = re.sub(r"^\s*(?:следующий шаг|footer)\s*:?\s*", "", content, flags=re.IGNORECASE).strip()
         if not content:
             return ""
+        content = cls._tokenize_assistant_mentions(content)
+        content = cls._dedupe_assistant_sentences(content, _ASSISTANT_TOKEN)
+        if require_contact and _ASSISTANT_TOKEN not in content:
+            suffix = f"Обсудить это можно с {_ASSISTANT_TOKEN}."
+            if content.endswith((".", "!", "?", "…")):
+                content = f"{content} {suffix}"
+            else:
+                content = f"{content}. {suffix}" if content else suffix
+        return re.sub(r"\s+", " ", content).strip()
 
-        helper_label = cls._helper_bot_label()
-        helper_username = cls._helper_bot_username()
-        assistant_token = "__ASSISTANT__"
-        content = re.sub(r"@legal_ai_helper_new_bot", assistant_token, content, flags=re.IGNORECASE)
-        content = re.sub(rf"@{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
-        content = re.sub(rf"https?://t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
-        content = re.sub(rf"t\.me/{re.escape(helper_username)}", assistant_token, content, flags=re.IGNORECASE)
-        content = re.sub(re.escape(helper_label), assistant_token, content, flags=re.IGNORECASE)
-        content = re.sub(r"ассистент(?:ом|у|а|е)?\s+legal\s+ai\s+pro", assistant_token, content, flags=re.IGNORECASE)
-        content = cls._dedupe_assistant_sentences(content, assistant_token)
+    @classmethod
+    def _finalize_footer_html(cls, footer_text: str) -> str:
+        content = cls._normalize_footer_token_text(footer_text, require_contact=True)
+        if not content:
+            return ""
 
         footer_html = html.escape(content)
         footer_html = re.sub(
-            rf"(?:написать|напишите|пишите|обратиться|обратитесь)\s+(?:в|через)?\s*{assistant_token}",
+            rf"(?:написать|напишите|пишите|обратиться|обратитесь)\s+(?:в|через)?\s*{_ASSISTANT_TOKEN}",
             lambda _match: f"напишите {cls._assistant_link('dat')}",
             footer_html,
             flags=re.IGNORECASE,
         )
         footer_html = re.sub(
-            rf"(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите)\s+(?:это\s+)?с\s+{assistant_token}",
-            lambda match: re.sub(rf"{assistant_token}$", cls._assistant_link("ins"), match.group(0)),
+            rf"(?:обсудить|обсудите|разобрать|разберите|сверить|сверьте|пройти|пройдите)\s+(?:это\s+)?с\s+{_ASSISTANT_TOKEN}",
+            lambda match: re.sub(rf"{_ASSISTANT_TOKEN}$", cls._assistant_link("ins"), match.group(0)),
             footer_html,
             flags=re.IGNORECASE,
         )
         footer_html = re.sub(
-            rf"\bс\s+{assistant_token}\b",
+            rf"\bс\s+{_ASSISTANT_TOKEN}\b",
             f"с {cls._assistant_link('ins')}",
             footer_html,
             flags=re.IGNORECASE,
         )
-        footer_html = footer_html.replace(assistant_token, cls._assistant_link("nom"))
-        if cls._assistant_link("nom") not in footer_html and cls._assistant_link("ins") not in footer_html and cls._assistant_link("dat") not in footer_html:
-            suffix = f"Обсудить это можно с {cls._assistant_link('ins')}."
-            if footer_html.endswith((".", "!", "?", "…")):
-                footer_html = f"{footer_html} {suffix}"
-            else:
-                footer_html = f"{footer_html}. {suffix}" if footer_html else suffix
+        footer_html = footer_html.replace(_ASSISTANT_TOKEN, cls._assistant_link("nom"))
         return re.sub(r"\s+", " ", footer_html).strip()
+
+    @classmethod
+    def _strip_trailing_assistant_footer_fragments(cls, text: str) -> str:
+        normalized = (text or "").strip()
+        if not normalized:
+            return ""
+        source_match = re.search(r"\n{0,2}<b>Источник</b>", normalized)
+        source_block = ""
+        if source_match:
+            source_block = normalized[source_match.start() :].lstrip()
+            body = normalized[: source_match.start()].rstrip()
+        else:
+            body = normalized
+        paragraphs = re.split(r"\n{2,}", body)
+        kept = list(paragraphs)
+        for index in range(len(kept) - 1, max(-1, len(kept) - 4), -1):
+            tokenized = cls._tokenize_assistant_mentions(kept[index])
+            if _ASSISTANT_TOKEN in tokenized and _ASSISTANT_CTA_VERB_RE.search(tokenized):
+                kept.pop(index)
+        result = "\n\n".join(part.strip() for part in kept if part.strip()).strip()
+        if source_block:
+            result = f"{result}\n\n{source_block}" if result else source_block
+        return result
+
+    @classmethod
+    def normalize_post_footer_blocks(cls, text: str) -> str:
+        original = (text or "").strip()
+        if not original:
+            return ""
+        footer_matches = list(_FOOTER_BLOCK_RE.finditer(original))
+        if not footer_matches:
+            return normalize_post_text(cls._strip_trailing_assistant_footer_fragments(original))
+
+        footer_block = footer_matches[-1].group(0)
+        footer_text = re.sub(r"^\s*<b>Следующий шаг</b>\s*", "", footer_block.strip(), flags=re.IGNORECASE)
+        base = _FOOTER_BLOCK_RE.sub("", original).strip()
+        base = cls._strip_trailing_assistant_footer_fragments(base)
+        footer_html = cls._finalize_footer_html(footer_text)
+        if not footer_html:
+            return normalize_post_text(base)
+        footer = f"<b>Следующий шаг</b>\n{footer_html}"
+        source_index = base.find("<b>Источник</b>")
+        if source_index != -1:
+            updated = f"{base[:source_index].rstrip()}\n\n{footer}\n\n{base[source_index:].lstrip()}"
+        else:
+            updated = f"{base.rstrip()}\n\n{footer}"
+        return normalize_post_text(updated)
 
     @classmethod
     def _normalize_title_for_format(cls, title: str, format_type: str, fallback_title: str) -> str:

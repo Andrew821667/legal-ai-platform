@@ -6,6 +6,7 @@ from news.publish import (
     TelegramRequestError,
     _autofill_publish_at,
     _demote_stale_scheduled_posts,
+    _normalize_text_before_publish,
     _promote_ready_posts_for_idle_queue,
     _retryable_publish_patch,
 )
@@ -153,3 +154,23 @@ def test_retryable_publish_patch_ignores_non_retryable_error() -> None:
     )
 
     assert patch is None
+
+
+def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        "Обсудите внедрение с Асистентом AI Verdict.\n\n"
+        "<b>Следующий шаг</b>\nОбсудите с Асистентом AI Verdict.\n\n"
+        "<b>Следующий шаг</b>\nНапишите в @legal_ai_helper_new_bot.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(original)
+
+    assert normalized.count("<b>Следующий шаг</b>") == 1
+    assert normalized.count("https://t.me/legal_ai_helper_new_bot") == 1
+    assert "Асистент" not in normalized
+    assert "Напишите в" not in normalized
+    assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
