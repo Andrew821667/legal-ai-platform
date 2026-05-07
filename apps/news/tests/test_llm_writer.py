@@ -592,6 +592,49 @@ def test_semantic_footer_html_dedupes_duplicate_assistant_cta() -> None:
     assert 'href="https://t.me/legal_ai_helper_new_bot"' in footer_html
 
 
+def test_semantic_footer_html_dedupes_typo_and_repeated_assistant_cta() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _FakeClient(
+        '{"include_footer": true, "footer_text": "Если это актуально, обсудите с Асистентом AI Verdict, обсудите детали с Ассистентом AI Verdict. Напишите в @legal_ai_helper_new_bot.", "fit_reason": "implementation fit"}'
+    )
+    writer.model = "deepseek-chat"
+    writer._use_max_tokens_param = True
+
+    footer_html = writer._semantic_footer_html(
+        title="AI для договоров",
+        rubric="legal_ops",
+        pillar="implementation",
+        format_type="daily",
+        cta_type="soft",
+        lead="Короткий лид",
+        what_happened="Описание фактов",
+        business_effect="Описание эффекта",
+        legal_risks="Описание ограничений",
+        conclusion="Итог",
+    )
+
+    assert footer_html.count("Ассистентом AI Verdict") == 1
+    assert "Асистент" not in footer_html
+    assert "Напишите" not in footer_html
+
+
+def test_normalize_post_footer_blocks_keeps_single_footer_before_source() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        "<b>Следующий шаг</b>\nОбсудите с Асистентом AI Verdict.\n\n"
+        "<b>Следующий шаг</b>\nНапишите в @legal_ai_helper_new_bot.\n\n"
+        "<b>Источник</b>: ссылка\n#AIVerdict"
+    )
+
+    normalized = LLMNewsWriter.normalize_post_footer_blocks(original)
+
+    assert normalized.count("<b>Следующий шаг</b>") == 1
+    assert normalized.count("https://t.me/legal_ai_helper_new_bot") == 1
+    assert "Асистент" not in normalized
+    assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
+
+
 def test_semantic_footer_html_skips_when_not_fit() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer.client = _FakeClient('{"include_footer": false, "footer_text": "", "fit_reason": "no service match"}')

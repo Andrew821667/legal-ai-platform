@@ -603,6 +603,26 @@ def test_apply_footer_to_post_text_dedupes_duplicate_assistant_cta() -> None:
     assert 'href="https://t.me/legal_ai_helper_new_bot"' in updated
 
 
+def test_apply_footer_to_post_text_replaces_existing_duplicate_footer_blocks() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        "<b>Следующий шаг</b>\nОбсудите с Асистентом AI Verdict.\n\n"
+        "<b>Следующий шаг</b>\nНапишите в @legal_ai_helper_new_bot.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+    updated = NewsAdminBot._apply_footer_to_post_text(
+        original,
+        "Если хотите понять, с чего начать внедрение Legal AI, обсудите это с Ассистентом AI Verdict.",
+    )
+    assert updated.count("<b>Следующий шаг</b>") == 1
+    assert updated.count("Ассистентом AI Verdict") == 1
+    assert "Асистент" not in updated
+    assert "Напишите в" not in updated
+    assert updated.index("<b>Следующий шаг</b>") < updated.index("<b>Источник</b>")
+
+
 def test_post_card_keyboard_has_add_footer_button() -> None:
     bot = NewsAdminBot()
     markup = bot._post_card_keyboard("123", "review", 0)

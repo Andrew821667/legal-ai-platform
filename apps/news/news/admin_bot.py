@@ -516,10 +516,6 @@ _MANUAL_THEMES = {
     },
 }
 _MANUAL_THEME_ORDER = tuple(_MANUAL_THEMES)
-_FOOTER_BLOCK_RE = re.compile(
-    r"(?:\n\n)?<b>Следующий шаг</b>\n.*?(?=(?:\n\n<b>Источник</b>|\n<b>Источник</b>|\n\n#|$))",
-    re.DOTALL,
-)
 _FOOTER_VARIANT_HINTS = (
     "Начни с мягкой формулы типа «Если у вас похожая задача...» или «Если для вашей команды это тоже актуально...»",
     "Начни с практического разворота типа «Такие сценарии уже можно внедрять в...» без рекламной напористости.",
@@ -4894,24 +4890,21 @@ class NewsAdminBot:
         url = cls._helper_bot_url().lower()
         short_url = f"t.me/{cls._helper_bot_username().lower()}"
         label = cls._helper_bot_label().lower()
-        return mention in normalized or url in normalized or short_url in normalized or label in normalized
+        tokenized = LLMNewsWriter._tokenize_assistant_mentions(text)
+        return (
+            mention in normalized
+            or url in normalized
+            or short_url in normalized
+            or label in normalized
+            or "__ASSISTANT__" in tokenized
+        )
 
     @classmethod
     def _ensure_footer_has_helper_contact(cls, footer_text: str) -> str:
-        content = re.sub(r"\s+", " ", (footer_text or "").strip())
-        helper_username = cls._helper_bot_username()
+        content = LLMNewsWriter._normalize_footer_token_text(footer_text, require_contact=True)
         if not content:
             return "Если тема для вас актуальна, обсудите это с Ассистентом AI Verdict."
-        content = re.sub(r"@legal_ai_helper_new_bot", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
-        content = re.sub(rf"@{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
-        content = re.sub(rf"https?://t\\.me/{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
-        content = re.sub(rf"t\\.me/{re.escape(helper_username)}", "Ассистент AI Verdict", content, flags=re.IGNORECASE)
-        if cls._footer_has_helper_contact(content):
-            return content
-        suffix = "Обсудить это можно с Ассистентом AI Verdict."
-        if content.endswith((".", "!", "?", "…")):
-            return f"{content} {suffix}"
-        return f"{content}. {suffix}"
+        return content.replace("__ASSISTANT__", "Ассистент AI Verdict")
 
     @staticmethod
     def _footer_variant_index(post: dict[str, Any]) -> int:
@@ -4992,7 +4985,8 @@ class NewsAdminBot:
     @classmethod
     def _apply_footer_to_post_text(cls, original_text: str, footer_text: str) -> str:
         text = (original_text or "").strip()
-        text = _FOOTER_BLOCK_RE.sub("", text).strip()
+        text = LLMNewsWriter.normalize_post_footer_blocks(text)
+        text = LLMNewsWriter._strip_trailing_assistant_footer_fragments(text).strip()
         footer_text = cls._ensure_footer_has_helper_contact(footer_text)
         if not footer_text:
             return normalize_post_text(text)
@@ -7459,7 +7453,7 @@ class NewsAdminBot:
                     await query.message.reply_text("Черновик редактирования не найден. Повторите редактирование.")
                     return
 
-                payload = {"text": draft.get("text")}
+                payload = {"text": LLMNewsWriter.normalize_post_footer_blocks(str(draft.get("text") or ""))}
                 self.client.patch_post(post_id, payload).raise_for_status()
                 self._invalidate_post_caches()
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
