@@ -7,6 +7,7 @@ from news.publish import (
     _autofill_publish_at,
     _demote_stale_scheduled_posts,
     _normalize_text_before_publish,
+    _promote_fallback_posts_for_idle_publisher,
     _promote_ready_posts_for_idle_queue,
     _retryable_publish_patch,
 )
@@ -26,15 +27,18 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    def __init__(self, *, ready_rows=None, scheduled_rows=None) -> None:
-        self._ready_rows = ready_rows
+    def __init__(self, *, ready_rows=None, review_rows=None, scheduled_rows=None) -> None:
+        self._ready_rows = ready_rows or []
+        self._review_rows = review_rows or []
         self._scheduled_rows = scheduled_rows
-        self.patched: list[tuple[str, dict[str, str]]] = []
+        self.patched: list[tuple[str, dict[str, object]]] = []
 
     def list_posts(self, limit: int = 20, status: str | None = None, newest_first: bool = False, offset: int = 0):
         _ = (limit, newest_first, offset)
         if status == "ready":
             return _FakeResponse(self._ready_rows[:limit])
+        if status == "review":
+            return _FakeResponse(self._review_rows[:limit])
         if status == "scheduled":
             return _FakeResponse(self._scheduled_rows[:limit])
         raise AssertionError(f"unexpected status {status}")
@@ -79,6 +83,42 @@ def test_promote_ready_posts_for_idle_queue() -> None:
     assert [post_id for post_id, _ in client.patched] == ["r1", "r2"]
     assert client.patched[0][1]["status"] == "scheduled"
     assert client.patched[1][1]["status"] == "scheduled"
+
+
+def test_idle_publisher_promotes_ready_before_review() -> None:
+    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=timezone.utc)
+    client = _FakeClient(
+        ready_rows=[{"id": "ready-1"}],
+        review_rows=[{"id": "review-1"}],
+    )
+
+    promoted = _promote_fallback_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 1
+    assert client.patched == [
+        (
+            "ready-1",
+            {"status": "scheduled", "publish_at": now_utc.isoformat(), "last_error": None},
+        )
+    ]
+
+
+def test_idle_publisher_promotes_review_when_ready_empty() -> None:
+    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=timezone.utc)
+    client = _FakeClient(
+        ready_rows=[],
+        review_rows=[{"id": "review-1"}],
+    )
+
+    promoted = _promote_fallback_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 1
+    assert client.patched == [
+        (
+            "review-1",
+            {"status": "scheduled", "publish_at": now_utc.isoformat(), "last_error": None},
+        )
+    ]
 
 
 def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:

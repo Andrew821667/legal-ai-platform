@@ -1855,6 +1855,14 @@ class NewsAdminBot:
             return value
         return settings.news_generate_limit
 
+    def _configured_intelligent_footer_enabled(self, *, force_refresh: bool = False) -> bool:
+        row = self._generate_control_row(force_refresh=force_refresh)
+        config = row.get("config") or {}
+        value = config.get("intelligent_footer_enabled")
+        if isinstance(value, bool):
+            return value
+        return True
+
     def _configured_review_retention_days(self, *, force_refresh: bool = False) -> int:
         row = self._generate_control_row(force_refresh=force_refresh)
         config = row.get("config") or {}
@@ -1951,6 +1959,8 @@ class NewsAdminBot:
         )
         feedback_collect = control_map.get("news.feedback.collect.enabled", True)
         feedback_guard = control_map.get("news.feedback.guard.enabled", True)
+        smart_footer_value = generate_config.get("intelligent_footer_enabled")
+        smart_footer_enabled = smart_footer_value if isinstance(smart_footer_value, bool) else True
         discussion_ready = bool((settings.news_discussion_chat_id or "").strip() or (settings.news_discussion_chat_username or "").strip())
 
         lines = [
@@ -1980,6 +1990,7 @@ class NewsAdminBot:
             f"Практика недели: {schedule_slot_label(schedule.humor_slot)}",
             f"Сбор feedback: {'🟢' if feedback_collect else '🔴'}",
             f"Защита по feedback: {'🟢' if feedback_guard else '🔴'}",
+            f"Умный футер в постах: {'🟢 включен' if smart_footer_enabled else '🔴 выключен'}",
             f"Discussion group для feedback: {'🟢 настроена' if discussion_ready else '🔴 не настроена'}",
             "",
         ]
@@ -2886,6 +2897,7 @@ class NewsAdminBot:
         generate_limit = self._configured_generate_limit()
         broad_ai_limit = self._configured_broad_ai_limit()
         retention_days = self._configured_review_retention_days()
+        smart_footer_enabled = self._configured_intelligent_footer_enabled()
         discussion_ready = bool((settings.news_discussion_chat_id or "").strip() or (settings.news_discussion_chat_username or "").strip())
         telegram_channel_count = len(self._telegram_channel_enabled_map())
         return (
@@ -2909,6 +2921,7 @@ class NewsAdminBot:
             f"Интервал автопубликации: {_humanize_interval(publish_interval)}\n"
             f"Лимит генерации за цикл: {generate_limit}\n"
             f"Broad-AI лимит за цикл: {broad_ai_limit}\n"
+            f"Умный футер: {'включен' if smart_footer_enabled else 'выключен'}\n"
             f"Хранение очереди: {_retention_summary_text(retention_days)}\n"
             f"Источников RSS/search: {source_count}\n"
             f"Telegram-каналов: {telegram_channel_count}\n"
@@ -3048,6 +3061,10 @@ class NewsAdminBot:
             and control_map.get("news.telegram_ingest.enabled", True)
             and control_map.get("news.publish.enabled", True)
         )
+        generate_row = {str(row.get("key") or ""): row for row in controls}.get("news.generate.enabled", {})
+        generate_config = generate_row.get("config") or {}
+        smart_footer_value = generate_config.get("intelligent_footer_enabled")
+        smart_footer_enabled = smart_footer_value if isinstance(smart_footer_value, bool) else True
         rows: list[list[InlineKeyboardButton]] = [
             [
                 _inline_button(
@@ -3066,6 +3083,13 @@ class NewsAdminBot:
             [
                 _inline_button("📬 Reader-дайджест", callback_data="rdg:menu"),
                 _inline_button("🎛 Reader CTA A/B", callback_data="rca:menu"),
+            ],
+            [
+                _inline_button(
+                    "🧩 Умный футер: вкл" if smart_footer_enabled else "🧩 Умный футер: выкл",
+                    callback_data=f"footer:intelligent:{'0' if smart_footer_enabled else '1'}",
+                    style=_BUTTON_STYLE_DANGER if smart_footer_enabled else _BUTTON_STYLE_SUCCESS,
+                ),
             ],
             [
                 _inline_button("🧭 Темы генерации", callback_data="sec:themes"),
@@ -6780,6 +6804,7 @@ class NewsAdminBot:
                         "generate_limit": 5,
                         "retention_days": 3,
                         "broad_ai_limit": 1,
+                        "intelligent_footer_enabled": True,
                     }
                 )
                 generate_payload = {
@@ -6854,6 +6879,28 @@ class NewsAdminBot:
                         "config": dict(row.get("config") or {}),
                     }
                     self.admin_client.update_automation_control(key, payload).raise_for_status()
+                self._invalidate_controls_cache()
+                controls = self._load_controls(force_refresh=True)
+                await self._safe_edit_message_text(
+                    query,
+                    self._controls_text(controls),
+                    reply_markup=self._automation_keyboard(controls),
+                )
+                return
+
+            if data.startswith("footer:intelligent:"):
+                enabled = data.rsplit(":", maxsplit=1)[1] == "1"
+                row = self._generate_control_row(force_refresh=True)
+                config = dict(row.get("config") or {})
+                config["intelligent_footer_enabled"] = enabled
+                payload = {
+                    "scope": "news",
+                    "title": row.get("title") or "Генерация контента (news.generate)",
+                    "description": row.get("description") or "Автогенерация драфтов из источников по двум слотам в сутки.",
+                    "enabled": bool(row.get("enabled", True)),
+                    "config": config,
+                }
+                self.admin_client.update_automation_control("news.generate.enabled", payload).raise_for_status()
                 self._invalidate_controls_cache()
                 controls = self._load_controls(force_refresh=True)
                 await self._safe_edit_message_text(

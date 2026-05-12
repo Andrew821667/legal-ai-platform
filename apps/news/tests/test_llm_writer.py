@@ -140,6 +140,14 @@ def test_build_news_writer_system_prompt_toggles_optional_module() -> None:
     assert "выключен" in disabled
 
 
+def test_build_news_writer_system_prompt_prefers_russian_terms() -> None:
+    prompt = build_news_writer_system_prompt(adoption_module_enabled=True)
+
+    assert "по умолчанию пиши «ИИ»" in prompt
+    assert "а не AI, vendor, workflow" in prompt
+    assert "выбор поставщика" in prompt
+
+
 def test_daily_format_prefers_adoption_block_when_present() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     title, text, rubric = writer._format_post(
@@ -168,6 +176,31 @@ def test_daily_format_prefers_adoption_block_when_present() -> None:
     assert "Где это можно применить" in text
     assert "Первичная AI-проверка типовых договоров" in text
     assert "Что это значит для команд" not in text
+
+
+def test_format_post_skips_intelligent_footer_when_disabled() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    _, text, _ = writer._format_post(
+        {
+            "title": "Новый ИИ-инструмент для договорной работы",
+            "rubric": "legal_ops",
+            "lead": "На рынке появился новый инструмент для ускорения проверки договоров.",
+            "what_happened": "Поставщик выпустил ИИ-функцию для сравнения версий и поиска рисков.",
+            "business_effect": "Это сокращает время первичной проверки и помогает быстрее разбирать типовые документы.",
+            "legal_risks": "Юристам нужно проверить режим данных, договорную ответственность поставщика и качество результата.",
+            "conclusion": "Практический интерес связан с автоматизацией повторяющихся шагов.",
+            "adoption_fit": "strong",
+            "adoption_patterns": ["Первичная ИИ-проверка типовых договоров до ручной ревизии юриста"],
+        },
+        "https://example.com/article",
+        "Новый ИИ-инструмент для договорной работы",
+        format_type="daily",
+        cta_type="soft",
+        pillar="tools",
+        intelligent_footer_enabled=False,
+    )
+
+    assert "Следующий шаг" not in text
 
 
 def test_standard_format_skips_footer_without_adoption_patterns() -> None:
@@ -331,7 +364,7 @@ def test_relevance_bias_hint_for_enterprise_ai_signal() -> None:
         published_at=datetime.now(timezone.utc),
     )
     hint = LLMNewsWriter._relevance_bias_hint(article, "tools")
-    assert "пограничный, но приоритетный AI-сигнал" in hint
+    assert "пограничный, но приоритетный ИИ-сигнал" in hint
 
 
 def test_relevance_bias_hint_empty_for_noise() -> None:
@@ -474,8 +507,8 @@ def test_fallback_legal_commentary_for_contract_tooling_is_specific() -> None:
     text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "contracts")
     lowered = text.lower()
     assert "sla" in lowered
-    assert "output" in lowered
-    assert "vendor lock-in" in lowered or "lock-in" in lowered
+    assert "результат" in lowered
+    assert "зависимости от поставщика" in lowered
 
 
 def test_infer_rubric_hint_for_litigation_article() -> None:
@@ -514,9 +547,9 @@ def test_fallback_legal_commentary_for_ai_law_article_is_specific() -> None:
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "ai_law")
     lowered = text.lower()
-    assert "output" in lowered
-    assert "training data" in lowered
-    assert "automated decision" in lowered
+    assert "результат" in lowered
+    assert "обучающие данные" in lowered
+    assert "автоматизированного принятия решений" in lowered
 
 
 def test_fallback_legal_commentary_for_litigation_article_is_specific() -> None:
@@ -529,9 +562,9 @@ def test_fallback_legal_commentary_for_litigation_article_is_specific() -> None:
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "case", "litigation")
     lowered = text.lower()
-    assert "chain of custody" in lowered
-    assert "legal hold" in lowered
-    assert "human-in-the-loop" in lowered
+    assert "цепочку хранения доказательств" in lowered
+    assert "сохранение документов" in lowered
+    assert "участие человека" in lowered
 
 
 def test_generic_legal_commentary_detection() -> None:

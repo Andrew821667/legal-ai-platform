@@ -85,21 +85,21 @@ _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
 }
 _CTA_LIBRARY = {
     "soft": {
-        "regulation": "Если хотите разобрать, как такой регуляторный риск влияет на вашу AI-, privacy- или compliance-функцию, обсудите это с {assistant_link}.",
+        "regulation": "Если хотите разобрать, как такой регуляторный риск влияет на вашу ИИ-функцию, персональные данные или комплаенс, обсудите это с {assistant_link}.",
         "case": "Если хотите понять, как такой сценарий внедрения применим в вашей юрфункции, обсудите это с {assistant_link}.",
         "implementation": "Если хотите примерить такой сценарий автоматизации на договорную работу, заявки или внутренние процессы, обсудите это с {assistant_link}.",
         "tools": "Если хотите оценить, подходит ли такой инструмент для юротдела или практики, обсудите это с {assistant_link}.",
         "market": "Если хотите перевести этот рыночный сигнал в план действий для вашей юрфункции или продукта, обсудите это с {assistant_link}.",
     },
     "mid": {
-        "regulation": "Если нужен прикладной разбор рисков, роли юристов и контура контроля для внедрения AI, обсудите это с {assistant_link}.",
+        "regulation": "Если нужен прикладной разбор рисков, роли юристов и контура контроля для внедрения ИИ, обсудите это с {assistant_link}.",
         "case": "Если хотите разобрать ваш процесс и собрать пилот внедрения по такому кейсу, обсудите это с {assistant_link}.",
         "implementation": "Если хотите разобрать ваш контур автоматизации и выбрать реальный формат внедрения для юротдела, обсудите это с {assistant_link}.",
         "tools": "Если нужен отбор инструмента, пилот и юридические ограничения по данным и ответственности, обсудите это с {assistant_link}.",
         "market": "Если хотите понять, как этот тренд влияет на ваши процессы, продукт и архитектуру Legal AI, обсудите это с {assistant_link}.",
     },
     "hard": {
-        "regulation": "Если нужен проектный формат: аудит риска, регламенты, процесс и контроль качества AI в юрфункции, обсудите это с {assistant_link}.",
+        "regulation": "Если нужен проектный формат: аудит риска, регламенты, процесс и контроль качества ИИ в юрфункции, обсудите это с {assistant_link}.",
         "case": "Если готовы переходить от идеи к проекту внедрения, обсудите следующий шаг с {assistant_link}.",
         "implementation": "Если нужен проект автоматизации заявок, договорной работы или типовых юридических процессов, обсудите это с {assistant_link}.",
         "tools": "Если нужен подбор стека, интеграция и запуск пилота для юротдела, обсудите это с {assistant_link}.",
@@ -411,24 +411,24 @@ _WEEKLY_META_PREFIXES = (
 )
 _RUBRIC_LEGAL_TEMPLATE_HINTS = {
     "privacy": (
-        "Если материал относится к privacy, юридический блок должен говорить про правовое основание обработки, "
-        "трансграничную передачу, локализацию, DPA/поручение обработки, права доступа к данным и режим работы с output."
+        "Если материал относится к персональным данным, юридический блок должен говорить про правовое основание обработки, "
+        "трансграничную передачу, локализацию, поручение обработки, права доступа к данным и режим работы с результатом."
     ),
     "contracts": (
-        "Если материал относится к contracts, юридический блок должен говорить про SLA, scope использования модели, "
-        "ограничения на output, распределение ответственности, indemnity, audit rights и риск vendor lock-in."
+        "Если материал относится к договорам, юридический блок должен говорить про SLA, объем допустимого использования модели, "
+        "ограничения на результат, распределение ответственности, возмещение убытков, право аудита и риск зависимости от поставщика."
     ),
     "litigation": (
-        "Если материал относится к litigation, юридический блок должен говорить про explainability, admissibility, "
-        "chain of custody, legal hold, document review, human-in-the-loop и контроль качества доказательственной базы."
+        "Если материал относится к спорам, юридический блок должен говорить про объяснимость, допустимость результата, "
+        "цепочку хранения доказательств, сохранение документов, проверку документов человеком и контроль качества доказательственной базы."
     ),
     "regulation": (
-        "Если материал относится к regulation, юридический блок должен говорить про применимость AI Act, privacy law, "
-        "классификацию риска, governance, логирование, внутренний контроль, санкционные и экспортные ограничения."
+        "Если материал относится к регулированию, юридический блок должен говорить про применимость AI Act, законов о персональных данных, "
+        "классификацию риска, управление процессом, логирование, внутренний контроль, санкционные и экспортные ограничения."
     ),
     "ai_law": (
-        "Если материал относится к ai_law, юридический блок должен говорить про права на output, обучение на данных, "
-        "IP и лицензии, automated decision-making, роль человека в принятии решения, explainability и enforceability."
+        "Если материал относится к праву ИИ, юридический блок должен говорить про права на результат, обучение на данных, "
+        "интеллектуальную собственность и лицензии, автоматизированное принятие решений, роль человека, объяснимость и исполнимость."
     ),
 }
 
@@ -923,7 +923,7 @@ class LLMNewsWriter:
                     {
                         "role": "user",
                         "content": (
-                            "Оцени пост и реши, нужен ли footer по нашим услугам.\n\n"
+                            "Оцени пост и реши, нужен ли футер по нашим услугам.\n\n"
                             f"{post_context}\n\n"
                             f"Контакт для CTA: {self._helper_bot_label()} ({self._helper_bot_url()})"
                         ),
@@ -1364,43 +1364,43 @@ class LLMNewsWriter:
         if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
             return (
                 "Сфокусируй юридический блок на персональных данных: правовое основание обработки, "
-                "трансграничную передачу, локализацию, права доступа к данным и договорный режим с вендором. "
+                "трансграничную передачу, локализацию, права доступа к данным и договорный режим с поставщиком. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform")):
             return (
                 "Сфокусируй юридический блок на договорном контуре: SLA, ответственность поставщика, "
-                "ограничения по использованию output, конфиденциальность, audit rights и vendor lock-in. "
+                "ограничения по использованию результата, конфиденциальность, право аудита и риск зависимости от поставщика. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("litigation", "суд", "e-discovery", "ediscovery", "legal hold", "document review")):
             return (
-                "Сфокусируй юридический блок на спорах и доказуемости: explainability, chain of custody, "
-                "сохранность доказательств, legal hold и human-in-the-loop. "
+                "Сфокусируй юридический блок на спорах и доказуемости: объяснимость, цепочка хранения доказательств, "
+                "сохранность доказательств, фиксация документов и участие человека в проверке. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if any(marker in haystack for marker in ("ai act", "регулирован", "compliance", "governance", "sanction", "санкц", "экспорт")):
             return (
-                "Сфокусируй юридический блок на регуляторике и governance: применимость AI Act / privacy law, "
+                "Сфокусируй юридический блок на регулировании и управлении процессом: применимость AI Act / законов о персональных данных, "
                 "внутренний контроль, логирование, санкционные и экспортные ограничения, распределение ответственности. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar == "market":
             return (
-                "Сфокусируй третий блок на юридико-рыночных последствиях: vendor due diligence, режим закупки, "
-                "санкционные ограничения, устойчивость поставщика и contractual safeguards. "
+                "Сфокусируй третий блок на юридико-рыночных последствиях: проверка поставщика, режим закупки, "
+                "санкционные ограничения, устойчивость поставщика и договорные гарантии. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar in {"implementation", "case"}:
             return (
-                "Сфокусируй юридический блок на практическом внедрении: контроль качества output, "
+                "Сфокусируй юридический блок на практическом внедрении: контроль качества результата, "
                 "процедуры проверки юристом, конфиденциальность и распределение ответственности. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         if pillar == "tools":
             return (
                 "Сфокусируй юридический блок на выборе инструмента: режим доступа к данным, SLA, "
-                "права на output, аудит действий модели и ограничения использования. "
+                "права на результат, аудит действий модели и ограничения использования. "
                 + cls._rubric_template_hint(inferred_rubric)
             )
         return (
@@ -1419,8 +1419,8 @@ class LLMNewsWriter:
             return ""
         if pillar in {"market", "tools", "implementation", "case", "regulation"}:
             return (
-                "Это пограничный, но приоритетный AI-сигнал: если в статье есть влияние на выбор вендора, "
-                "архитектуру внедрения, enterprise AI-процессы, governance, закупку, договоры, данные "
+                "Это пограничный, но приоритетный ИИ-сигнал: если в статье есть влияние на выбор поставщика, "
+                "архитектуру внедрения, корпоративные ИИ-процессы, управление, закупку, договоры, данные "
                 "или автоматизацию бизнес-/юридических процессов, трактуй материал как релевантный."
             )
         return ""
@@ -1444,27 +1444,27 @@ class LLMNewsWriter:
         if inferred_rubric == "privacy":
             return (
                 "Юристу стоит проверить правовое основание обработки, трансграничную передачу, локализацию, "
-                "DPA с вендором, режим доступа к данным и ограничения на повторное использование output."
+                "поручение обработки с поставщиком, режим доступа к данным и ограничения на повторное использование результата."
             )
         if inferred_rubric == "contracts":
             return (
-                "Юристу стоит проверить SLA, scope допустимого использования модели, права на output, indemnity, "
-                "audit rights, распределение ответственности и риск vendor lock-in при смене поставщика."
+                "Юристу стоит проверить SLA, объем допустимого использования модели, права на результат, возмещение убытков, "
+                "право аудита, распределение ответственности и риск зависимости от поставщика."
             )
         if inferred_rubric == "litigation":
             return (
-                "Юристу стоит оценить explainability модели, admissibility результата, chain of custody, "
-                "legal hold, полноту document review и обязательный human-in-the-loop в спорном контуре."
+                "Юристу стоит оценить объяснимость модели, допустимость результата, цепочку хранения доказательств, "
+                "сохранение документов, полноту проверки документов и обязательное участие человека в спорном контуре."
             )
         if inferred_rubric == "regulation":
             return (
-                "Юристу стоит проверить применимость AI Act и privacy-требований, классификацию риска, "
-                "внутренний governance-контур, логирование, санкционные и экспортные ограничения."
+                "Юристу стоит проверить применимость AI Act и требований к персональным данным, классификацию риска, "
+                "внутренний контур управления, логирование, санкционные и экспортные ограничения."
             )
         if inferred_rubric == "ai_law":
             return (
-                "Юристу стоит проверить права на output и training data, лицензионный режим модели, "
-                "границы automated decision-making, explainability, human review и enforceability решений."
+                "Юристу стоит проверить права на результат и обучающие данные, лицензионный режим модели, "
+                "границы автоматизированного принятия решений, объяснимость, проверку человеком и исполнимость решений."
             )
         if any(marker in haystack for marker in ("персональн", "privacy", "gdpr", "локализац", "трансгранич")):
             return (
@@ -1473,32 +1473,32 @@ class LLMNewsWriter:
             )
         if any(marker in haystack for marker in ("contract", "договор", "sla", "redlining", "vendor", "platform")):
             return (
-                "Юристу стоит проверить SLA, распределение ответственности поставщика, права на output, "
-                "режим конфиденциальности, audit rights и риск vendor lock-in."
+                "Юристу стоит проверить SLA, распределение ответственности поставщика, права на результат, "
+                "режим конфиденциальности, право аудита и риск зависимости от поставщика."
             )
         if any(marker in haystack for marker in ("litigation", "суд", "e-discovery", "ediscovery", "legal hold", "document review")):
             return (
-                "Юристу стоит оценить explainability, порядок валидации модели, сохранность цепочки доказательств, "
-                "полноту legal hold и обязательный human-in-the-loop при работе со спором."
+                "Юристу стоит оценить объяснимость, порядок проверки модели, сохранность цепочки доказательств, "
+                "полноту фиксации документов и обязательное участие человека при работе со спором."
             )
         if rubric in _DAILY_LEGAL_RUBRICS or any(marker in haystack for marker in ("ai act", "регулирован", "compliance", "governance", "sanction", "санкц", "экспорт")):
             return (
-                "Юристу стоит проверить применимость AI Act и privacy-требований, внутренний governance-контур, "
-                "логирование, контроль качества output и распределение ответственности между бизнесом и вендором."
+                "Юристу стоит проверить применимость AI Act и требований к персональным данным, внутренний контур управления, "
+                "логирование, контроль качества результата и распределение ответственности между бизнесом и поставщиком."
             )
         if pillar == "market":
             return (
-                "Для юрфункции здесь важны vendor due diligence, санкционные и экспортные ограничения, "
-                "режим закупки, contractual safeguards и устойчивость поставщика в критичных сценариях."
+                "Для юрфункции здесь важны проверка поставщика, санкционные и экспортные ограничения, "
+                "режим закупки, договорные гарантии и устойчивость поставщика в критичных сценариях."
             )
         if pillar == "tools":
             return (
-                "Юристу стоит проверить режим доступа к данным, ограничения использования output, "
+                "Юристу стоит проверить режим доступа к данным, ограничения использования результата, "
                 "SLA, конфиденциальность и право на аудит действий модели."
             )
         return (
             "Юристу стоит проверить договорный режим использования инструмента, контур данных, "
-            "контроль качества output и распределение ответственности при внедрении."
+            "контроль качества результата и распределение ответственности при внедрении."
         )
 
     def _format_post(
@@ -1509,6 +1509,7 @@ class LLMNewsWriter:
         format_type: str,
         cta_type: str,
         pillar: str,
+        intelligent_footer_enabled: bool = True,
     ) -> tuple[str, str, str]:
         limits = _FORMAT_FIELD_LIMITS.get(format_type, _FORMAT_FIELD_LIMITS["standard"])
         raw_title = self._sanitize_generated_field(data.get("title") or fallback_title)
@@ -1558,7 +1559,7 @@ class LLMNewsWriter:
 
         escaped_title = html.escape(title)
         escaped_what_happened = html.escape(
-            what_happened or "В статье описан новый кейс внедрения AI с конкретными операционными деталями."
+            what_happened or "В статье описан новый кейс внедрения ИИ с конкретными операционными деталями."
         )
         escaped_business_effect = html.escape(
             business_effect or "Сценарий влияет на скорость процессов, стоимость операций и управляемость качества сервиса."
@@ -1579,20 +1580,22 @@ class LLMNewsWriter:
         escaped_conclusion = html.escape(conclusion)
         adoption_fit, adoption_patterns = self._extract_adoption_patterns(data)
         adoption_block = self._adoption_block_html(adoption_patterns)
-        cta_line = self._semantic_footer_html(
-            title=title,
-            rubric=rubric,
-            pillar=pillar,
-            format_type=format_type,
-            cta_type=cta_type,
-            lead=lead,
-            what_happened=what_happened,
-            business_effect=business_effect,
-            legal_risks=legal_risks,
-            conclusion=conclusion,
-            adoption_fit=adoption_fit,
-            adoption_patterns=adoption_patterns,
-        )
+        cta_line = ""
+        if intelligent_footer_enabled:
+            cta_line = self._semantic_footer_html(
+                title=title,
+                rubric=rubric,
+                pillar=pillar,
+                format_type=format_type,
+                cta_type=cta_type,
+                lead=lead,
+                what_happened=what_happened,
+                business_effect=business_effect,
+                legal_risks=legal_risks,
+                conclusion=conclusion,
+                adoption_fit=adoption_fit,
+                adoption_patterns=adoption_patterns,
+            )
         source_block = self._source_block(article_url, format_type)
         hashtags_line = " ".join(html.escape(tag) for tag in hashtags[:4])
         next_step_block = f"<b>Следующий шаг</b>\n{cta_line}\n\n" if cta_line else ""
@@ -1770,20 +1773,28 @@ class LLMNewsWriter:
         repaired = normalize_post_text(response.choices[0].message.content or "")
         return repaired
 
-    def _fallback_post(self, article: ArticleCandidate, format_type: str, cta_type: str, pillar: str) -> dict[str, str]:
+    def _fallback_post(
+        self,
+        article: ArticleCandidate,
+        format_type: str,
+        cta_type: str,
+        pillar: str,
+        *,
+        intelligent_footer_enabled: bool = True,
+    ) -> dict[str, str]:
         title = self._shorten(article.title or "Обзор новости", 110)
         summary_raw = self._sanitize_summary_for_fallback(article.summary)
         summary = self._shorten(summary_raw, 1300, prefer_sentence=True)
-        summary = summary or "Источник сообщил о новом кейсе внедрения AI в юридическом процессе."
+        summary = summary or "Источник сообщил о новом кейсе внедрения ИИ в юридическом процессе."
         business_effect = "Кейс показывает, как сократить ручную работу и повысить скорость обработки типовых задач."
-        legal_risks = "Юристу стоит заранее проверить обработку персональных данных, договорную ответственность поставщика, требования к логированию и контроль качества output."
+        legal_risks = "Юристу стоит заранее проверить обработку персональных данных, договорную ответственность поставщика, требования к логированию и контроль качества результата."
         conclusion = ""
         if pillar == "market":
-            business_effect = "Это сигнал о том, что вокруг крупных AI-вендоров усиливается рыночный, политический и регуляторный контур."
-            conclusion = "Дальше стоит смотреть, как это повлияет на выбор поставщиков, закупки и корпоративные AI-стратегии."
+            business_effect = "Это сигнал о том, что вокруг крупных поставщиков ИИ усиливается рыночный, политический и регуляторный контур."
+            conclusion = "Дальше стоит смотреть, как это повлияет на выбор поставщиков, закупки и корпоративные стратегии внедрения ИИ."
         elif pillar == "tools":
-            business_effect = "Новость показывает, как меняется контур выбора AI-инструментов и требований к вендорам со стороны корпоративных команд."
-            conclusion = "Дальше важны не общие обещания вендора, а режим доступа к данным, качество output и контрактные ограничения."
+            business_effect = "Новость показывает, как меняется контур выбора ИИ-инструментов и требований к поставщикам со стороны корпоративных команд."
+            conclusion = "Дальше важны не общие обещания поставщика, а режим доступа к данным, качество результата и договорные ограничения."
         elif pillar in {"implementation", "case"}:
             conclusion = "Практический смысл здесь не в самой новости, а в том, какие процессы и роли можно пересобрать внутри юрфункции."
         base: dict[str, Any] = {
@@ -1800,14 +1811,14 @@ class LLMNewsWriter:
             weekly_points = self._extract_internal_weekly_points(summary_raw)
             weekly_points.extend(
                 [
-                    "Команды все чаще считают KPI не по количеству AI-фич, а по скорости прохождения юридического цикла, качеству исходящих документов и снижению операционных ошибок на повторяющихся задачах.",
-                    "Выбор AI-вендора смещается в сторону прозрачности процессов, управляемости данных, стабильности SLA и готовности поставщика подтверждать контроль качества output в критичных сценариях.",
-                    "Роль юриста усиливается в точках контроля качества output, настройки правил эскалации и принятия финального решения там, где цена ошибки для бизнеса выше среднего.",
+                    "Команды все чаще считают KPI не по количеству ИИ-функций, а по скорости прохождения юридического цикла, качеству исходящих документов и снижению операционных ошибок на повторяющихся задачах.",
+                    "Выбор ИИ-поставщика смещается в сторону прозрачности процессов, управляемости данных, стабильности SLA и готовности поставщика подтверждать контроль качества результата в критичных сценариях.",
+                    "Роль юриста усиливается в точках контроля качества результата, настройки правил эскалации и принятия финального решения там, где цена ошибки для бизнеса выше среднего.",
                     "Внедрение переходит из режима «тест инструмента» в режим «операционная система юрфункции», где важны регламенты, метрики, ответственность и предсказуемость результата.",
-                    "Рынок показывает, что без связки legal ops, privacy, governance и контрактного контура даже сильный AI-инструмент не дает стабильного эффекта в продакшене.",
-                    "Команды, которые заранее фиксируют human-in-the-loop и регламенты проверки output, быстрее масштабируют Legal AI без роста операционных и правовых инцидентов.",
+                    "Рынок показывает, что без связки юридических операций, персональных данных, управления процессом и контрактного контура даже сильный ИИ-инструмент не дает стабильного эффекта в рабочем режиме.",
+                    "Команды, которые заранее фиксируют участие человека в проверке и регламенты контроля результата, быстрее масштабируют Legal AI без роста операционных и правовых инцидентов.",
                     "Бизнес-клиенты ожидают от юрфункции не экспериментов с инструментами, а стабильного SLA по срокам договорной и претензионной работы с прозрачной ответственностью.",
-                    "Пилоты с четкими метриками, owner-ролями и аудитом качества показывают лучший эффект, чем внедрения без формализованного governance-контура.",
+                    "Пилоты с четкими метриками, ответственными ролями и аудитом качества показывают лучший эффект, чем внедрения без формализованного контура управления.",
                 ]
             )
             weekly_points = self._dedupe_weekly_points(weekly_points)
@@ -1825,20 +1836,20 @@ class LLMNewsWriter:
                     ),
                     "business_effect": (
                         "Для юрфункции это означает переход от точечных экспериментов к операционной модели, "
-                        "где важны скорость цикла, качество проверки, предсказуемость output и экономическая эффективность на длинной дистанции. "
+                        "где важны скорость цикла, качество проверки, предсказуемость результата и экономическая эффективность на длинной дистанции. "
                         "Бизнес ожидает не просто автоматизации шага, а устойчивого сокращения срока обработки обращений, договоров и внутренних запросов."
                     ),
                     "legal_risks": (
                         "Юристу важно заранее определить контур данных, договорные ограничения, ответственность поставщика, "
-                        "режим логирования и контроль качества output в критичных сценариях. "
-                        "Отдельный акцент нужен на правах на данные и output, трансграничной передаче, vendor lock-in, "
-                        "audit rights и понятной модели эскалации при ошибках системы."
+                        "режим логирования и контроль качества результата в критичных сценариях. "
+                        "Отдельный акцент нужен на правах на данные и результат, трансграничной передаче, зависимости от поставщика, "
+                        "праве аудита и понятной модели эскалации при ошибках системы."
                     ),
                     "next_steps": (
                         "Переоценить приоритеты автоматизации на ближайший квартал и выбрать 2-3 процесса с максимальным эффектом; "
                         "зафиксировать критерии качества, SLA и метрики для каждого этапа; "
-                        "обновить договорный, privacy и governance-контур до запуска масштабного потока; "
-                        "назначить owner-роли за валидацию output и эскалацию юридических рисков"
+                        "обновить договорный контур, контур персональных данных и контур управления до запуска масштабного потока; "
+                        "назначить ответственные роли за проверку результата и эскалацию юридических рисков"
                     ),
                     "conclusion": (
                         "Главный вывод недели: эффект дает не отдельная модель, а связка процессов, юридического контроля и "
@@ -1854,12 +1865,13 @@ class LLMNewsWriter:
             format_type=format_type,
             cta_type=cta_type,
             pillar=pillar,
+            intelligent_footer_enabled=intelligent_footer_enabled,
         )
         if format_type == "weekly_review" and len(text) < _FORMAT_MIN_CHARS["weekly_review"]:
             booster_block = (
                 "<b>Фокус следующей недели</b>\n"
-                "Приоритетом становится не количество AI-инструментов, а управляемость процесса: "
-                "кто владеет качеством output, как устроена эскалация спорных кейсов, где фиксируются отклонения и "
+                "Приоритетом становится не количество ИИ-инструментов, а управляемость процесса: "
+                "кто отвечает за качество результата, как устроена эскалация спорных кейсов, где фиксируются отклонения и "
                 "как команда доказывает воспроизводимость результата при росте нагрузки. "
                 "Именно эта дисциплина отделяет устойчивые внедрения от красивых, но краткоживущих пилотов."
             )
@@ -1879,6 +1891,7 @@ class LLMNewsWriter:
         pillar: str = "implementation",
         negative_feedback_context: str = "",
         target_publish_at: datetime | None = None,
+        intelligent_footer_enabled: bool = True,
     ) -> dict[str, str] | None:
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         inferred_rubric = self._infer_rubric_hint(article, pillar)
@@ -1943,6 +1956,7 @@ class LLMNewsWriter:
                 format_type=format_type,
                 cta_type=cta_type,
                 pillar=pillar,
+                intelligent_footer_enabled=intelligent_footer_enabled,
             )
             fact_checked = self._fact_check_post(
                 article=article,
@@ -2006,7 +2020,13 @@ class LLMNewsWriter:
                 )
                 if not self._allow_quality_fallback(format_type):
                     if format_type == "weekly_review":
-                        fallback_weekly = self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+                        fallback_weekly = self._fallback_post(
+                            article,
+                            format_type=format_type,
+                            cta_type=cta_type,
+                            pillar=pillar,
+                            intelligent_footer_enabled=intelligent_footer_enabled,
+                        )
                         if self._passes_quality_gate(fallback_weekly.get("text", ""), format_type):
                             logger.info(
                                 "llm_weekly_replaced_with_fallback",
@@ -2018,12 +2038,24 @@ class LLMNewsWriter:
                         extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
                     )
                     return None
-                return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+                return self._fallback_post(
+                    article,
+                    format_type=format_type,
+                    cta_type=cta_type,
+                    pillar=pillar,
+                    intelligent_footer_enabled=intelligent_footer_enabled,
+                )
             logger.info("llm_post_generated", extra={"title": title[:80], "rubric": rubric, "format_type": format_type})
             return {"title": title[:160], "text": text, "rubric": rubric[:100]}
         except Exception as exc:
             logger.warning("llm_post_parse_failed", extra={"error": str(exc), "format_type": format_type})
-            return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+            return self._fallback_post(
+                article,
+                format_type=format_type,
+                cta_type=cta_type,
+                pillar=pillar,
+                intelligent_footer_enabled=intelligent_footer_enabled,
+            )
 
     def fallback_post(
         self,
@@ -2032,9 +2064,16 @@ class LLMNewsWriter:
         format_type: str = "standard",
         cta_type: str = "soft",
         pillar: str = "implementation",
+        intelligent_footer_enabled: bool = True,
     ) -> dict[str, str]:
         """Public fallback wrapper for caller-side hardening in generation pipeline."""
-        return self._fallback_post(article, format_type=format_type, cta_type=cta_type, pillar=pillar)
+        return self._fallback_post(
+            article,
+            format_type=format_type,
+            cta_type=cta_type,
+            pillar=pillar,
+            intelligent_footer_enabled=intelligent_footer_enabled,
+        )
 
 
 def build_manual_footer(post_kind: str) -> str:
