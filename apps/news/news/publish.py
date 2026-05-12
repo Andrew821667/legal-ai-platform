@@ -398,7 +398,7 @@ def _normalize_text_before_publish(
     return _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
 
 
-def main() -> int:
+def main(*, allow_idle_fallback: bool = True) -> int:
     if not settings.api_key_news:
         logger.error("API_KEY_NEWS is required")
         return 1
@@ -429,11 +429,14 @@ def main() -> int:
 
     claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
-        try:
-            fallback_promoted = _promote_fallback_posts_for_idle_publisher(client, limit=claim_limit)
-        except Exception as exc:
-            fallback_promoted = 0
-            logger.warning("idle_publisher_fallback_failed", extra={"error": str(exc)})
+        fallback_promoted = 0
+        if allow_idle_fallback:
+            try:
+                fallback_promoted = _promote_fallback_posts_for_idle_publisher(client, limit=claim_limit)
+            except Exception as exc:
+                logger.warning("idle_publisher_fallback_failed", extra={"error": str(exc)})
+        else:
+            logger.info("idle_publisher_fallback_skipped_during_startup_grace")
 
         if fallback_promoted:
             claim_response = client.claim_posts(limit=claim_limit)

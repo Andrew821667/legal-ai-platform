@@ -10,6 +10,7 @@ from news.publish import (
     _promote_fallback_posts_for_idle_publisher,
     _promote_ready_posts_for_idle_queue,
     _retryable_publish_patch,
+    main as publish_main,
 )
 from news.settings import settings
 
@@ -46,6 +47,25 @@ class _FakeClient:
     def patch_post(self, post_id: str, payload: dict[str, str]):
         self.patched.append((post_id, payload))
         return _FakeResponse({})
+
+
+class _FakeMainClient(_FakeClient):
+    def __init__(self) -> None:
+        super().__init__(
+            ready_rows=[{"id": "ready-1"}],
+            review_rows=[{"id": "review-1"}],
+            scheduled_rows=[],
+        )
+        self.claims = 0
+
+    def list_automation_controls(self, scope: str | None = None):
+        _ = scope
+        return _FakeResponse([])
+
+    def claim_posts(self, limit: int):
+        _ = limit
+        self.claims += 1
+        return _FakeResponse([], status_code=204)
 
 
 def test_autofill_publish_at_keeps_future_publish_time() -> None:
@@ -119,6 +139,34 @@ def test_idle_publisher_promotes_review_when_ready_empty() -> None:
             {"status": "scheduled", "publish_at": now_utc.isoformat(), "last_error": None},
         )
     ]
+
+
+def test_main_skips_idle_fallback_when_startup_grace_is_active(monkeypatch) -> None:
+    client = _FakeMainClient()
+
+    monkeypatch.setattr("news.publish.CoreClient", lambda *_args, **_kwargs: client)
+    monkeypatch.setattr("news.publish.rebalance_active_publish_queue", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(settings, "api_key_news", "test-key")
+
+    result = publish_main(allow_idle_fallback=False)
+
+    assert result == 0
+    assert client.claims == 1
+    assert client.patched == []
+
+
+def test_main_allows_idle_fallback_after_startup_grace(monkeypatch) -> None:
+    client = _FakeMainClient()
+
+    monkeypatch.setattr("news.publish.CoreClient", lambda *_args, **_kwargs: client)
+    monkeypatch.setattr("news.publish.rebalance_active_publish_queue", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(settings, "api_key_news", "test-key")
+
+    result = publish_main(allow_idle_fallback=True)
+
+    assert result == 0
+    assert client.claims == 2
+    assert [post_id for post_id, _ in client.patched] == ["ready-1"]
 
 
 def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:
