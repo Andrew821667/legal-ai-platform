@@ -25,6 +25,10 @@ def _send_worker_heartbeat(client: CoreClient, info: dict[str, object]) -> None:
         logger.warning("worker_heartbeat_failed", extra={"worker_id": _WORKER_ID, "error": str(exc)})
 
 
+def _idle_fallback_allowed(*, started_at: float, now_ts: float, grace_seconds: int) -> bool:
+    return now_ts - started_at >= max(grace_seconds, 0)
+
+
 def main() -> int:
     if not settings.api_key_news:
         logger.error("API_KEY_NEWS is required")
@@ -43,17 +47,27 @@ def main() -> int:
             },
         )
 
+    started_at = time.time()
     last_tick_heartbeat_at = 0.0
     while True:
         sleep_for = settings.news_publish_interval_seconds
         try:
+            now_ts = time.time()
             if client is not None:
                 rows = load_news_controls(client)
                 sleep_for = publish_interval_seconds(rows)
-            result_code = publish_once()
+            allow_idle_fallback = _idle_fallback_allowed(
+                started_at=started_at,
+                now_ts=now_ts,
+                grace_seconds=settings.news_publish_fallback_startup_grace_seconds,
+            )
+            result_code = publish_once(allow_idle_fallback=allow_idle_fallback)
             if client is not None:
-                now_ts = time.time()
-                heartbeat_info: dict[str, object] = {"mode": "poll", "result_code": result_code}
+                heartbeat_info: dict[str, object] = {
+                    "mode": "poll",
+                    "result_code": result_code,
+                    "idle_fallback_allowed": allow_idle_fallback,
+                }
                 if now_ts - last_tick_heartbeat_at >= _TICK_HEARTBEAT_SECONDS:
                     heartbeat_info["action"] = "tick"
                     heartbeat_info["publish_interval"] = sleep_for
