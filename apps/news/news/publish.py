@@ -9,10 +9,11 @@ import json
 import requests
 
 from news.active_queue import parse_post_datetime, rebalance_active_publish_queue
-from news.control_plane import publish_claim_limit
+from news.control_plane import intelligent_footer_enabled, publish_claim_limit
 from news.core_client import CoreClient
 from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
+from news.pipeline import normalize_rubric_to_pillar
 from news.settings import settings
 
 setup_logging()
@@ -350,8 +351,51 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
     return primary_message_id
 
 
-def _normalize_text_before_publish(text: str) -> str:
-    return LLMNewsWriter.normalize_post_footer_blocks(text)
+def _normalize_format_type(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    for prefix in ("operator_ai_", "manual_"):
+        if raw.startswith(prefix):
+            return raw.removeprefix(prefix)
+    return raw or "daily"
+
+
+def _insert_footer_before_source(text: str, footer_html: str) -> str:
+    footer = f"<b>Следующий шаг</b>\n{footer_html}"
+    source_index = text.find("<b>Источник</b>")
+    if source_index != -1:
+        return f"{text[:source_index].rstrip()}\n\n{footer}\n\n{text[source_index:].lstrip()}"
+    return f"{text.rstrip()}\n\n{footer}"
+
+
+def _ensure_intelligent_footer_before_publish(text: str, post: dict[str, Any], *, enabled: bool = True) -> str:
+    normalized = LLMNewsWriter.normalize_post_footer_blocks(text)
+    if not enabled or "<b>Следующий шаг</b>" in normalized:
+        return normalized
+
+    format_type = _normalize_format_type(post.get("format_type"))
+    if format_type == "weekly_review":
+        return normalized
+
+    title = str(post.get("title") or "")
+    rubric = str(post.get("rubric") or "")
+    pillar = normalize_rubric_to_pillar(rubric, f"{title}\n{normalized}")
+    cta_type = str(post.get("cta_type") or "soft").strip().lower() or "soft"
+    footer_text = LLMNewsWriter._auto_footer_text(format_type, cta_type, pillar)
+    footer_html = LLMNewsWriter._finalize_footer_html(footer_text)
+    if not footer_html:
+        return normalized
+    return LLMNewsWriter.normalize_post_footer_blocks(_insert_footer_before_source(normalized, footer_html))
+
+
+def _normalize_text_before_publish(
+    text: str,
+    post: dict[str, Any] | None = None,
+    *,
+    intelligent_footer: bool = True,
+) -> str:
+    if post is None:
+        return LLMNewsWriter.normalize_post_footer_blocks(text)
+    return _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
 
 
 def main() -> int:
@@ -361,12 +405,15 @@ def main() -> int:
 
     client = CoreClient(settings.core_api_url, settings.api_key_news)
     claim_limit = max(settings.news_publish_claim_limit, 1)
+    control_rows: list[dict[str, Any]] = []
+    publish_intelligent_footer = True
     try:
         controls_response = client.list_automation_controls(scope="news")
         controls_response.raise_for_status()
         control_rows = list(controls_response.json())
         controls = {row.get("key"): bool(row.get("enabled", True)) for row in control_rows}
         claim_limit = publish_claim_limit(control_rows)
+        publish_intelligent_footer = intelligent_footer_enabled(control_rows)
         if controls.get("news.publish.enabled") is False:
             logger.info("publish_disabled_by_control_plane")
             return 0
@@ -413,7 +460,11 @@ def main() -> int:
         post_id = post["id"]
         try:
             original_text = str(post.get("text") or "")
-            normalized_text = _normalize_text_before_publish(original_text)
+            normalized_text = _normalize_text_before_publish(
+                original_text,
+                post,
+                intelligent_footer=publish_intelligent_footer,
+            )
             message_id = _send_to_telegram(normalized_text, post.get("media_urls"))
             patch_payload: dict[str, Any] = {
                 "status": "posted",

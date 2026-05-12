@@ -214,3 +214,71 @@ def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> No
     assert "Асистент" not in normalized
     assert "Напишите в" not in normalized
     assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
+
+
+def test_normalize_text_before_publish_adds_missing_footer_for_applicable_ready_post() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста про рынок Legal AI и внедрение в юрфункции.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Заголовок", "format_type": "daily", "cta_type": "soft", "rubric": "contracts"},
+    )
+
+    assert "<b>Следующий шаг</b>" in normalized
+    assert "https://t.me/legal_ai_helper_new_bot" in normalized
+    assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
+
+
+def test_normalize_text_before_publish_does_not_force_footer_when_not_applicable() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста про общий рыночный сигнал без явного сценария внедрения.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Заголовок", "format_type": "daily", "cta_type": "soft", "rubric": "market"},
+    )
+
+    assert "<b>Следующий шаг</b>" not in normalized
+
+
+def test_normalize_text_before_publish_respects_disabled_footer_control() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Заголовок", "format_type": "daily", "cta_type": "soft", "rubric": "market"},
+        intelligent_footer=False,
+    )
+
+    assert "<b>Следующий шаг</b>" not in normalized
+
+
+def test_normalize_text_before_publish_keeps_weekly_review_footerless() -> None:
+    original = (
+        "<b>Обзор недели</b>\n\n"
+        "1. Первый сигнал.\n"
+        "2. Второй сигнал.\n\n"
+        "<b>Источник</b>: внутренняя подборка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Обзор недели", "format_type": "weekly_review", "cta_type": "soft", "rubric": "market"},
+    )
+
+    assert "<b>Следующий шаг</b>" not in normalized
