@@ -301,3 +301,30 @@ def test_normalize_post_text_removes_markdown_artifacts() -> None:
     assert "[источник](" not in normalized
     assert "• Пункт 1" in normalized
     assert normalized.endswith(".")
+
+
+def test_normalize_post_text_russifies_common_editorial_anglicisms_without_touching_links() -> None:
+    text = (
+        "<b>In-house AI против Big Law</b>\n\n"
+        "CEO объяснил, почему in-house-юристы считают KPI не по AI-фич, "
+        "а по workflow, output, red flags, vendor lock-in и audit rights. "
+        "AI-вендора проверяют через due diligence и human-in-the-loop.\n\n"
+        '<b>Источник</b>: <a href="https://example.com/legal-ais-output-workflow">оригинал статьи</a>'
+    )
+
+    normalized = normalize_post_text(text)
+
+    assert "крупные юрфирмы" in normalized
+    assert "генеральный директор" in normalized
+    assert "корпоративные юристы" in normalized
+    assert "показатели" in normalized
+    assert "ИИ-функций" in normalized
+    assert "процесс" in normalized
+    assert "результат" in normalized
+    assert "рисковые признаки" in normalized
+    assert "зависимость от поставщика" in normalized
+    assert "права на аудит" in normalized
+    assert "поставщика ИИ-решения" in normalized
+    assert "юридическая проверка" in normalized
+    assert "обязательная проверка человеком" in normalized
+    assert 'href="https://example.com/legal-ais-output-workflow"' in normalized
