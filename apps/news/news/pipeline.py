@@ -879,6 +879,7 @@ def normalize_post_text(text: str) -> str:
     normalized = _cleanup_technical_symbols((text or "").strip())
     if not normalized:
         return ""
+    normalized = _russify_editorial_terms(normalized)
     if len(normalized) <= 4000:
         return normalized
 
@@ -939,6 +940,60 @@ def _cleanup_technical_symbols(text: str) -> str:
 
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
+
+_HREF_VALUE_RE = re.compile(r'href="[^"]*"')
+_EDITORIAL_TERM_REPLACEMENTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bweekly_review\b", re.IGNORECASE), "обзор недели"),
+    (re.compile(r"\bbillable hours\b", re.IGNORECASE), "оплачиваемые часы"),
+    (re.compile(r"\bhuman-in-the-loop\b", re.IGNORECASE), "обязательная проверка человеком"),
+    (re.compile(r"\bvendor lock-in\b", re.IGNORECASE), "зависимость от поставщика"),
+    (re.compile(r"\baudit rights\b", re.IGNORECASE), "права на аудит"),
+    (re.compile(r"\bred flags\b", re.IGNORECASE), "рисковые признаки"),
+    (re.compile(r"\bdue diligence\b", re.IGNORECASE), "юридическая проверка"),
+    (re.compile(r"\bworkflow\b", re.IGNORECASE), "процесс"),
+    (re.compile(r"\boutput\b", re.IGNORECASE), "результат"),
+    (re.compile(r"\bBig Law\b"), "крупные юрфирмы"),
+    (re.compile(r"\bin-house-юристы\b", re.IGNORECASE), "корпоративные юристы"),
+    (re.compile(r"\bin-house-юристов\b", re.IGNORECASE), "корпоративных юристов"),
+    (re.compile(r"\bin-house-команд\b", re.IGNORECASE), "внутренних юридических команд"),
+    (re.compile(r"\bin-house-отделе\b", re.IGNORECASE), "внутреннем юридическом отделе"),
+    (re.compile(r"\bin-house-юридические отделы\b", re.IGNORECASE), "внутренние юридические отделы"),
+    (re.compile(r"\bin-house\b", re.IGNORECASE), "корпоративный"),
+    (re.compile(r"\bCEO\b"), "генеральный директор"),
+    (re.compile(r"\bKPI\b"), "показатели"),
+    (re.compile(r"\bAI-ревью\b", re.IGNORECASE), "ИИ-проверка"),
+    (re.compile(r"\bAI-проверк", re.IGNORECASE), "ИИ-проверк"),
+    (re.compile(r"\bAI-инструмент", re.IGNORECASE), "ИИ-инструмент"),
+    (re.compile(r"\bAI-чернов", re.IGNORECASE), "ИИ-чернов"),
+    (re.compile(r"\bAI-сценар", re.IGNORECASE), "ИИ-сценар"),
+    (re.compile(r"\bAI-фич\b", re.IGNORECASE), "ИИ-функций"),
+    (re.compile(r"\bAI-вендора\b", re.IGNORECASE), "поставщика ИИ-решения"),
+    (re.compile(r"\bAI-вендору\b", re.IGNORECASE), "поставщику ИИ-решения"),
+    (re.compile(r"\bAI-вендором\b", re.IGNORECASE), "поставщиком ИИ-решения"),
+    (re.compile(r"\bAI-вендор\b", re.IGNORECASE), "поставщик ИИ-решения"),
+    (re.compile(r"\benterprise-среде\b", re.IGNORECASE), "корпоративной среде"),
+    (re.compile(r"\benterprise-среда\b", re.IGNORECASE), "корпоративная среда"),
+    (re.compile(r"\bowner-роли\b", re.IGNORECASE), "ответственных"),
+)
+
+
+def _russify_editorial_terms(text: str) -> str:
+    if not text:
+        return ""
+
+    protected: list[str] = []
+
+    def protect(match: re.Match[str]) -> str:
+        protected.append(match.group(0))
+        return f"__HREF_PLACEHOLDER_{len(protected) - 1}__"
+
+    updated = _HREF_VALUE_RE.sub(protect, text)
+    for pattern, replacement in _EDITORIAL_TERM_REPLACEMENTS:
+        updated = pattern.sub(replacement, updated)
+    for index, value in enumerate(protected):
+        updated = updated.replace(f"__HREF_PLACEHOLDER_{index}__", value)
+    return updated
 
 
 class _HTMLTextExtractor(HTMLParser):

@@ -174,7 +174,8 @@ def test_daily_format_prefers_adoption_block_when_present() -> None:
     assert title == "Новый AI-инструмент для договорной работы"
     assert rubric == "legal_ops"
     assert "Где это можно применить" in text
-    assert "Первичная AI-проверка типовых договоров" in text
+    assert "Первичная ИИ-проверка типовых договоров" in text
+    assert "рисковые признаки" in text
     assert "Что это значит для команд" not in text
 
 
