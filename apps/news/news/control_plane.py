@@ -68,6 +68,14 @@ def review_retention_days(rows: list[dict[str, Any]]) -> int:
     return settings.news_review_retention_days
 
 
+def intelligent_footer_enabled(rows: list[dict[str, Any]]) -> bool:
+    config = _generate_config(rows)
+    value = config.get("intelligent_footer_enabled")
+    if isinstance(value, bool):
+        return value
+    return True
+
+
 def telegram_ingest_schedule_times(rows: list[dict[str, Any]]) -> list[str]:
     config = _telegram_ingest_config(rows)
     morning = str(config.get("morning_time") or settings.news_telegram_ingest_morning_slot).strip()

@@ -21,6 +21,7 @@ _REVIEW_AUTOFILL_MIN_LIMIT = 3
 _REVIEW_AUTOFILL_SCAN_LIMIT = 10
 _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
+_IDLE_FALLBACK_STATUSES = ("ready", "review")
 
 
 class TelegramRequestError(RuntimeError):
@@ -112,6 +113,54 @@ def _promote_ready_posts_for_idle_queue(client: CoreClient, *, limit: int) -> in
     if promoted:
         logger.info("ready_posts_promoted_to_scheduled", extra={"count": promoted})
     return promoted
+
+
+def _promote_fallback_posts_for_idle_publisher(
+    client: CoreClient,
+    *,
+    limit: int,
+    now_utc: datetime | None = None,
+) -> int:
+    """
+    Keep the channel moving when no due scheduled posts are available.
+
+    Priority is intentional and mirrors the admin UI:
+    1. ready: already approved for publication;
+    2. review: next-best editorial queue when ready is empty.
+    """
+    now_utc = now_utc or datetime.now(timezone.utc)
+    promote_limit = max(limit, 1)
+
+    for source_status in _IDLE_FALLBACK_STATUSES:
+        response = client.list_posts(limit=promote_limit, status=source_status, newest_first=False)
+        response.raise_for_status()
+        rows = list(response.json() or [])
+        if not rows:
+            continue
+
+        promoted = 0
+        for row in rows[:promote_limit]:
+            post_id = str(row.get("id") or "").strip()
+            if not post_id:
+                continue
+            client.patch_post(
+                post_id,
+                {
+                    "status": "scheduled",
+                    "publish_at": now_utc.isoformat(),
+                    "last_error": None,
+                },
+            ).raise_for_status()
+            promoted += 1
+
+        if promoted:
+            logger.info(
+                "idle_publisher_fallback_promoted",
+                extra={"source_status": source_status, "count": promoted},
+            )
+            return promoted
+
+    return 0
 
 
 def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
@@ -331,16 +380,29 @@ def main() -> int:
     except Exception as exc:
         logger.warning("stale_scheduled_posts_demote_failed", extra={"error": str(exc)})
 
-    try:
-        rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
-        if any(rebalance.values()):
-            logger.info("active_publish_queue_rebalanced", extra=rebalance)
-    except Exception as exc:
-        logger.warning("active_publish_queue_rebalance_failed", extra={"error": str(exc)})
-
     claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
-        logger.info("no_due_posts")
+        try:
+            fallback_promoted = _promote_fallback_posts_for_idle_publisher(client, limit=claim_limit)
+        except Exception as exc:
+            fallback_promoted = 0
+            logger.warning("idle_publisher_fallback_failed", extra={"error": str(exc)})
+
+        if fallback_promoted:
+            claim_response = client.claim_posts(limit=claim_limit)
+        else:
+            try:
+                rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
+                if any(rebalance.values()):
+                    logger.info("active_publish_queue_rebalanced", extra=rebalance)
+            except Exception as exc:
+                logger.warning("active_publish_queue_rebalance_failed", extra={"error": str(exc)})
+
+            logger.info("no_due_posts")
+            return 0
+
+    if claim_response.status_code == 204:
+        logger.info("no_due_posts_after_fallback")
         return 0
     claim_response.raise_for_status()
 

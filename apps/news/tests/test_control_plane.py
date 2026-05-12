@@ -4,6 +4,7 @@ from news.control_plane import (
     generate_limit,
     generate_slot_grace_minutes,
     generate_schedule_times,
+    intelligent_footer_enabled,
     publish_claim_limit,
     review_retention_days,
     telegram_ingest_fetch_limit,
@@ -35,6 +36,7 @@ def test_generate_limit_and_retention_defaults() -> None:
     assert generate_limit(rows) == 5
     assert review_retention_days(rows) == 3
     assert generate_slot_grace_minutes(rows) == 35
+    assert intelligent_footer_enabled(rows) is True
 
 
 def test_generate_limit_and_retention_from_control_config() -> None:
@@ -51,6 +53,18 @@ def test_generate_limit_and_retention_from_control_config() -> None:
     assert generate_limit(rows) == 7
     assert review_retention_days(rows) == 5
     assert generate_slot_grace_minutes(rows) == 44
+
+
+def test_intelligent_footer_can_be_disabled_from_control_config() -> None:
+    rows = [
+        {
+            "key": "news.generate.enabled",
+            "config": {
+                "intelligent_footer_enabled": False,
+            },
+        }
+    ]
+    assert intelligent_footer_enabled(rows) is False
 
 
 def test_publish_claim_limit_defaults_to_single_post() -> None:

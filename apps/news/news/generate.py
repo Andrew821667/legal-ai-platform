@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from news.control_plane import enabled_telegram_channels
+from news.control_plane import enabled_telegram_channels, intelligent_footer_enabled
 from news.core_client import CoreClient
 from news.feedback import render_negative_feedback_context, select_negative_feedback_examples
 from news.llm_writer import LLMNewsWriter
@@ -423,6 +423,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     broad_ai_limit = _broad_ai_limit(control_rows)
     general_news_limit = _general_news_limit(control_rows)
     feedback_guard_enabled = _is_enabled(controls, "news.feedback.guard.enabled", True)
+    smart_footer_enabled = intelligent_footer_enabled(control_rows)
     negative_feedback_context = (
         render_negative_feedback_context(negative_feedback_examples) if feedback_guard_enabled else ""
     )
@@ -589,6 +590,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                     pillar=pillar,
                     negative_feedback_context=negative_feedback_context,
                     target_publish_at=publish_at_utc,
+                    intelligent_footer_enabled=smart_footer_enabled,
                 )
             except Exception as exc:
                 logger.warning(
@@ -609,6 +611,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                             format_type=format_type,
                             cta_type=cta_type,
                             pillar=pillar,
+                            intelligent_footer_enabled=smart_footer_enabled,
                         )
                         logger.info(
                             "synthetic_slot_fallback_applied",
@@ -637,6 +640,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                             format_type=format_type,
                             cta_type=cta_type,
                             pillar=pillar,
+                            intelligent_footer_enabled=smart_footer_enabled,
                         )
                         logger.info(
                             "synthetic_slot_fallback_applied_after_rejection",
