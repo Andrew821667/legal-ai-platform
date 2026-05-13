@@ -1,32 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PUBLIC_APP_DIR="${PUBLIC_APP_DIR:-/Users/legalai/projects/legal-ai-platform}"
-BOT_APP_DIR="${BOT_APP_DIR:-/Users/aiwork/legal-ai-platform}"
-PUBLIC_COMPOSE="${PUBLIC_COMPOSE:-infra/compose/docker-compose.public.yml}"
-BOT_COMPOSE="${BOT_COMPOSE:-docker-compose.bots.yml}"
-PUBLIC_ENV="${PUBLIC_ENV:-.env}"
-BOT_ENV="${BOT_ENV:-.env}"
-CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-http://127.0.0.1:${CORE_API_PUBLISH_PORT:-8100}}"
+APP_DIR="${APP_DIR:-${PUBLIC_APP_DIR:-/Users/legalai/projects/legal-ai-platform}}"
+COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
+ENV_FILE="${ENV_FILE:-.env}"
+CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-http://127.0.0.1:${CORE_API_PUBLISH_PORT:-8000}}"
 SKIP_PULL="${SKIP_PULL:-0}"
+COMPOSE_BUILD_MODE="${COMPOSE_BUILD_MODE:-}"
 
-public_compose=(docker compose -p compose --env-file "$PUBLIC_ENV" -f "$PUBLIC_COMPOSE")
-bot_compose=(docker compose --env-file "$BOT_ENV" -f "$BOT_COMPOSE")
+services=(
+  postgres
+  core-api
+  web
+  lead-bot
+  news-generate
+  news-telegram-ingest
+  news-publish
+  news-admin-bot
+  news-reader-bot
+  news-reader-digest
+  caddy
+)
 
 if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
   echo "Logging in to GHCR..."
   printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 fi
 
-cd "$PUBLIC_APP_DIR"
+cd "$APP_DIR"
 
-if [ "$SKIP_PULL" != "1" ]; then
-  echo "Pulling public images where available..."
-  "${public_compose[@]}" pull postgres core-api web caddy || true
+compose=(docker compose -p compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+
+if [ -z "$COMPOSE_BUILD_MODE" ]; then
+  if [ -n "${CORE_API_IMAGE:-}" ] || [ -n "${WEB_IMAGE:-}" ] || [ -n "${LEAD_BOT_IMAGE:-}" ] || [ -n "${NEWS_IMAGE:-}" ] || [ -n "${NEWS_READER_IMAGE:-}" ]; then
+    COMPOSE_BUILD_MODE="--no-build"
+  else
+    COMPOSE_BUILD_MODE="--build"
+  fi
 fi
 
-echo "Starting public contour..."
-"${public_compose[@]}" up -d --no-build --force-recreate postgres core-api web caddy
+if [ "$SKIP_PULL" != "1" ]; then
+  echo "Pulling production images where available..."
+  "${compose[@]}" pull "${services[@]}" || true
+fi
+
+echo "Starting production stack..."
+"${compose[@]}" up -d "$COMPOSE_BUILD_MODE" postgres
+"${compose[@]}" up -d "$COMPOSE_BUILD_MODE" --force-recreate \
+  core-api \
+  web \
+  lead-bot \
+  news-generate \
+  news-telegram-ingest \
+  news-publish \
+  news-admin-bot \
+  news-reader-bot \
+  news-reader-digest \
+  caddy
 
 echo "Waiting for Core API..."
 for _ in $(seq 1 60); do
@@ -37,21 +67,8 @@ for _ in $(seq 1 60); do
 done
 curl -fsS "${CORE_API_HEALTH_URL%/}/health" >/dev/null
 
-cd "$BOT_APP_DIR"
-
-if [ "$SKIP_PULL" != "1" ]; then
-  echo "Pulling bot/news images where available..."
-  "${bot_compose[@]}" pull lead-bot news-generate news-telegram-ingest news-publish news-admin-bot news-reader-bot news-reader-digest || true
+if [ -x "$APP_DIR/infra/scripts/macmini_deploy_check.sh" ]; then
+  COMPOSE_PROJECT=compose COMPOSE_FILE="$COMPOSE_FILE" "$APP_DIR/infra/scripts/macmini_deploy_check.sh"
 fi
-
-echo "Starting Telegram/VPN contour..."
-"${bot_compose[@]}" up -d --no-build --force-recreate \
-  lead-bot \
-  news-admin-bot \
-  news-generate \
-  news-telegram-ingest \
-  news-publish \
-  news-reader-bot \
-  news-reader-digest
 
 echo "Mac Mini deploy complete"

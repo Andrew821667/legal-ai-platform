@@ -169,6 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v6
 
@@ -186,7 +187,6 @@ jobs:
           : "${MACMINI_HOST:?Set MACMINI_TAILSCALE_HOST, for example 100.78.58.52}"
           ssh -o StrictHostKeyChecking=accept-new legalai@"$MACMINI_HOST" \
             "cd /Users/legalai/projects/legal-ai-platform && git pull --ff-only origin main"
-          scp docker-compose.bots.yml aiwork@"$MACMINI_HOST":/Users/aiwork/legal-ai-platform/docker-compose.bots.yml
 
       - id: image_owner
         run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
@@ -195,7 +195,7 @@ jobs:
         env:
           MACMINI_HOST: ${{ vars.MACMINI_TAILSCALE_HOST }}
           GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_TOKEN: ${{ github.token }}
           IMAGE_OWNER: ${{ steps.image_owner.outputs.value }}
           CORE_API_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-core-api:${{ github.sha }}
           WEB_IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-web:${{ github.sha }}
@@ -205,4 +205,4 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=accept-new andrej@"$MACMINI_HOST" \
-            "GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' CORE_API_IMAGE='$CORE_API_IMAGE' WEB_IMAGE='$WEB_IMAGE' LEAD_BOT_IMAGE='$LEAD_BOT_IMAGE' NEWS_IMAGE='$NEWS_IMAGE' NEWS_READER_IMAGE='$NEWS_READER_IMAGE' PUBLIC_APP_DIR=/Users/legalai/projects/legal-ai-platform BOT_APP_DIR=/Users/aiwork/legal-ai-platform /Users/legalai/projects/legal-ai-platform/infra/scripts/deploy_macmini.sh"
+            "GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' CORE_API_IMAGE='$CORE_API_IMAGE' WEB_IMAGE='$WEB_IMAGE' LEAD_BOT_IMAGE='$LEAD_BOT_IMAGE' NEWS_IMAGE='$NEWS_IMAGE' NEWS_READER_IMAGE='$NEWS_READER_IMAGE' APP_DIR=/Users/legalai/projects/legal-ai-platform /Users/legalai/projects/legal-ai-platform/infra/scripts/deploy_macmini.sh"

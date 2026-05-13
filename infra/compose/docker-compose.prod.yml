@@ -145,6 +145,7 @@ services:
         max-file: "5"
 
   news-generate:
+    image: ${NEWS_IMAGE:-compose-news:latest}
     build:
       context: ../..
       dockerfile: apps/news/Dockerfile
@@ -174,6 +175,7 @@ services:
         max-file: "5"
 
   news-telegram-ingest:
+    image: ${NEWS_IMAGE:-compose-news:latest}
     build:
       context: ../..
       dockerfile: apps/news/Dockerfile
@@ -203,6 +205,7 @@ services:
         max-file: "5"
 
   news-publish:
+    image: ${NEWS_IMAGE:-compose-news:latest}
     build:
       context: ../..
       dockerfile: apps/news/Dockerfile
@@ -228,6 +231,7 @@ services:
         max-file: "5"
 
   news-admin-bot:
+    image: ${NEWS_IMAGE:-compose-news:latest}
     build:
       context: ../..
       dockerfile: apps/news/Dockerfile
@@ -252,6 +256,7 @@ services:
         max-file: "5"
 
   news-reader-bot:
+    image: ${NEWS_READER_IMAGE:-compose-news-reader:latest}
     build:
       context: ../..
       dockerfile: apps/news/legacy/Dockerfile.reader
@@ -286,6 +291,7 @@ services:
         max-file: "5"
 
   news-reader-digest:
+    image: ${NEWS_READER_IMAGE:-compose-news-reader:latest}
     build:
       context: ../..
       dockerfile: apps/news/legacy/Dockerfile.reader
