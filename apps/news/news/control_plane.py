@@ -133,6 +133,15 @@ def publish_claim_limit(rows: list[dict[str, Any]]) -> int:
     return max(settings.news_publish_claim_limit, 1)
 
 
+def publish_idle_fallback_enabled(rows: list[dict[str, Any]]) -> bool:
+    row = controls_map(rows).get("news.publish.enabled") or {}
+    config = row.get("config") or {}
+    value = config.get("idle_fallback_enabled")
+    if isinstance(value, bool):
+        return value
+    return settings.news_publish_idle_fallback_enabled
+
+
 def generate_limit(rows: list[dict[str, Any]]) -> int:
     config = _generate_config(rows)
     value = config.get("generate_limit")

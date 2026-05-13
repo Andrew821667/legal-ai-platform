@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from news.publish import (
     TelegramRequestError,
@@ -10,6 +10,8 @@ from news.publish import (
     _promote_fallback_posts_for_idle_publisher,
     _promote_ready_posts_for_idle_queue,
     _retryable_publish_patch,
+)
+from news.publish import (
     main as publish_main,
 )
 from news.settings import settings
@@ -69,7 +71,7 @@ class _FakeMainClient(_FakeClient):
 
 
 def test_autofill_publish_at_keeps_future_publish_time() -> None:
-    now_utc = datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc)
+    now_utc = datetime(2026, 3, 16, 12, 0, tzinfo=UTC)
     future = now_utc + timedelta(hours=5)
     row = {"publish_at": future.isoformat()}
 
@@ -79,7 +81,7 @@ def test_autofill_publish_at_keeps_future_publish_time() -> None:
 
 
 def test_autofill_publish_at_shifts_past_review_post_forward() -> None:
-    now_utc = datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc)
+    now_utc = datetime(2026, 3, 16, 12, 0, tzinfo=UTC)
     past = now_utc - timedelta(hours=2)
     row = {"publish_at": past.isoformat()}
 
@@ -89,7 +91,7 @@ def test_autofill_publish_at_shifts_past_review_post_forward() -> None:
 
 
 def test_promote_ready_posts_for_idle_queue() -> None:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     client = _FakeClient(
         ready_rows=[
             {"id": "r1", "publish_at": (now_utc - timedelta(hours=1)).isoformat()},
@@ -106,7 +108,7 @@ def test_promote_ready_posts_for_idle_queue() -> None:
 
 
 def test_idle_publisher_promotes_ready_before_review() -> None:
-    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=timezone.utc)
+    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=UTC)
     client = _FakeClient(
         ready_rows=[{"id": "ready-1"}],
         review_rows=[{"id": "review-1"}],
@@ -124,7 +126,7 @@ def test_idle_publisher_promotes_ready_before_review() -> None:
 
 
 def test_idle_publisher_promotes_review_when_ready_empty() -> None:
-    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=timezone.utc)
+    now_utc = datetime(2026, 5, 12, 15, 0, tzinfo=UTC)
     client = _FakeClient(
         ready_rows=[],
         review_rows=[{"id": "review-1"}],
@@ -161,6 +163,7 @@ def test_main_allows_idle_fallback_after_startup_grace(monkeypatch) -> None:
     monkeypatch.setattr("news.publish.CoreClient", lambda *_args, **_kwargs: client)
     monkeypatch.setattr("news.publish.rebalance_active_publish_queue", lambda *_args, **_kwargs: {})
     monkeypatch.setattr(settings, "api_key_news", "test-key")
+    monkeypatch.setattr(settings, "news_publish_idle_fallback_enabled", True)
 
     result = publish_main(allow_idle_fallback=True)
 
@@ -169,8 +172,23 @@ def test_main_allows_idle_fallback_after_startup_grace(monkeypatch) -> None:
     assert [post_id for post_id, _ in client.patched] == ["ready-1"]
 
 
+def test_main_disables_idle_fallback_by_default(monkeypatch) -> None:
+    client = _FakeMainClient()
+
+    monkeypatch.setattr("news.publish.CoreClient", lambda *_args, **_kwargs: client)
+    monkeypatch.setattr("news.publish.rebalance_active_publish_queue", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(settings, "api_key_news", "test-key")
+    monkeypatch.setattr(settings, "news_publish_idle_fallback_enabled", False)
+
+    result = publish_main(allow_idle_fallback=True)
+
+    assert result == 0
+    assert client.claims == 1
+    assert client.patched == []
+
+
 def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     client = _FakeClient(
         ready_rows=[
             {"id": "stale", "publish_at": (now_utc - timedelta(days=3)).isoformat()},
@@ -185,7 +203,7 @@ def test_do_not_promote_stale_or_distant_ready_posts_for_idle_queue() -> None:
 
 
 def test_demote_stale_scheduled_posts_to_ready() -> None:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     client = _FakeClient(
         scheduled_rows=[
             {"id": "old", "publish_at": (now_utc - timedelta(hours=7)).isoformat()},
@@ -209,7 +227,7 @@ def test_retryable_publish_patch_requeues_transient_telegram_failure() -> None:
     original = settings.news_retry_failed_after_minutes
     settings.news_retry_failed_after_minutes = 15
     try:
-        now_utc = datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc)
+        now_utc = datetime(2026, 4, 13, 6, 5, tzinfo=UTC)
         patch = _retryable_publish_patch(
             {"attempts": 0, "max_attempts": 3},
             TelegramRequestError("dns fail", retryable=True),
@@ -228,7 +246,7 @@ def test_retryable_publish_patch_stops_after_max_attempts() -> None:
     patch = _retryable_publish_patch(
         {"attempts": 2, "max_attempts": 3},
         TelegramRequestError("dns fail", retryable=True),
-        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc),
+        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=UTC),
     )
 
     assert patch is None
@@ -238,7 +256,7 @@ def test_retryable_publish_patch_ignores_non_retryable_error() -> None:
     patch = _retryable_publish_patch(
         {"attempts": 0, "max_attempts": 3},
         TelegramRequestError("bad request", retryable=False),
-        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=timezone.utc),
+        now_utc=datetime(2026, 4, 13, 6, 5, tzinfo=UTC),
     )
 
     assert patch is None

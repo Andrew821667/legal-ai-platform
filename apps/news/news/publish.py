@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
-import json
 
 import requests
 
 from news.active_queue import parse_post_datetime, rebalance_active_publish_queue
-from news.control_plane import intelligent_footer_enabled, publish_claim_limit
+from news.control_plane import (
+    intelligent_footer_enabled,
+    publish_claim_limit,
+    publish_idle_fallback_enabled,
+)
 from news.core_client import CoreClient
 from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
@@ -38,7 +42,7 @@ def _demote_stale_scheduled_posts(client: CoreClient, *, scan_limit: int = 100) 
     if not scheduled_rows:
         return 0
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     stale_cutoff = now_utc - timedelta(minutes=max(settings.news_publish_max_overdue_minutes, 1))
     demoted = 0
 
@@ -79,7 +83,7 @@ def _promote_ready_posts_for_idle_queue(client: CoreClient, *, limit: int) -> in
     if not ready_rows:
         return 0
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     lookahead = now_utc + timedelta(hours=_REVIEW_AUTOFILL_LOOKAHEAD_HOURS)
     stale_cutoff = now_utc - timedelta(hours=_REVIEW_AUTOFILL_MAX_STALENESS_HOURS)
     candidate_rows = []
@@ -129,7 +133,7 @@ def _promote_fallback_posts_for_idle_publisher(
     1. ready: already approved for publication;
     2. review: next-best editorial queue when ready is empty.
     """
-    now_utc = now_utc or datetime.now(timezone.utc)
+    now_utc = now_utc or datetime.now(UTC)
     promote_limit = max(limit, 1)
 
     for source_status in _IDLE_FALLBACK_STATUSES:
@@ -407,6 +411,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
     claim_limit = max(settings.news_publish_claim_limit, 1)
     control_rows: list[dict[str, Any]] = []
     publish_intelligent_footer = True
+    allow_configured_idle_fallback = settings.news_publish_idle_fallback_enabled
     try:
         controls_response = client.list_automation_controls(scope="news")
         controls_response.raise_for_status()
@@ -414,6 +419,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
         controls = {row.get("key"): bool(row.get("enabled", True)) for row in control_rows}
         claim_limit = publish_claim_limit(control_rows)
         publish_intelligent_footer = intelligent_footer_enabled(control_rows)
+        allow_configured_idle_fallback = publish_idle_fallback_enabled(control_rows)
         if controls.get("news.publish.enabled") is False:
             logger.info("publish_disabled_by_control_plane")
             return 0
@@ -429,25 +435,27 @@ def main(*, allow_idle_fallback: bool = True) -> int:
 
     claim_response = client.claim_posts(limit=claim_limit)
     if claim_response.status_code == 204:
+        try:
+            rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
+            if any(rebalance.values()):
+                logger.info("active_publish_queue_rebalanced", extra=rebalance)
+        except Exception as exc:
+            logger.warning("active_publish_queue_rebalance_failed", extra={"error": str(exc)})
+
         fallback_promoted = 0
-        if allow_idle_fallback:
+        if allow_idle_fallback and allow_configured_idle_fallback:
             try:
                 fallback_promoted = _promote_fallback_posts_for_idle_publisher(client, limit=claim_limit)
             except Exception as exc:
                 logger.warning("idle_publisher_fallback_failed", extra={"error": str(exc)})
+        elif not allow_configured_idle_fallback:
+            logger.info("idle_publisher_fallback_disabled")
         else:
             logger.info("idle_publisher_fallback_skipped_during_startup_grace")
 
         if fallback_promoted:
             claim_response = client.claim_posts(limit=claim_limit)
         else:
-            try:
-                rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
-                if any(rebalance.values()):
-                    logger.info("active_publish_queue_rebalanced", extra=rebalance)
-            except Exception as exc:
-                logger.warning("active_publish_queue_rebalance_failed", extra={"error": str(exc)})
-
             logger.info("no_due_posts")
             return 0
 
@@ -473,7 +481,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
                 "status": "posted",
                 "last_error": None,
                 "telegram_message_id": message_id or None,
-                "posted_at": datetime.now(timezone.utc).isoformat(),
+                "posted_at": datetime.now(UTC).isoformat(),
             }
             if normalized_text != original_text.strip():
                 patch_payload["text"] = normalized_text
@@ -487,7 +495,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
         except Exception as exc:
             consecutive_errors += 1
             logger.exception("post_publish_failed", extra={"post_id": post_id, "error": str(exc)})
-            retry_patch = _retryable_publish_patch(post, exc, now_utc=datetime.now(timezone.utc))
+            retry_patch = _retryable_publish_patch(post, exc, now_utc=datetime.now(UTC))
             if retry_patch is not None:
                 retry = client.patch_post(post_id, retry_patch)
                 if retry.status_code >= 400:
