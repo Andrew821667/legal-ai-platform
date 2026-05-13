@@ -57,8 +57,9 @@ READER_MINIAPP_BASE_URL=https://ai-verdict.ru
 CI/CD:
 - GitHub Actions собирает runtime-образы в GHCR: `core-api`, `web`, `lead-bot`, `news`, `news-reader`;
 - на Mac Mini в `.env` должны быть заданы `CORE_API_IMAGE`, `WEB_IMAGE`, `LEAD_BOT_IMAGE`, `NEWS_IMAGE`, `NEWS_READER_IMAGE`;
-- если GHCR package остается private, Mac Mini должен быть заранее залогинен в `ghcr.io` или запускать `infra/scripts/deploy_macmini.sh` с `GHCR_USERNAME`/`GHCR_TOKEN`;
-- деплой из GitHub Actions включается только при `ENABLE_MACMINI_DEPLOY=true` и настроенных Tailscale OAuth secrets.
+- GitHub Actions передает временный `github.token` в `infra/scripts/deploy_macmini.sh`, поэтому отдельный `GHCR_TOKEN` secret не нужен;
+- деплой из GitHub Actions включается только при `ENABLE_MACMINI_DEPLOY=true` и настроенных Tailscale OAuth secrets `TS_OAUTH_CLIENT_ID` и `TS_OAUTH_SECRET`;
+- production-деплой использует единый compose-файл `infra/compose/docker-compose.prod.yml` в `/Users/legalai/projects/legal-ai-platform`.
 
 Проверка после деплоя:
 ```bash
