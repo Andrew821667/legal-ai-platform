@@ -4,14 +4,27 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if [ -f ".env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
-fi
+env_value() {
+  local key="$1"
+  if [ ! -f ".env" ]; then
+    return 0
+  fi
+  awk -F= -v key="$key" '
+    $1 == key {
+      sub(/^[^=]*=/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      gsub(/^"|"$/, "")
+      gsub(/^'\''|'\''$/, "")
+      print
+      exit
+    }
+  ' .env
+}
 
+DOMAIN="${DOMAIN:-$(env_value DOMAIN)}"
 DOMAIN="${DOMAIN:-ai-verdict.ru}"
+CORE_API_HOST_URL="${CORE_API_HOST_URL:-$(env_value CORE_API_HOST_URL)}"
+CORE_API_PUBLISH_PORT="${CORE_API_PUBLISH_PORT:-$(env_value CORE_API_PUBLISH_PORT)}"
 CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-${CORE_API_HOST_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"
