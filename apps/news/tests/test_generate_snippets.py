@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import news.generate as generate_module
-from news.generate import _collect_history, _normalize_snippet
+from news.generate import _collect_history, _drop_existing_source_articles, _normalize_snippet
 from news.pipeline import ArticleCandidate
 
 
@@ -23,6 +23,31 @@ def test_normalize_snippet_strips_markup_source_and_footer() -> None:
     assert "#AIVerdict" not in normalized
     assert "@legal_ai_helper_new_bot" not in normalized
     assert "Полезный абзац" in normalized
+
+
+def test_drop_existing_source_articles_keeps_fresh_candidates() -> None:
+    old_article = ArticleCandidate(
+        source_url="https://example.com/feed",
+        article_url="https://example.com/old?utm_source=rss",
+        title="Старый материал",
+        summary="Уже был в истории.",
+        published_at=datetime.now(timezone.utc),
+    )
+    fresh_article = ArticleCandidate(
+        source_url="https://example.com/feed",
+        article_url="https://example.com/fresh",
+        title="Новый материал",
+        summary="Еще не публиковался.",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    filtered, skipped = _drop_existing_source_articles(
+        [old_article, fresh_article],
+        {"https://example.com/old"},
+    )
+
+    assert filtered == [fresh_article]
+    assert skipped == 1
 
 
 def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(monkeypatch) -> None:

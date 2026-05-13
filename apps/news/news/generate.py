@@ -280,6 +280,21 @@ def _normalize_snippet(text: str, limit: int = 260) -> str:
     return normalized[:cutoff].rstrip(" ,;:-") + "..."
 
 
+def _drop_existing_source_articles(
+    articles: list[ArticleCandidate],
+    existing_source_urls: set[str],
+) -> tuple[list[ArticleCandidate], int]:
+    filtered: list[ArticleCandidate] = []
+    skipped = 0
+    for article in articles:
+        article_canonical_url = canonicalize_url(article.article_url)
+        if article_canonical_url and article_canonical_url in existing_source_urls:
+            skipped += 1
+            continue
+        filtered.append(article)
+    return filtered, skipped
+
+
 def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[str, Any]]) -> ArticleCandidate | None:
     if not posted_items:
         return None
@@ -457,6 +472,9 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         for article in articles
         if article_matches_enabled_generation_themes(article, enabled_generation_themes)
     ]
+    articles, prefiltered_duplicates = _drop_existing_source_articles(articles, existing_source_urls)
+    if prefiltered_duplicates:
+        logger.info("existing_source_articles_prefiltered", extra={"count": prefiltered_duplicates})
     priority_domains = _parse_priority_domains()
     selection_limit = min(200, max(80, top_limit * 16))
     selected_articles = choose_top_articles(
@@ -478,7 +496,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             fetched=len(articles),
             pool_selected=0,
             slots_planned=0,
-            duplicates=0,
+            duplicates=prefiltered_duplicates,
             feedback_skipped=0,
             skipped_slots=0,
         )
@@ -495,7 +513,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             fetched=len(articles),
             pool_selected=len(selected_articles),
             slots_planned=0,
-            duplicates=0,
+            duplicates=prefiltered_duplicates,
             feedback_skipped=0,
             skipped_slots=0,
         )
@@ -730,7 +748,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         fetched=len(articles),
         pool_selected=len(selected_articles),
         slots_planned=len(publish_plan),
-        duplicates=duplicates,
+        duplicates=duplicates + prefiltered_duplicates,
         feedback_skipped=feedback_skipped,
         skipped_slots=skipped_slots,
     )
