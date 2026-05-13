@@ -6,6 +6,12 @@ import { motion } from 'framer-motion'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 
+const freeLimits = [
+  { value: '0 ₽', label: 'стоимость демо-доступа' },
+  { value: '3', label: 'договора бесплатно в месяц' },
+  { value: '5 МБ', label: 'размер одного файла' },
+]
+
 export default function Home() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
@@ -65,9 +71,9 @@ export default function Home() {
   ]
 
   const stats = [
-    { value: '10,000+', label: 'Проанализированных договоров' },
-    { value: '99.8%', label: 'Точность анализа' },
-    { value: '30 сек', label: 'Среднее время обработки' },
+    { value: '3/мес', label: 'Договора бесплатно' },
+    { value: '0 ₽', label: 'Стоимость первого шага' },
+    { value: '30 сек', label: 'Ориентир быстрой проверки' },
     { value: '24/7', label: 'Доступность системы' }
   ]
 
@@ -134,7 +140,8 @@ export default function Home() {
               </h1>
               <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
                 Contract AI System помогает быстро проверить договорный сценарий на реальных документах,
-                а затем перейти к пилоту и рабочему контуру без лишней архитектурной сложности.
+                начать с 3 бесплатных договоров в месяц, а затем перейти к пилоту и рабочему контуру
+                без лишней архитектурной сложности.
               </p>
             </motion.div>
 
@@ -223,8 +230,38 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <Card className="bg-white/90 border-2 border-primary-100">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 items-center">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary-600 mb-3">
+                  Бесплатный вход
+                </p>
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                  3 договора бесплатно каждый месяц
+                </h2>
+                <p className="text-lg text-gray-600">
+                  Бесплатный режим нужен для спокойной проверки сценария: загрузить документ,
+                  посмотреть структуру отчета и понять, подходит ли система под ваш процесс.
+                  Оплата появляется только на следующем этапе — пилоте или рабочем контуре.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+                {freeLimits.map((limit) => (
+                  <div key={limit.label} className="rounded-2xl border border-gray-100 bg-slate-50 p-5">
+                    <div className="text-3xl font-bold gradient-text">{limit.value}</div>
+                    <div className="text-sm text-gray-600 mt-1">{limit.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
+
       {/* Features Section */}
-      <section className="py-20 px-4">
+      <section id="features" className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -274,8 +311,8 @@ export default function Home() {
                   Готовы попробовать?
                 </h2>
                 <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-                  Начните с демо-контура. Если нужен следующий этап, обсудим пилот на ваших документах и
-                  только потом зафиксируем рабочий формат.
+                  Начните с 3 бесплатных договоров в месяц. Если нужен следующий этап, обсудим пилот
+                  на ваших документах и только потом зафиксируем рабочий формат.
                 </p>
                 <Button
                   variant="primary"
@@ -323,27 +360,28 @@ export default function Home() {
             <div>
               <h4 className="font-bold mb-4">Продукт</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="/features" className="hover:text-primary-600">Возможности</a></li>
+                <li><a href="#features" className="hover:text-primary-600">Возможности</a></li>
                 <li><a href="/pricing" className="hover:text-primary-600">Форматы запуска</a></li>
-                <li><a href="/demo" className="hover:text-primary-600">Демо</a></li>
+                <li><a href="/register" className="hover:text-primary-600">Демо</a></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold mb-4">Компания</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="/about" className="hover:text-primary-600">О нас</a></li>
-                <li><a href="/blog" className="hover:text-primary-600">Блог</a></li>
-                <li><a href="/contacts" className="hover:text-primary-600">Контакты</a></li>
+                <li><a href="https://ai-verdict.ru/about" className="hover:text-primary-600">О нас</a></li>
+                <li><a href="https://ai-verdict.ru/content-cases" className="hover:text-primary-600">Контент / Кейсы</a></li>
+                <li><a href="https://ai-verdict.ru/about#contacts" className="hover:text-primary-600">Контакты</a></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-bold mb-4">Поддержка</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="/docs" className="hover:text-primary-600">Документация</a></li>
-                <li><a href="/help" className="hover:text-primary-600">Помощь</a></li>
+                <li><a href="/dashboard" className="hover:text-primary-600">Кабинет</a></li>
+                <li><a href="/pricing" className="hover:text-primary-600">Форматы запуска</a></li>
                 <li><a href="/privacy" className="hover:text-primary-600">Конфиденциальность</a></li>
+                <li><a href="/terms" className="hover:text-primary-600">Условия использования</a></li>
               </ul>
             </div>
           </div>

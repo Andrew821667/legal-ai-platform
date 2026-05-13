@@ -20,7 +20,7 @@ export default function Footer() {
       { name: "Главная", href: "/" },
       { name: "Для юристов", href: ROUTES.forLawyers },
       { name: "Для бизнеса", href: ROUTES.forBusiness },
-      { name: "Contract_AI_System", href: ROUTES.contractAI },
+      { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
       { name: "О платформе", href: ROUTES.about },
       { name: "Контакты", href: `${ROUTES.about}#contacts` },
     ],

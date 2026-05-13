@@ -138,6 +138,7 @@ export default function DashboardPage() {
   const accessModeLabel = accessModeLabelMap[user?.subscription_tier || 'demo'] || 'Доступ'
   const contractLimit = permissions.maxContractsPerDay
   const llmLimit = permissions.maxLLMRequestsPerDay
+  const contractLimitPeriod = permissions.contractLimitPeriod === 'month' ? 'в месяц' : 'в день'
 
   const contractsUsagePercent = contractLimit === -1
     ? 0
@@ -239,7 +240,7 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-slate-800">
                   {permissions.maxContractsPerDay === -1 ? '∞' : permissions.maxContractsPerDay}
                 </p>
-                <p className="text-xs text-slate-500">в день</p>
+                <p className="text-xs text-slate-500">{contractLimitPeriod}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl text-center">
                 <p className="text-sm text-slate-600 mb-1">Форматы экспорта</p>
@@ -284,7 +285,9 @@ export default function DashboardPage() {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-sm font-semibold text-gray-600 mb-1">Контракты сегодня</p>
+                    <p className="text-sm font-semibold text-gray-600 mb-1">
+                      {permissions.contractLimitPeriod === 'month' ? 'Договоры в лимите' : 'Контракты сегодня'}
+                    </p>
                     <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                       {user?.contracts_today || 0}
                       <span className="text-lg text-gray-400 font-normal"> / {contractLimit === -1 ? '∞' : contractLimit}</span>

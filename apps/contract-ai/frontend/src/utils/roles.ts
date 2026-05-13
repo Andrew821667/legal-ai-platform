@@ -10,6 +10,7 @@ export interface RolePermissions {
   canEditTemplates: boolean
   maxContractsPerDay: number
   maxLLMRequestsPerDay: number
+  contractLimitPeriod: 'day' | 'month'
   exportFormats: string[]
   features: string[]
 }
@@ -25,6 +26,7 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canEditTemplates: true,
     maxContractsPerDay: -1, // unlimited
     maxLLMRequestsPerDay: -1,
+    contractLimitPeriod: 'day',
     exportFormats: ['docx', 'pdf', 'json'],
     features: [
       'Анализ договоров (безлимит)',
@@ -48,6 +50,7 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canEditTemplates: true,
     maxContractsPerDay: 100,
     maxLLMRequestsPerDay: 200000, // ~$2.00 worth
+    contractLimitPeriod: 'day',
     exportFormats: ['docx', 'pdf', 'json'],
     features: [
       'Анализ договоров (100/день)',
@@ -70,6 +73,7 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canEditTemplates: false,
     maxContractsPerDay: 50,
     maxLLMRequestsPerDay: 50000, // ~$0.50 worth
+    contractLimitPeriod: 'day',
     exportFormats: ['docx', 'pdf'],
     features: [
       'Анализ договоров (50/день)',
@@ -90,6 +94,7 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canEditTemplates: false,
     maxContractsPerDay: 10,
     maxLLMRequestsPerDay: 10000, // ~$0.10 worth
+    contractLimitPeriod: 'day',
     exportFormats: ['pdf'],
     features: [
       'Анализ договоров (10/день)',
@@ -108,9 +113,10 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canEditTemplates: false,
     maxContractsPerDay: 3,
     maxLLMRequestsPerDay: 1000,
+    contractLimitPeriod: 'month',
     exportFormats: [],
     features: [
-      'Анализ договоров (3/день)',
+      'Анализ договоров (3/месяц)',
       'Просмотр демо-функций',
       'Ограниченный функционал',
     ]

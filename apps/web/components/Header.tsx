@@ -19,7 +19,7 @@ export default function Header() {
 
   const mainNavigation = [
     { name: "Решения", href: "/solutions" },
-    { name: "Contract_AI_System", href: contractAIEntryHref() },
+    { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
     { name: "Контент / Кейсы", href: "/content-cases" },
     { name: "О платформе", href: "/about" },
   ];
@@ -102,13 +102,25 @@ export default function Header() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {mainNavigation.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
-              >
-                {item.name}
-              </Link>
+              item.external ? (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
+                >
+                  {item.name}
+                </a>
+              ) : (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
+                >
+                  {item.name}
+                </Link>
+              )
             ))}
             <details className="relative">
               <summary className="list-none cursor-pointer text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap">
@@ -196,14 +208,27 @@ export default function Header() {
           <div className="md:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
             <div className="px-4 py-2 space-y-1">
               {mainNavigation.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
+                item.external ? (
+                  <a
+                    key={item.name}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </Link>
+                )
               ))}
               {contractAIActionExternal ? (
                 <a
