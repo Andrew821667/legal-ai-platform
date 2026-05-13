@@ -7,6 +7,7 @@ ENV_FILE="${ENV_FILE:-.env}"
 CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-http://127.0.0.1:${CORE_API_PUBLISH_PORT:-8000}}"
 SKIP_PULL="${SKIP_PULL:-0}"
 COMPOSE_BUILD_MODE="${COMPOSE_BUILD_MODE:-}"
+FORCE_RECREATE="${FORCE_RECREATE:-0}"
 
 services=(
   postgres
@@ -44,9 +45,14 @@ if [ "$SKIP_PULL" != "1" ]; then
   "${compose[@]}" pull "${services[@]}" || true
 fi
 
+recreate_args=()
+if [ "$FORCE_RECREATE" = "1" ]; then
+  recreate_args=(--force-recreate)
+fi
+
 echo "Starting production stack..."
 "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" postgres
-"${compose[@]}" up -d "$COMPOSE_BUILD_MODE" --force-recreate \
+"${compose[@]}" up -d "$COMPOSE_BUILD_MODE" "${recreate_args[@]}" \
   core-api \
   web \
   lead-bot \

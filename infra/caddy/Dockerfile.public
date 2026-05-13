@@ -1,3 +1,4 @@
 FROM caddy:2-alpine
 
-COPY infra/caddy/Caddyfile.public /etc/caddy/Caddyfile
+COPY infra/caddy/Caddyfile* /etc/caddy/
+RUN cp /etc/caddy/Caddyfile.public /etc/caddy/Caddyfile
