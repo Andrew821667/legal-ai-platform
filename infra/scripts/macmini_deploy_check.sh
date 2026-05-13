@@ -28,11 +28,15 @@ CORE_API_PUBLISH_PORT="${CORE_API_PUBLISH_PORT:-$(env_value CORE_API_PUBLISH_POR
 CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-${CORE_API_HOST_URL:-http://localhost:${CORE_API_PUBLISH_PORT:-8000}}}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"
+compose_env_args=()
+if [ -f ".env" ]; then
+  compose_env_args=(--env-file .env)
+fi
 
 if [ -n "$COMPOSE_PROJECT" ]; then
-  COMPOSE=(docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE")
+  COMPOSE=(docker compose -p "$COMPOSE_PROJECT" "${compose_env_args[@]}" -f "$COMPOSE_FILE")
 else
-  COMPOSE=(docker compose -f "$COMPOSE_FILE")
+  COMPOSE=(docker compose "${compose_env_args[@]}" -f "$COMPOSE_FILE")
 fi
 
 echo "[1/6] DNSSEC DS at .ru registry"
