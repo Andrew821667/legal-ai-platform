@@ -52,17 +52,31 @@ fi
 
 echo "Starting production stack..."
 "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" postgres
-"${compose[@]}" up -d "$COMPOSE_BUILD_MODE" "${recreate_args[@]}" \
-  core-api \
-  web \
-  lead-bot \
-  news-generate \
-  news-telegram-ingest \
-  news-publish \
-  news-admin-bot \
-  news-reader-bot \
-  news-reader-digest \
-  caddy
+if [ "${#recreate_args[@]}" -gt 0 ]; then
+  "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" "${recreate_args[@]}" \
+    core-api \
+    web \
+    lead-bot \
+    news-generate \
+    news-telegram-ingest \
+    news-publish \
+    news-admin-bot \
+    news-reader-bot \
+    news-reader-digest \
+    caddy
+else
+  "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" \
+    core-api \
+    web \
+    lead-bot \
+    news-generate \
+    news-telegram-ingest \
+    news-publish \
+    news-admin-bot \
+    news-reader-bot \
+    news-reader-digest \
+    caddy
+fi
 
 echo "Waiting for Core API..."
 for _ in $(seq 1 60); do
