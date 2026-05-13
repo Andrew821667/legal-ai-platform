@@ -1,5 +1,5 @@
 # LangChain and LangGraph
-langchain==0.2.5
+langchain==0.3.30
 langgraph==1.0.10
 langchain-community==0.3.27
 

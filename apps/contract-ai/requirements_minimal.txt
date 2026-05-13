@@ -22,7 +22,7 @@ pdfplumber==0.10.3
 tenacity==8.2.3
 openai==1.12.0
 anthropic==0.18.1
-langchain==0.2.5
+langchain==0.3.30
 langgraph==1.0.10
 langchain-community==0.3.27
 jinja2==3.1.6
