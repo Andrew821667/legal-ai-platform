@@ -275,6 +275,7 @@ News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`, 
 - `news-reader-digest` отправляет reader-дайджесты по слоту из `news.reader_digest.enabled.config.slot_time`.
 - slot-воркеры (`ingest`/`generate`/`reader-digest`) обмениваются heartbeat-полем `busy` и не запускают тяжелый цикл, пока соседний слот-воркер занят;
 - для защиты от дрейфа времени и кратковременных блокировок используется `slot_grace_minutes` в control-plane (`news.generate.enabled`, `news.telegram_ingest.enabled`, `news.reader_digest.enabled`);
+- если в `scheduled` нет due-поста, `news-publish` может взять due-пост из `ready`/`review`, но только когда его `publish_at` уже наступил;
 - `NEWS_PUBLISH_IDLE_FALLBACK_ENABLED=false` оставляет публикации строго на due-слотах. Не включайте fallback в production, иначе паблишер начнёт немедленно выпускать `ready/review`-посты при пустой due-очереди.
 Чтобы не было пакетных публикаций при накопившихся due-постах, ограничивайте клейм:
 `NEWS_PUBLISH_CLAIM_LIMIT=1` (или через `news.publish.enabled.config.claim_limit`).

@@ -7,6 +7,7 @@ from news.publish import (
     _autofill_publish_at,
     _demote_stale_scheduled_posts,
     _normalize_text_before_publish,
+    _promote_due_editorial_posts_for_idle_publisher,
     _promote_fallback_posts_for_idle_publisher,
     _promote_ready_posts_for_idle_queue,
     _retryable_publish_patch,
@@ -141,6 +142,48 @@ def test_idle_publisher_promotes_review_when_ready_empty() -> None:
             {"status": "scheduled", "publish_at": now_utc.isoformat(), "last_error": None},
         )
     ]
+
+
+def test_due_editorial_fallback_promotes_due_ready_before_review() -> None:
+    now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    client = _FakeClient(
+        ready_rows=[
+            {"id": "future-ready", "publish_at": (now_utc + timedelta(hours=2)).isoformat()},
+            {"id": "due-ready", "publish_at": (now_utc - timedelta(minutes=15)).isoformat()},
+        ],
+        review_rows=[{"id": "due-review", "publish_at": (now_utc - timedelta(minutes=10)).isoformat()}],
+    )
+
+    promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 1
+    assert client.patched == [("due-ready", {"status": "scheduled", "last_error": None})]
+
+
+def test_due_editorial_fallback_promotes_due_review_when_ready_has_no_due_posts() -> None:
+    now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    client = _FakeClient(
+        ready_rows=[{"id": "future-ready", "publish_at": (now_utc + timedelta(hours=2)).isoformat()}],
+        review_rows=[{"id": "due-review", "publish_at": (now_utc - timedelta(minutes=10)).isoformat()}],
+    )
+
+    promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 1
+    assert client.patched == [("due-review", {"status": "scheduled", "last_error": None})]
+
+
+def test_due_editorial_fallback_skips_future_review_posts() -> None:
+    now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    client = _FakeClient(
+        ready_rows=[],
+        review_rows=[{"id": "future-review", "publish_at": (now_utc + timedelta(hours=2)).isoformat()}],
+    )
+
+    promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 0
+    assert client.patched == []
 
 
 def test_main_skips_idle_fallback_when_startup_grace_is_active(monkeypatch) -> None:

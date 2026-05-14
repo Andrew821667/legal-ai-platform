@@ -5,7 +5,7 @@ import html
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -42,7 +42,11 @@ from news.source_catalog import (
     telegram_channel_priority_map,
 )
 from news.strategy import build_publish_plan
-from news.telegram_ingest import fetch_telegram_articles, load_telegram_articles_cache, save_telegram_articles_cache
+from news.telegram_ingest import (
+    fetch_telegram_articles,
+    load_telegram_articles_cache,
+    save_telegram_articles_cache,
+)
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -154,7 +158,7 @@ def _collect_history(
     posted_items: list[dict[str, str]] = []
     occupied_slot_keys: set[str] = set()
 
-    for status in ("posted", "review", "scheduled", "publishing", "failed"):
+    for status in ("posted", "review", "ready", "scheduled", "publishing", "failed"):
         try:
             response = client.list_posts(
                 limit=settings.news_history_scan_limit,
@@ -201,13 +205,13 @@ def _collect_history(
             if url:
                 source_urls.add(url)
 
-            if status in {"review", "scheduled", "publishing"}:
+            if status in {"review", "ready", "scheduled", "publishing"}:
                 publish_raw = str(row.get("publish_at") or "").strip()
                 if publish_raw:
                     try:
                         publish_at = datetime.fromisoformat(publish_raw.replace("Z", "+00:00"))
                         if publish_at.tzinfo is None:
-                            publish_at = publish_at.replace(tzinfo=timezone.utc)
+                            publish_at = publish_at.replace(tzinfo=UTC)
                         occupied_slot_keys.add(
                             publish_at.astimezone(local_tz).replace(second=0, microsecond=0).isoformat()
                         )
@@ -402,7 +406,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         raise RuntimeError("OPENAI_API_KEY is required for content generation")
 
     top_limit = max(1, min(limit, 20))
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     local_tz = ZoneInfo(settings.tz_name)
     now_local = now_utc.astimezone(local_tz)
 
@@ -599,7 +603,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 rag_context = []
             pillar = pillar_for_article(article)
             try:
-                publish_at_utc = slot.publish_at_local.astimezone(timezone.utc)
+                publish_at_utc = slot.publish_at_local.astimezone(UTC)
                 generated = writer.generate_post(
                     article,
                     rag_context,

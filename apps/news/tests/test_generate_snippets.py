@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import news.generate as generate_module
@@ -31,14 +31,14 @@ def test_drop_existing_source_articles_keeps_fresh_candidates() -> None:
         article_url="https://example.com/old?utm_source=rss",
         title="Старый материал",
         summary="Уже был в истории.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     fresh_article = ArticleCandidate(
         source_url="https://example.com/feed",
         article_url="https://example.com/fresh",
         title="Новый материал",
         summary="Еще не публиковался.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
 
     filtered, skipped = _drop_existing_source_articles(
@@ -96,7 +96,7 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
         article_url="https://example.com/legal-ai",
         title="Legal AI сигнал",
         summary="Короткий сигнал про AI и юридическую автоматизацию.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
 
     monkeypatch.setattr(generate_module.settings, "api_key_news", "test-key", raising=False)
@@ -123,7 +123,7 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
         "build_publish_plan",
         lambda *_args, **_kwargs: [
             SimpleNamespace(
-                publish_at_local=datetime.now(timezone.utc),
+                publish_at_local=datetime.now(UTC),
                 publication_kind="practice",
                 format_type="practice",
                 cta_type="soft",
@@ -138,6 +138,7 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
 
     assert len(result.previews) == 1
     assert result.previews[0]["publication_kind"] == "practice"
+    assert result.previews[0]["status"] == "review"
     assert _FakeWriter.generate_calls == 1
     assert _FakeWriter.fallback_calls == 1
 
@@ -155,6 +156,20 @@ def test_collect_history_does_not_block_non_irrelevant_failed_posts() -> None:
 
     class _FakeClient:
         def list_posts(self, *, limit: int, status: str, newest_first: bool):
+            if status == "ready":
+                return _FakeResponse(
+                    [
+                        {
+                            "title": "Готовый пост",
+                            "text": "Текст готового поста.",
+                            "source_url": "https://example.com/ready",
+                            "last_error": "",
+                            "publish_at": "2026-04-13T06:00:00+00:00",
+                            "feedback_snapshot": {},
+                            "id": "ready-1",
+                        }
+                    ]
+                )
             if status == "failed":
                 return _FakeResponse(
                     [
@@ -182,13 +197,14 @@ def test_collect_history_does_not_block_non_irrelevant_failed_posts() -> None:
 
     texts, source_urls, recent_pillar_counts, posted_items, negative_feedback_examples, occupied_slot_keys = _collect_history(
         _FakeClient(),
-        timezone.utc,
+        UTC,
     )
 
     assert "https://example.com/network-failure" not in source_urls
     assert "https://example.com/offtopic" in source_urls
+    assert "https://example.com/ready" in source_urls
     assert all(item.get("source_url") != "https://example.com/network-failure" for item in posted_items)
     assert any(item.get("source_url") == "https://example.com/offtopic" for item in posted_items)
+    assert "2026-04-13T06:00:00+00:00" in occupied_slot_keys
     assert recent_pillar_counts == {}
-    assert occupied_slot_keys == set()
     assert len(negative_feedback_examples) >= 0

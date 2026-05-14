@@ -168,6 +168,55 @@ def _promote_fallback_posts_for_idle_publisher(
     return 0
 
 
+def _promote_due_editorial_posts_for_idle_publisher(
+    client: CoreClient,
+    *,
+    limit: int,
+    now_utc: datetime | None = None,
+) -> int:
+    now_utc = now_utc or datetime.now(UTC)
+    promote_limit = max(limit, 1)
+    scan_limit = max(promote_limit * 5, 10)
+
+    for source_status in _IDLE_FALLBACK_STATUSES:
+        response = client.list_posts(limit=scan_limit, status=source_status, newest_first=False)
+        response.raise_for_status()
+        rows = list(response.json() or [])
+        due_rows = []
+        for row in rows:
+            publish_at = parse_post_datetime(row.get("publish_at"))
+            if publish_at is None or publish_at > now_utc:
+                continue
+            due_rows.append(row)
+            if len(due_rows) >= promote_limit:
+                break
+        if not due_rows:
+            continue
+
+        promoted = 0
+        for row in due_rows:
+            post_id = str(row.get("id") or "").strip()
+            if not post_id:
+                continue
+            client.patch_post(
+                post_id,
+                {
+                    "status": "scheduled",
+                    "last_error": None,
+                },
+            ).raise_for_status()
+            promoted += 1
+
+        if promoted:
+            logger.info(
+                "due_editorial_fallback_promoted",
+                extra={"source_status": source_status, "count": promoted},
+            )
+            return promoted
+
+    return 0
+
+
 def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
     normalized = (text or "").strip()
     if not normalized:
@@ -434,6 +483,19 @@ def main(*, allow_idle_fallback: bool = True) -> int:
         logger.warning("stale_scheduled_posts_demote_failed", extra={"error": str(exc)})
 
     claim_response = client.claim_posts(limit=claim_limit)
+    if claim_response.status_code == 204:
+        due_fallback_promoted = 0
+        try:
+            due_fallback_promoted = _promote_due_editorial_posts_for_idle_publisher(
+                client,
+                limit=claim_limit,
+            )
+        except Exception as exc:
+            logger.warning("due_editorial_fallback_failed", extra={"error": str(exc)})
+
+        if due_fallback_promoted:
+            claim_response = client.claim_posts(limit=claim_limit)
+
     if claim_response.status_code == 204:
         try:
             rebalance = rebalance_active_publish_queue(client, control_rows=control_rows)
