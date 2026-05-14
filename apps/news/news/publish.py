@@ -177,6 +177,7 @@ def _promote_due_editorial_posts_for_idle_publisher(
     now_utc = now_utc or datetime.now(UTC)
     promote_limit = max(limit, 1)
     scan_limit = max(promote_limit * 5, 10)
+    stale_cutoff = now_utc - timedelta(minutes=max(settings.news_publish_max_overdue_minutes, 1))
 
     for source_status in _IDLE_FALLBACK_STATUSES:
         response = client.list_posts(limit=scan_limit, status=source_status, newest_first=False)
@@ -185,7 +186,7 @@ def _promote_due_editorial_posts_for_idle_publisher(
         due_rows = []
         for row in rows:
             publish_at = parse_post_datetime(row.get("publish_at"))
-            if publish_at is None or publish_at > now_utc:
+            if publish_at is None or publish_at > now_utc or publish_at < stale_cutoff:
                 continue
             due_rows.append(row)
             if len(due_rows) >= promote_limit:

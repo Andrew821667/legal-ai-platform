@@ -186,6 +186,23 @@ def test_due_editorial_fallback_skips_future_review_posts() -> None:
     assert client.patched == []
 
 
+def test_due_editorial_fallback_skips_stale_review_posts(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "news_publish_max_overdue_minutes", 360)
+    now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    client = _FakeClient(
+        ready_rows=[],
+        review_rows=[
+            {"id": "stale-review", "publish_at": (now_utc - timedelta(hours=7)).isoformat()},
+            {"id": "fresh-review", "publish_at": (now_utc - timedelta(minutes=10)).isoformat()},
+        ],
+    )
+
+    promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 1
+    assert client.patched == [("fresh-review", {"status": "scheduled", "last_error": None})]
+
+
 def test_main_skips_idle_fallback_when_startup_grace_is_active(monkeypatch) -> None:
     client = _FakeMainClient()
 
