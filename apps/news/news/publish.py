@@ -5,6 +5,7 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -19,6 +20,7 @@ from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.pipeline import normalize_rubric_to_pillar
 from news.settings import settings
+from news.strategy import build_schedule_window
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -26,7 +28,7 @@ _REVIEW_AUTOFILL_MIN_LIMIT = 3
 _REVIEW_AUTOFILL_SCAN_LIMIT = 10
 _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
-_IDLE_FALLBACK_STATUSES = ("ready", "review")
+_EDITORIAL_FALLBACK_STATUSES = ("ready", "review")
 
 
 class TelegramRequestError(RuntimeError):
@@ -120,75 +122,36 @@ def _promote_ready_posts_for_idle_queue(client: CoreClient, *, limit: int) -> in
     return promoted
 
 
-def _promote_fallback_posts_for_idle_publisher(
-    client: CoreClient,
-    *,
-    limit: int,
-    now_utc: datetime | None = None,
-) -> int:
-    """
-    Keep the channel moving when no due scheduled posts are available.
-
-    Priority is intentional and mirrors the admin UI:
-    1. ready: already approved for publication;
-    2. review: next-best editorial queue when ready is empty.
-    """
-    now_utc = now_utc or datetime.now(UTC)
-    promote_limit = max(limit, 1)
-
-    for source_status in _IDLE_FALLBACK_STATUSES:
-        response = client.list_posts(limit=promote_limit, status=source_status, newest_first=False)
-        response.raise_for_status()
-        rows = list(response.json() or [])
-        if not rows:
-            continue
-
-        promoted = 0
-        for row in rows[:promote_limit]:
-            post_id = str(row.get("id") or "").strip()
-            if not post_id:
-                continue
-            client.patch_post(
-                post_id,
-                {
-                    "status": "scheduled",
-                    "publish_at": now_utc.isoformat(),
-                    "last_error": None,
-                },
-            ).raise_for_status()
-            promoted += 1
-
-        if promoted:
-            logger.info(
-                "idle_publisher_fallback_promoted",
-                extra={"source_status": source_status, "count": promoted},
-            )
-            return promoted
-
-    return 0
-
-
 def _promote_due_editorial_posts_for_idle_publisher(
     client: CoreClient,
     *,
     limit: int,
     now_utc: datetime | None = None,
+    control_rows: list[dict[str, Any]] | None = None,
 ) -> int:
     now_utc = now_utc or datetime.now(UTC)
     promote_limit = max(limit, 1)
     scan_limit = max(promote_limit * 5, 10)
-    stale_cutoff = now_utc - timedelta(minutes=max(settings.news_publish_max_overdue_minutes, 1))
+    local_tz = ZoneInfo(settings.tz_name)
+    eligible_slot_keys = _eligible_editorial_fallback_slot_keys(now_utc, local_tz, control_rows=control_rows)
+    if not eligible_slot_keys:
+        return 0
+    posted_slot_keys = _posted_slot_keys(client, local_tz)
 
-    for source_status in _IDLE_FALLBACK_STATUSES:
+    for source_status in _EDITORIAL_FALLBACK_STATUSES:
         response = client.list_posts(limit=scan_limit, status=source_status, newest_first=False)
         response.raise_for_status()
         rows = list(response.json() or [])
         due_rows = []
         for row in rows:
             publish_at = parse_post_datetime(row.get("publish_at"))
-            if publish_at is None or publish_at > now_utc or publish_at < stale_cutoff:
+            slot_key = _publish_slot_key(publish_at, local_tz)
+            if publish_at is None or publish_at > now_utc:
+                continue
+            if slot_key is None or slot_key not in eligible_slot_keys or slot_key in posted_slot_keys:
                 continue
             due_rows.append(row)
+            posted_slot_keys.add(slot_key)
             if len(due_rows) >= promote_limit:
                 break
         if not due_rows:
@@ -216,6 +179,42 @@ def _promote_due_editorial_posts_for_idle_publisher(
             return promoted
 
     return 0
+
+
+def _publish_slot_key(value: datetime | None, local_tz: ZoneInfo) -> str | None:
+    if value is None:
+        return None
+    return value.astimezone(local_tz).replace(second=0, microsecond=0).isoformat()
+
+
+def _eligible_editorial_fallback_slot_keys(
+    now_utc: datetime,
+    local_tz: ZoneInfo,
+    *,
+    control_rows: list[dict[str, Any]] | None = None,
+) -> set[str]:
+    now_local = now_utc.astimezone(local_tz)
+    grace = timedelta(minutes=max(settings.news_publish_editorial_fallback_grace_minutes, 1))
+    result: set[str] = set()
+    for slot in build_schedule_window(now_local, days=1, control_rows=control_rows, future_only=False):
+        slot_utc = slot.publish_at_local.astimezone(UTC)
+        if slot_utc <= now_utc <= slot_utc + grace:
+            result.add(_publish_slot_key(slot_utc, local_tz) or "")
+    result.discard("")
+    return result
+
+
+def _posted_slot_keys(client: CoreClient, local_tz: ZoneInfo, *, scan_limit: int = 100) -> set[str]:
+    response = client.list_posts(limit=scan_limit, status="posted", newest_first=True)
+    response.raise_for_status()
+    rows = list(response.json() or [])
+    result: set[str] = set()
+    for row in rows:
+        publish_at = parse_post_datetime(row.get("publish_at"))
+        slot_key = _publish_slot_key(publish_at, local_tz)
+        if slot_key:
+            result.add(slot_key)
+    return result
 
 
 def _split_text_for_telegram(text: str, limit: int = 4000) -> list[str]:
@@ -490,6 +489,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
             due_fallback_promoted = _promote_due_editorial_posts_for_idle_publisher(
                 client,
                 limit=claim_limit,
+                control_rows=control_rows,
             )
         except Exception as exc:
             logger.warning("due_editorial_fallback_failed", extra={"error": str(exc)})
@@ -507,10 +507,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
 
         fallback_promoted = 0
         if allow_idle_fallback and allow_configured_idle_fallback:
-            try:
-                fallback_promoted = _promote_fallback_posts_for_idle_publisher(client, limit=claim_limit)
-            except Exception as exc:
-                logger.warning("idle_publisher_fallback_failed", extra={"error": str(exc)})
+            logger.warning("unsafe_idle_publisher_fallback_ignored")
         elif not allow_configured_idle_fallback:
             logger.info("idle_publisher_fallback_disabled")
         else:

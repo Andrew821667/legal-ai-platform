@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     news_publish_claim_limit: int = 1
     news_publish_idle_fallback_enabled: bool = False
     news_publish_max_overdue_minutes: int = 360
+    news_publish_editorial_fallback_grace_minutes: int = 45
     news_publish_fallback_startup_grace_seconds: int = 600
     news_generate_interval_options: str = "900,1800,2700,3600,7200"
     news_publish_interval_options: str = "60,120,300,600,900"
