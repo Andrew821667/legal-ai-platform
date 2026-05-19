@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from telegram import InlineKeyboardMarkup
+from telegram_ui import inline_button as InlineKeyboardButton
 
 import content
 import database
@@ -141,11 +142,11 @@ async def maybe_handle_view_callbacks(
             f"{content.LEAD_MAGNET_OFFER_TEXT}"
         )
         response_markup = _with_channel_button(InlineKeyboardMarkup(LEAD_MAGNET_MENU))
-        response_markup = append_inline_url_row(
-            response_markup,
-            content.CONTRACT_AI_BUTTON_TEXT,
-            content.contract_ai_public_url(),
-            prepend=True,
+        response_markup = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton(content.CONTRACT_AI_BUTTON_TEXT, callback_data="open_web:contract_ai")],
+                *response_markup.inline_keyboard,
+            ]
         )
         await responder.send_html(
             response_text,

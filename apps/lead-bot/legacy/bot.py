@@ -65,11 +65,13 @@ from handlers.callbacks import (
     handle_consent_callback,
     handle_documents_callback,
     handle_lead_magnet_callback,
+    handle_open_web_callback,
     handle_profile_callback,
 )
 from handlers.contract_analysis import (
     handle_contract_analysis_cancel,
     handle_contract_analysis_start,
+    handle_contract_result_open,
 )
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
@@ -772,7 +774,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
 
         data = query.data or ""
-        if data == "menu_contract_ai":
+        if data.startswith("open_web:"):
+            await handle_open_web_callback(update, context)
+        elif data == "menu_contract_ai":
             await handle_business_menu_callback(update, context)
         elif data.startswith("menu_"):
             await handle_business_menu_callback(update, context)
@@ -792,6 +796,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_contract_analysis_start(update, context)
         elif data == "contract_cancel":
             await handle_contract_analysis_cancel(update, context)
+        elif data.startswith("contract_result:"):
+            await handle_contract_result_open(update, context)
         else:
             await query.answer("Неизвестное действие")
         log_update_timing(update, started_at, ok=True)

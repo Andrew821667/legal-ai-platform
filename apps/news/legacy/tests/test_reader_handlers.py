@@ -44,7 +44,7 @@ def test_get_article_keyboard_includes_source_links() -> None:
     )
 
     buttons = [button for row in keyboard.inline_keyboard for button in row]
-    assert any(button.text == "🌐 Статья" and button.url == "https://example.com/original" for button in buttons)
+    assert any(button.text == "🌐 Статья" and button.callback_data == "web:article:pub-1" for button in buttons)
     assert any(button.text == "📣 Пост в канале" and button.url == "https://t.me/ai_verdict/42" for button in buttons)
 
 

@@ -11,6 +11,7 @@ from .callback_flows import (
     handle_consent_callback,
     handle_documents_callback,
     handle_lead_magnet_callback,
+    handle_open_web_callback,
     handle_profile_callback,
 )
 from .cleanup_callbacks import handle_cleanup_callback
@@ -22,5 +23,6 @@ __all__ = [
     "handle_consent_callback",
     "handle_documents_callback",
     "handle_lead_magnet_callback",
+    "handle_open_web_callback",
     "handle_profile_callback",
 ]

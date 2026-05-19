@@ -69,6 +69,23 @@ from app.config import settings
 
 router = Router()
 _MAX_TELEGRAM_ARTICLE_TEXT = 3600
+_WEB_TRANSITION_VPN_ALERT = (
+    "Вы переходите во внешний веб-адрес:\n{url}\n\n"
+    "Перед открытием отключите VPN/прокси в Telegram. "
+    "Иначе сайт может не открыться."
+)
+
+
+def _web_transition_alert(url: str) -> str:
+    return _WEB_TRANSITION_VPN_ALERT.format(url=url)
+
+
+def _web_open_message(url: str) -> str:
+    return (
+        "<b>Переход во внешний веб-адрес</b>\n\n"
+        f"Адрес: <code>{escape(url)}</code>\n\n"
+        "Отключите VPN/прокси в Telegram, затем нажмите кнопку ниже."
+    )
 
 
 # ==================== FSM States ====================
@@ -422,7 +439,7 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
     if miniapp_url:
         nav_markup = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="🧩 Продолжить в Mini App", url=miniapp_url)],
+                [InlineKeyboardButton(text="🧩 Продолжить в Mini App", callback_data="rnav:miniapp")],
                 *nav_markup.inline_keyboard,
             ]
         )
@@ -496,7 +513,7 @@ async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> Non
         ],
     ]
     if miniapp_url:
-        rows.append([InlineKeyboardButton(text="🧩 Mini App: Контент", url=miniapp_url)])
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Контент", callback_data="rnav:miniapp_content")])
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Контент", callback_data="rnav:miniapp_content")])
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
@@ -531,7 +548,7 @@ async def _show_validate(target: Message, user_id: int) -> None:
     rows: list[list[InlineKeyboardButton]] = []
     contract_url = (settings.reader_contract_ai_url or "").strip()
     if contract_url:
-        rows.append([InlineKeyboardButton(text="🖥 Открыть Contract AI", url=contract_url)])
+        rows.append([InlineKeyboardButton(text="🖥 Открыть Contract AI", callback_data="web:contract_ai")])
     if demo_link:
         rows.append(
             [
@@ -542,7 +559,7 @@ async def _show_validate(target: Message, user_id: int) -> None:
     if checklist_link:
         rows.append([InlineKeyboardButton(text="📄 Чек-лист рисков", url=checklist_link)])
     if miniapp_url:
-        rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", url=miniapp_url)])
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", callback_data="rnav:miniapp_tools")])
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Инструменты", callback_data="rnav:miniapp_tools")])
     if pilot_link:
@@ -580,12 +597,12 @@ async def _show_solutions(target: Message, user_id: int) -> None:
     )
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton(text="⚖️ Для юристов", url=(settings.reader_for_lawyers_url or "").strip() or "https://ai-verdict.ru/for-lawyers"),
-            InlineKeyboardButton(text="🏢 Для бизнеса", url=(settings.reader_for_business_url or "").strip() or "https://ai-verdict.ru/for-business"),
+            InlineKeyboardButton(text="⚖️ Для юристов", callback_data="web:lawyers"),
+            InlineKeyboardButton(text="🏢 Для бизнеса", callback_data="web:business"),
         ],
     ]
     if miniapp_url:
-        rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", url=miniapp_url)])
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", callback_data="rnav:miniapp_solutions")])
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Решения", callback_data="rnav:miniapp_solutions")])
     if helper_link:
@@ -632,7 +649,7 @@ async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> 
         ],
     ]
     if miniapp_url:
-        rows.append([InlineKeyboardButton(text="🧩 Mini App: Мое", url=miniapp_url)])
+        rows.append([InlineKeyboardButton(text="🧩 Mini App: Мое", callback_data="rnav:miniapp_profile")])
     else:
         rows.append([InlineKeyboardButton(text="🧩 Mini App: Мое", callback_data="rnav:miniapp_profile")])
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
@@ -670,7 +687,7 @@ def get_article_keyboard(
 
     external_links = []
     if source_url:
-        external_links.append(InlineKeyboardButton(text="🌐 Статья", url=source_url))
+        external_links.append(InlineKeyboardButton(text="🌐 Статья", callback_data=f"web:article:{publication_id}"))
     if channel_post_url:
         external_links.append(InlineKeyboardButton(text="📣 Пост в канале", url=channel_post_url))
     if external_links:
@@ -929,7 +946,14 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
         await _handle_start(callback.message, callback.from_user, state, db, raw_text="/start")
         return
 
-    await callback.answer()
+    if action.startswith("miniapp"):
+        await callback.answer(
+            "Вы переходите в Mini App AI Verdict.\n\n"
+            "Перед открытием отключите VPN/прокси в Telegram. Иначе веб-экран может не открыться.",
+            show_alert=True,
+        )
+    else:
+        await callback.answer()
     await state.clear()
     if action == "home":
         await measure_async("reader.screen.home", _show_home_screen(callback.message, callback.from_user, db), user_id=user_id, action=action)
@@ -1023,6 +1047,43 @@ async def handle_reader_navigation(callback: CallbackQuery, state: FSMContext, d
         )
     elif action == "lead_magnet":
         await measure_async("reader.screen.lead_magnet", _open_lead_magnet(callback.message, user_id, state, db), user_id=user_id, action=action)
+
+
+@router.callback_query(F.data.startswith("web:"))
+async def handle_web_transition(callback: CallbackQuery, db: AsyncSession):
+    """Show a Telegram popup before exposing an external web URL."""
+    if callback.message is None:
+        await callback.answer("Откройте раздел заново", show_alert=True)
+        return
+
+    parts = (callback.data or "").split(":")
+    target = parts[1] if len(parts) > 1 else ""
+    label = "Открыть"
+    url = ""
+    if target == "contract_ai":
+        url = (settings.reader_contract_ai_url or "").strip()
+        label = "Открыть Contract AI"
+    elif target == "lawyers":
+        url = (settings.reader_for_lawyers_url or "").strip() or "https://ai-verdict.ru/for-lawyers"
+        label = "Открыть раздел для юристов"
+    elif target == "business":
+        url = (settings.reader_for_business_url or "").strip() or "https://ai-verdict.ru/for-business"
+        label = "Открыть раздел для бизнеса"
+    elif target == "article" and len(parts) > 2:
+        article = await get_publication_by_id(parts[2], db)
+        url = _article_source_url(article) if article else ""
+        label = "Открыть статью"
+
+    if not url:
+        await callback.answer("Адрес временно недоступен.", show_alert=True)
+        return
+
+    await callback.answer(_web_transition_alert(url), show_alert=True)
+    await callback.message.answer(
+        _web_open_message(url),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]]),
+    )
 
 
 async def _open_lead_magnet(target: Message, user_id: int, state: FSMContext, db: AsyncSession) -> None:

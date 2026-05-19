@@ -1,8 +1,6 @@
 """
 Константы для handlers - меню кнопок и другие константы
 """
-import os
-
 from telegram import InlineKeyboardMarkup
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
@@ -21,12 +19,7 @@ DEFAULT_PROFILE_CTA_LABEL = "🎯 Профиль услуг: выбрать и �
 
 
 def contract_ai_menu_url() -> str:
-    return (
-        os.getenv("CONTRACT_AI_SYSTEM_URL")
-        or os.getenv("READER_CONTRACT_AI_URL")
-        or os.getenv("NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL")
-        or "https://contract.ai-verdict.ru"
-    ).strip()
+    return "open_web:contract_ai"
 
 
 def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
@@ -37,7 +30,7 @@ def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LAB
             InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
         ],
         [
-            InlineKeyboardButton("🧪 Проверить договор", url=contract_ai_menu_url()),
+            InlineKeyboardButton("🧪 Проверить договор", callback_data=contract_ai_menu_url()),
             InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
         ],
         [
@@ -58,7 +51,7 @@ def build_start_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
         [
-            InlineKeyboardButton("🧪 Проверить договор", url=contract_ai_menu_url()),
+            InlineKeyboardButton("🧪 Проверить договор", callback_data=contract_ai_menu_url()),
             InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
         ],
         [
@@ -80,7 +73,7 @@ def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
         [
             InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
-            InlineKeyboardButton("🧪 Проверить договор", url=contract_ai_menu_url()),
+            InlineKeyboardButton("🧪 Проверить договор", callback_data=contract_ai_menu_url()),
         ],
         [
             InlineKeyboardButton("👤 Профиль", callback_data="menu_profile"),

@@ -19,6 +19,13 @@ def _e(value: object) -> str:
     return escape(str(value or ""))
 
 
+WEB_TRANSITION_VPN_ALERT = (
+    "Вы переходите во внешний веб-адрес:\n{url}\n\n"
+    "Перед открытием отключите VPN/прокси в Telegram. "
+    "Иначе сайт может не открыться."
+)
+
+
 CONTACTS = {
     "manager_name": "Андрей Попов",
     "telegram": "@AndrewPopov821667",
@@ -248,12 +255,29 @@ def public_channel_url() -> str | None:
 
 
 def contract_ai_public_url() -> str | None:
-    direct_url = (config.CONTRACT_AI_SYSTEM_URL or "").strip()
+    direct_url = (config.CONTRACT_AI_SYSTEM_URL or "https://contract.ai-verdict.ru").strip()
     if not direct_url:
         return None
     if direct_url.startswith(("http://", "https://")):
         return direct_url
     return f"https://{direct_url.lstrip('/')}"
+
+
+def web_url_by_key(key: str) -> str | None:
+    urls = {
+        "contract_ai": contract_ai_public_url(),
+        "privacy": config.PRIVACY_POLICY_URL,
+        "transborder": config.TRANSBORDER_CONSENT_URL,
+        "user_agreement": config.USER_AGREEMENT_URL,
+        "ai_policy": config.AI_POLICY_URL,
+        "marketing_consent": config.MARKETING_CONSENT_URL,
+    }
+    value = (urls.get(key) or "").strip()
+    return value or None
+
+
+def web_transition_alert(url: str) -> str:
+    return WEB_TRANSITION_VPN_ALERT.format(url=url)
 
 
 def channel_nurture_text() -> str:
@@ -774,8 +798,7 @@ def privacy_policy_text() -> str:
         "<b>📄 Политика обработки персональных данных</b>\n\n"
         f"Оператор: {_operator_identity_text()}\n"
         "Оператор обрабатывает только данные, необходимые для связи и консультации.\n"
-        "<b>Подробная версия:</b>\n"
-        f"{_e(config.PRIVACY_POLICY_URL)}\n\n"
+        "<b>Подробная версия:</b> откройте веб-версию кнопкой под сообщением.\n\n"
         f"<b>Контакт по вопросам ПД:</b> {_e(config.PRIVACY_CONTACT_EMAIL)}"
     )
 
@@ -784,8 +807,7 @@ def transborder_policy_text() -> str:
     return (
         "<b>📄 Согласие на трансграничную передачу данных</b>\n\n"
         "Нужно для работы ИИ-функций на базе внешних сервисов искусственного интеллекта.\n"
-        "<b>Подробная версия:</b>\n"
-        f"{_e(config.TRANSBORDER_CONSENT_URL)}"
+        "<b>Подробная версия:</b> откройте веб-версию кнопкой под сообщением."
     )
 
 
@@ -810,24 +832,21 @@ def documents_list_text() -> str:
 def user_agreement_text() -> str:
     return (
         "<b>📄 Пользовательское соглашение</b>\n\n"
-        "<b>Актуальная редакция:</b>\n"
-        f"{_e(config.USER_AGREEMENT_URL)}"
+        "<b>Актуальная редакция:</b> откройте веб-версию кнопкой под сообщением."
     )
 
 
 def ai_policy_text() -> str:
     return (
         "<b>📄 Политика использования ИИ</b>\n\n"
-        "<b>Актуальная редакция:</b>\n"
-        f"{_e(config.AI_POLICY_URL)}"
+        "<b>Актуальная редакция:</b> откройте веб-версию кнопкой под сообщением."
     )
 
 
 def marketing_consent_text() -> str:
     return (
         "<b>📄 Согласие на информационные/маркетинговые рассылки</b>\n\n"
-        "<b>Актуальная редакция:</b>\n"
-        f"{_e(config.MARKETING_CONSENT_URL)}"
+        "<b>Актуальная редакция:</b> откройте веб-версию кнопкой под сообщением."
     )
 
 

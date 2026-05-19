@@ -12,7 +12,7 @@ import content
 import database
 import utils
 from config import get_config
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from .markup import (
@@ -33,6 +33,21 @@ from .start_payloads import (
 
 config = get_config()
 logger = logging.getLogger(__name__)
+
+
+_WEB_OPEN_LABELS = {
+    "privacy": "Открыть политику ПД",
+    "transborder": "Открыть условия передачи",
+    "user_agreement": "Открыть соглашение",
+    "ai_policy": "Открыть политику ИИ",
+    "marketing_consent": "Открыть согласие на рассылки",
+}
+
+
+def _web_open_markup(target: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть веб-страницу"), callback_data=f"open_web:{target}")]]
+    )
 
 
 def _get_local_user_and_lead(telegram_id: int) -> tuple[dict | None, dict | None]:
@@ -225,19 +240,34 @@ async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /privacy - политика обработки ПД."""
     _ = context
-    await utils.safe_reply_html(update.message, content.privacy_policy_text(), action="privacy_command")
+    await utils.safe_reply_html(
+        update.message,
+        content.privacy_policy_text(),
+        reply_markup=_web_open_markup("privacy"),
+        action="privacy_command",
+    )
 
 
 async def user_agreement_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /user_agreement - пользовательское соглашение."""
     _ = context
-    await utils.safe_reply_html(update.message, content.user_agreement_text(), action="user_agreement_command")
+    await utils.safe_reply_html(
+        update.message,
+        content.user_agreement_text(),
+        reply_markup=_web_open_markup("user_agreement"),
+        action="user_agreement_command",
+    )
 
 
 async def ai_policy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /ai_policy - политика использования ИИ."""
     _ = context
-    await utils.safe_reply_html(update.message, content.ai_policy_text(), action="ai_policy_command")
+    await utils.safe_reply_html(
+        update.message,
+        content.ai_policy_text(),
+        reply_markup=_web_open_markup("ai_policy"),
+        action="ai_policy_command",
+    )
 
 
 async def marketing_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -245,7 +275,12 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
     _ = context
     user = update.effective_user
     user_data = database.db.get_local_user_by_telegram_id(user.id)
-    await utils.safe_reply_html(update.message, content.marketing_consent_text(), action="marketing_consent_command")
+    await utils.safe_reply_html(
+        update.message,
+        content.marketing_consent_text(),
+        reply_markup=_web_open_markup("marketing_consent"),
+        action="marketing_consent_command",
+    )
     if user_data:
         database.db.set_user_marketing_consent(user_data["id"], True)
 
@@ -264,6 +299,7 @@ async def transborder_consent_command(update: Update, context: ContextTypes.DEFA
         await utils.safe_reply_html(
             update.message,
             f"{message}\n\n<b>Статус:</b> ✅ согласие активно.",
+            reply_markup=_web_open_markup("transborder"),
             action="transborder_status_active",
         )
         return

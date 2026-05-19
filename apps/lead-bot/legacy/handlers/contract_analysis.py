@@ -156,13 +156,53 @@ def contract_analysis_markup() -> InlineKeyboardMarkup:
     ])
 
 
-def contract_result_markup(web_url: str | None = None) -> InlineKeyboardMarkup:
+def contract_result_markup(web_url: str | None = None, *, job_id: str | None = None) -> InlineKeyboardMarkup:
     """Клавиатура после получения результата."""
     buttons = []
     if web_url:
-        buttons.append([InlineKeyboardButton("Открыть в веб-кабинете", url=web_url)])
+        callback_data = f"contract_result:{job_id}" if job_id else "open_web:contract_ai"
+        buttons.append([InlineKeyboardButton("Открыть в веб-кабинете", callback_data=callback_data)])
     buttons.append([InlineKeyboardButton("Проверить ещё договор", callback_data="contract_upload")])
     return InlineKeyboardMarkup(buttons)
+
+
+async def handle_contract_result_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Warn before opening a contract analysis web result."""
+    _ = context
+    query = update.callback_query
+    if not query:
+        return
+
+    job_id = (query.data or "").split(":", 1)[1].strip()
+    summary = await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: _api_get(f"/result/{job_id}/summary", timeout=15),
+    )
+    web_url = str((summary or {}).get("web_url") or "").strip()
+    if not web_url:
+        await utils.safe_answer_callback(
+            query,
+            action="contract_result_web_missing",
+            text="Ссылка на веб-кабинет временно недоступна.",
+            show_alert=True,
+        )
+        return
+
+    await utils.safe_answer_callback(
+        query,
+        action="contract_result_web_notice",
+        text=content.web_transition_alert(web_url),
+        show_alert=True,
+    )
+    if query.message is not None:
+        await utils.safe_reply_html(
+            query.message,
+            "<b>Переход в веб-кабинет</b>\n\n"
+            f"Адрес: <code>{content._e(web_url)}</code>\n\n"
+            "Отключите VPN/прокси в Telegram, затем нажмите кнопку ниже.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Открыть результат", url=web_url)]]),
+            action="contract_result_web_open",
+        )
 
 
 async def handle_contract_analysis_start(
@@ -390,7 +430,7 @@ async def _poll_and_report(progress_msg: Message, job_id: str) -> None:
         await progress_msg.edit_text(
             summary_text,
             parse_mode="Markdown",
-            reply_markup=contract_result_markup(summary.get("web_url")),
+            reply_markup=contract_result_markup(summary.get("web_url"), job_id=job_id),
         )
     else:
         # Если summary не получен — показываем что анализ завершён

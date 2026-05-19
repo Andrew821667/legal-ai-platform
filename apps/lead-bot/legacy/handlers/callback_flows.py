@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import reply_button as KeyboardButton
@@ -27,6 +27,59 @@ from .start_payloads import process_pending_start_payload
 
 config = get_config()
 logger = logging.getLogger(__name__)
+
+
+_WEB_OPEN_LABELS = {
+    "contract_ai": "Открыть Contract AI",
+    "privacy": "Открыть политику ПД",
+    "transborder": "Открыть условия передачи",
+    "user_agreement": "Открыть соглашение",
+    "ai_policy": "Открыть политику ИИ",
+    "marketing_consent": "Открыть согласие на рассылки",
+}
+
+
+def _web_open_markup(target: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть веб-страницу"), callback_data=f"open_web:{target}")]]
+    )
+
+
+async def handle_open_web_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows an in-Telegram warning before giving the external web URL."""
+    _ = context
+    query = update.callback_query
+    if not query:
+        return
+
+    target = (query.data or "").split(":", 1)[1].strip()
+    url = content.web_url_by_key(target)
+    if not url:
+        await utils.safe_answer_callback(
+            query,
+            action="open_web_missing",
+            text="Адрес временно недоступен.",
+            show_alert=True,
+        )
+        return
+
+    await utils.safe_answer_callback(
+        query,
+        action="open_web_notice",
+        text=content.web_transition_alert(url),
+        show_alert=True,
+    )
+    if query.message is not None:
+        await utils.safe_reply_html(
+            query.message,
+            "<b>Переход во внешний веб-адрес</b>\n\n"
+            f"Адрес: <code>{content._e(url)}</code>\n\n"
+            "Отключите VPN/прокси в Telegram, затем нажмите кнопку ниже.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть"), url=url)]]
+            ),
+            action=f"open_web_{target}",
+        )
 
 
 def build_client_profile_text(user_row: dict, lead: dict | None, consent_state: dict) -> str:
@@ -261,11 +314,21 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     action = query.data or ""
 
     if action == "consent_doc_privacy":
-        await utils.safe_reply_html(query.message, content.privacy_policy_text(), action="consent_doc_privacy")
+        await utils.safe_reply_html(
+            query.message,
+            content.privacy_policy_text(),
+            reply_markup=_web_open_markup("privacy"),
+            action="consent_doc_privacy",
+        )
         return
 
     if action == "consent_doc_transborder":
-        await utils.safe_reply_html(query.message, content.transborder_policy_text(), action="consent_doc_transborder")
+        await utils.safe_reply_html(
+            query.message,
+            content.transborder_policy_text(),
+            reply_markup=_web_open_markup("transborder"),
+            action="consent_doc_transborder",
+        )
         return
 
     if action == "consent_pdn_no":
@@ -372,7 +435,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📄 Политика ПД", content.privacy_policy_text())),
-            reply_markup=_documents_panel_markup(),
+            reply_markup=_web_open_markup("privacy"),
             action="doc_privacy",
         )
         return
@@ -380,7 +443,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("🌍 Трансграничная передача", content.transborder_policy_text())),
-            reply_markup=_documents_panel_markup(),
+            reply_markup=_web_open_markup("transborder"),
             action="doc_transborder",
         )
         return
@@ -388,7 +451,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📜 Пользовательское соглашение", content.user_agreement_text())),
-            reply_markup=_documents_panel_markup(),
+            reply_markup=_web_open_markup("user_agreement"),
             action="doc_user_agreement",
         )
         return
@@ -396,7 +459,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("🤖 Политика ИИ", content.ai_policy_text())),
-            reply_markup=_documents_panel_markup(),
+            reply_markup=_web_open_markup("ai_policy"),
             action="doc_ai_policy",
         )
         return
@@ -404,7 +467,7 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
         await utils.safe_edit_html(
             query.message,
             _clip_for_edit(_documents_panel_text("📣 Согласие на рассылки", content.marketing_consent_text())),
-            reply_markup=_documents_panel_markup(),
+            reply_markup=_web_open_markup("marketing_consent"),
             action="doc_marketing_consent",
         )
         if user_data:
