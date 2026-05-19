@@ -332,6 +332,33 @@ def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> No
     assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
 
 
+def test_normalize_text_before_publish_adds_vpn_notice_for_external_source() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        '<b>Источник</b>: <a href="https://example.com/article">оригинал</a>\n'
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(original)
+
+    assert "отключите VPN" in normalized
+    assert normalized.index("оригинал") < normalized.index("отключите VPN")
+
+
+def test_normalize_text_before_publish_skips_vpn_notice_for_telegram_links() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "Текст поста.\n\n"
+        '<b>Источник</b>: <a href="https://t.me/ai_verdict/42">пост</a>\n'
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(original)
+
+    assert "отключите VPN" not in normalized
+
+
 def test_normalize_text_before_publish_adds_missing_footer_for_applicable_ready_post() -> None:
     original = (
         "<b>Заголовок</b>\n\n"

@@ -21,6 +21,7 @@ from news.logging_config import setup_logging
 from news.pipeline import normalize_rubric_to_pillar
 from news.settings import settings
 from news.strategy import build_schedule_window
+from news.telegram_vpn_notice import append_external_link_vpn_notice
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -447,8 +448,10 @@ def _normalize_text_before_publish(
     intelligent_footer: bool = True,
 ) -> str:
     if post is None:
-        return LLMNewsWriter.normalize_post_footer_blocks(text)
-    return _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
+        return append_external_link_vpn_notice(LLMNewsWriter.normalize_post_footer_blocks(text))
+    return append_external_link_vpn_notice(
+        _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
+    )
 
 
 def main(*, allow_idle_fallback: bool = True) -> int:

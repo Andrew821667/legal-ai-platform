@@ -57,6 +57,7 @@ def test_build_article_detail_text_truncates_and_sanitizes() -> None:
     assert '»' not in detail_text
     assert "..." in detail_text
     assert "Текст сокращен из-за лимита Telegram" in detail_text
+    assert "отключите VPN" in detail_text
 
 
 def test_reader_publication_channel_post_url() -> None:

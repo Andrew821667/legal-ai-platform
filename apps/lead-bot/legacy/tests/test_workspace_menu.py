@@ -126,6 +126,12 @@ def test_contract_module_text_is_clear_for_new_user() -> None:
     assert "сервис AI-анализа договоров" in response
     assert "полный анализ рисков договора за минуты" in response
     assert "краткий отчёт с ключевыми рисками и рекомендациями" in response
+    assert "отключите VPN" in response
+
+
+def test_documents_with_external_urls_include_vpn_notice() -> None:
+    assert "отключите VPN" in content.privacy_policy_text()
+    assert "отключите VPN" in content.user_agreement_text()
 
 
 def test_consultation_text_explains_value_of_handoff() -> None:

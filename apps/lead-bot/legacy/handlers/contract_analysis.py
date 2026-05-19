@@ -22,6 +22,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.ext import ContextTypes
 
 import database
+import content
 import utils
 from config import get_config
 
@@ -388,7 +389,11 @@ async def _poll_and_report(progress_msg: Message, job_id: str) -> None:
             summary_text = summary_text[:3997] + "..."
 
         await progress_msg.edit_text(
-            summary_text,
+            (
+                f"{summary_text}\n\n{content.EXTERNAL_LINK_VPN_NOTICE_TEXT}"
+                if summary.get("web_url")
+                else summary_text
+            ),
             parse_mode="Markdown",
             reply_markup=contract_result_markup(summary.get("web_url")),
         )

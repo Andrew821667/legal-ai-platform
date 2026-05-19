@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from news.telegram_vpn_notice import EXTERNAL_LINK_VPN_NOTICE_TEXT, has_external_non_telegram_link
+
 
 ScreenGuide = Callable[[str, list[str]], str]
 FeedbackSnapshotFormatter = Callable[[dict[str, Any] | None], str]
@@ -68,6 +70,8 @@ def build_post_card_text(
         parts.append(f"✅ Опубликован: {posted_at}")
     if source_url:
         parts.append(f"🔗 Источник: {source_url}")
+        if has_external_non_telegram_link(source_url):
+            parts.append(EXTERNAL_LINK_VPN_NOTICE_TEXT)
     parts.extend(
         [
             "",
