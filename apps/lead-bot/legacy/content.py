@@ -19,21 +19,6 @@ def _e(value: object) -> str:
     return escape(str(value or ""))
 
 
-EXTERNAL_LINK_VPN_NOTICE_TEXT = (
-    "Важно: при переходе на сайт или внешний сервис отключите VPN, "
-    "если страница не открывается."
-)
-EXTERNAL_LINK_VPN_NOTICE_HTML = f"<b>Важно:</b> {EXTERNAL_LINK_VPN_NOTICE_TEXT.removeprefix('Важно: ')}"
-_VPN_NOTICE_MARKER = "отключите vpn"
-
-
-def with_external_link_vpn_notice(text: str, *, enabled: bool = True) -> str:
-    normalized = (text or "").rstrip()
-    if not enabled or _VPN_NOTICE_MARKER in normalized.lower():
-        return normalized
-    return f"{normalized}\n\n{EXTERNAL_LINK_VPN_NOTICE_HTML}"
-
-
 CONTACTS = {
     "manager_name": "Андрей Попов",
     "telegram": "@AndrewPopov821667",
@@ -263,7 +248,7 @@ def public_channel_url() -> str | None:
 
 
 def contract_ai_public_url() -> str | None:
-    direct_url = (config.CONTRACT_AI_SYSTEM_URL or "https://contract.ai-verdict.ru").strip()
+    direct_url = (config.CONTRACT_AI_SYSTEM_URL or "").strip()
     if not direct_url:
         return None
     if direct_url.startswith(("http://", "https://")):
@@ -315,9 +300,7 @@ def with_assistant_chat_hint(text: str) -> str:
 def contract_ai_entry_hint() -> str:
     if not contract_ai_public_url():
         return ""
-    return with_external_link_vpn_notice(
-        "Если доступ уже согласован, можно сразу открыть внешний модуль кнопкой ниже."
-    )
+    return "Если доступ уже согласован, можно сразу открыть внешний модуль кнопкой ниже."
 
 
 def legal_disclaimer_short_text() -> str:
@@ -351,7 +334,7 @@ def pdn_consent_required_text(action_label: str | None = None) -> str:
 
 def build_welcome_message(first_name: str) -> str:
     name = _e((first_name or "").strip() or "коллега")
-    return with_external_link_vpn_notice(
+    return (
         f"<b>Здравствуйте, {name}.</b>\n\n"
         "<b>AI Verdict</b> — это ИИ-помощник по автоматизации юридических процессов.\n"
         "Мы помогаем внедрять ИИ в <b>юридические и бизнес-процессы</b>: "
@@ -365,8 +348,7 @@ def build_welcome_message(first_name: str) -> str:
         "Можно начать без специальных терминов: посмотреть услуги, цены, "
         "проверку договора или просто описать задачу обычными словами.\n\n"
         f"{assistant_chat_hint_text()}\n\n"
-        f"{legal_disclaimer_short_text()}",
-        enabled=bool(contract_ai_public_url()),
+        f"{legal_disclaimer_short_text()}"
     )
 
 
@@ -385,7 +367,7 @@ def build_start_entry_text(
             "👉 <b>Сначала нажмите верхнюю кнопку «🎯 Профиль услуг».</b>\n"
             "Так я быстрее покажу подходящие услуги, цены и следующий шаг именно под вашу роль.\n\n"
         )
-    return with_external_link_vpn_notice(
+    return (
         f"<b>Здравствуйте, {name}.</b>\n\n"
         "<b>AI Verdict</b> — это ИИ-помощник по автоматизации юридических процессов.\n"
         "Мы помогаем внедрять ИИ в <b>юридические и бизнес-процессы</b>: "
@@ -400,8 +382,7 @@ def build_start_entry_text(
         "Меню и документы доступны сразу. Для персональной заявки, контакта и ИИ-разбора "
         "я сначала попрошу согласие на обработку данных.\n\n"
         f"{assistant_chat_hint_text()}\n\n"
-        f"{legal_disclaimer_short_text()}",
-        enabled=bool(contract_ai_public_url()),
+        f"{legal_disclaimer_short_text()}"
     )
 
 
@@ -469,7 +450,7 @@ def build_workspace_text(
     intro = "\n\n".join(intro_parts)
     if intro:
         intro = f"{intro}\n\n"
-    return with_external_link_vpn_notice(
+    return (
         "<b>🧭 Рабочий стол</b>\n\n"
         f"{intro}"
         "Здесь собраны основные разделы: услуги, цены, ИИ-проверка договора, консультация и документы.\n"
@@ -482,8 +463,7 @@ def build_workspace_text(
         "• открыть ИИ-проверку договора или описать задачу своими словами\n"
         "• запросить консультацию, оставить контакт или обсудить внедрение ИИ\n\n"
         "Для персональной заявки и ИИ-разбора я сначала попрошу согласие на обработку данных.\n\n"
-        "Выберите нужный раздел кнопками ниже.",
-        enabled=bool(contract_ai_public_url()),
+        "Выберите нужный раздел кнопками ниже."
     )
 
 
@@ -706,7 +686,7 @@ REPEAT_LOOP_FALLBACK_TEXT = (
 )
 
 
-CONSENT_STEP_1_TEXT = with_external_link_vpn_notice(
+CONSENT_STEP_1_TEXT = (
     "<b>📋 Согласие на обработку персональных данных</b>\n\n"
     f"Оператор: {_operator_identity_text()}\n\n"
     "<b>Для персональной заявки и связи по вашему запросу нужно согласие на обработку ПД:</b>\n"
@@ -790,7 +770,7 @@ def consent_user_status_text(consent: dict) -> str:
 
 
 def privacy_policy_text() -> str:
-    return with_external_link_vpn_notice(
+    return (
         "<b>📄 Политика обработки персональных данных</b>\n\n"
         f"Оператор: {_operator_identity_text()}\n"
         "Оператор обрабатывает только данные, необходимые для связи и консультации.\n"
@@ -801,7 +781,7 @@ def privacy_policy_text() -> str:
 
 
 def transborder_policy_text() -> str:
-    return with_external_link_vpn_notice(
+    return (
         "<b>📄 Согласие на трансграничную передачу данных</b>\n\n"
         "Нужно для работы ИИ-функций на базе внешних сервисов искусственного интеллекта.\n"
         "<b>Подробная версия:</b>\n"
@@ -828,7 +808,7 @@ def documents_list_text() -> str:
 
 
 def user_agreement_text() -> str:
-    return with_external_link_vpn_notice(
+    return (
         "<b>📄 Пользовательское соглашение</b>\n\n"
         "<b>Актуальная редакция:</b>\n"
         f"{_e(config.USER_AGREEMENT_URL)}"
@@ -836,7 +816,7 @@ def user_agreement_text() -> str:
 
 
 def ai_policy_text() -> str:
-    return with_external_link_vpn_notice(
+    return (
         "<b>📄 Политика использования ИИ</b>\n\n"
         "<b>Актуальная редакция:</b>\n"
         f"{_e(config.AI_POLICY_URL)}"
@@ -844,7 +824,7 @@ def ai_policy_text() -> str:
 
 
 def marketing_consent_text() -> str:
-    return with_external_link_vpn_notice(
+    return (
         "<b>📄 Согласие на информационные/маркетинговые рассылки</b>\n\n"
         "<b>Актуальная редакция:</b>\n"
         f"{_e(config.MARKETING_CONSENT_URL)}"

@@ -131,7 +131,6 @@ from news.queue_keyboard_ui import build_auto_queue_keyboard_rows, build_manual_
 from news.queue_ui import build_auto_queue_text, build_manual_queue_text
 from news.settings import settings
 from news.source_catalog import resolve_source_urls, source_catalog
-from news.telegram_vpn_notice import EXTERNAL_LINK_VPN_NOTICE_TEXT, append_external_link_vpn_notice
 from news.sources_ui import (
     build_source_detail_text,
     build_source_posts_text,
@@ -2971,28 +2970,25 @@ class NewsAdminBot:
         text = _strip_html_markup(str(preview.get("text") or "").strip())
         if len(text) > 2100:
             text = text[:2100].rstrip() + "\n\n…"
-        return append_external_link_vpn_notice(
-            "\n".join(
-                [
-                    f"Драфт {index + 1} из {total}",
-                    "",
-                    f"Вид публикации: {publication_kind_label(str(preview.get('publication_kind') or publication_kind_from_format_type(str(preview.get('format_type') or ''))))}",
-                    f"Тематика: {_pillar_label(str(preview.get('pillar') or 'implementation'))}",
-                    f"Рубрика: {_rubric_label(str(preview.get('rubric') or ''))}",
-                    f"Формат: {preview.get('format_type') or 'standard'}",
-                    f"План публикации: {preview.get('publish_at') or '—'}",
-                    f"Источник: {source_domain}",
-                    f"Оригинальная статья: {source_title}",
-                    f"URL: {preview.get('source_url') or '—'}",
-                    "",
-                    "Краткое содержание статьи:",
-                    source_summary or "—",
-                    "",
-                    "Драфт поста:",
-                    text or "—",
-                ]
-            ),
-            notice=EXTERNAL_LINK_VPN_NOTICE_TEXT,
+        return "\n".join(
+            [
+                f"Драфт {index + 1} из {total}",
+                "",
+                f"Вид публикации: {publication_kind_label(str(preview.get('publication_kind') or publication_kind_from_format_type(str(preview.get('format_type') or ''))))}",
+                f"Тематика: {_pillar_label(str(preview.get('pillar') or 'implementation'))}",
+                f"Рубрика: {_rubric_label(str(preview.get('rubric') or ''))}",
+                f"Формат: {preview.get('format_type') or 'standard'}",
+                f"План публикации: {preview.get('publish_at') or '—'}",
+                f"Источник: {source_domain}",
+                f"Оригинальная статья: {source_title}",
+                f"URL: {preview.get('source_url') or '—'}",
+                "",
+                "Краткое содержание статьи:",
+                source_summary or "—",
+                "",
+                "Драфт поста:",
+                text or "—",
+            ]
         )
 
     def _generation_preview_card_keyboard(self, preview: dict[str, Any], index: int, total: int) -> InlineKeyboardMarkup:

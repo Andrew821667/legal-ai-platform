@@ -651,7 +651,6 @@ def test_post_card_text_compact_sections() -> None:
     assert "Карточка поста" in text
     assert "🆔 42" in text
     assert "🔗 Источник: https://example.com/post" in text
-    assert "отключите VPN" in text
     assert "🧠 Feedback: пока нет сигналов." in text
     assert "Текст (фрагмент):" in text
 

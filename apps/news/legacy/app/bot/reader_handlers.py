@@ -69,34 +69,6 @@ from app.config import settings
 
 router = Router()
 _MAX_TELEGRAM_ARTICLE_TEXT = 3600
-_EXTERNAL_LINK_VPN_NOTICE_HTML = (
-    "<b>Важно:</b> при переходе на сайт или внешний сервис отключите VPN, "
-    "если страница не открывается."
-)
-_EXTERNAL_NON_TELEGRAM_URL_RE = re.compile(
-    r"https?://(?!(?:t\.me|telegram\.me|telegram\.dog|api\.telegram\.org)(?:/|\b))",
-    re.IGNORECASE,
-)
-_VPN_NOTICE_MARKER = "отключите vpn"
-
-
-def _has_external_non_telegram_url(value: str | None) -> bool:
-    return bool(_EXTERNAL_NON_TELEGRAM_URL_RE.search(value or ""))
-
-
-def _markup_has_external_non_telegram_url(rows: list[list[InlineKeyboardButton]]) -> bool:
-    return any(
-        _has_external_non_telegram_url(getattr(button, "url", None))
-        for row in rows
-        for button in row
-    )
-
-
-def _with_external_link_vpn_notice(text: str, *, enabled: bool = True) -> str:
-    normalized = (text or "").rstrip()
-    if not enabled or _VPN_NOTICE_MARKER in normalized.lower():
-        return normalized
-    return f"{normalized}\n\n{_EXTERNAL_LINK_VPN_NOTICE_HTML}"
 
 
 # ==================== FSM States ====================
@@ -197,10 +169,7 @@ def _build_article_detail_text(article: ReaderPublication) -> str:
     if len(body) > _MAX_TELEGRAM_ARTICLE_TEXT:
         body = body[:_MAX_TELEGRAM_ARTICLE_TEXT].rstrip() + "..."
         footer = "\n\n<i>Текст сокращен из-за лимита Telegram. Для оригинала используйте кнопки ниже.</i>"
-    return _with_external_link_vpn_notice(
-        f"{header}{escape(body)}{footer}",
-        enabled=_has_external_non_telegram_url(_article_source_url(article)),
-    )
+    return f"{header}{escape(body)}{footer}"
 
 
 def format_article_message(article: ReaderPublication, index: Optional[int] = None) -> str:
@@ -479,19 +448,16 @@ async def _show_home_screen(target: Message, user: User, db: AsyncSession) -> No
         )
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
-            "Рабочий стол: выберите раздел кнопками ниже.\n\n"
-            "Главные маршруты:\n"
-            "• 🧠 Узнать — персональные новости и недельный дайджест\n"
-            "• 🧪 Проверить — быстрый вход в Contract AI System\n"
-            "• 🧰 Решения — сценарии внедрения для юристов и бизнеса\n"
-            "• 👤 Мое — сохраненное, настройки и персонализация\n\n"
-            f"Сохранённых статей: <b>{saved_count_display}</b>\n"
-            f"{lead_magnet_text}\n"
-            f"{escape(miniapp_state)}{escape(recommendation_line)}",
-            enabled=bool(miniapp_url),
-        ),
+        f"С возвращением, {escape(user.first_name or 'коллега')}! 👋\n\n"
+        "Рабочий стол: выберите раздел кнопками ниже.\n\n"
+        "Главные маршруты:\n"
+        "• 🧠 Узнать — персональные новости и недельный дайджест\n"
+        "• 🧪 Проверить — быстрый вход в Contract AI System\n"
+        "• 🧰 Решения — сценарии внедрения для юристов и бизнеса\n"
+        "• 👤 Мое — сохраненное, настройки и персонализация\n\n"
+        f"Сохранённых статей: <b>{saved_count_display}</b>\n"
+        f"{lead_magnet_text}\n"
+        f"{escape(miniapp_state)}{escape(recommendation_line)}",
         parse_mode="HTML",
         reply_markup=nav_markup,
     )
@@ -536,17 +502,14 @@ async def _show_discover(target: Message, user_id: int, db: AsyncSession) -> Non
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            "🧠 <b>Раздел «Узнать»</b>\n\n"
-            "Что это:\n"
-            "• персональные новости по вашим интересам;\n"
-            "• недельная выжимка ключевых событий.\n\n"
-            "Как использовать:\n"
-            "1. Откройте «Новости за сегодня» или «Дайджест недели».\n"
-            "2. Оцените материалы кнопками под карточками.\n"
-            "3. Перейдите в Mini App для продолжения работы.",
-            enabled=_markup_has_external_non_telegram_url(rows),
-        ),
+        "🧠 <b>Раздел «Узнать»</b>\n\n"
+        "Что это:\n"
+        "• персональные новости по вашим интересам;\n"
+        "• недельная выжимка ключевых событий.\n\n"
+        "Как использовать:\n"
+        "1. Откройте «Новости за сегодня» или «Дайджест недели».\n"
+        "2. Оцените материалы кнопками под карточками.\n"
+        "3. Перейдите в Mini App для продолжения работы.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -592,18 +555,15 @@ async def _show_validate(target: Message, user_id: int) -> None:
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            "🧪 <b>Раздел «Проверить»</b>\n\n"
-            "Что это:\n"
-            "• быстрый вход в Contract_AI_System;\n"
-            "• демо-анализ договора и карта рисков;\n"
-            "• маршрут от проверки к пилоту внедрения.\n\n"
-            "Как использовать:\n"
-            "1. Выберите «Демо-анализ» или «Образец отчета».\n"
-            "2. Если нужен live-доступ, откройте кабинет или Mini App.\n"
-            "3. Если захотите перейти к пилоту, воспользуйтесь кнопкой ниже.",
-            enabled=_markup_has_external_non_telegram_url(rows),
-        ),
+        "🧪 <b>Раздел «Проверить»</b>\n\n"
+        "Что это:\n"
+        "• быстрый вход в Contract_AI_System;\n"
+        "• демо-анализ договора и карта рисков;\n"
+        "• маршрут от проверки к пилоту внедрения.\n\n"
+        "Как использовать:\n"
+        "1. Выберите «Демо-анализ» или «Образец отчета».\n"
+        "2. Если нужен live-доступ, откройте кабинет или Mini App.\n"
+        "3. Если захотите перейти к пилоту, воспользуйтесь кнопкой ниже.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -633,17 +593,14 @@ async def _show_solutions(target: Message, user_id: int) -> None:
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            "🧰 <b>Раздел «Решения»</b>\n\n"
-            "Что это:\n"
-            "• готовые сценарии автоматизации юридической функции;\n"
-            "• маршруты отдельно для юристов и бизнеса.\n\n"
-            "Как использовать:\n"
-            "1. Выберите свой контур: «Для юристов» или «Для бизнеса».\n"
-            "2. Посмотрите подходящие сценарии и кейсы.\n"
-            "3. Ниже можно отправить задачу на подбор сценария.",
-            enabled=_markup_has_external_non_telegram_url(rows),
-        ),
+        "🧰 <b>Раздел «Решения»</b>\n\n"
+        "Что это:\n"
+        "• готовые сценарии автоматизации юридической функции;\n"
+        "• маршруты отдельно для юристов и бизнеса.\n\n"
+        "Как использовать:\n"
+        "1. Выберите свой контур: «Для юристов» или «Для бизнеса».\n"
+        "2. Посмотрите подходящие сценарии и кейсы.\n"
+        "3. Ниже можно отправить задачу на подбор сценария.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -681,15 +638,12 @@ async def _show_profile_hub(target: Message, user_id: int, db: AsyncSession) -> 
     rows.append([InlineKeyboardButton(text="🏠 Рабочий стол", callback_data="rnav:home")])
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            "👤 <b>Раздел «Мое»</b>\n\n"
-            "Что здесь:\n"
-            "• ваши сохраненные материалы и настройки;\n"
-            "• персональный статус и маршруты продолжения.\n\n"
-            f"Сохранено статей: <b>{len(saved_articles)}</b>\n"
-            f"{lead_magnet_text}",
-            enabled=_markup_has_external_non_telegram_url(rows),
-        ),
+        "👤 <b>Раздел «Мое»</b>\n\n"
+        "Что здесь:\n"
+        "• ваши сохраненные материалы и настройки;\n"
+        "• персональный статус и маршруты продолжения.\n\n"
+        f"Сохранено статей: <b>{len(saved_articles)}</b>\n"
+        f"{lead_magnet_text}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -1135,11 +1089,8 @@ async def _open_miniapp(
     )
 
     await target.answer(
-        _with_external_link_vpn_notice(
-            "🧩 <b>Открыть Mini App AI Verdict</b>\n\n"
-            "В mini-app доступен быстрый маршрут: контент -> инструменты -> внедрение.",
-            enabled=bool(miniapp_url),
-        ),
+        "🧩 <b>Открыть Mini App AI Verdict</b>\n\n"
+        "В mini-app доступен быстрый маршрут: контент -> инструменты -> внедрение.",
         parse_mode="HTML",
         disable_web_page_preview=True,
         reply_markup=InlineKeyboardMarkup(
