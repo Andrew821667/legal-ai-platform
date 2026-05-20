@@ -8,12 +8,34 @@ ALERT_CHAT_ID="${ALERT_CHAT_ID:-}"
 ALERT_STATE_FILE="${ALERT_STATE_FILE:-/tmp/legal-ai-alert-state.json}"
 ALERT_COOLDOWN_SECONDS="${ALERT_COOLDOWN_SECONDS:-1800}"
 SLA_ALERTS_ENABLED="${SLA_ALERTS_ENABLED:-1}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+DOCKER_BIN="${DOCKER_BIN:-$(command -v docker || true)}"
+COMPOSE_BIN="${COMPOSE_BIN:-$(command -v docker-compose || true)}"
+if [ -z "${DOCKER_BIN}" ] && [ -x "/usr/local/bin/docker" ]; then
+  DOCKER_BIN="/usr/local/bin/docker"
+fi
+if [ -z "${COMPOSE_BIN}" ] && [ -x "/opt/homebrew/bin/docker-compose" ]; then
+  COMPOSE_BIN="/opt/homebrew/bin/docker-compose"
+fi
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-compose}"
+COMPOSE_FILE="${COMPOSE_FILE:-${PROJECT_DIR}/infra/compose/docker-compose.prod.yml}"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-${PROJECT_DIR}/.env}"
 REQUIRED_NEWS_WORKERS="${REQUIRED_NEWS_WORKERS:-news-generate,news-telegram-ingest,news-publish,news-reader-digest}"
 DRAFT_MAX_IDLE_HOURS="${DRAFT_MAX_IDLE_HOURS:-24}"
 DUE_POSTS_ALERT_THRESHOLD="${DUE_POSTS_ALERT_THRESHOLD:-0}"
 CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD="${CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD:-0}"
 CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD="${CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD:-0}"
 CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD="${CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD:-0}"
+TELEGRAM_RECOVERY_ENABLED="${TELEGRAM_RECOVERY_ENABLED:-0}"
+TELEGRAM_TLS_CHECK_CONTAINER="${TELEGRAM_TLS_CHECK_CONTAINER:-legal-ai-lead-bot}"
+TELEGRAM_TLS_CHECK_HOST="${TELEGRAM_TLS_CHECK_HOST:-api.telegram.org}"
+TELEGRAM_TLS_CHECK_TIMEOUT_SECONDS="${TELEGRAM_TLS_CHECK_TIMEOUT_SECONDS:-8}"
+TELEGRAM_RECOVERY_COOLDOWN_SECONDS="${TELEGRAM_RECOVERY_COOLDOWN_SECONDS:-300}"
+TELEGRAM_RECOVERY_SERVICES="${TELEGRAM_RECOVERY_SERVICES:-lead-bot news-admin-bot news-reader-bot news-publish news-reader-digest}"
+TELEGRAM_RECOVERY_STOP_HAPP_TUNNEL="${TELEGRAM_RECOVERY_STOP_HAPP_TUNNEL:-0}"
+TELEGRAM_RECOVERY_STOP_HAPP_APP="${TELEGRAM_RECOVERY_STOP_HAPP_APP:-0}"
+TELEGRAM_RECOVERY_RESTART_SERVICES="${TELEGRAM_RECOVERY_RESTART_SERVICES:-1}"
+TELEGRAM_RECOVERY_TUN_INTERFACES="${TELEGRAM_RECOVERY_TUN_INTERFACES:-utun}"
 
 api_get() {
   local url="$1"
@@ -73,14 +95,137 @@ send_alert_once() {
   fi
   curl -fsS "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
     -d "chat_id=${ALERT_CHAT_ID}" \
-    --data-urlencode "text=${text}" >/dev/null
+    --data-urlencode "text=${text}" >/dev/null || return 0
   _state_set_ts "$key" "$now_ts"
+}
+
+docker_compose() {
+  if [ -n "${COMPOSE_BIN}" ]; then
+    "${COMPOSE_BIN}" -p "${COMPOSE_PROJECT_NAME}" --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+    return $?
+  fi
+  if [ -n "${DOCKER_BIN}" ]; then
+    "${DOCKER_BIN}" compose -p "${COMPOSE_PROJECT_NAME}" --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+    return $?
+  fi
+  return 127
+}
+
+telegram_tls_check() {
+  if [ -z "${DOCKER_BIN}" ]; then
+    echo "docker_not_found"
+    return 1
+  fi
+  "${DOCKER_BIN}" exec "${TELEGRAM_TLS_CHECK_CONTAINER}" python - \
+    "${TELEGRAM_TLS_CHECK_HOST}" "${TELEGRAM_TLS_CHECK_TIMEOUT_SECONDS}" <<'PY'
+import socket
+import ssl
+import sys
+
+host = sys.argv[1]
+timeout = float(sys.argv[2])
+try:
+    sock = socket.create_connection((host, 443), timeout=timeout)
+    with ssl.create_default_context().wrap_socket(sock, server_hostname=host) as tls:
+        print(f"tls_ok {host} {tls.version()}")
+except Exception as exc:
+    print(f"tls_failed {host} {type(exc).__name__}: {exc}")
+    raise SystemExit(1)
+PY
+}
+
+telegram_route_interface() {
+  route get "${TELEGRAM_TLS_CHECK_HOST}" 2>/dev/null | awk '/interface:/{print $2; exit}'
+}
+
+telegram_route_is_tun() {
+  local interface prefix
+  interface="$(telegram_route_interface || true)"
+  if [ -z "${interface}" ]; then
+    return 1
+  fi
+  for prefix in ${TELEGRAM_RECOVERY_TUN_INTERFACES}; do
+    case "${interface}" in
+      "${prefix}"*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+telegram_recovery_allowed() {
+  local now_ts last_ts
+  now_ts="$(date +%s)"
+  last_ts="$(_state_get_ts "telegram_network_recovery")"
+  if [ $((now_ts - last_ts)) -lt "${TELEGRAM_RECOVERY_COOLDOWN_SECONDS}" ]; then
+    return 1
+  fi
+  _state_set_ts "telegram_network_recovery" "${now_ts}"
+  return 0
+}
+
+restart_telegram_services() {
+  if [ "${TELEGRAM_RECOVERY_RESTART_SERVICES}" != "1" ]; then
+    return 0
+  fi
+  docker_compose restart ${TELEGRAM_RECOVERY_SERVICES}
+}
+
+recover_telegram_network() {
+  if [ "${TELEGRAM_RECOVERY_ENABLED}" != "1" ]; then
+    send_alert_once \
+      "telegram_tls_failed" \
+      "🔴 Telegram API недоступен из ${TELEGRAM_TLS_CHECK_CONTAINER}; recovery выключен."
+    return 1
+  fi
+  if ! telegram_recovery_allowed; then
+    echo "telegram_recovery_skipped_cooldown"
+    return 1
+  fi
+
+  local route_interface
+  route_interface="$(telegram_route_interface || true)"
+  echo "telegram_recovery_started route_interface=${route_interface:-unknown}"
+
+  if [ "${TELEGRAM_RECOVERY_STOP_HAPP_TUNNEL}" = "1" ] && telegram_route_is_tun; then
+    pkill -f "/Applications/Happ Plus.app/Contents/PlugIns/Tunnel.appex" 2>/dev/null || true
+    if [ "${TELEGRAM_RECOVERY_STOP_HAPP_APP}" = "1" ]; then
+      pkill -f "/Applications/Happ Plus.app/Contents/MacOS/Happ" 2>/dev/null || true
+    fi
+    sleep 5
+  fi
+
+  if telegram_tls_check >/dev/null; then
+    restart_telegram_services
+    send_alert_once \
+      "telegram_network_recovered" \
+      "🟢 Telegram API восстановлен автоматически; перезапущены сервисы: ${TELEGRAM_RECOVERY_SERVICES}."
+    return 0
+  fi
+
+  restart_telegram_services || true
+  sleep 5
+  if telegram_tls_check >/dev/null; then
+    send_alert_once \
+      "telegram_network_recovered_after_restart" \
+      "🟢 Telegram API восстановлен после перезапуска сервисов: ${TELEGRAM_RECOVERY_SERVICES}."
+    return 0
+  fi
+
+  send_alert_once \
+    "telegram_network_recovery_failed" \
+    "🔴 Telegram API всё ещё недоступен после automatic recovery. Проверьте VPN/TUN на Mac mini."
+  return 1
 }
 
 # 1) Базовый health
 if ! api_get "${API_BASE}/health/detailed" >/dev/null; then
   send_alert_once "health_detailed_failed" "🔴 AI Verdict Platform: health check failed!"
   exit 1
+fi
+
+# 1.1) Telegram API должен проходить полноценный TLS-handshake из контейнера.
+if ! telegram_tls_check >/dev/null; then
+  recover_telegram_network || true
 fi
 
 # 2) Контрактный backlog + отсутствие воркеров

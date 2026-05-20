@@ -295,6 +295,9 @@ SLA-алерты в `healthcheck.sh`:
 - неактивные обязательные воркеры (`REQUIRED_NEWS_WORKERS`);
 - отсутствие новых драфтов дольше порога (`DRAFT_MAX_IDLE_HOURS`);
 - просроченная очередь публикации (`DUE_POSTS_ALERT_THRESHOLD`).
+- недоступность Telegram API на уровне TLS из контейнера бота; при включенном
+  `TELEGRAM_RECOVERY_ENABLED=1` healthcheck может автоматически остановить
+  сломанный Happ Plus TUN-маршрут и перезапустить Telegram-сервисы.
 
 Доп. настройки алертов:
 ```bash
@@ -312,7 +315,17 @@ CONTRACT_MAINTENANCE_STALE_MINUTES=30
 CONTRACT_MAINTENANCE_RETRY_FAILED=0
 CONTRACT_MAINTENANCE_RETRY_FAILED_ONLY_RETRYABLE=1
 # CONTRACT_MAINTENANCE_RETRY_FAILED_OLDER_THAN_MINUTES=60
+TELEGRAM_RECOVERY_ENABLED=1
+TELEGRAM_RECOVERY_STOP_HAPP_TUNNEL=1
+TELEGRAM_RECOVERY_SERVICES="lead-bot news-admin-bot news-reader-bot news-publish news-reader-digest"
+TELEGRAM_RECOVERY_COOLDOWN_SECONDS=300
 ```
+
+На Mac mini дополнительно установлен launchd-watchdog
+`~/Library/LaunchAgents/ru.legalai.bots.watchdog.plist`, который запускает
+`infra/scripts/bots_watchdog.sh` каждые 120 секунд. Он проверяет именно рабочий
+путь контейнера до `api.telegram.org`, а не отдельный proxy, поэтому ловит
+случай, когда Happ Plus перехватывает маршрут и ломает Telegram TLS.
 
 Ручная проверка генерации без записи в БД:
 ```bash
