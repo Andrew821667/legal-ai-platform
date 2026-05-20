@@ -355,6 +355,7 @@ services:
       - caddy_config:/config
     environment:
       DOMAIN: ${DOMAIN}
+      MONITOR_DOMAIN: ${MONITOR_DOMAIN:-monitor.ai-verdict.ru}
       ACME_EMAIL: ${ACME_EMAIL}
       CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.ai-verdict.ru}
       CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:8080}

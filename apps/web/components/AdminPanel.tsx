@@ -29,12 +29,16 @@ import ExportButton from './admin/ExportButton';
 import NotificationBadge from './admin/NotificationBadge';
 import IssueFilters from './admin/IssueFilters';
 import AutomationControlsPanel from './admin/AutomationControlsPanel';
+import SystemMonitorPanel from './admin/SystemMonitorPanel';
+
+type AdminTab = 'seo' | 'system' | 'technical' | 'github' | 'automation';
 
 interface AdminPanelProps {
   initialOpen?: boolean;
+  initialTab?: AdminTab;
 }
 
-export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
+export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: AdminPanelProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [inputPassword, setInputPassword] = useState('');
@@ -42,7 +46,7 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isRevokingAll, setIsRevokingAll] = useState(false);
-  const [activeTab, setActiveTab] = useState<'seo' | 'technical' | 'github' | 'automation'>('seo');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [githubData, setGithubData] = useState<any>(null);
   const [isLoadingGithub, setIsLoadingGithub] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
@@ -465,6 +469,7 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                     <div className="flex gap-2 mb-6 border-b border-slate-800">
                       {[
                         { id: 'seo' as const, label: 'SEO & Аналитика', icon: BarChart3 },
+                        { id: 'system' as const, label: 'System Monitor', icon: Server },
                         { id: 'technical' as const, label: 'Технические данные', icon: Zap },
                         { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github },
                         { id: 'automation' as const, label: 'Automation Control', icon: Settings2 }
@@ -608,6 +613,16 @@ export default function AdminPanel({ initialOpen = false }: AdminPanelProps) {
                             ))}
                           </div>
                         </div>
+                      </motion.div>
+                    )}
+
+                    {/* System Monitor Tab */}
+                    {activeTab === 'system' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <SystemMonitorPanel />
                       </motion.div>
                     )}
 

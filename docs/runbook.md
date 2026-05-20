@@ -327,6 +327,13 @@ TELEGRAM_RECOVERY_COOLDOWN_SECONDS=300
 путь контейнера до `api.telegram.org`, а не отдельный proxy, поэтому ловит
 случай, когда Happ Plus перехватывает маршрут и ломает Telegram TLS.
 
+Веб-мониторинг доступен в защищенной админке:
+- `/admin` -> вкладка `System Monitor`;
+- `/monitor` -> сразу открывает вкладку мониторинга;
+- `MONITOR_DOMAIN=monitor.ai-verdict.ru` отдает `/monitor` на отдельном
+  поддомене через Caddy. Для выпуска TLS-сертификата нужен DNS `A/AAAA` или
+  `CNAME` для этого поддомена.
+
 Ручная проверка генерации без записи в БД:
 ```bash
 uv run --package news python -m news.generate --dry-run --limit 5
