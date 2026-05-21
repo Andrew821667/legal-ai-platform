@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
+import LeadCaptureForm from "@/components/LeadCaptureForm";
 
 export const metadata: Metadata = {
   title: "Платформа AI Verdict",
@@ -114,14 +115,24 @@ export default function Home() {
               Посмотреть решения
             </Link>
             <a
+              href="#lead-form"
+              className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+            >
+              Получить бесплатную консультацию
+            </a>
+          </div>
+          <p className="mt-4 text-sm text-slate-400">
+            Или напишите нам в{" "}
+            <a
               href={leadBotDeepLink("web_home_intro")}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-sky-400 hover:text-sky-300"
+              className="text-sky-400 hover:text-sky-300 underline"
             >
-              Бесплатная консультация в Telegram
+              Telegram
             </a>
-          </div>
+            {" "}— потребуется VPN, если открываете из России.
+          </p>
         </div>
       </section>
 
@@ -221,6 +232,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <LeadCaptureForm />
     </main>
   );
 }

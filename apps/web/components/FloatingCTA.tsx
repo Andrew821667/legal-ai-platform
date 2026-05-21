@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { MessageCircle, X } from 'lucide-react';
-import { leadBotDeepLink } from "@/lib/links";
 
 interface MousePosition {
   x: number;
@@ -145,9 +144,7 @@ export default function FloatingCTA() {
       {/* Большая овальная кнопка */}
       <a
         ref={buttonRef}
-        href={leadBotDeepLink()}
-        target="_blank"
-        rel="noopener noreferrer"
+        href="/#lead-form"
         className={`fixed z-50 transition-all duration-300 transform ${
           isMobile ? 'w-20 h-10' : 'w-40 h-20'
         } ${

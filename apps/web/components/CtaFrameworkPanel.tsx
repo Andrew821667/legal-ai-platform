@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ROUTES, contractAIEntryHref, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, readerBotDeepLink } from "@/lib/links";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 
 type CtaFrameworkPanelProps = {
@@ -58,10 +58,9 @@ export default function CtaFrameworkPanel({
           🧪 Проверить
         </a>
         <a
-          href={leadBotDeepLink(leadStart)}
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/#lead-form"
           className={classFor("consult")}
+          data-lead-start={leadStart}
         >
           🛠 Обсудить пилот
         </a>

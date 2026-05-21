@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useScrollAnimation } from "@/lib/hooks/useScrollAnimation";
 import { ChevronDown } from "lucide-react";
 import { faqData } from "@/lib/faqData";
-import { leadBotDeepLink } from "@/lib/links";
 import { LEGAL_CONTACT_PHONE, LEGAL_CONTACT_PHONE_HREF } from "@/lib/legalProfile";
 
 export default function FAQ() {
@@ -97,12 +96,10 @@ export default function FAQ() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href={leadBotDeepLink("consultation")}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/#lead-form"
               className="inline-flex items-center justify-center bg-white text-amber-700 font-semibold px-8 py-4 rounded-lg text-lg hover:bg-slate-100 transition-all transform hover:scale-105 shadow-lg"
             >
-              Написать в Telegram
+              Оставить заявку
             </a>
             <a
               href={`tel:${LEGAL_CONTACT_PHONE_HREF}`}
