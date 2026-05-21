@@ -356,9 +356,12 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       MONITOR_DOMAIN: ${MONITOR_DOMAIN:-monitor.ai-verdict.ru}
+      MEMORY_DOMAIN: ${MEMORY_DOMAIN:-memory.ai-verdict.ru}
       ACME_EMAIL: ${ACME_EMAIL}
       CONTRACT_DOMAIN: ${CONTRACT_DOMAIN:-contract.ai-verdict.ru}
       CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:8080}
+      MEMORY_HUB_UPSTREAM: ${MEMORY_HUB_UPSTREAM:-host.docker.internal:8787}
+      GUACAMOLE_UPSTREAM: ${GUACAMOLE_UPSTREAM:-host.docker.internal:8080}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
