@@ -64,6 +64,45 @@ def _format_lead_message(lead: Lead, web_base_url: str) -> str:
     return "\n".join(lines)
 
 
+_NOTIFY_HTTP_TIMEOUT_SECONDS = 15
+_NOTIFY_MAX_ATTEMPTS = 3
+_NOTIFY_RETRY_BACKOFF_SECONDS = 2
+
+
+def _post_telegram_message(token: str, chat_id: str, text: str) -> None:
+    """POST to Telegram sendMessage with a few retries on transient errors.
+
+    Telegram via VPN/WARP occasionally takes 5–10s for the TLS handshake,
+    so we use a generous timeout and retry on timeout/connection errors.
+    """
+    import time
+
+    last_exc: Exception | None = None
+    for attempt in range(1, _NOTIFY_MAX_ATTEMPTS + 1):
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "disable_web_page_preview": "true",
+                },
+                timeout=_NOTIFY_HTTP_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            return
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            if attempt < _NOTIFY_MAX_ATTEMPTS:
+                time.sleep(_NOTIFY_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            raise
+        except Exception:
+            raise
+    if last_exc is not None:
+        raise last_exc
+
+
 def notify_new_lead(lead_id: uuid.UUID) -> None:
     """Send a Telegram message about a newly created lead.
 
@@ -91,15 +130,6 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         db.close()
 
     try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data={
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": "true",
-            },
-            timeout=5,
-        )
-        response.raise_for_status()
+        _post_telegram_message(token, chat_id, text)
     except Exception:
         logger.exception("Failed to send new-lead Telegram notification", extra={"lead_id": str(lead_id)})
