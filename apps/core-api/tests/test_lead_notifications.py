@@ -108,9 +108,14 @@ def test_new_website_lead_triggers_notification(
         assert call["url"].endswith("/bottest-token/sendMessage")
         assert call["data"]["chat_id"] == "999"
         text = call["data"]["text"]
-        assert "Новая заявка" in text
+        assert "Новая заявка с сайта" in text  # website_form header
         assert "Sample Name" in text
-        assert "Сайт" in text  # source label for website_form
+        assert "Бесплатная консультация" in text  # localized offer
+        # Should not leak technical/admin internals to the manager.
+        assert "ip_hash" not in text
+        assert "ua_hash" not in text
+        assert "/admin/leads/" not in text
+        assert str(lead_id) not in text  # UUID hidden
     finally:
         _cleanup_lead(lead_id)
 
@@ -141,6 +146,7 @@ def test_new_miniapp_lead_triggers_notification(
         text = fake_telegram[0]["data"]["text"]
         assert "Mini App" in text  # source label for miniapp_form
         assert "MiniApp User" in text
+        assert "telegram_verified" not in text  # internal flag hidden
     finally:
         _cleanup_lead(lead_id)
 

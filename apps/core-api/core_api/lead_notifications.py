@@ -2,52 +2,153 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 
 from core_api.config import get_settings
-from core_api.models import Lead, LeadSource
+from core_api.models import Lead, LeadSegment, LeadSource
 
 logger = logging.getLogger(__name__)
 
-_SOURCE_LABELS: dict[LeadSource, str] = {
-    LeadSource.telegram_bot: "Telegram bot",
-    LeadSource.website_form: "Сайт",
-    LeadSource.telegram_channel: "Telegram channel",
-    LeadSource.miniapp_form: "Mini App",
+_SOURCE_HEADERS: dict[LeadSource, str] = {
+    LeadSource.telegram_bot: "🆕 Новая заявка из Telegram-бота",
+    LeadSource.website_form: "🆕 Новая заявка с сайта",
+    LeadSource.telegram_channel: "🆕 Новая заявка из Telegram-канала",
+    LeadSource.miniapp_form: "🆕 Новая заявка из Mini App",
 }
 
+_SEGMENT_LABELS: dict[LeadSegment, str] = {
+    LeadSegment.inhouse: "Юр. отдел компании",
+    LeadSegment.law_firm: "Юридическая фирма",
+    LeadSegment.entrepreneur: "Предприниматель",
+    LeadSegment.other: "Не указан",
+}
 
-def _format_lead_message(lead: Lead, web_base_url: str) -> str:
-    source_label = _SOURCE_LABELS.get(lead.source, str(lead.source))
+_OFFER_LABELS: dict[str, str] = {
+    "consultation": "Бесплатная консультация",
+    "checklist": "Гайд по внедрению ИИ",
+    "demo": "Демонстрационный разбор договора",
+    "sample_report": "Пример отчёта по договору",
+    "unknown": "Общий запрос",
+}
 
-    lines: list[str] = [
-        "🆕 Новая заявка",
-        f"Источник: {source_label}",
-    ]
+_AUDIENCE_LABELS: dict[str, str] = {
+    "lawyer": "Юрист",
+    "business": "Бизнес",
+    "mixed": "Смешанная",
+}
+
+# Тех-флаги внутри notes, которые менеджеру показывать не нужно.
+_NOTES_TECHNICAL_KEYS = frozenset(
+    {"ip_hash", "ua_hash", "security_flags", "telegram_verified"}
+)
+
+_DISPLAY_TZ = ZoneInfo("Europe/Moscow")
+
+
+def _parse_notes(notes: str | None) -> tuple[dict[str, str], str | None]:
+    """Split notes into structured key=value pairs and a free-text message.
+
+    Lines that look like `key=value` are returned in the dict (excluding
+    technical keys). Everything else is concatenated into the free-text
+    message. We also pull the `message=...` value out of the dict and
+    return it as the message.
+    """
+    if not notes:
+        return {}, None
+
+    parsed: dict[str, str] = {}
+    free_lines: list[str] = []
+    for raw_line in notes.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key in _NOTES_TECHNICAL_KEYS:
+                continue
+            if key == "message":
+                free_lines.append(value)
+                continue
+            if key:
+                parsed[key] = value
+                continue
+        free_lines.append(line)
+
+    message = "\n".join(free_lines).strip() or None
+    return parsed, message
+
+
+def _format_timestamp(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    local = value.astimezone(_DISPLAY_TZ)
+    return local.strftime("%d.%m.%Y %H:%M (Мск)")
+
+
+def _format_lead_message(lead: Lead) -> str:
+    header = _SOURCE_HEADERS.get(lead.source, "🆕 Новая заявка")
+    parsed_notes, message = _parse_notes(lead.notes)
+
+    lines: list[str] = [header, ""]
+
     if lead.name:
-        lines.append(f"Имя: {lead.name}")
+        lines.append(f"👤 Имя: {lead.name}")
     if lead.contact:
-        lines.append(f"Контакт: {lead.contact}")
-    if lead.telegram_user_id:
-        lines.append(f"Telegram ID: {lead.telegram_user_id}")
-    if lead.segment:
-        lines.append(f"Сегмент: {lead.segment.value if hasattr(lead.segment, 'value') else lead.segment}")
-    if lead.utm_source or lead.utm_campaign:
-        utm_parts = [
-            f"utm_source={lead.utm_source}" if lead.utm_source else None,
-            f"utm_medium={lead.utm_medium}" if lead.utm_medium else None,
-            f"utm_campaign={lead.utm_campaign}" if lead.utm_campaign else None,
-        ]
-        lines.append("UTM: " + ", ".join(p for p in utm_parts if p))
-    if lead.notes:
-        snippet = lead.notes[:500]
-        lines.append(f"Notes:\n{snippet}")
-    lines.append(f"ID: {lead.id}")
-    base_url = web_base_url.rstrip("/")
-    if base_url:
-        lines.append(f"Открыть: {base_url}/admin/leads/{lead.id}")
-    return "\n".join(lines)
+        lines.append(f"📞 Контакт: {lead.contact}")
+
+    segment_label: str | None = None
+    if lead.segment is not None:
+        segment_label = _SEGMENT_LABELS.get(lead.segment)
+    if segment_label and segment_label != _SEGMENT_LABELS[LeadSegment.other]:
+        lines.append(f"💼 Сегмент: {segment_label}")
+
+    offer_key = parsed_notes.get("offer")
+    if offer_key:
+        offer_label = _OFFER_LABELS.get(offer_key, offer_key)
+        lines.append(f"🎯 Запрос: {offer_label}")
+
+    if lead.source == LeadSource.miniapp_form:
+        audience = parsed_notes.get("audience")
+        if audience:
+            lines.append(f"🎓 Аудитория: {_AUDIENCE_LABELS.get(audience, audience)}")
+        goal = parsed_notes.get("goal")
+        if goal:
+            lines.append(f"🧭 Цель: {goal}")
+        if lead.telegram_user_id:
+            lines.append(f"💬 Telegram ID: {lead.telegram_user_id}")
+
+    if message:
+        lines.append("")
+        lines.append("💬 Сообщение:")
+        snippet = message[:1000]
+        lines.append(snippet)
+
+    landing = parsed_notes.get("landing")
+    if landing:
+        lines.append("")
+        lines.append(f"📍 Страница: {landing}")
+
+    if lead.utm_source:
+        utm_bits = [lead.utm_source]
+        if lead.utm_medium:
+            utm_bits.append(lead.utm_medium)
+        if lead.utm_campaign:
+            utm_bits.append(lead.utm_campaign)
+        lines.append(f"🌐 Источник трафика: {' / '.join(utm_bits)}")
+
+    timestamp = _format_timestamp(lead.created_at or lead.last_activity_at)
+    if timestamp:
+        lines.append("")
+        lines.append(f"⏰ {timestamp}")
+
+    return "\n".join(lines).strip()
 
 
 _NOTIFY_HTTP_TIMEOUT_SECONDS = 15
@@ -111,7 +212,7 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         if lead is None:
             logger.warning("Lead %s vanished before notify", lead_id)
             return
-        text = _format_lead_message(lead, settings.lead_notify_web_base_url)
+        text = _format_lead_message(lead)
     finally:
         db.close()
 
