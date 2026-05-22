@@ -11,6 +11,7 @@ export const ROUTES = {
   miniAppTools: "/miniapp/tools",
   miniAppSolutions: "/miniapp/solutions",
   miniAppProfile: "/miniapp/profile",
+  miniAppLead: "/miniapp/lead",
 } as const;
 
 const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_ai_helper_new_bot").trim();

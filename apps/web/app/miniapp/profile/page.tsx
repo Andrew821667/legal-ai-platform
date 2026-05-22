@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { leadBotDeepLink } from "@/lib/links";
+import { ROUTES } from "@/lib/links";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
@@ -180,16 +180,14 @@ export default function MiniAppProfilePage() {
       </article>
 
       <MiniTrackedLink
-        href={leadBotDeepLink("web_miniapp_profile")}
+        href={ROUTES.miniAppLead}
         action={MINIAPP_ACTIONS.openAssistant}
         meta={{
           eventType: MINIAPP_EVENT_TYPES.ctaClick,
           source: MINIAPP_EVENT_SOURCES.profile,
           screen: MINIAPP_SCREENS.profile,
-          payload: { cta: "lead_bot" },
+          payload: { cta: "lead_form" },
         }}
-        target="_blank"
-        rel="noopener noreferrer"
         className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
       >
         Связаться с Ассистентом AI Verdict

@@ -1,17 +1,16 @@
 "use client";
 
-import { contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink, readerBotDeepLink } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, readerBotDeepLink } from "@/lib/links";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
 import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES } from "@/lib/reader-events";
 
 type MiniAppCtaFlowCardProps = {
-  leadStart: string;
+  leadStart?: string;
   sourceScreen: string;
   title?: string;
 };
 
 export default function MiniAppCtaFlowCard({
-  leadStart,
   sourceScreen,
   title = "Маршрут: Узнать -> Проверить -> Обсудить пилот",
 }: MiniAppCtaFlowCardProps) {
@@ -54,7 +53,7 @@ export default function MiniAppCtaFlowCard({
         </MiniTrackedLink>
 
         <MiniTrackedLink
-          href={leadBotDeepLink(leadStart)}
+          href={ROUTES.miniAppLead}
           action={MINIAPP_ACTIONS.flowImplement}
           meta={{
             eventType: MINIAPP_EVENT_TYPES.ctaClick,
@@ -62,11 +61,9 @@ export default function MiniAppCtaFlowCard({
             screen: sourceScreen,
             payload: { cta: "implement" },
           }}
-          target="_blank"
-          rel="noopener noreferrer"
           className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-medium text-sky-200 hover:border-sky-300 transition-colors"
         >
-          🛠 Обсудить пилот через Ассистент AI Verdict
+          🛠 Обсудить пилот
         </MiniTrackedLink>
       </div>
     </article>
