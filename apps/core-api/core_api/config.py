@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     alert_bot_token: str | None = None
     alert_chat_id: str | None = None
+    lead_notify_bot_token: str | None = None
+    lead_notify_chat_id: str | None = None
+    lead_notify_web_base_url: str = "https://ai-verdict.ru"
     api_key_cache_ttl_seconds: int = 60
     health_worker_active_minutes: int = 10
     news_retry_failed_after_minutes: int = 15

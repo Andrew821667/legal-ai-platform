@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
+from core_api.lead_notifications import notify_new_lead
 from core_api.models import ActorType, ContractJob, Event, Lead, LeadSource, LeadStatus, Scope
 from core_api.schemas import LeadCreate, LeadOut, LeadPatch, LeadStatsOut
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/v1/leads", tags=["leads"])
 @router.post("", response_model=LeadOut)
 def upsert_lead(
     payload: LeadCreate,
+    background_tasks: BackgroundTasks,
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -42,6 +44,7 @@ def upsert_lead(
         lead = db.execute(select(Lead).where(Lead.contact == payload.contact).limit(1)).scalar_one_or_none()
     now = datetime.now(timezone.utc)
 
+    is_new_lead = lead is None
     if lead is None:
         lead = Lead(
             source=payload.source,
@@ -93,6 +96,9 @@ def upsert_lead(
             LeadOut.model_validate(lead).model_dump(mode="json"),
             namespace="leads.upsert",
         )
+
+    if is_new_lead and lead.source != LeadSource.telegram_bot:
+        background_tasks.add_task(notify_new_lead, lead.id)
 
     return lead
 

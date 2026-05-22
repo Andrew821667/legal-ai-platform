@@ -42,8 +42,7 @@ export default function Footer() {
       },
       {
         name: "Обсудить внедрение",
-        href: leadBotDeepLink("web_footer_consult"),
-        external: true,
+        href: "/#lead-form",
       },
     ],
   };
@@ -154,7 +153,19 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-8 pb-8" id="contacts">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="flex items-start gap-3">
+              <div className="text-amber-500 text-xl">📝</div>
+              <div>
+                <div className="text-white font-medium mb-1">Оставить заявку</div>
+                <Link
+                  href="/#lead-form"
+                  className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
+                >
+                  Форма на сайте — без VPN
+                </Link>
+              </div>
+            </div>
             <div className="flex items-start gap-3">
               <div className="text-amber-500 text-xl">📞</div>
               <div>

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useScrollAnimation } from "@/lib/hooks/useScrollAnimation";
-import { leadBotDeepLink } from "@/lib/links";
 
 export default function ROICalculator() {
   const { ref: sectionRef, isVisible: sectionVisible } = useScrollAnimation({ threshold: 0.1 });
@@ -145,12 +144,10 @@ export default function ROICalculator() {
                 По этим вводным можно обсудить, какой пилот имеет смысл запускать первым.
               </p>
               <a
-                href={leadBotDeepLink()}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/#lead-form"
                 className="block w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg"
               >
-                Обсудить пилот в Telegram →
+                Обсудить пилот →
               </a>
             </div>
           </div>

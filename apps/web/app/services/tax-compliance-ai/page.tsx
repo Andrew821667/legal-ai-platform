@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LeadCaptureForm from "@/components/LeadCaptureForm";
 
 export const metadata: Metadata = {
   title: "Налоговый комплаенс с AI",
@@ -71,9 +72,7 @@ export default function TaxComplianceAIPage() {
 
         <div className="flex flex-col sm:flex-row gap-4">
           <a
-            href="https://t.me/legal_ai_helper_new_bot?start=consultation"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#lead-form"
             className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-lg text-center"
           >
             Обсудить налоговый контур
@@ -86,6 +85,8 @@ export default function TaxComplianceAIPage() {
           </Link>
         </div>
       </section>
+
+      <LeadCaptureForm />
     </main>
   );
 }
