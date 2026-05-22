@@ -130,7 +130,6 @@ export async function POST(request: NextRequest) {
   const utmTerm = clean(payload.utm_term, 255);
 
   const notesParts = [
-    "source_channel=miniapp",
     `offer=${offer}`,
     telegramUserId ? `telegram_user_id=${telegramUserId}` : undefined,
     auth.verifiedTelegramUserId
@@ -143,7 +142,7 @@ export async function POST(request: NextRequest) {
   ].filter(Boolean);
 
   const corePayload = {
-    source: "website_form",
+    source: "miniapp_form",
     name,
     contact,
     segment,

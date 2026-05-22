@@ -94,8 +94,8 @@ def test_new_website_lead_triggers_notification(
             "source": "website_form",
             "name": "Sample Name",
             "contact": f"+7900{uuid.uuid4().hex[:7]}",
-            "notes": "source_channel=miniapp\noffer=consultation",
-            "utm_source": "miniapp",
+            "notes": "offer=consultation",
+            "utm_source": "site",
         },
     )
     assert response.status_code == 200, response.text
@@ -110,7 +110,37 @@ def test_new_website_lead_triggers_notification(
         text = call["data"]["text"]
         assert "Новая заявка" in text
         assert "Sample Name" in text
-        assert "miniapp" in text  # source_channel hint in notes
+        assert "Сайт" in text  # source label for website_form
+    finally:
+        _cleanup_lead(lead_id)
+
+
+def test_new_miniapp_lead_triggers_notification(
+    api_key: str,
+    notify_config: None,
+    fake_telegram: list[dict[str, Any]],
+) -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/leads",
+        headers={"X-API-Key": api_key},
+        json={
+            "source": "miniapp_form",
+            "name": "MiniApp User",
+            "contact": f"+7900{uuid.uuid4().hex[:7]}",
+            "notes": "offer=consultation\ntelegram_verified=1",
+            "utm_source": "miniapp",
+            "utm_medium": "telegram",
+        },
+    )
+    assert response.status_code == 200, response.text
+    lead_id = uuid.UUID(response.json()["id"])
+
+    try:
+        assert len(fake_telegram) == 1
+        text = fake_telegram[0]["data"]["text"]
+        assert "Mini App" in text  # source label for miniapp_form
+        assert "MiniApp User" in text
     finally:
         _cleanup_lead(lead_id)
 

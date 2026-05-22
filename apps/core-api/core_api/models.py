@@ -28,6 +28,7 @@ class LeadSource(str, enum.Enum):
     telegram_bot = "telegram_bot"
     website_form = "website_form"
     telegram_channel = "telegram_channel"
+    miniapp_form = "miniapp_form"
 
 
 class LeadSegment(str, enum.Enum):

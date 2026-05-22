@@ -14,26 +14,12 @@ _SOURCE_LABELS: dict[LeadSource, str] = {
     LeadSource.telegram_bot: "Telegram bot",
     LeadSource.website_form: "Сайт",
     LeadSource.telegram_channel: "Telegram channel",
+    LeadSource.miniapp_form: "Mini App",
 }
-
-
-def _channel_hint(notes: str | None) -> str | None:
-    if not notes:
-        return None
-    for line in notes.splitlines():
-        prefix = "source_channel="
-        if line.startswith(prefix):
-            value = line[len(prefix):].strip()
-            if value:
-                return value
-    return None
 
 
 def _format_lead_message(lead: Lead, web_base_url: str) -> str:
     source_label = _SOURCE_LABELS.get(lead.source, str(lead.source))
-    channel = _channel_hint(lead.notes)
-    if channel:
-        source_label = f"{source_label} · {channel}"
 
     lines: list[str] = [
         "🆕 Новая заявка",
