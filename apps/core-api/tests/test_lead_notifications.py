@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from core_api.auth import cache
 from core_api.config import get_settings
