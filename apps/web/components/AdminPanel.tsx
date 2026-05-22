@@ -41,8 +41,8 @@ interface AdminPanelProps {
 export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: AdminPanelProps) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [inputUsername, setInputUsername] = useState('');
   const [inputPassword, setInputPassword] = useState('');
-  const [inputTotp, setInputTotp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isRevokingAll, setIsRevokingAll] = useState(false);
@@ -181,8 +181,8 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
 
   const handleClose = () => {
     setIsOpen(false);
+    setInputUsername('');
     setInputPassword('');
-    setInputTotp('');
     setError('');
     setShowPassword(false);
     // Не сбрасываем аутентификацию при закрытии
@@ -194,7 +194,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
       const response = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: inputPassword, totp: inputTotp }),
+        body: JSON.stringify({ username: inputUsername, password: inputPassword }),
       });
       const data = await response.json();
       if (!response.ok || !data?.ok) {
@@ -202,12 +202,12 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
       }
       setIsAuthenticated(true);
       setError('');
+      setInputUsername('');
       setInputPassword('');
-      setInputTotp('');
     } catch (err: any) {
       setError(err?.message || 'Неверные учетные данные');
+      setInputUsername('');
       setInputPassword('');
-      setInputTotp('');
     }
   };
 
@@ -218,8 +218,8 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
       // Ignore transport errors and reset local session state.
     }
     setIsAuthenticated(false);
+    setInputUsername('');
     setInputPassword('');
-    setInputTotp('');
     setError('');
   };
 
@@ -383,11 +383,29 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                           Авторизация
                         </h3>
                         <p className="text-slate-400 text-sm">
-                          Введите пароль и одноразовый код для доступа к панели администратора
+                          Введите логин и пароль для доступа к панели администратора
                         </p>
                       </div>
 
                       <form onSubmit={handleAuth} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-2">
+                            Логин
+                          </label>
+                          <input
+                            type="text"
+                            value={inputUsername}
+                            onChange={(e) => {
+                              setInputUsername(e.target.value);
+                              setError('');
+                            }}
+                            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                            placeholder="Введите логин"
+                            autoComplete="username"
+                            autoFocus
+                          />
+                        </div>
+
                         <div>
                           <label className="block text-sm font-medium text-slate-300 mb-2">
                             Пароль
@@ -402,7 +420,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                               }}
                               className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
                               placeholder="Введите пароль"
-                              autoFocus
+                              autoComplete="current-password"
                             />
                             <button
                               type="button"
@@ -425,26 +443,6 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                               {error}
                             </motion.p>
                           )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-2">
-                            TOTP код
-                          </label>
-                          <input
-                            type="text"
-                            value={inputTotp}
-                            onChange={(e) => {
-                              setInputTotp(e.target.value.replace(/\D/g, '').slice(0, 6));
-                              setError('');
-                            }}
-                            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
-                            placeholder="6 цифр из Authenticator"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            pattern="[0-9]{6}"
-                            maxLength={6}
-                          />
                         </div>
 
                         <button

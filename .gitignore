@@ -28,3 +28,7 @@ apps/*/legacy/data/
 !/data/.gitkeep
 /chroma_data/
 apps/contract-ai/CREDENTIALS.txt
+
+# Claude Code per-machine settings (never commit)
+.claude/
+**/.claude/

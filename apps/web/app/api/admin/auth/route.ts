@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  normalizeTotpCode,
   resolveAdminClientContext,
   verifyAdminPassword,
-  verifyTotpCode,
 } from "@/lib/admin-auth";
 import {
   appendAdminAuditEvent,
@@ -33,14 +31,13 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 const AUTH_WINDOW_SECONDS = parsePositiveInt(process.env.ADMIN_AUTH_WINDOW_SECONDS, 15 * 60);
 const AUTH_BLOCK_SECONDS = parsePositiveInt(process.env.ADMIN_AUTH_BLOCK_SECONDS, 15 * 60);
 const AUTH_MAX_ATTEMPTS = parsePositiveInt(process.env.ADMIN_AUTH_MAX_ATTEMPTS, 10);
-const TOTP_WINDOW_STEPS = parsePositiveInt(process.env.ADMIN_PANEL_TOTP_WINDOW_STEPS, 1);
 
 function getConfiguredPasswordHash(): string {
   return String(process.env.ADMIN_PANEL_PASSWORD_HASH || "").trim();
 }
 
-function getConfiguredTotpSecret(): string {
-  return String(process.env.ADMIN_PANEL_TOTP_SECRET || "").trim();
+function getConfiguredUsername(): string {
+  return String(process.env.ADMIN_PANEL_USERNAME || "andrew").trim();
 }
 
 function getThrottleOptions() {
@@ -79,9 +76,15 @@ export async function POST(request: NextRequest) {
   }
 
   const configuredPasswordHash = getConfiguredPasswordHash();
+  const configuredUsername = getConfiguredUsername();
   const configuredSessionSecret = String(process.env.ADMIN_PANEL_SESSION_SECRET || "").trim();
-  const configuredTotpSecret = getConfiguredTotpSecret();
 
+  if (!configuredUsername) {
+    return NextResponse.json(
+      { detail: "ADMIN_PANEL_USERNAME не настроен на сервере" },
+      { status: 500 },
+    );
+  }
   if (!configuredPasswordHash) {
     return NextResponse.json(
       { detail: "ADMIN_PANEL_PASSWORD_HASH не настроен на сервере" },
@@ -94,66 +97,32 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-  if (!configuredTotpSecret) {
-    return NextResponse.json(
-      { detail: "ADMIN_PANEL_TOTP_SECRET не настроен на сервере" },
-      { status: 500 },
-    );
-  }
 
-  let payload: { password?: string; totp?: string };
+  let payload: { username?: string; password?: string };
   try {
-    payload = (await request.json()) as { password?: string; totp?: string };
+    payload = (await request.json()) as { username?: string; password?: string };
   } catch {
     return NextResponse.json({ detail: "Некорректный JSON" }, { status: 400 });
   }
 
+  const username = typeof payload.username === "string" ? payload.username.trim() : "";
   const password = typeof payload.password === "string" ? payload.password : "";
-  const totp = typeof payload.totp === "string" ? normalizeTotpCode(payload.totp) : "";
 
+  if (!username) {
+    return NextResponse.json({ detail: "Логин не передан" }, { status: 400 });
+  }
   if (!password) {
     return NextResponse.json({ detail: "Пароль не передан" }, { status: 400 });
   }
-  if (!totp) {
-    return NextResponse.json({ detail: "TOTP код не передан" }, { status: 400 });
-  }
 
-  if (!verifyAdminPassword(password, configuredPasswordHash)) {
+  if (username !== configuredUsername || !verifyAdminPassword(password, configuredPasswordHash)) {
     const retryAfterSeconds = registerFailedLogin(client.clientKey, nowMs, getThrottleOptions());
     appendAdminAuditEvent({
-      id: `${nowMs}-password`,
+      id: `${nowMs}-credentials`,
       createdAtMs: nowMs,
       type: "admin_login",
       outcome: retryAfterSeconds !== null ? "blocked" : "denied",
-      detail: "password_hash_mismatch",
-      ipHash: client.ipHash,
-      userAgentHash: client.userAgentHash,
-    });
-    if (retryAfterSeconds !== null) {
-      return NextResponse.json(
-        {
-          detail: "Слишком много неуспешных попыток входа. Повторите позже.",
-          retry_after_seconds: retryAfterSeconds,
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(retryAfterSeconds),
-          },
-        },
-      );
-    }
-    return NextResponse.json({ detail: "Неверные учетные данные" }, { status: 401 });
-  }
-
-  if (!verifyTotpCode(configuredTotpSecret, totp, nowMs, TOTP_WINDOW_STEPS)) {
-    const retryAfterSeconds = registerFailedLogin(client.clientKey, nowMs, getThrottleOptions());
-    appendAdminAuditEvent({
-      id: `${nowMs}-totp`,
-      createdAtMs: nowMs,
-      type: "admin_login",
-      outcome: retryAfterSeconds !== null ? "blocked" : "denied",
-      detail: "totp_mismatch",
+      detail: "credentials_mismatch",
       ipHash: client.ipHash,
       userAgentHash: client.userAgentHash,
     });
