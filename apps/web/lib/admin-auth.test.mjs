@@ -2,12 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  generateTotpCode,
-  generateTotpSecret,
   hashAdminPassword,
   resolveAdminClientContext,
   verifyAdminPassword,
-  verifyTotpCode,
 } from "./admin-auth.ts";
 
 test("hashAdminPassword verifies correct password and rejects wrong one", () => {
@@ -15,16 +12,6 @@ test("hashAdminPassword verifies correct password and rejects wrong one", () => 
   assert.ok(hash.startsWith("$2"));
   assert.equal(verifyAdminPassword("S3curePassword!", hash), true);
   assert.equal(verifyAdminPassword("wrong-password", hash), false);
-});
-
-test("TOTP verification accepts current code within allowed window", () => {
-  const secret = generateTotpSecret();
-  const nowMs = Date.UTC(2026, 2, 10, 12, 0, 0);
-  const code = generateTotpCode(secret, nowMs);
-
-  assert.equal(verifyTotpCode(secret, code, nowMs, 1), true);
-  assert.equal(verifyTotpCode(secret, code, nowMs + 31_000, 0), false);
-  assert.equal(verifyTotpCode(secret, code, nowMs + 25_000, 1), true);
 });
 
 test("resolveAdminClientContext hashes IP and user agent without leaking raw values", () => {

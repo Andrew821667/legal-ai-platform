@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMiniAppState, type MiniAppAudience } from "@/components/miniapp/MiniAppStateProvider";
+import { leadBotDeepLink } from "@/lib/links";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -57,6 +58,8 @@ export default function MiniAppLeadPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // null while we wait for the Telegram WebApp object to load, then bool
+  const [insideTelegram, setInsideTelegram] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!ready) {
@@ -75,6 +78,21 @@ export default function MiniAppLeadPage() {
       setContact(`@${tgUser.username}`);
     }
   }, [ready, state.audience, name, contact]);
+
+  // Detect whether we're actually inside a Telegram WebView. The Telegram
+  // script populates window.Telegram.WebApp.initData; if it's empty we're
+  // in a regular browser and the POST will 401 — show a friendly nudge
+  // instead of letting the user fill the form for nothing.
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const check = () => setInsideTelegram(Boolean(readInitData()));
+    check();
+    // Telegram injects initData a moment after page load on some clients
+    const timeoutId = setTimeout(check, 1200);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") {
@@ -154,6 +172,39 @@ export default function MiniAppLeadPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (insideTelegram === false) {
+    return (
+      <section className="space-y-5">
+        <header className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-4">
+          <h2 className="text-base font-semibold text-sky-200">Откройте через Telegram</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            Эта страница — Mini App внутри Telegram, она требует авторизации
+            через клиент Telegram. В обычном браузере отправить заявку отсюда
+            не получится.
+          </p>
+          <p className="mt-3 text-sm text-slate-300">
+            Если вы хотите оставить заявку прямо сейчас — откройте бота:
+          </p>
+          <a
+            href={leadBotDeepLink("web_miniapp_lead_fallback")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center justify-center rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400"
+          >
+            Открыть @legal_ai_helper_new_bot
+          </a>
+          <p className="mt-3 text-xs text-slate-400">
+            Или используйте обычную{" "}
+            <a href="/#lead-form" className="text-amber-300 underline">
+              форму на сайте
+            </a>{" "}
+            — она работает в любом браузере и без авторизации.
+          </p>
+        </header>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-5">
