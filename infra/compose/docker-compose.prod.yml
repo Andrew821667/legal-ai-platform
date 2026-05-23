@@ -84,6 +84,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.telegram.org:${TELEGRAM_API_HOST_IP:-149.154.167.220}"
     networks:
       default:
         aliases:
