@@ -62,7 +62,7 @@ export default function AboutPage() {
                   Ассистент AI Verdict
                 </a>
               </p>
-              <p className="mt-1 text-xs text-slate-500">Из РФ — с VPN.</p>
+              <p className="mt-1 text-xs text-slate-500">Если ссылка не открывается, возможно нужно временно отключить прокси/VPN.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
               <h3 className="font-semibold text-amber-300">Канал</h3>
