@@ -181,6 +181,26 @@ Telethon переведён в архив, а Telegram стал заметно �
 
 Если ingest вдруг перестал давать посты в HTML-режиме — проверьте `scutil --nc status "Happ Plus"`
 и `curl -x http://127.0.0.1:10808 -m 10 https://t.me/s/ai_newz -I` на хосте.
+
+### Happ Plus watchdog (auto-reraise)
+
+`bots_watchdog.sh` иногда сознательно тушит туннель Happ Plus (если route к `api.telegram.org`
+оказался через `utun*` — это ломает Telegram-боты). Чтобы HTML-фетчер не оставался без proxy
+дольше минуты, на хосте крутится отдельный LaunchAgent:
+
+- скрипт: `infra/scripts/happ_plus_watchdog.sh` → ставится в `/Users/andrej/bin/happ-plus-watchdog.sh`
+- plist: `infra/launchd/ru.legalai.happ-plus.watchdog.plist` → ставится в `~/Library/LaunchAgents/`
+- интервал: 60 секунд, `RunAtLoad=true`
+- лог: `~/Library/Logs/happ-plus-watchdog.log` (квакает только при смене статуса или раз в 30 итераций)
+
+Установка одной строкой:
+```bash
+install -m 755 infra/scripts/happ_plus_watchdog.sh ~/bin/happ-plus-watchdog.sh
+install -m 644 infra/launchd/ru.legalai.happ-plus.watchdog.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ru.legalai.happ-plus.watchdog.plist
+launchctl kickstart gui/$(id -u)/ru.legalai.happ-plus.watchdog
+```
+Снять (если когда-то надо): `launchctl bootout gui/$(id -u)/ru.legalai.happ-plus.watchdog`.
 3. Применить миграции и создать первый admin-key:
 ```bash
 docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
