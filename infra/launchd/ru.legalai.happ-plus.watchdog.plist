@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ru.legalai.happ-plus.watchdog</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/andrej/bin/happ-plus-watchdog.sh</string>
+  </array>
+  <!-- Check every 60 seconds. bots_watchdog.sh runs every 120s and may
+       deliberately stop the Happ Plus tunnel; this watcher reraises it
+       within ~1 minute so the t.me/s HTML fetch path stays alive. -->
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/andrej/Library/Logs/happ-plus-watchdog.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/andrej/Library/Logs/happ-plus-watchdog.stderr.log</string>
+</dict>
+</plist>
