@@ -1,6 +1,13 @@
 x-telegram-api-extra-hosts: &telegram-api-extra-hosts
   - "api.telegram.org:${TELEGRAM_API_HOST_IP:-149.154.167.220}"
 
+# Same as above + host.docker.internal — for services that also need to
+# reach the host's HTTP proxy (e.g. news-telegram-ingest using the public
+# t.me web preview via the Mac Mini's Happ Plus xray proxy on port 10808).
+x-telegram-api-and-host-extra-hosts: &telegram-api-and-host-extra-hosts
+  - "api.telegram.org:${TELEGRAM_API_HOST_IP:-149.154.167.220}"
+  - "host.docker.internal:host-gateway"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -195,7 +202,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
     command: >
       uv run --package news python -m news.telegram_ingest_loop
-    extra_hosts: *telegram-api-extra-hosts
+    extra_hosts: *telegram-api-and-host-extra-hosts
     depends_on:
       core-api:
         condition: service_healthy

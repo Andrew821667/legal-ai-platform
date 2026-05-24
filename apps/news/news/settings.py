@@ -24,6 +24,28 @@ class Settings(BaseSettings):
     telegram_channels: str = ""
     telegram_fetch_limit: int = 50
     telegram_fetch_enabled: bool = True
+    # Source for Telegram channel posts. Options:
+    #   - "telethon": MTProto user-session path. Carries user-account ban
+    #     risk in 2026 — Telegram aggressively detects automated user
+    #     sessions and Telethon itself is archived (Feb 2026).
+    #   - "html": fetch via the public t.me/s/<channel> preview. Zero ban
+    #     risk because there is no user session. From the Mac Mini behind
+    #     RKN, t.me is reachable through the host's Happ Plus HTTP proxy
+    #     (default: http://host.docker.internal:10808); override via
+    #     news_telegram_html_proxy_url or NEWS_TELEGRAM_HTML_PROXY env.
+    #   - "html_then_telethon": try HTML first, fall back to Telethon on
+    #     empty result. Best of both — keep new posts flowing if the proxy
+    #     hiccups, without paying the user-session risk in the steady state.
+    news_telegram_fetch_mode: str = "html_then_telethon"
+    news_telegram_html_proxy_url: str = "http://host.docker.internal:10808"
+    # Telethon hardening (only used when Telethon is active):
+    # cap the per-channel batch and add a randomised pause between channels
+    # so the polling pattern doesn't look mechanical to Telegram's
+    # behavioural detection.
+    telegram_telethon_per_channel_cap: int = 5
+    telegram_telethon_inter_channel_pause_min_seconds: float = 15.0
+    telegram_telethon_inter_channel_pause_max_seconds: float = 35.0
+    telegram_telethon_flood_max_wait_seconds: int = 600
     news_telegram_cache_path: str = "data/news_telegram_cache.json"
     news_telegram_cache_max_age_minutes: int = 720
     news_telegram_inline_fallback: bool = True

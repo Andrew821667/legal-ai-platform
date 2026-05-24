@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from urllib.parse import urlparse
 
 from news.pipeline import ArticleCandidate, canonicalize_url, passes_generation_scope
 from news.settings import settings
+from news.telegram_html_fetcher import TelegramHtmlPost, fetch_channels as fetch_html_channels
 
 logger = logging.getLogger(__name__)
 _STRICT_CHANNELS = {
@@ -47,12 +49,50 @@ def _cache_path() -> Path:
 
 def _is_configured(channels: list[str] | None = None) -> bool:
     channel_list = channels if channels is not None else settings.telegram_channels_list
-    return bool(
-        settings.telegram_fetch_enabled
-        and settings.telegram_api_id
-        and settings.telegram_api_hash
-        and channel_list
+    if not (settings.telegram_fetch_enabled and channel_list):
+        return False
+    mode = (settings.news_telegram_fetch_mode or "telethon").strip().lower()
+    if mode == "html":
+        # HTML mode doesn't need MTProto credentials.
+        return True
+    # telethon or html_then_telethon both need MTProto creds to be useful.
+    return bool(settings.telegram_api_id and settings.telegram_api_hash)
+
+
+def _html_post_to_candidate(post: TelegramHtmlPost) -> ArticleCandidate | None:
+    if not post.text:
+        return None
+    lines = [line.strip() for line in post.text.splitlines() if line.strip()]
+    title = (lines[0] if lines else post.text)[:200]
+    channel_url = f"https://t.me/{post.channel}"
+    candidate = ArticleCandidate(
+        source_url=channel_url,
+        article_url=post.permalink,
+        title=title,
+        summary=post.text[:5000],
+        published_at=post.published_at,
     )
+    if post.channel.lower() in _STRICT_CHANNELS and not passes_generation_scope(candidate):
+        return None
+    return candidate
+
+
+def _fetch_via_html(channels: list[str], fetch_limit: int | None) -> list[ArticleCandidate]:
+    """Pull posts via the public t.me/s/<channel> preview. Returns [] on any
+    network failure — caller decides whether to fall back to Telethon.
+    """
+    results: list[ArticleCandidate] = []
+    proxy_url = (settings.news_telegram_html_proxy_url or "").strip() or None
+    by_channel = fetch_html_channels(channels, fetch_limit=fetch_limit, proxy_url=proxy_url)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    for channel, posts in by_channel.items():
+        for post in posts:
+            if post.published_at is not None and post.published_at < cutoff:
+                continue
+            candidate = _html_post_to_candidate(post)
+            if candidate is not None:
+                results.append(candidate)
+    return results
 
 
 def fetch_telegram_articles(
@@ -63,6 +103,22 @@ def fetch_telegram_articles(
     active_channels = channels if channels is not None else settings.telegram_channels_list
     if not _is_configured(active_channels):
         return []
+
+    mode = (settings.news_telegram_fetch_mode or "telethon").strip().lower()
+
+    if mode in ("html", "html_then_telethon"):
+        html_items = _fetch_via_html(active_channels, fetch_limit)
+        if html_items or mode == "html":
+            logger.info(
+                "telegram_html_fetch_done",
+                extra={"count": len(html_items), "channels": len(active_channels), "mode": mode},
+            )
+            return html_items
+        # html_then_telethon and HTML returned nothing — try Telethon next.
+        logger.info(
+            "telegram_html_empty_falling_back_to_telethon",
+            extra={"channels": len(active_channels)},
+        )
 
     result = _FetchResult(items=[])
 
@@ -235,7 +291,15 @@ async def _fetch_telegram_articles_async(channels: list[str], *, fetch_limit: in
         logger.warning("telegram_session_missing", extra={"session_name": session_name})
         return []
 
-    limit = fetch_limit if isinstance(fetch_limit, int) and fetch_limit > 0 else settings.telegram_fetch_limit
+    requested_limit = fetch_limit if isinstance(fetch_limit, int) and fetch_limit > 0 else settings.telegram_fetch_limit
+    # Cap the per-channel batch so a single iteration never looks like a scrape.
+    # The default cap is intentionally small (5) — large bursts are exactly
+    # what Telegram's 2026 detection looks for on user-session accounts.
+    per_channel_cap = max(1, settings.telegram_telethon_per_channel_cap)
+    limit = min(requested_limit, per_channel_cap)
+    pause_min = max(0.0, float(settings.telegram_telethon_inter_channel_pause_min_seconds))
+    pause_max = max(pause_min, float(settings.telegram_telethon_inter_channel_pause_max_seconds))
+    flood_cap = max(1, int(settings.telegram_telethon_flood_max_wait_seconds))
     client = TelegramClient(session_name, settings.telegram_api_id, settings.telegram_api_hash)
     accepted: list[ArticleCandidate] = []
     try:
@@ -244,7 +308,7 @@ async def _fetch_telegram_articles_async(channels: list[str], *, fetch_limit: in
             logger.warning("telegram_session_not_authorized", extra={"session_name": session_name})
             return []
 
-        for raw_channel in channels:
+        for channel_index, raw_channel in enumerate(channels):
             channel = raw_channel.lstrip("@")
             try:
                 entity = await client.get_entity(channel)
@@ -255,8 +319,24 @@ async def _fetch_telegram_articles_async(channels: list[str], *, fetch_limit: in
             try:
                 messages = await client.get_messages(entity, limit=limit)
             except FloodWaitError as exc:
-                logger.warning("telegram_flood_wait", extra={"channel": channel, "wait_seconds": exc.seconds})
-                await asyncio.sleep(exc.seconds)
+                wait_seconds = min(exc.seconds, flood_cap)
+                logger.warning(
+                    "telegram_flood_wait",
+                    extra={
+                        "channel": channel,
+                        "wait_seconds": exc.seconds,
+                        "sleeping_seconds": wait_seconds,
+                    },
+                )
+                if exc.seconds >= flood_cap:
+                    # Telegram is throttling us hard — abort this run rather
+                    # than power through and risk a 24h soft-ban.
+                    logger.warning(
+                        "telegram_flood_wait_exceeds_cap_aborting",
+                        extra={"channel": channel, "wait_seconds": exc.seconds, "cap": flood_cap},
+                    )
+                    break
+                await asyncio.sleep(wait_seconds)
                 continue
 
             for message in messages:
@@ -289,7 +369,12 @@ async def _fetch_telegram_articles_async(channels: list[str], *, fetch_limit: in
                 if channel.lower() in _STRICT_CHANNELS and not passes_generation_scope(candidate):
                     continue
                 accepted.append(candidate)
-            await asyncio.sleep(0.5)
+            # Randomised pause between channels — uniform timing is a red flag
+            # to behavioural detection. Skip the pause after the last channel.
+            if channel_index + 1 < len(channels):
+                jitter = random.uniform(pause_min, pause_max) if pause_max > 0 else 0.0
+                if jitter > 0:
+                    await asyncio.sleep(jitter)
     finally:
         await client.disconnect()
 
