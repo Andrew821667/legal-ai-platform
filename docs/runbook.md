@@ -157,6 +157,30 @@ make prod
 ```
 Будут подняты: `postgres`, `core-api`, `lead-bot`, `news-generate`, `news-telegram-ingest`, `news-publish`,
 `news-admin-bot`, `news-reader-bot`, `news-reader-digest`, `web`, `caddy`.
+
+## Telegram news ingest — пути и риск user-аккаунта
+
+`news-telegram-ingest` достаёт посты публичных каналов (`ai_newz`, `anthropicai` и т.д.). С февраля 2026
+Telethon переведён в архив, а Telegram стал заметно агрессивнее банить user-сессии за паттерны автоматизации
+(см. issue [Telethon#3955](https://github.com/LonamiWebs/Telethon/issues/3955)). Поэтому ingest умеет два пути:
+
+- **HTML-превью** (`https://t.me/s/<channel>`) — публичная страница, никаких токенов и сессий,
+  поэтому риск бана нулевой. На Mac Mini RKN режет прямой `t.me`, так что запросы идут
+  через локальный xray-прокси Happ Plus (`http://host.docker.internal:10808`).
+  Контейнер `news-telegram-ingest` получает `host.docker.internal` через extra_host.
+  Если Happ Plus не подключён — `scutil --nc start "Happ Plus"`.
+- **Telethon (MTProto user-session)** — оставлен как fallback. С защитами: per-channel cap
+  (`telegram_telethon_per_channel_cap=5`), случайные паузы 15–35 с между каналами,
+  exponential cap на FloodWaitError (`telegram_telethon_flood_max_wait_seconds=600`,
+  при превышении — аборт без power-through).
+
+Режим переключается через `NEWS_TELEGRAM_FETCH_MODE`:
+- `html_then_telethon` (по умолчанию) — пробуем HTML, при пустом результате Telethon
+- `html` — только HTML (если хотите полностью убрать риск user-аккаунта)
+- `telethon` — только Telethon (старое поведение)
+
+Если ingest вдруг перестал давать посты в HTML-режиме — проверьте `scutil --nc status "Happ Plus"`
+и `curl -x http://127.0.0.1:10808 -m 10 https://t.me/s/ai_newz -I` на хосте.
 3. Применить миграции и создать первый admin-key:
 ```bash
 docker compose -f infra/compose/docker-compose.prod.yml run --rm core-api bash -lc "cd /app/apps/core-api && alembic upgrade head"
