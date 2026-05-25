@@ -10,6 +10,8 @@ const CORE_API_URL = process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_AP
 const CORE_API_ADMIN_KEY = process.env.CORE_API_ADMIN_KEY || process.env.API_KEY_ADMIN || "";
 const SITE_PUBLIC_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_PUBLIC_URL || "";
 const CONTRACT_AI_SYSTEM_URL = process.env.NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL || "https://contract.ai-verdict.ru";
+const SITE_INTERNAL_CHECK_URL = process.env.SITE_INTERNAL_CHECK_URL || "";
+const CONTRACT_AI_INTERNAL_CHECK_URL = process.env.CONTRACT_AI_INTERNAL_CHECK_URL || "";
 const TELEGRAM_API_HOST = process.env.TELEGRAM_API_HOST || "api.telegram.org";
 const ARCHIVED_PUBLICATION_ERROR_PREFIXES = [
   "deleted_irrelevant",
@@ -44,6 +46,31 @@ function publicSiteBaseUrl(): string {
   }
   const domain = String(process.env.DOMAIN || "ai-verdict.ru").trim();
   return `https://${domain}`.replace(/\/+$/, "");
+}
+
+function normalizeBaseUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
+function internalSiteBaseUrl(): string {
+  return normalizeBaseUrl(SITE_INTERNAL_CHECK_URL) || "http://127.0.0.1:3000";
+}
+
+function internalContractBaseUrl(): string {
+  const configured = normalizeBaseUrl(CONTRACT_AI_INTERNAL_CHECK_URL);
+  if (configured) {
+    return configured;
+  }
+  return normalizeBaseUrl(process.env.CONTRACT_AI_UPSTREAM || "") || "http://host.docker.internal:3000";
+}
+
+function joinUrl(base: string, path: string): string {
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
 function normalizeStatus(ok: boolean, warn = false): CheckStatus {
@@ -96,10 +123,10 @@ async function safeCoreJson(path: string): Promise<{ ok: boolean; status: number
   }
 }
 
-async function checkUrl(name: string, url: string): Promise<EndpointCheck> {
+async function checkUrl(name: string, url: string, probeUrl = url): Promise<EndpointCheck> {
   const startedAt = performance.now();
   try {
-    const response = await fetch(url, {
+    const response = await fetch(probeUrl, {
       method: "GET",
       cache: "no-store",
       redirect: "manual",
@@ -112,6 +139,7 @@ async function checkUrl(name: string, url: string): Promise<EndpointCheck> {
       status: normalizeStatus(ok, response.status >= 300),
       statusCode: response.status,
       latencyMs: elapsedMs(startedAt),
+      detail: probeUrl === url ? undefined : `probe: ${probeUrl}`,
     };
   } catch (error: any) {
     return {
@@ -250,6 +278,8 @@ export async function GET(request: NextRequest) {
   }
 
   const siteBaseUrl = publicSiteBaseUrl();
+  const siteProbeBaseUrl = internalSiteBaseUrl();
+  const contractProbeBaseUrl = internalContractBaseUrl();
   const [
     coreHealth,
     detailedHealth,
@@ -282,10 +312,10 @@ export async function GET(request: NextRequest) {
     safeCoreJson("/api/v1/scheduled-posts?status=publishing&limit=100"),
     safeCoreJson("/api/v1/scheduled-posts?status=posted&limit=20&newest_first=true"),
     checkTelegramTls(),
-    checkUrl("Сайт", `${siteBaseUrl}/`),
-    checkUrl("Mini App", `${siteBaseUrl}/miniapp`),
-    checkUrl("Mini App content", `${siteBaseUrl}/miniapp/content`),
-    checkUrl("Contract AI System", CONTRACT_AI_SYSTEM_URL),
+    checkUrl("Сайт", `${siteBaseUrl}/`, `${siteProbeBaseUrl}/`),
+    checkUrl("Mini App", `${siteBaseUrl}/miniapp`, joinUrl(siteProbeBaseUrl, "/miniapp")),
+    checkUrl("Mini App content", `${siteBaseUrl}/miniapp/content`, joinUrl(siteProbeBaseUrl, "/miniapp/content")),
+    checkUrl("Contract AI System", CONTRACT_AI_SYSTEM_URL, `${contractProbeBaseUrl}/`),
   ]);
 
   const failedRows = Array.isArray(failedPosts.data) ? failedPosts.data : [];
