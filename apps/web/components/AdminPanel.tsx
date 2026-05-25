@@ -22,7 +22,8 @@ import {
   XCircle,
   AlertCircle,
   ExternalLink,
-  Settings2
+  Settings2,
+  Brain
 } from 'lucide-react';
 import SEOChart from './admin/SEOChart';
 import ExportButton from './admin/ExportButton';
@@ -30,8 +31,9 @@ import NotificationBadge from './admin/NotificationBadge';
 import IssueFilters from './admin/IssueFilters';
 import AutomationControlsPanel from './admin/AutomationControlsPanel';
 import SystemMonitorPanel from './admin/SystemMonitorPanel';
+import AnalyticsPanel from './admin/AnalyticsPanel';
 
-type AdminTab = 'seo' | 'system' | 'technical' | 'github' | 'automation';
+type AdminTab = 'seo' | 'analytics' | 'system' | 'technical' | 'github' | 'automation';
 
 interface AdminPanelProps {
   initialOpen?: boolean;
@@ -467,6 +469,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                     <div className="flex gap-2 mb-6 border-b border-slate-800">
                       {[
                         { id: 'seo' as const, label: 'SEO & Аналитика', icon: BarChart3 },
+                        { id: 'analytics' as const, label: 'Аналитика', icon: Brain },
                         { id: 'system' as const, label: 'System Monitor', icon: Server },
                         { id: 'technical' as const, label: 'Технические данные', icon: Zap },
                         { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github },
@@ -611,6 +614,16 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                             ))}
                           </div>
                         </div>
+                      </motion.div>
+                    )}
+
+                    {/* Analytics Tab */}
+                    {activeTab === 'analytics' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <AnalyticsPanel />
                       </motion.div>
                     )}
 

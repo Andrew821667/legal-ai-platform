@@ -53,7 +53,7 @@ test("login throttling is persisted and blocks after configured limit", () => {
 
 test("admin sessions can be revoked individually and in bulk", () => {
   withTempStore(() => {
-    const nowMs = Date.UTC(2026, 2, 10, 11, 0, 0);
+    const nowMs = Date.now();
     createAdminSessionRecord({
       sessionId: "session-1",
       createdAtMs: nowMs,
