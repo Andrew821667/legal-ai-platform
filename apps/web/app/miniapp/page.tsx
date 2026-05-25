@@ -121,7 +121,7 @@ export default function MiniAppHomePage() {
         description="Начните с блока «Для вас», затем переходите в Contract_AI_System или в решения. Последнее действие сохраняется, чтобы вы продолжали с нужного шага."
       />
 
-      <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Важное сегодня</h2>
         <ul className="mt-3 space-y-3 text-sm text-slate-300">
           {highlights.map((item) => (
@@ -133,7 +133,7 @@ export default function MiniAppHomePage() {
         </ul>
       </article>
 
-      <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Для вас</h2>
         <p className="mt-2 text-sm text-slate-300">
           {ready ? audienceHints[state.audience] : "Подбираем маршрут под ваш профиль..."}

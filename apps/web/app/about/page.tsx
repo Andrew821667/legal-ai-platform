@@ -18,7 +18,7 @@ const principles = [
 
 export default function AboutPage() {
   return (
-    <main className="bg-slate-950 text-slate-100 min-h-screen">
+    <main className="bg-slate-900 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
@@ -36,14 +36,14 @@ export default function AboutPage() {
         <h2 className="text-3xl font-semibold text-white">Принципы работы</h2>
         <ul className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {principles.map((item) => (
-            <li key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
+            <li key={item} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-slate-200">
               {item}
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40" id="contacts">
+      <section className="border-y border-slate-800 bg-slate-800/40" id="contacts">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Контакты</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -55,7 +55,7 @@ export default function AboutPage() {
                 </a>
               </p>
             </article>
-            <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+            <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <h3 className="font-semibold text-amber-300">Telegram</h3>
               <p className="mt-2 text-sm text-slate-300">
                 <a href={leadBotDeepLink("web_about_contacts")} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
@@ -64,7 +64,7 @@ export default function AboutPage() {
               </p>
               <p className="mt-1 text-xs text-slate-500">Если ссылка не открывается, возможно нужно временно отключить прокси/VPN.</p>
             </article>
-            <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+            <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <h3 className="font-semibold text-amber-300">Канал</h3>
               <p className="mt-2 text-sm text-slate-300">
                 <a href={EXTERNAL_LINKS.channel} target="_blank" rel="noopener noreferrer" className="hover:text-amber-300">
@@ -72,7 +72,7 @@ export default function AboutPage() {
                 </a>
               </p>
             </article>
-            <article className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+            <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <h3 className="font-semibold text-amber-300">Email</h3>
               <p className="mt-2 text-sm text-slate-300">
                 <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="hover:text-amber-300">

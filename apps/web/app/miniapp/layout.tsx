@@ -15,12 +15,12 @@ export const metadata: Metadata = {
 export default function MiniAppLayout({ children }: { children: React.ReactNode }) {
   return (
     <MiniAppStateProvider>
-      <main className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="min-h-screen bg-slate-900 text-slate-100">
         <Suspense fallback={null}>
           <MiniAppDeepLinkSync />
         </Suspense>
         <div className="mx-auto w-full max-w-md px-4 pb-24 pt-6">
-          <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+          <div className="mb-5 rounded-xl border border-slate-800 bg-slate-800/70 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">AI Verdict</p>

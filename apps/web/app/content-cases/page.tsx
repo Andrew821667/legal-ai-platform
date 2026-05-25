@@ -41,7 +41,7 @@ const conversionFlow = [
 
 export default function ContentCasesPage() {
   return (
-    <main className="bg-slate-950 text-slate-100 min-h-screen">
+    <main className="bg-slate-900 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
@@ -66,7 +66,7 @@ export default function ContentCasesPage() {
       <section id="practical" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {caseBlocks.map((item) => (
-            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-800/60 p-6">
               <h2 className="text-xl font-semibold text-amber-300">{item.title}</h2>
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.description}</p>
             </article>
@@ -74,12 +74,12 @@ export default function ContentCasesPage() {
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40">
+      <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Как конвертировать контент в результат</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-slate-200">
             {conversionFlow.map((item) => (
-              <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-950/60 p-6">
+              <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
                 <h3 className="font-semibold text-amber-300">{item.title}</h3>
                 <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.description}</p>
               </article>

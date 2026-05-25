@@ -18,7 +18,7 @@ export default function MiniAppNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-900/95 backdrop-blur"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
     >
       <div className="mx-auto flex w-full max-w-md items-center justify-between px-3 py-2">

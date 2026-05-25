@@ -99,7 +99,7 @@ export default function AboutTeam() {
               {stack.map((item) => (
                 <span
                   key={item}
-                  className="rounded-lg border border-slate-600 bg-slate-900/60 px-4 py-2 text-sm text-slate-200"
+                  className="rounded-lg border border-slate-600 bg-slate-800/60 px-4 py-2 text-sm text-slate-200"
                 >
                   {item}
                 </span>

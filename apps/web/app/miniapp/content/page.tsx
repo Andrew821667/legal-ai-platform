@@ -153,7 +153,7 @@ export default function MiniAppContentPage() {
         description="Здесь — живой поток материалов под ваш профиль. Используйте фильтр тем и поиск, чтобы быстро выйти на нужный материал."
       />
 
-      <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Фильтры</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {topics.map((topic) => {
@@ -181,12 +181,12 @@ export default function MiniAppContentPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Поиск по материалам"
-            className="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-500"
+            className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-500"
           />
         </label>
       </article>
 
-      <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-white">Лента</h2>
           <span className="text-xs text-slate-400">{filteredFeed.length} материалов</span>
@@ -204,7 +204,7 @@ export default function MiniAppContentPage() {
                 screen: MINIAPP_SCREENS.content,
                 payload: { topic: item.topic, item_id: item.id },
               }}
-              className="block rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+              className="block rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-3 text-sm text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
             >
               <span className="block text-xs text-slate-500">{item.topic}</span>
               <span className="mt-1 block">{item.title}</span>
@@ -215,7 +215,7 @@ export default function MiniAppContentPage() {
           ))}
 
           {filteredFeed.length === 0 && (
-            <p className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-400">
+            <p className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-3 text-sm text-slate-400">
               По текущему фильтру ничего не найдено. Снимите фильтр или измените запрос.
             </p>
           )}

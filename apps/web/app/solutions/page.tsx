@@ -47,7 +47,7 @@ const launchFormats = [
 
 export default function SolutionsPage() {
   return (
-    <main className="bg-slate-950 text-slate-100 min-h-screen">
+    <main className="bg-slate-900 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
@@ -75,19 +75,19 @@ export default function SolutionsPage() {
         <h2 className="text-3xl font-semibold text-white">Автоматизация юрфункции</h2>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {automationCases.map((item) => (
-            <article key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
+            <article key={item} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-slate-200">
               {item}
             </article>
           ))}
         </div>
       </section>
 
-      <section id="legal-ops" className="border-y border-slate-800 bg-slate-900/40">
+      <section id="legal-ops" className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Внедрение AI в legal ops</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {legalOpsCases.map((item) => (
-              <article key={item} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 text-slate-200">
+              <article key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
                 {item}
               </article>
             ))}
@@ -99,19 +99,19 @@ export default function SolutionsPage() {
         <h2 className="text-3xl font-semibold text-white">Интеграции и архитектура</h2>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {integrationCases.map((item) => (
-            <article key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
+            <article key={item} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-slate-200">
               {item}
             </article>
           ))}
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40">
+      <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Форматы запуска</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
             {launchFormats.map((format) => (
-              <article key={format.title} className="rounded-xl border border-slate-800 bg-slate-950/60 p-6">
+              <article key={format.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
                 <h3 className="text-lg font-semibold text-amber-300">{format.title}</h3>
                 <p className="mt-3 text-sm text-slate-300 leading-relaxed">{format.details}</p>
               </article>

@@ -97,13 +97,13 @@ export default function AutomationControlsPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск автоматизаций..."
-              className="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="w-full pl-9 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
             />
           </div>
           <select
             value={scopeFilter}
             onChange={(e) => setScopeFilter(e.target.value as any)}
-            className="px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200"
+            className="px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200"
           >
             <option value="all">Все scope</option>
             <option value="news">news</option>
@@ -114,7 +114,7 @@ export default function AutomationControlsPanel() {
           </select>
           <button
             onClick={loadControls}
-            className="inline-flex items-center gap-2 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 hover:bg-slate-800 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             Обновить
@@ -173,7 +173,7 @@ export default function AutomationControlsPanel() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     item.enabled
                       ? 'bg-green-900/30 border border-green-700/50 text-green-300 hover:bg-green-900/50'
-                      : 'bg-slate-900 border border-slate-600 text-slate-300 hover:bg-slate-800'
+                      : 'bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-800'
                   }`}
                 >
                   {isSaving[item.key] ? 'Сохраняю...' : item.enabled ? 'Включено' : 'Выключено'}
@@ -243,7 +243,7 @@ function ConfigEditor({
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="w-full min-h-[120px] bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono"
+        className="w-full min-h-[120px] bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono"
       />
       {error && <div className="text-xs text-red-300">{error}</div>}
       <button

@@ -38,7 +38,7 @@ export default function CtaFrameworkPanel({
   };
 
   return (
-    <div className={`rounded-2xl border border-amber-500/35 bg-slate-950/70 p-5 ${className}`.trim()}>
+    <div className={`rounded-2xl border border-amber-500/35 bg-slate-900/70 p-5 ${className}`.trim()}>
       <p className="text-xs uppercase tracking-wide text-amber-300/90">{title}</p>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <a

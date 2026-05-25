@@ -37,7 +37,7 @@ export default function Header() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-slate-900/95 backdrop-blur-md shadow-lg"
+          ? "bg-slate-800/95 backdrop-blur-md shadow-lg"
           : "bg-transparent"
       }`}
     >
@@ -126,7 +126,7 @@ export default function Header() {
               <summary className="list-none cursor-pointer text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap">
                 Еще
               </summary>
-              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900 shadow-xl">
+              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
                 <div className="p-2 space-y-1">
                   {secondaryNavigation.map((item) => (
                     <Link

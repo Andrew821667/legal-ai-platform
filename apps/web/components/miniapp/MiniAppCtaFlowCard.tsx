@@ -17,7 +17,7 @@ export default function MiniAppCtaFlowCard({
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
   return (
-    <article className="rounded-xl border border-amber-500/35 bg-slate-900/70 p-4">
+    <article className="rounded-xl border border-amber-500/35 bg-slate-800/70 p-4">
       <h2 className="text-sm font-semibold text-amber-300">{title}</h2>
       <div className="mt-3 grid grid-cols-1 gap-2">
         <MiniTrackedLink

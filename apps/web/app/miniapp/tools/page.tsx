@@ -39,7 +39,7 @@ export default function MiniAppToolsPage() {
       />
 
       {tools.map((tool) => (
-        <article key={tool.title} className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+        <article key={tool.title} className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
           <h2 className="text-base font-semibold text-white">{tool.title}</h2>
           <p className="mt-2 text-sm text-slate-300 leading-relaxed">{tool.description}</p>
           <MiniTrackedLink
