@@ -54,9 +54,11 @@ type MonitorData = {
     counts: Record<string, number>;
     due_count: number;
     stale_publishing_count: number;
+    archived_failed_cleanup_count?: number;
     review: any[];
     scheduled: any[];
     failed: any[];
+    archived_failed_cleanup?: any[];
     recent_posted: any[];
   };
   reader: {
@@ -309,7 +311,7 @@ export default function SystemMonitorPanel() {
             <MetricCard
               label="Due publications"
               value={data.publications.due_count}
-              detail={`scheduled: ${data.publications.counts.scheduled || 0}, review: ${data.publications.counts.review || 0}`}
+              detail={`scheduled: ${data.publications.counts.scheduled || 0}, review: ${data.publications.counts.review || 0}, cleanup: ${data.publications.archived_failed_cleanup_count || 0}`}
               status={data.publications.due_count > 0 ? 'warn' : 'ok'}
             />
             <MetricCard

@@ -11,6 +11,12 @@ const CORE_API_ADMIN_KEY = process.env.CORE_API_ADMIN_KEY || process.env.API_KEY
 const SITE_PUBLIC_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_PUBLIC_URL || "";
 const CONTRACT_AI_SYSTEM_URL = process.env.NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL || "https://contract.ai-verdict.ru";
 const TELEGRAM_API_HOST = process.env.TELEGRAM_API_HOST || "api.telegram.org";
+const ARCHIVED_PUBLICATION_ERROR_PREFIXES = [
+  "deleted_irrelevant",
+  "expired_review_cleanup",
+  "expired_editorial_cleanup",
+  "expired_weekly_review_cleanup",
+];
 
 type CheckStatus = "ok" | "warn" | "error" | "unknown";
 
@@ -171,6 +177,11 @@ function countStatuses(rows: any[]): Record<string, number> {
   }, {});
 }
 
+function isArchivedPublicationFailure(row: any): boolean {
+  const lastError = String(row?.last_error || "").trim().toLowerCase();
+  return ARCHIVED_PUBLICATION_ERROR_PREFIXES.some((prefix) => lastError.startsWith(prefix));
+}
+
 function buildIssues(input: {
   coreHealth: Awaited<ReturnType<typeof safeCoreJson>>;
   detailedHealth: Awaited<ReturnType<typeof safeCoreJson>>;
@@ -277,10 +288,13 @@ export async function GET(request: NextRequest) {
     checkUrl("Contract AI System", CONTRACT_AI_SYSTEM_URL),
   ]);
 
+  const failedRows = Array.isArray(failedPosts.data) ? failedPosts.data : [];
+  const actionableFailedRows = failedRows.filter((row: any) => !isArchivedPublicationFailure(row));
+  const archivedFailedRows = failedRows.filter(isArchivedPublicationFailure);
   const postRows = [
     ...(Array.isArray(reviewPosts.data) ? reviewPosts.data : []),
     ...(Array.isArray(scheduledPosts.data) ? scheduledPosts.data : []),
-    ...(Array.isArray(failedPosts.data) ? failedPosts.data : []),
+    ...actionableFailedRows,
     ...(Array.isArray(publishingPosts.data) ? publishingPosts.data : []),
     ...(Array.isArray(postedPosts.data) ? postedPosts.data : []),
   ];
@@ -320,9 +334,11 @@ export async function GET(request: NextRequest) {
       counts: scheduledCounts,
       due_count: dueCount,
       stale_publishing_count: stalePublishingCount,
+      archived_failed_cleanup_count: archivedFailedRows.length,
       review: Array.isArray(reviewPosts.data) ? reviewPosts.data.slice(0, 10) : [],
       scheduled: Array.isArray(scheduledPosts.data) ? scheduledPosts.data.slice(0, 10) : [],
-      failed: Array.isArray(failedPosts.data) ? failedPosts.data.slice(0, 10) : [],
+      failed: actionableFailedRows.slice(0, 10),
+      archived_failed_cleanup: archivedFailedRows.slice(0, 10),
       recent_posted: Array.isArray(postedPosts.data) ? postedPosts.data.slice(0, 10) : [],
     },
     reader: {

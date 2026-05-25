@@ -88,6 +88,8 @@ type AnalyticsData = {
       review: any[];
       scheduled: any[];
       failed: any[];
+      archived_cleanup_count?: number;
+      archived_cleanup?: any[];
       posted: any[];
     };
   };
@@ -516,6 +518,7 @@ export default function AnalyticsPanel() {
             <MetricCard label="Идеи запрошены" value={formatNumber(data.telegram.reader_summary?.stats?.idea_requested)} tone="good" />
             <MetricCard label="Намерение консультации" value={formatNumber(data.telegram.reader_summary?.stats?.consultation_intent)} tone="warn" />
             <MetricCard label="Ошибки публикаций" value={formatNumber(data.telegram.publications.counts.failed)} tone={data.telegram.publications.counts.failed ? 'bad' : 'good'} />
+            <MetricCard label="Архив cleanup" value={formatNumber(data.telegram.publications.archived_cleanup_count || 0)} />
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

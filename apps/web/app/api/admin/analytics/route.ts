@@ -8,6 +8,12 @@ export const runtime = "nodejs";
 
 const CORE_API_URL = process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8000";
 const CORE_API_ADMIN_KEY = process.env.CORE_API_ADMIN_KEY || process.env.API_KEY_ADMIN || "";
+const ARCHIVED_PUBLICATION_ERROR_PREFIXES = [
+  "deleted_irrelevant",
+  "expired_review_cleanup",
+  "expired_editorial_cleanup",
+  "expired_weekly_review_cleanup",
+];
 
 type RecommendationPriority = "critical" | "high" | "medium" | "low";
 
@@ -72,6 +78,11 @@ function periodSiteMetrics(site: GA4MetricData, days: number) {
     return site.week;
   }
   return site.month;
+}
+
+function isArchivedPublicationFailure(row: any): boolean {
+  const lastError = String(row?.last_error || "").trim().toLowerCase();
+  return ARCHIVED_PUBLICATION_ERROR_PREFIXES.some((prefix) => lastError.startsWith(prefix));
 }
 
 async function fetchCoreJson(path: string): Promise<CoreJsonResult> {
@@ -371,10 +382,13 @@ async function buildAnalyticsForDays(days: number) {
     ]),
   );
 
+  const failedRows = Array.isArray(failedPosts.data) ? failedPosts.data : [];
+  const actionableFailedRows = failedRows.filter((row: any) => !isArchivedPublicationFailure(row));
+  const archivedFailedRows = failedRows.filter(isArchivedPublicationFailure);
   const publicationRows = [
     ...(Array.isArray(reviewPosts.data) ? reviewPosts.data : []),
     ...(Array.isArray(scheduledPosts.data) ? scheduledPosts.data : []),
-    ...(Array.isArray(failedPosts.data) ? failedPosts.data : []),
+    ...actionableFailedRows,
     ...(Array.isArray(postedPosts.data) ? postedPosts.data : []),
   ];
 
@@ -412,7 +426,8 @@ async function buildAnalyticsForDays(days: number) {
       won_leads: wonLeads,
       contract_jobs_total: numberValue(contractSummaryData.total),
       contract_done_window: numberValue(contractSummaryData.done_last_hours_count),
-      failed_publications: Array.isArray(failedPosts.data) ? failedPosts.data.length : 0,
+      failed_publications: actionableFailedRows.length,
+      archived_publication_cleanups: archivedFailedRows.length,
     },
     site: {
       configured: site.configured,
@@ -464,7 +479,9 @@ async function buildAnalyticsForDays(days: number) {
         }, {}),
         review: Array.isArray(reviewPosts.data) ? reviewPosts.data.slice(0, 8) : [],
         scheduled: Array.isArray(scheduledPosts.data) ? scheduledPosts.data.slice(0, 8) : [],
-        failed: Array.isArray(failedPosts.data) ? failedPosts.data.slice(0, 8) : [],
+        failed: actionableFailedRows.slice(0, 8),
+        archived_cleanup_count: archivedFailedRows.length,
+        archived_cleanup: archivedFailedRows.slice(0, 8),
         posted: Array.isArray(postedPosts.data) ? postedPosts.data.slice(0, 8) : [],
       },
     },
