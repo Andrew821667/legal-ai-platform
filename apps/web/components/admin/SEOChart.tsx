@@ -38,7 +38,7 @@ export default function SEOChart({ data }: SEOChartProps) {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-900 border border-amber-500/50 rounded-lg p-3 shadow-xl">
+        <div className="bg-slate-800 border border-amber-500/50 rounded-lg p-3 shadow-xl">
           <p className="text-white font-semibold">{data.date}</p>
           <p className={`text-lg font-bold ${
             data.score >= 80 ? 'text-green-400' :
@@ -111,19 +111,19 @@ export default function SEOChart({ data }: SEOChartProps) {
 
       {/* Статистика */}
       <div className="grid grid-cols-3 gap-4 mt-6">
-        <div className="bg-slate-900/50 p-3 rounded-lg text-center">
+        <div className="bg-slate-800/50 p-3 rounded-lg text-center">
           <div className="text-slate-400 text-xs mb-1">Средний</div>
           <div className="text-white font-bold text-lg">
             {Math.round(chartData.reduce((sum, item) => sum + (item.score || 0), 0) / chartData.length)}
           </div>
         </div>
-        <div className="bg-slate-900/50 p-3 rounded-lg text-center">
+        <div className="bg-slate-800/50 p-3 rounded-lg text-center">
           <div className="text-slate-400 text-xs mb-1">Максимум</div>
           <div className="text-green-400 font-bold text-lg">
             {Math.max(...chartData.map(item => item.score || 0))}
           </div>
         </div>
-        <div className="bg-slate-900/50 p-3 rounded-lg text-center">
+        <div className="bg-slate-800/50 p-3 rounded-lg text-center">
           <div className="text-slate-400 text-xs mb-1">Минимум</div>
           <div className="text-red-400 font-bold text-lg">
             {Math.min(...chartData.map(item => item.score || 0))}

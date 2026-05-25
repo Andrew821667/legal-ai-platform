@@ -204,7 +204,7 @@ function MetricCard({
     bad: 'text-red-300',
   }[tone];
   return (
-    <div className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-4">
+    <div className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-4">
       <div className="text-sm text-slate-400">{label}</div>
       <div className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</div>
       {detail && <div className="mt-2 text-xs text-slate-500">{detail}</div>}
@@ -213,7 +213,7 @@ function MetricCard({
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="rounded-lg bg-slate-900/60 p-4 text-sm text-slate-500">{text}</div>;
+  return <div className="rounded-lg bg-slate-800/60 p-4 text-sm text-slate-500">{text}</div>;
 }
 
 function SmallList({ rows, labelKey = 'label' }: { rows: any[]; labelKey?: string }) {
@@ -223,7 +223,7 @@ function SmallList({ rows, labelKey = 'label' }: { rows: any[]; labelKey?: strin
   return (
     <div className="space-y-2">
       {rows.slice(0, 8).map((row, index) => (
-        <div key={`${row[labelKey] || row.name || index}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/60 p-3 text-sm">
+        <div key={`${row[labelKey] || row.name || index}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/60 p-3 text-sm">
           <span className="min-w-0 truncate text-slate-200">{row[labelKey] || row.name || 'не указано'}</span>
           <span className="font-semibold text-amber-300">{formatNumber(row.count ?? row.percentage)}</span>
         </div>
@@ -239,7 +239,7 @@ function RecentPosts({ rows }: { rows: any[] }) {
   return (
     <div className="space-y-2">
       {rows.slice(0, 6).map((row) => (
-        <div key={row.id} className="rounded-lg bg-slate-900/60 p-3">
+        <div key={row.id} className="rounded-lg bg-slate-800/60 p-3">
           <div className="truncate text-sm font-medium text-slate-100">{row.title || 'Без заголовка'}</div>
           <div className="mt-1 text-xs text-slate-500">{formatDate(row.publish_at || row.posted_at)}</div>
           {row.last_error && <div className="mt-2 text-xs text-red-300">{String(row.last_error).slice(0, 180)}</div>}
@@ -333,7 +333,7 @@ export default function AnalyticsPanel() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2">
             <Filter className="h-4 w-4 text-slate-400" />
             <select
               value={periodDays}
@@ -341,7 +341,7 @@ export default function AnalyticsPanel() {
               className="bg-transparent text-sm text-slate-200 outline-none"
             >
               {periodOptions.map((option) => (
-                <option key={option.value} value={option.value} className="bg-slate-900">
+                <option key={option.value} value={option.value} className="bg-slate-800">
                   {option.label}
                 </option>
               ))}
@@ -484,7 +484,7 @@ export default function AnalyticsPanel() {
             <Section title="Последние лиды" icon={<ClipboardList className="h-5 w-5" />}>
               <div className="space-y-2">
                 {data.lead_funnel.recent_leads.slice(0, 6).map((lead) => (
-                  <div key={lead.id} className="rounded-lg bg-slate-900/60 p-3 text-sm">
+                  <div key={lead.id} className="rounded-lg bg-slate-800/60 p-3 text-sm">
                     <div className="truncate font-medium text-slate-100">{lead.name || lead.contact || 'Без имени'}</div>
                     <div className="mt-1 text-xs text-slate-500">{lead.source || 'источник не указан'} · {lead.status || 'new'}</div>
                   </div>
@@ -578,10 +578,10 @@ export default function AnalyticsPanel() {
               <select
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 outline-none"
+                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none"
               >
                 {modelOptions.map((option) => (
-                  <option key={option.value} value={option.value} className="bg-slate-900">
+                  <option key={option.value} value={option.value} className="bg-slate-800">
                     {option.label}
                   </option>
                 ))}

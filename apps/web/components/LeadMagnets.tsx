@@ -150,7 +150,7 @@ export default function LeadMagnets() {
                 className={`block w-full text-center font-semibold py-4 px-6 rounded-lg text-lg transition-all transform hover:scale-105 ${
                   magnet.popular
                     ? "bg-amber-600 hover:bg-amber-700 text-white shadow-lg"
-                    : "bg-slate-900 hover:bg-slate-800 text-white"
+                    : "bg-slate-800 hover:bg-slate-800 text-white"
                 }`}
               >
                 {magnet.cta} →

@@ -140,7 +140,7 @@ function MetricCard({
   status?: MonitorStatus;
 }) {
   return (
-    <div className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-4">
+    <div className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-sm text-slate-400">{label}</div>
         <StatusPill status={status} label={status === 'ok' ? 'OK' : status === 'warn' ? 'WARN' : status === 'error' ? 'FAIL' : 'INFO'} />
@@ -165,12 +165,12 @@ function Section({ title, icon, children }: { title: string; icon: ReactNode; ch
 
 function PostList({ rows }: { rows: any[] }) {
   if (!rows?.length) {
-    return <div className="rounded-lg bg-slate-900/60 p-4 text-sm text-slate-500">Нет записей</div>;
+    return <div className="rounded-lg bg-slate-800/60 p-4 text-sm text-slate-500">Нет записей</div>;
   }
   return (
     <div className="space-y-2">
       {rows.map((row) => (
-        <div key={row.id} className="rounded-lg bg-slate-900/60 p-3">
+        <div key={row.id} className="rounded-lg bg-slate-800/60 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-100">{row.title || 'Без заголовка'}</div>
             <StatusPill status={row.status === 'failed' ? 'error' : row.status === 'posted' ? 'ok' : 'unknown'} label={row.status || 'unknown'} />
@@ -323,7 +323,7 @@ export default function SystemMonitorPanel() {
           <Section title="Проверки доступа" icon={<Globe className="h-5 w-5" />}>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {data.endpoints.map((endpoint) => (
-                <div key={endpoint.name} className="rounded-lg bg-slate-900/60 p-3">
+                <div key={endpoint.name} className="rounded-lg bg-slate-800/60 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-slate-100">{endpoint.name}</div>
                     <StatusPill status={endpoint.status} label={endpoint.status.toUpperCase()} />
@@ -343,7 +343,7 @@ export default function SystemMonitorPanel() {
         <Section title="Боты и фоновые сервисы" icon={<Bot className="h-5 w-5" />}>
           <div className="space-y-3">
             {workerRows.map((worker) => (
-              <div key={worker.worker_id} className="rounded-lg bg-slate-900/60 p-4">
+              <div key={worker.worker_id} className="rounded-lg bg-slate-800/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold text-white">{workerLabels[worker.worker_id] || worker.worker_id}</div>
@@ -384,7 +384,7 @@ export default function SystemMonitorPanel() {
           <Section title="Сайт, Mini App и внешние переходы" icon={<Smartphone className="h-5 w-5" />}>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {data.endpoints.map((endpoint) => (
-                <div key={endpoint.name} className="rounded-lg bg-slate-900/60 p-4">
+                <div key={endpoint.name} className="rounded-lg bg-slate-800/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium text-white">{endpoint.name}</div>
                     <StatusPill status={endpoint.status} />
@@ -416,7 +416,7 @@ export default function SystemMonitorPanel() {
             <MetricCard label="Failed retryable" value={contractSummary.failed_retryable_count || 0} status={contractSummary.failed_retryable_count ? 'warn' : 'ok'} />
             <MetricCard label="Workers active" value={data.workers.any_active ? 'yes' : 'no'} status={data.workers.any_active ? 'ok' : 'warn'} />
           </div>
-          <pre className="mt-5 max-h-96 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-300">
+          <pre className="mt-5 max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-300">
             {JSON.stringify(contractSummary, null, 2)}
           </pre>
         </Section>
@@ -424,7 +424,7 @@ export default function SystemMonitorPanel() {
 
       {data && activeTab === 'raw' && (
         <Section title="Raw payload" icon={<Server className="h-5 w-5" />}>
-          <pre className="max-h-[560px] overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-300">
+          <pre className="max-h-[560px] overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-300">
             {JSON.stringify(data, null, 2)}
           </pre>
         </Section>

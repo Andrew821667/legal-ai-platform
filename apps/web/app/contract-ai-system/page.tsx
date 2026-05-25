@@ -71,7 +71,7 @@ export default function ContractAISystemPage() {
   const contractAIExternal = contractAIEntryIsExternal();
   const ssoUrl = contractAISsoUrl();
   return (
-    <main className="bg-slate-950 text-slate-100 min-h-screen">
+    <main className="bg-slate-900 text-slate-100 min-h-screen">
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-300">
@@ -120,7 +120,7 @@ export default function ContractAISystemPage() {
         <h2 className="text-3xl font-semibold text-white">Ценность продукта</h2>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {valuePoints.map((item) => (
-            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-800/60 p-6">
               <h3 className="text-lg font-semibold text-amber-300">{item.title}</h3>
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.details}</p>
             </article>
@@ -128,12 +128,12 @@ export default function ContractAISystemPage() {
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40">
+      <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Ключевые сценарии применения</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {taskTracks.map((track) => (
-              <article key={track.title} className="rounded-xl border border-slate-800 bg-slate-950/60 p-6">
+              <article key={track.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
                 <h3 className="text-xl font-semibold text-amber-300">{track.title}</h3>
                 <ul className="mt-3 space-y-2 text-sm text-slate-300 leading-relaxed">
                   {track.items.map((item) => (
@@ -157,19 +157,19 @@ export default function ContractAISystemPage() {
         </p>
         <ol className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {demoSteps.map((step) => (
-            <li key={step} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-sm text-slate-200">
+            <li key={step} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-sm text-slate-200">
               {step}
             </li>
           ))}
         </ol>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40">
+      <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Как устроен запуск</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {launchFormats.map((item) => (
-              <article key={item} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 text-slate-200">
+              <article key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
                 {item}
               </article>
             ))}
@@ -177,12 +177,12 @@ export default function ContractAISystemPage() {
         </div>
       </section>
 
-      <section id="integrations" className="border-y border-slate-800 bg-slate-900/40">
+      <section id="integrations" className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Интеграции и контроль</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {integrationPoints.map((item) => (
-              <article key={item} className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 text-slate-200">
+              <article key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-slate-200">
                 {item}
               </article>
             ))}

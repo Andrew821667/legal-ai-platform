@@ -74,7 +74,7 @@ export default function Home() {
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
   return (
-    <main className="bg-slate-950 text-slate-100">
+    <main className="bg-slate-900 text-slate-100">
       <section className="relative overflow-hidden border-b border-slate-800">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.16),_transparent_52%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.14),_transparent_45%)]" />
@@ -146,7 +146,7 @@ export default function Home() {
         </div>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {launchPath.map((item) => (
-            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+            <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-800/60 p-6">
               <h3 className="font-semibold text-amber-300">{item.title}</h3>
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.description}</p>
             </article>
@@ -157,7 +157,7 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {audienceCards.map((card) => (
-            <article key={card.title} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-7">
+            <article key={card.title} className="rounded-2xl border border-slate-800 bg-slate-800/60 p-7">
               <h2 className="text-2xl font-semibold text-white">{card.title}</h2>
               <p className="mt-4 text-slate-300 leading-relaxed">{card.description}</p>
               <Link href={card.href} className="mt-6 inline-flex text-amber-300 hover:text-amber-200 font-semibold">
@@ -168,7 +168,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40" id="product-entry">
+      <section className="border-y border-slate-800 bg-slate-800/40" id="product-entry">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="max-w-3xl">
             <h2 className="text-3xl md:text-4xl font-semibold text-white">Флагманский вход: Contract_AI_System</h2>
@@ -178,15 +178,15 @@ export default function Home() {
             </p>
           </div>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-5">
+            <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
               <h3 className="font-semibold text-white">Проверить</h3>
               <p className="mt-2 text-sm text-slate-400">Быстрый анализ договора и подсветка рискованных условий.</p>
             </div>
-            <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-5">
+            <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
               <h3 className="font-semibold text-white">Уточнить</h3>
               <p className="mt-2 text-sm text-slate-400">Комментарий по нормам, альтернативные формулировки и план правок.</p>
             </div>
-            <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-5">
+            <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
               <h3 className="font-semibold text-white">Запустить пилот</h3>
               <p className="mt-2 text-sm text-slate-400">Подтвердить эффект на ограниченном процессе и только потом масштабировать в рабочий контур.</p>
             </div>
@@ -198,7 +198,7 @@ export default function Home() {
         <h2 className="text-3xl font-semibold text-white">Карта платформы</h2>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
           {platformLayers.map((layer) => (
-            <article key={layer.title} className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+            <article key={layer.title} className="rounded-xl border border-slate-800 bg-slate-800/50 p-6">
               <h3 className="text-lg font-semibold text-amber-300">{layer.title}</h3>
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">{layer.description}</p>
             </article>
@@ -206,12 +206,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/40">
+      <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <h2 className="text-3xl font-semibold text-white">Сценарии, которые запускаем первыми</h2>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {cases.map((item) => (
-              <div key={item} className="rounded-xl border border-slate-800 bg-slate-950/60 px-5 py-4 text-slate-200">
+              <div key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4 text-slate-200">
                 {item}
               </div>
             ))}

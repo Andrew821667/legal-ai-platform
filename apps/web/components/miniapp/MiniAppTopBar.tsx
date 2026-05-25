@@ -16,7 +16,7 @@ export default function MiniAppTopBar() {
 
   if (!ready) {
     return (
-      <article className="mb-4 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="mb-4 rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <p className="text-sm text-slate-400">Загрузка персонального контура...</p>
       </article>
     );

@@ -91,7 +91,7 @@ export default function MiniAppProfilePage() {
         description="Заполните роль, интересы и цель. После сохранения mini-app начнет показывать более релевантный контент и маршруты внедрения."
       />
 
-      <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Профиль</h2>
         <p className="mt-2 text-xs text-slate-400">Последнее обновление: {updatedAtLabel}</p>
 
@@ -152,7 +152,7 @@ export default function MiniAppProfilePage() {
               }}
               rows={3}
               placeholder="Например: сократить срок согласования договоров"
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-500"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-500"
             />
           </label>
         </div>

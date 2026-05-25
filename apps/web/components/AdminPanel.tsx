@@ -319,7 +319,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-4 md:inset-8 lg:inset-16 bg-slate-900 rounded-2xl shadow-2xl z-50 overflow-hidden border border-amber-500/20"
+              className="fixed inset-4 md:inset-8 lg:inset-16 bg-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden border border-amber-500/20"
             >
               {/* Header */}
               <div className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-amber-500/20 px-6 py-4 flex items-center justify-between">
@@ -577,7 +577,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                           </h3>
                           <div className="space-y-3">
                             {seoData.topPages.map((page: any, idx: number) => (
-                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                                 <div className="flex items-center gap-3">
                                   <span className="text-amber-400 font-bold text-sm">#{idx + 1}</span>
                                   <code className="text-slate-300">{page.page}</code>
@@ -658,31 +658,31 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                             Производительность
                           </h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Lighthouse Score</div>
                               <div className="text-2xl font-bold text-green-400">{technicalData.performance.lighthouse}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">FCP</div>
                               <div className="text-2xl font-bold text-white">{technicalData.performance.fcp}s</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">LCP</div>
                               <div className="text-2xl font-bold text-white">{technicalData.performance.lcp}s</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">TTI</div>
                               <div className="text-2xl font-bold text-white">{technicalData.performance.tti}s</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">CLS</div>
                               <div className="text-2xl font-bold text-green-400">{technicalData.performance.cls}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Bundle Size</div>
                               <div className="text-xl font-bold text-white">{technicalData.performance.bundleSize}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Gzipped</div>
                               <div className="text-xl font-bold text-white">{technicalData.performance.gzipped}</div>
                             </div>
@@ -696,19 +696,19 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                             Серверные метрики
                           </h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Uptime</div>
                               <div className="text-2xl font-bold text-green-400">{technicalData.server.uptime}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Response Time</div>
                               <div className="text-2xl font-bold text-white">{technicalData.server.responseTime}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Requests</div>
                               <div className="text-2xl font-bold text-white">{technicalData.server.requests}</div>
                             </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                            <div className="bg-slate-800/50 p-4 rounded-lg">
                               <div className="text-slate-400 text-sm mb-1">Error Rate</div>
                               <div className="text-2xl font-bold text-green-400">{technicalData.server.errors}</div>
                             </div>
@@ -722,19 +722,19 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                             Информация о деплое
                           </h3>
                           <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                               <span className="text-slate-400">Версия</span>
                               <span className="text-white font-mono">{technicalData.deployment.version}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                               <span className="text-slate-400">Последний деплой</span>
                               <span className="text-white">{technicalData.deployment.lastDeploy}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                               <span className="text-slate-400">Окружение</span>
                               <span className="text-green-400 font-semibold">{technicalData.deployment.environment}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                               <span className="text-slate-400">Регион</span>
                               <span className="text-white">{technicalData.deployment.region}</span>
                             </div>
@@ -776,7 +776,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                                   )}
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                  <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <div className="bg-slate-800/50 p-4 rounded-lg">
                                     <div className="text-slate-400 text-sm mb-1">SEO Score</div>
                                     <div className={`text-3xl font-bold ${
                                       (githubData.seo_report.score || 0) >= 80 ? 'text-green-400' :
@@ -786,19 +786,19 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                                       {githubData.seo_report.score || 'N/A'}<span className="text-lg">/100</span>
                                     </div>
                                   </div>
-                                  <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <div className="bg-slate-800/50 p-4 rounded-lg">
                                     <div className="text-slate-400 text-sm mb-1">Predicted Position</div>
                                     <div className="text-3xl font-bold text-white">
                                       {githubData.seo_report.predicted_position?.toFixed(1) || 'N/A'}
                                     </div>
                                   </div>
-                                  <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <div className="bg-slate-800/50 p-4 rounded-lg">
                                     <div className="text-slate-400 text-sm mb-1">Readability</div>
                                     <div className="text-2xl font-bold text-white">
                                       {githubData.seo_report.readability || 'N/A'}<span className="text-sm">/100</span>
                                     </div>
                                   </div>
-                                  <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <div className="bg-slate-800/50 p-4 rounded-lg">
                                     <div className="text-slate-400 text-sm mb-1">E-E-A-T Score</div>
                                     <div className="text-2xl font-bold text-white">
                                       {githubData.seo_report.eeat_score || 'N/A'}<span className="text-sm">/100</span>
@@ -820,27 +820,27 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                                 Статистика Issues
                               </h3>
                               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">Всего</div>
                                   <div className="text-2xl font-bold text-white">{githubData.issues?.total || 0}</div>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">Открыто</div>
                                   <div className="text-2xl font-bold text-green-400">{githubData.issues?.open || 0}</div>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">Закрыто</div>
                                   <div className="text-2xl font-bold text-slate-400">{githubData.issues?.closed || 0}</div>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">SEO Critical</div>
                                   <div className="text-2xl font-bold text-red-400">{githubData.issues?.seo_critical || 0}</div>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">SEO High</div>
                                   <div className="text-2xl font-bold text-orange-400">{githubData.issues?.seo_high || 0}</div>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
                                   <div className="text-slate-400 text-sm mb-1">SEO Medium</div>
                                   <div className="text-2xl font-bold text-yellow-400">{githubData.issues?.seo_medium || 0}</div>
                                 </div>
@@ -864,7 +864,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                                 </div>
                                 <div className="space-y-3">
                                   {getFilteredTasks().map((task: any, idx: number) => (
-                                    <div key={task.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg hover:bg-slate-900 transition-colors">
+                                    <div key={task.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors">
                                       <div className="flex items-center gap-3 flex-1">
                                         <span className={`px-2 py-1 rounded text-xs font-semibold ${
                                           task.priority === 'critical' ? 'bg-red-500/20 text-red-400' :
@@ -898,7 +898,7 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                                 </h3>
                                 <div className="space-y-3">
                                   {githubData.workflows.recent.map((run: any) => (
-                                    <div key={run.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                                    <div key={run.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                                       <div className="flex items-center gap-3">
                                         {run.conclusion === 'success' ? (
                                           <CheckCircle2 className="w-5 h-5 text-green-400" />
