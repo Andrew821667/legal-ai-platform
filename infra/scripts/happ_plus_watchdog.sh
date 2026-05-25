@@ -16,6 +16,9 @@
 # the VPN status and starts it if needed. It does *not* try to reason
 # about why Happ Plus is down — that's bots_watchdog.sh's job. It just
 # brings the proxy back so that the next ingest tick uses HTML again.
+#
+# NB: this script is zsh because `status` is a read-only variable there,
+# so we use `vpn_state` everywhere for the local var name.
 
 set -u
 
@@ -31,7 +34,7 @@ QUIET_REPEAT_TICKS="${HAPP_QUIET_REPEAT_TICKS:-30}"
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "$(ts) $*" >> "$LOG"; }
 
-vpn_status() {
+read_vpn_state() {
   # Output: "Connected", "Disconnected", or "Unknown".
   local raw
   raw="$(scutil --nc status "$SERVICE_NAME" 2>/dev/null | head -n 1)"
@@ -42,23 +45,23 @@ vpn_status() {
   echo "$raw"
 }
 
-# Read state: "last_status:repeat_count"
-prev_status="Unknown"
+# Read state: "last_state:repeat_count"
+prev_vpn_state="Unknown"
 prev_repeat=0
 if [ -r "$STATE_FILE" ]; then
   state_line="$(cat "$STATE_FILE" 2>/dev/null || echo '')"
-  prev_status="${state_line%%:*}"
+  prev_vpn_state="${state_line%%:*}"
   rest="${state_line#*:}"
   if [ "$rest" != "$state_line" ]; then
     prev_repeat="$rest"
   fi
 fi
 
-status="$(vpn_status)"
+vpn_state="$(read_vpn_state)"
 
-# Suppress noisy logs: only log when status changes, or every Nth tick.
+# Suppress noisy logs: only log when state changes, or every Nth tick.
 should_log=1
-if [ "$status" = "$prev_status" ]; then
+if [ "$vpn_state" = "$prev_vpn_state" ]; then
   prev_repeat=$((prev_repeat + 1))
   if [ "$prev_repeat" -lt "$QUIET_REPEAT_TICKS" ]; then
     should_log=0
@@ -70,11 +73,11 @@ else
 fi
 
 if [ "$should_log" -eq 1 ]; then
-  log "STATUS $status"
+  log "STATUS $vpn_state"
 fi
 
-if [ "$status" = "Connected" ]; then
-  echo "${status}:${prev_repeat}" > "$STATE_FILE"
+if [ "$vpn_state" = "Connected" ]; then
+  echo "${vpn_state}:${prev_repeat}" > "$STATE_FILE"
   exit 0
 fi
 
@@ -83,13 +86,13 @@ log "STARTING service=\"$SERVICE_NAME\""
 scutil --nc start "$SERVICE_NAME" >> "$LOG" 2>&1 || true
 sleep "$START_GRACE_SECONDS"
 
-post_status="$(vpn_status)"
-log "POST_START $post_status"
+post_vpn_state="$(read_vpn_state)"
+log "POST_START $post_vpn_state"
 
 # Reset repeat counter on transition.
-echo "${post_status}:0" > "$STATE_FILE"
+echo "${post_vpn_state}:0" > "$STATE_FILE"
 
-if [ "$post_status" = "Connected" ]; then
+if [ "$post_vpn_state" = "Connected" ]; then
   exit 0
 fi
 exit 1
