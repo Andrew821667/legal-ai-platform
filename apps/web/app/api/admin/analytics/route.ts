@@ -296,8 +296,7 @@ function buildRecommendations(analytics: any, model: string): Recommendation[] {
   return rows.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority)).slice(0, limit);
 }
 
-async function buildAnalyticsPayload(request: NextRequest) {
-  const days = clampDays(request.nextUrl.searchParams.get("days"));
+async function buildAnalyticsForDays(days: number) {
   const hours = days * 24;
 
   if (!CORE_API_ADMIN_KEY) {
@@ -501,6 +500,10 @@ async function buildAnalyticsPayload(request: NextRequest) {
   };
 }
 
+async function buildAnalyticsPayload(request: NextRequest) {
+  return buildAnalyticsForDays(clampDays(request.nextUrl.searchParams.get("days")));
+}
+
 export async function GET(request: NextRequest) {
   const unauthorized = requireAdminSession(request);
   if (unauthorized) {
@@ -526,9 +529,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const model = String(body?.model || "balanced").trim();
     const days = String(body?.days || request.nextUrl.searchParams.get("days") || "7");
-    const url = new URL(request.url);
-    url.searchParams.set("days", days);
-    const payload = await buildAnalyticsPayload(new NextRequest(url, request));
+    const payload = await buildAnalyticsForDays(clampDays(days));
     return NextResponse.json({
       generated_at: new Date().toISOString(),
       model,
