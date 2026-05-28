@@ -5,6 +5,7 @@ import { ROUTES, contractAIEntryHref } from "@/lib/links";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
+import PlatformMap from "@/components/PlatformMap";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 
@@ -205,6 +206,8 @@ export default function MiniAppHomePage() {
         sourceScreen="/miniapp"
         title="Единый маршрут в mini-app: Узнать -> Проверить -> Обсудить пилот"
       />
+
+      <PlatformMap variant="compact" highlightId="miniapp" />
     </section>
   );
 }

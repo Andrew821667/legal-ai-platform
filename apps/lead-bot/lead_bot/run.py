@@ -5,7 +5,8 @@ import threading
 import time
 import uuid
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from lead_bot.buffer import LeadBuffer
@@ -18,6 +19,60 @@ logger = logging.getLogger(__name__)
 
 core_client = CoreClient(base_url=settings.core_api_url, api_key=settings.api_key_bot)
 buffer = LeadBuffer(settings.buffer_db_path)
+
+
+# Keep these descriptions in sync with apps/web/lib/platformParts.ts.
+# The web file is the canonical source for the site-facing UI; this list is
+# what /start shows inside Telegram, so the bot reads the same five parts.
+_PLATFORM_INTRO = (
+    "👋 Это ассистент платформы <b>AI Verdict</b>.\n\n"
+    "Платформа состоит из нескольких связанных частей — можно зайти в любую, "
+    "данные и заявки между ними не теряются:"
+)
+_PLATFORM_PART_LINES = [
+    "🌐 <b>Сайт</b> — обзор продуктов и услуг, заявка на консультацию",
+    "📄 <b>Contract AI</b> — флагман: проверка договоров и поиск рисков",
+    "💬 <b>Этот бот</b> — задать вопрос, получить демо, оставить заявку",
+    "📰 <b>Новостной контур</b> — канал и reader-бот с разборами AI в legal",
+    "📱 <b>Mini App</b> — личный контур прямо в Telegram",
+]
+
+
+def _platform_map_text() -> str:
+    body = "\n".join(_PLATFORM_PART_LINES)
+    return f"{_PLATFORM_INTRO}\n\n{body}"
+
+
+def _platform_map_keyboard() -> InlineKeyboardMarkup:
+    site_url = settings.public_site_url.rstrip("/")
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("🌐 Открыть сайт", url=site_url or "https://ai-verdict.ru")],
+        [InlineKeyboardButton("📄 Contract AI", url=settings.contract_ai_url)],
+        [
+            InlineKeyboardButton(
+                "📰 Канал",
+                url=f"https://t.me/{settings.public_channel_username.lstrip('@')}",
+            ),
+            InlineKeyboardButton(
+                "📰 Reader-бот",
+                url=f"https://t.me/{settings.public_reader_bot_username.lstrip('@')}",
+            ),
+        ],
+    ]
+
+    # Mini App entry — prefer the in-Telegram WebApp button if a registered
+    # Mini App name is configured (PUBLIC_SELF_MINIAPP_NAME). Otherwise fall
+    # back to opening the lead-form page on the site, which works without
+    # @BotFather Mini App registration.
+    if settings.public_self_miniapp_name:
+        miniapp_url = (
+            f"{site_url or 'https://ai-verdict.ru'}/miniapp"
+        )
+        rows.append([InlineKeyboardButton("📱 Открыть Mini App", web_app=WebAppInfo(url=miniapp_url))])
+    elif site_url:
+        rows.append([InlineKeyboardButton("📱 Mini App на сайте", url=f"{site_url}/miniapp")])
+
+    return InlineKeyboardMarkup(rows)
 
 
 def _flush_buffer_once() -> None:
@@ -79,7 +134,24 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception:
         logger.exception("Failed to send bot_start event")
 
-    await update.message.reply_text("Спасибо! Мы получили ваш запрос и скоро свяжемся.")
+    if update.message is None:
+        return
+
+    # Platform map first — sets the context "this bot is part of a bigger
+    # thing", inline buttons let the user jump anywhere immediately.
+    await update.message.reply_text(
+        _platform_map_text(),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_platform_map_keyboard(),
+        disable_web_page_preview=True,
+    )
+
+    # Original acknowledgement — same wording, kept so existing scripts and
+    # dialog flows don't break.
+    await update.message.reply_text(
+        "Если хотите, напишите задачу одним сообщением — я передам её менеджеру "
+        "и мы вернёмся с предложением."
+    )
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
