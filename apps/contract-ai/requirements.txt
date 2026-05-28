@@ -56,7 +56,7 @@ jinja2==3.1.6
 streamlit==1.54.0
 fastapi==0.109.2
 uvicorn[standard]==0.27.0
-python-multipart==0.0.22  # For FastAPI form data
+python-multipart==0.0.27  # For FastAPI form data
 websockets==12.0  # WebSocket support
 
 # Authentication & Security
