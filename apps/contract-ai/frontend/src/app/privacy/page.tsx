@@ -2,8 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Политика конфиденциальности | Contract AI System',
+  title: 'Политика конфиденциальности',
   description: 'Политика конфиденциальности Contract AI System: обработка данных, документы пользователей и меры защиты.',
+  alternates: {
+    canonical: '/privacy',
+  },
 }
 
 const sections = [

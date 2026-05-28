@@ -2,8 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Условия использования | Contract AI System',
+  title: 'Условия использования',
   description: 'Условия использования Contract AI System: бесплатный режим, ограничения, ответственность и правила работы с договорами.',
+  alternates: {
+    canonical: '/terms',
+  },
 }
 
 const sections = [
