@@ -28,7 +28,7 @@ numpy<2.0.0
 feedparser==6.0.11
 httpx==0.26.0
 beautifulsoup4==4.12.3
-lxml==5.1.0
+lxml==6.1.0
 aiohttp==3.13.4
 aiohttp-socks==0.8.4
 
