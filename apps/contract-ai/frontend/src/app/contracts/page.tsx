@@ -336,9 +336,23 @@ export default function ContractsListPage() {
                       })}
                     </div>
                     {contract.status === 'completed' && (
-                      <span className="text-primary-600 font-semibold hover:text-primary-700">
-                        Открыть →
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            // Stop propagation so the parent Card onClick doesn't also navigate to /contracts/{id}.
+                            e.stopPropagation()
+                            router.push(`/revisions/compare?contractId=${contract.id}`)
+                          }}
+                          className="text-gray-600 font-medium hover:text-primary-600"
+                          title="Открыть сравнение редакций этого договора"
+                        >
+                          Сравнить редакции
+                        </button>
+                        <span className="text-primary-600 font-semibold hover:text-primary-700">
+                          Открыть →
+                        </span>
+                      </div>
                     )}
                   </div>
                 </Card>

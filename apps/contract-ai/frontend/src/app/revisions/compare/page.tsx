@@ -10,7 +10,8 @@
  * лежит в таблице — то и в файле.
  */
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 import Button from '@/components/ui/Button'
@@ -37,9 +38,21 @@ const PERSPECTIVES: { value: RevisionPerspective; label: string }[] = [
 
 
 export default function RevisionsComparePage() {
+  // useSearchParams must live inside a Suspense boundary for App Router builds.
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-500">Загрузка…</div>}>
+      <RevisionsComparePageInner />
+    </Suspense>
+  )
+}
+
+function RevisionsComparePageInner() {
+  const searchParams = useSearchParams()
+  const initialContractId = searchParams?.get('contractId') ?? ''
+
   const [contracts, setContracts] = useState<ContractOption[]>([])
   const [contractsLoading, setContractsLoading] = useState(false)
-  const [contractId, setContractId] = useState<string>('')
+  const [contractId, setContractId] = useState<string>(initialContractId)
 
   const [revisions, setRevisions] = useState<RevisionListItem[]>([])
   const [revisionsLoading, setRevisionsLoading] = useState(false)
