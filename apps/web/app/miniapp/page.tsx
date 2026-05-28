@@ -144,7 +144,7 @@ export default function MiniAppHomePage() {
             href={ROUTES.miniAppContent}
             action={MINIAPP_ACTIONS.openContent}
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+            variant="secondary"
           >
             Открыть контент
           </MiniTrackedLink>
@@ -152,7 +152,7 @@ export default function MiniAppHomePage() {
             href={ROUTES.miniAppTools}
             action={MINIAPP_ACTIONS.openMiniAppTools}
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+            variant="secondary"
           >
             Открыть инструменты
           </MiniTrackedLink>
@@ -160,7 +160,7 @@ export default function MiniAppHomePage() {
             href={ROUTES.miniAppSolutions}
             action={MINIAPP_ACTIONS.openSolutions}
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+            variant="secondary"
           >
             Сценарии внедрения
           </MiniTrackedLink>
@@ -195,7 +195,8 @@ export default function MiniAppHomePage() {
             screen: MINIAPP_SCREENS.home,
             payload: { section: state.recommendedSection, screen: state.recommendedScreen },
           }}
-          className="mt-3 inline-flex rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
+          className="mt-3"
+          variant="info"
         >
           Открыть рекомендованный шаг
         </MiniTrackedLink>

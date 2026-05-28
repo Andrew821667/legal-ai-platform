@@ -188,7 +188,7 @@ export default function MiniAppProfilePage() {
           screen: MINIAPP_SCREENS.profile,
           payload: { cta: "lead_form" },
         }}
-        className="inline-flex rounded-lg border border-sky-500/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:border-sky-300 transition-colors"
+        variant="info"
       >
         Связаться с Ассистентом AI Verdict
       </MiniTrackedLink>

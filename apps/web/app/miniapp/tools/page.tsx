@@ -48,7 +48,8 @@ export default function MiniAppToolsPage() {
             meta={{ eventType: MINIAPP_EVENT_TYPES.toolOpen, source: MINIAPP_EVENT_SOURCES.tools, screen: MINIAPP_SCREENS.tools }}
             target={tool.external ? "_blank" : undefined}
             rel={tool.external ? "noopener noreferrer" : undefined}
-            className="mt-4 inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+            className="mt-4"
+            variant="secondary"
           >
             Открыть
           </MiniTrackedLink>

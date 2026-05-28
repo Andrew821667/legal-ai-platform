@@ -31,7 +31,7 @@ export default function MiniAppCtaFlowCard({
           }}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-500 hover:text-amber-300 transition-colors"
+          variant="secondary"
         >
           🧠 Узнать в Reader
         </MiniTrackedLink>
@@ -47,7 +47,7 @@ export default function MiniAppCtaFlowCard({
           }}
           target={contractAIExternal ? "_blank" : undefined}
           rel={contractAIExternal ? "noopener noreferrer" : undefined}
-          className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 transition-colors"
+          variant="primary"
         >
           🧪 Проверить в Contract_AI_System
         </MiniTrackedLink>
@@ -61,7 +61,7 @@ export default function MiniAppCtaFlowCard({
             screen: sourceScreen,
             payload: { cta: "implement" },
           }}
-          className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-medium text-sky-200 hover:border-sky-300 transition-colors"
+          variant="info"
         >
           🛠 Обсудить пилот
         </MiniTrackedLink>
