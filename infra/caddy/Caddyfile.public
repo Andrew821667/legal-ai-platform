@@ -84,7 +84,9 @@ https://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
 
     handle /robots.txt {
         header Content-Type "text/plain; charset=utf-8"
-        respond "User-agent: *\nDisallow: /\n" 200
+        respond `User-agent: *
+Disallow: /
+` 200
     }
 
     handle /sitemap.xml {
@@ -112,7 +114,9 @@ https://{$MONITOR_DOMAIN:monitor.ai-verdict.ru} {
 
     handle /robots.txt {
         header Content-Type "text/plain; charset=utf-8"
-        respond "User-agent: *\nDisallow: /\n" 200
+        respond `User-agent: *
+Disallow: /
+` 200
     }
 
     handle /sitemap.xml {
