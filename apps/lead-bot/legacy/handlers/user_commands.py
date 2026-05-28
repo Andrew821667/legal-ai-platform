@@ -10,6 +10,7 @@ from typing import Dict, Optional
 import admin_interface
 import content
 import database
+import platform_map
 import utils
 from config import get_config
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -119,6 +120,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if start_payload:
             context.user_data[_PENDING_START_PAYLOAD_KEY] = start_payload
         logger.info("User %s started bot", user.id)
+
+        # Plain /start (no deep-link payload) — show the platform map first so
+        # the user understands this bot is one of several connected entry
+        # points, not a standalone tool. Skipped for deep-link arrivals
+        # because those users already know which scenario they're in.
+        if not start_payload and update.message is not None:
+            try:
+                await utils.safe_reply_html(
+                    update.message,
+                    platform_map.build_text(),
+                    reply_markup=platform_map.build_keyboard(),
+                    action="platform_map",
+                )
+            except Exception:
+                logger.exception("Failed to send platform map greeting")
 
         user_id = database.db.create_or_update_user(
             telegram_id=user.id,
