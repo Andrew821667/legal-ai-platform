@@ -12,7 +12,9 @@ import os
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-import config
+from config import get_config
+
+_config = get_config()
 
 
 _INTRO = (
@@ -40,9 +42,9 @@ def _site_url() -> str:
 
 
 def _channel_url() -> str:
-    if config.config.TELEGRAM_CHANNEL_URL:
-        return config.config.TELEGRAM_CHANNEL_URL
-    username = (config.config.TELEGRAM_CHANNEL_USERNAME or "ai_verdict").lstrip("@")
+    if _config.TELEGRAM_CHANNEL_URL:
+        return _config.TELEGRAM_CHANNEL_URL
+    username = (_config.TELEGRAM_CHANNEL_USERNAME or "ai_verdict").lstrip("@")
     return f"https://t.me/{username}"
 
 
@@ -56,7 +58,7 @@ def _reader_bot_url() -> str:
 
 
 def _contract_url() -> str:
-    return config.config.CONTRACT_AI_SYSTEM_URL or "https://contract.ai-verdict.ru"
+    return _config.CONTRACT_AI_SYSTEM_URL or "https://contract.ai-verdict.ru"
 
 
 def build_text() -> str:
