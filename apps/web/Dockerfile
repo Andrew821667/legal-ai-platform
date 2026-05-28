@@ -1,11 +1,11 @@
-FROM node:22-slim AS deps
+FROM node:25-slim AS deps
 
 WORKDIR /app/apps/web
 
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
-FROM node:22-slim AS builder
+FROM node:25-slim AS builder
 
 WORKDIR /app/apps/web
 
@@ -23,7 +23,7 @@ COPY apps/web ./
 
 RUN npm run build
 
-FROM node:22-slim AS runner
+FROM node:25-slim AS runner
 
 WORKDIR /app/apps/web
 
