@@ -324,6 +324,91 @@ class APIClient {
     );
     return response.data;
   }
+
+  // --- Revisions: side-by-side comparison ---
+
+  async listRevisions(contractId: string): Promise<RevisionListItem[]> {
+    const response = await this.client.get<RevisionListItem[]>(
+      `/api/v1/revisions/${contractId}`
+    );
+    return response.data;
+  }
+
+  async compareRevisions(req: CompareRevisionsRequest): Promise<RevisionCompareReport> {
+    const response = await this.client.post<RevisionCompareReport>(
+      '/api/v1/revisions/compare',
+      req,
+      { params: { format: 'json' } }
+    );
+    return response.data;
+  }
+
+  async downloadRevisionsCompare(
+    req: CompareRevisionsRequest,
+    format: 'xlsx' | 'pdf'
+  ): Promise<Blob> {
+    const response = await this.client.post(
+      '/api/v1/revisions/compare',
+      req,
+      { params: { format }, responseType: 'blob' }
+    );
+    return response.data;
+  }
+}
+
+// --- Revisions types ---
+
+export type RevisionPerspective = 'supplier' | 'buyer' | 'neutral';
+export type RevisionAssessment = 'plus' | 'minus' | 'neutral' | 'mixed';
+export type RevisionRiskLevel = 'low' | 'medium' | 'high';
+
+export interface RevisionListItem {
+  id: number;
+  version_number: number;
+  source: string;
+  description: string | null;
+  is_current: boolean;
+  file_name: string;
+  uploaded_at: string | null;
+}
+
+export interface CompareRevisionsRequest {
+  old_revision_id: number;
+  new_revision_id: number;
+  perspective: RevisionPerspective;
+  title?: string;
+}
+
+export interface RevisionDiffRow {
+  number: number;
+  clause_pair_label: string;
+  block: string;
+  condition: string;
+  old_text: string;
+  new_text: string;
+  change_summary: string;
+  assessment: RevisionAssessment;
+  risk_level: RevisionRiskLevel;
+  complex_impact: string;
+  recommendation: string;
+  source: string;
+}
+
+export interface RevisionDiffSummary {
+  title: string;
+  prepared_at: string;
+  documents_compared: string;
+  overall_verdict: string;
+  key_pros: string[];
+  key_risks: string[];
+  pre_signature_edits: string[];
+  source_files: Record<string, string>;
+}
+
+export interface RevisionCompareReport {
+  perspective: RevisionPerspective;
+  rows: RevisionDiffRow[];
+  summary: RevisionDiffSummary;
 }
 
 // Export singleton instance
