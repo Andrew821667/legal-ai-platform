@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import PlatformMap from "@/components/PlatformMap";
 
 export const metadata: Metadata = {
   title: "Платформа AI Verdict",
@@ -135,6 +136,8 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      <PlatformMap highlightId="site" />
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="max-w-3xl">

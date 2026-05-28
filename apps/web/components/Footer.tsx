@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
+import { PLATFORM_PARTS } from "@/lib/platformParts";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 import {
   LEGAL_BRAND,
@@ -15,7 +16,13 @@ type NavItem = {
 };
 
 export default function Footer() {
-  const navigation: Record<"company" | "services" | "resources", NavItem[]> = {
+  const platformNav: NavItem[] = PLATFORM_PARTS.map((part) => ({
+    name: part.name,
+    href: part.url,
+    external: part.external,
+  }));
+  const navigation: Record<"platform" | "company" | "services" | "resources", NavItem[]> = {
+    platform: platformNav,
     company: [
       { name: "Главная", href: "/" },
       { name: "Для юристов", href: ROUTES.forLawyers },
@@ -71,7 +78,7 @@ export default function Footer() {
   return (
     <footer className="bg-slate-800 text-slate-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8 mb-8">
           <div className="lg:col-span-2">
             <h3 className="text-2xl font-bold text-white mb-4">{LEGAL_BRAND}</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
@@ -122,6 +129,15 @@ export default function Footer() {
                 </svg>
               </a>
             </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-4">Платформа</h4>
+            <ul className="space-y-3">
+              {navigation.platform.map((item) => (
+                <li key={item.name}>{renderNavItem(item)}</li>
+              ))}
+            </ul>
           </div>
 
           <div>
