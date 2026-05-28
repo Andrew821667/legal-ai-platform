@@ -44,7 +44,7 @@ pdf2docx>=0.5.6  # PDF → DOCX с сохранением форматирова
 # OCR and additional formats
 pytesseract==0.3.10
 pdf2image==1.17.0
-Pillow==12.1.1
+Pillow==12.2.0
 striprtf==0.0.26
 odfpy==1.4.1
 pypandoc==1.13
