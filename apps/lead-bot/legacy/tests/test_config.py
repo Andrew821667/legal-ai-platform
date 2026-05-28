@@ -23,7 +23,7 @@ def test_openai_settings():
 
 
 def test_deepseek_default_model_is_provider_compatible():
-    assert default_ai_model_for_base_url("https://api.deepseek.com/v1") == "deepseek-v4-flash"
+    assert default_ai_model_for_base_url("https://api.deepseek.com/v1") == "deepseek-v4-pro"
 
 
 def test_paths():

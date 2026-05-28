@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения детерминированно:
@@ -38,7 +38,7 @@ if _ROOT_ENV is not None:
 def default_ai_model_for_base_url(openai_base_url: str) -> str:
     """Choose a provider-compatible model when env does not set one explicitly."""
     if "deepseek" in (openai_base_url or "").lower():
-        return "deepseek-v4-flash"
+        return "deepseek-v4-pro"
     return "gpt-4o-mini"
 
 
@@ -127,7 +127,7 @@ class Config:
 
         # Куда отправлять уведомления по лидам (если не задано — админу).
         leads_chat_id = os.getenv('LEADS_CHAT_ID', '').strip()
-        self.LEADS_CHAT_ID: Optional[int] = int(leads_chat_id) if leads_chat_id else None
+        self.LEADS_CHAT_ID: int | None = int(leads_chat_id) if leads_chat_id else None
         self.ALLOW_ADMIN_TEST_LEADS: bool = os.getenv('ALLOW_ADMIN_TEST_LEADS', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_URL: str = os.getenv('CORE_API_URL', '').strip()
         self.API_KEY_BOT: str = os.getenv('API_KEY_BOT', '').strip()

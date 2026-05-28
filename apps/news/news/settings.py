@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     tz_name: str = "Europe/Moscow"
     openai_api_key: str = ""
     openai_base_url: str = ""
-    news_model: str = "deepseek-chat"
+    news_model: str = "deepseek-v4-pro"
     news_top_k: int = 5
     news_schedule_slots: str = "10:00,13:00,17:00"
     news_retry_failed_after_minutes: int = 15
