@@ -93,3 +93,37 @@ async def test_forced_business_welcome_does_not_duplicate_greeting_welcome(monke
 
     assert len(sent) == 1
     assert "AI Verdict" in sent[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_business_social_message_is_not_answered(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[dict] = []
+
+    monkeypatch.setattr(business, "_is_business_processing_allowed", lambda message: True)
+    monkeypatch.setattr(business.database.db, "create_or_update_user", lambda **kwargs: 101)
+    monkeypatch.setattr(business.database.db, "get_chat_mode", lambda chat_id: "bot")
+    monkeypatch.setattr(
+        business,
+        "_should_force_business_welcome",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SystemExit("should-not-force-welcome")),
+    )
+
+    async def _fake_send_message(**kwargs):
+        sent.append(kwargs)
+
+    update = SimpleNamespace(
+        business_message=SimpleNamespace(
+            text="Андрей, поздравляем тебя с Днем Рождения! Желаем большого счастья и здоровья.",
+            from_user=SimpleNamespace(id=42, username="u42", first_name="Мария", last_name=None),
+            business_connection_id="bc-123",
+            chat=SimpleNamespace(id=5001),
+        ),
+        edited_business_message=None,
+        message=None,
+        update_id=777,
+    )
+    context = SimpleNamespace(bot=SimpleNamespace(send_message=_fake_send_message), user_data={})
+
+    await business.handle_business_message(update, context)
+
+    assert sent == []

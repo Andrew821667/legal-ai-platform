@@ -34,6 +34,14 @@ if _LOCAL_ENV.exists():
 if _ROOT_ENV is not None:
     load_dotenv(_ROOT_ENV, override=False)
 
+
+def default_ai_model_for_base_url(openai_base_url: str) -> str:
+    """Choose a provider-compatible model when env does not set one explicitly."""
+    if "deepseek" in (openai_base_url or "").lower():
+        return "deepseek-v4-flash"
+    return "gpt-4o-mini"
+
+
 class Config:
     """Класс конфигурации"""
 
@@ -68,7 +76,11 @@ class Config:
         # Настройки AI
         # Поддерживаем оба имени переменной для обратной совместимости:
         # AI_MODEL и OPENAI_MODEL.
-        self.AI_MODEL: str = os.getenv('AI_MODEL') or os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+        self.AI_MODEL: str = (
+            os.getenv('AI_MODEL')
+            or os.getenv('OPENAI_MODEL')
+            or default_ai_model_for_base_url(self.OPENAI_BASE_URL)
+        )
         self.OPENAI_MODEL: str = self.AI_MODEL
         self.MAX_TOKENS: int = int(os.getenv('MAX_TOKENS', '1000'))
         self.MAX_COMPLETION_TOKENS: int = int(os.getenv('MAX_COMPLETION_TOKENS', str(self.MAX_TOKENS)))

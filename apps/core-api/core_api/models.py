@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text as sa_text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text as sa_text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -132,7 +132,7 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role_enum"), nullable=False)
-    telegram_id: Mapped[int | None] = mapped_column(nullable=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_name: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -183,7 +183,7 @@ class Lead(Base):
     )
     source: Mapped[LeadSource] = mapped_column(Enum(LeadSource, name="lead_source_enum"), nullable=False)
     legacy_lead_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact: Mapped[str | None] = mapped_column(Text, nullable=True)
     company: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -284,7 +284,7 @@ class SpecialConsultationOrder(Base):
         default=SpecialConsultationOrderStatus.requested,
         server_default=sa_text("'requested'"),
     )
-    telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_contact: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_email: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -445,7 +445,7 @@ class ReaderPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     topics: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default=sa_text("'[]'::jsonb"))
     digest_frequency: Mapped[str] = mapped_column(
         String(50), nullable=False, default="never", server_default=sa_text("'never'")
@@ -471,7 +471,7 @@ class ReaderSavedPost(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("scheduled_posts.id"), nullable=False)
 
     __table_args__ = (
@@ -486,7 +486,7 @@ class ReaderMiniAppEvent(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    telegram_user_id: Mapped[int] = mapped_column(nullable=False)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="miniapp", server_default=sa_text("'miniapp'"))
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     screen: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -551,7 +551,7 @@ class PostFeedbackSignal(Base):
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     telegram_chat_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    telegram_user_id: Mapped[int | None] = mapped_column(nullable=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     actor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=sa_text("'{}'::jsonb"))
 

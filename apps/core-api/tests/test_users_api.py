@@ -103,6 +103,50 @@ def test_upsert_and_list_users() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_upsert_and_list_user_with_large_telegram_id() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.users.large-telegram-id"
+    raw_key = _create_api_key(Scope.bot, api_key_name)
+    telegram_id = 5_690_579_174
+    created_id: str | None = None
+
+    try:
+        created = client.post(
+            "/api/v1/users",
+            headers={"X-API-Key": raw_key},
+            json={
+                "telegram_id": telegram_id,
+                "username": "large_tg_user",
+                "first_name": "Large",
+                "last_name": "Telegram",
+            },
+        )
+        assert created.status_code == 200
+        created_payload = created.json()
+        created_id = created_payload["id"]
+        assert created_payload["telegram_id"] == telegram_id
+
+        listed = client.get(
+            f"/api/v1/users?telegram_id={telegram_id}&limit=1",
+            headers={"X-API-Key": raw_key},
+        )
+        assert listed.status_code == 200
+        rows = listed.json()
+        assert len(rows) == 1
+        assert rows[0]["telegram_id"] == telegram_id
+    finally:
+        db = SessionLocal()
+        try:
+            if created_id:
+                db.execute(delete(User).where(User.id == created_id))
+            else:
+                db.execute(delete(User).where(User.telegram_id == telegram_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_admin_user_data_operations_by_telegram_id() -> None:
     client = TestClient(app)
     admin_key_name = "pytest.users.admin.ops"
