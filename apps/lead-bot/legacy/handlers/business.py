@@ -20,8 +20,6 @@ from config import get_config
 config = get_config()
 import utils
 import email_sender
-import security
-import prompts
 import content
 import funnel
 from .constants import (
@@ -333,6 +331,34 @@ def _looks_like_plain_greeting(text: str) -> bool:
     return any(compact.startswith(prefix) for prefix in greeting_prefixes)
 
 
+def _looks_like_personal_social_message(text: str) -> bool:
+    normalized = normalize_button_text(text).strip().lower()
+    if not normalized:
+        return False
+    compact = re.sub(r"[^\w\sа-яё]", " ", normalized, flags=re.IGNORECASE)
+    compact = re.sub(r"\s+", " ", compact).strip()
+    social_patterns = (
+        "с днем рождения",
+        "с днём рождения",
+        "днем рождения",
+        "днём рождения",
+        "поздравляю",
+        "поздравляем",
+        "поздравить",
+        "поздравления",
+        "с праздником",
+        "с новым годом",
+        "с рождеством",
+        "желаю счастья",
+        "желаем счастья",
+        "желаю здоровья",
+        "желаем здоровья",
+        "желаю успехов",
+        "желаем успехов",
+    )
+    return any(pattern in compact for pattern in social_patterns)
+
+
 def _looks_like_return_to_bot(text: str) -> bool:
     normalized = normalize_button_text(text).strip().lower()
     return normalized in {
@@ -537,6 +563,10 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         has_pending_contact = bool(pending_contact)
         
         forced_welcome_sent = False
+
+        if _looks_like_personal_social_message(text):
+            logger.info("[Business] Skip personal/social message for user %s", user_id)
+            return
 
         # Обработка команды /start для бизнес-чата
         if text == "/start":

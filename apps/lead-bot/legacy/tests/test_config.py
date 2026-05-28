@@ -1,8 +1,7 @@
 """
 Тесты для config.py - проверка корректности конфигурации
 """
-import pytest
-from config import get_config
+from config import default_ai_model_for_base_url, get_config
 
 # Создаем экземпляр конфигурации для тестов
 config = get_config()
@@ -21,6 +20,10 @@ def test_openai_settings():
     assert config.MAX_TOKENS > 0, "MAX_TOKENS должен быть положительным"
     assert config.MAX_COMPLETION_TOKENS > 0, "MAX_COMPLETION_TOKENS должен быть положительным"
     assert 0 <= config.TEMPERATURE <= 2, "TEMPERATURE должна быть между 0 и 2"
+
+
+def test_deepseek_default_model_is_provider_compatible():
+    assert default_ai_model_for_base_url("https://api.deepseek.com/v1") == "deepseek-v4-flash"
 
 
 def test_paths():
