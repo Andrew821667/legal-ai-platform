@@ -3,4 +3,4 @@ python-dotenv>=1.2.2
 openai>=1.0.0
 pytest>=9.0.3
 pytest-asyncio>=1.4.0
-numpy>=1.21.0
+numpy>=2.4.6
