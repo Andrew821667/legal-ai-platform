@@ -36,6 +36,7 @@ services:
     restart: unless-stopped
 
   web:
+    image: ${WEB_IMAGE:-legal-ai-web:local}
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
