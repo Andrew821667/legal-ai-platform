@@ -618,7 +618,8 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             
             await context.bot.send_message(
                 chat_id=message.chat.id,
-                text="История диалога очищена. Начнем сначала!\n\nЧем могу помочь вам сегодня?",
+                text=content.RESET_MESSAGE,
+                parse_mode="HTML",
                 reply_markup=_business_menu_markup(),
                 business_connection_id=message.business_connection_id
             )

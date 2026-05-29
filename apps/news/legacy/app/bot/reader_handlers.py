@@ -74,6 +74,12 @@ _WEB_TRANSITION_VPN_ALERT = (
     "Перед открытием отключите VPN/прокси в Telegram. "
     "Иначе сайт может не открыться."
 )
+_PLATFORM_READER_INTRO = (
+    "👋 <b>Добро пожаловать в reader-бот AI Verdict.</b>\n\n"
+    "Это не отдельный новостной бот, а часть платформы AI Verdict: сайт, "
+    "Contract AI, ассистент, канал, reader-бот и Mini App работают как один контур.\n\n"
+    "Здесь настраивается персональная лента материалов и разборов Legal AI."
+)
 
 
 def _web_transition_alert(url: str) -> str:
@@ -1309,8 +1315,7 @@ async def start_onboarding(message: Message, state: FSMContext, db: AsyncSession
     ])
 
     await message.answer(
-        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
-        "Давайте настроим вашу персональную ленту новостей.\n\n"
+        f"{_PLATFORM_READER_INTRO}\n\n"
         "<b>1️⃣ Какие темы вас интересуют?</b> (выберите несколько)",
         parse_mode="HTML",
         reply_markup=keyboard
@@ -1375,8 +1380,7 @@ async def ask_expertise(callback: CallbackQuery, state: FSMContext, db: AsyncSes
     ])
 
     await callback.message.edit_text(
-        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
-        "Давайте настроим вашу персональную ленту новостей.\n\n"
+        f"{_PLATFORM_READER_INTRO}\n\n"
         "<b>2️⃣ Ваш уровень экспертизы?</b>",
         parse_mode="HTML",
         reply_markup=keyboard
@@ -1400,8 +1404,7 @@ async def save_expertise(callback: CallbackQuery, state: FSMContext):
     ])
 
     await callback.message.edit_text(
-        "👋 <b>Добро пожаловать в AI Verdict News!</b>\n\n"
-        "Давайте настроим вашу персональную ленту новостей.\n\n"
+        f"{_PLATFORM_READER_INTRO}\n\n"
         "<b>3️⃣ Как часто получать дайджесты?</b>",
         parse_mode="HTML",
         reply_markup=keyboard
