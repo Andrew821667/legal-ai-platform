@@ -25,8 +25,13 @@ services=(
 
 if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
   docker_config_cleanup="$(mktemp -d)"
-  docker_source_config="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+  docker_source_dir="${DOCKER_CONFIG:-$HOME/.docker}"
+  docker_source_config="$docker_source_dir/config.json"
   docker_auth="$(printf '%s:%s' "$GHCR_USERNAME" "$GHCR_TOKEN" | base64 | tr -d '\n')"
+
+  if [ -d "$docker_source_dir/contexts" ]; then
+    cp -R "$docker_source_dir/contexts" "$docker_config_cleanup/contexts"
+  fi
 
   if command -v jq >/dev/null 2>&1 && [ -f "$docker_source_config" ]; then
     jq --arg auth "$docker_auth" '
