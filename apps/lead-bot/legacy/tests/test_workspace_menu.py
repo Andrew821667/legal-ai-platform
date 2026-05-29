@@ -70,7 +70,8 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
         include_context_intro=True,
     )
     assert "AI Verdict" in first_touch
-    assert "это ИИ-помощник по автоматизации юридических процессов" in first_touch
+    assert "это полноценная платформа и ИИ-помощник" in first_touch
+    assert "Можно пользоваться всем контуром" in first_touch
     assert "С чего удобно начать" in first_touch
     assert "Проверить договор" in first_touch
 
@@ -103,8 +104,9 @@ def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "это ИИ-помощник по автоматизации юридических процессов" in welcome
+    assert "это полноценная платформа и ИИ-помощник" in welcome
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in welcome
+    assert "всеми элементами платформы" in welcome
     assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome
     assert "💬 <b>Необязательно ждать подходящую кнопку" in welcome
@@ -116,6 +118,7 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in start_entry
+    assert "Можно пользоваться всем контуром" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
     assert "Сейчас активен:" in start_entry
     assert "💬 <b>Необязательно ждать подходящую кнопку" in start_entry

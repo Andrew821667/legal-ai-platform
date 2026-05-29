@@ -72,6 +72,7 @@ from news.callbacks import (
     theme_from_context as _theme_from_context,
 )
 from news.active_queue import rebalance_active_publish_queue
+from news.channel_pin import build_channel_pin_keyboard, build_channel_pin_text
 from news.feedback import classify_comment_signal, summarize_reaction_counts
 from news.generate import collect_generation_previews
 from news.llm_writer import LLMNewsWriter, build_manual_footer, compose_manual_post_html
@@ -5277,6 +5278,7 @@ class NewsAdminBot:
                 BotCommand("start", "Открыть рабочий стол"),
                 BotCommand("newpost", "Создать пост"),
                 BotCommand("calendar", "Календарь публикаций"),
+                BotCommand("channel_pin", "Черновик закрепа"),
                 BotCommand("generate_now", "Принудительная генерация"),
                 BotCommand("help", "Помощь"),
             ]
@@ -5301,6 +5303,21 @@ class NewsAdminBot:
         except Exception as exc:
             logger.exception("admin_start_failed", extra={"error": str(exc)})
             await update.effective_message.reply_text(f"Ошибка запуска рабочего стола: {exc}", reply_markup=_main_menu_markup())
+
+    async def cmd_channel_pin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        _ = context
+        if not await self._ensure_admin(update):
+            return
+        await update.effective_message.reply_text(
+            build_channel_pin_text(),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=build_channel_pin_keyboard(),
+        )
+        await update.effective_message.reply_text(
+            "Это черновик авторского закрепа. Бот не публикует и не закрепляет его сам, "
+            "чтобы сообщение осталось от имени Андрея.",
+        )
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         _ = context
@@ -8005,6 +8022,7 @@ class NewsAdminBot:
         app.add_handler(CommandHandler("posts", self.cmd_posts))
         app.add_handler(CommandHandler("queue", self.cmd_queue))
         app.add_handler(CommandHandler("workers", self.cmd_workers))
+        app.add_handler(CommandHandler("channel_pin", self.cmd_channel_pin))
         app.add_handler(CommandHandler("cancel", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("cancel_edit", self.cmd_cancel_edit))
         app.add_handler(CommandHandler("help", self.cmd_help))

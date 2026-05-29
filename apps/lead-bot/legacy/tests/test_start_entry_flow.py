@@ -41,7 +41,8 @@ async def test_start_command_sends_platform_map_and_start_entry(monkeypatch: pyt
     await user_commands.start_command(update, context)
 
     assert len(messages) == 2
-    assert "Платформа состоит из нескольких связанных частей" in messages[0][0]
+    assert "это не отдельный бот, а полноценная платформа" in messages[0][0]
+    assert "Все части связаны между собой" in messages[0][0]
     assert messages[0][1] is not None
     assert "С чего удобно начать" in messages[1][0]
     assert "Проверить договор" in messages[1][0]
