@@ -24,6 +24,14 @@ services=(
 )
 
 if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
+  docker_config_cleanup=""
+  if [ -z "${DOCKER_CONFIG:-}" ]; then
+    docker_config_cleanup="$(mktemp -d)"
+    export DOCKER_CONFIG="$docker_config_cleanup"
+    printf '{ "auths": {} }\n' > "$DOCKER_CONFIG/config.json"
+    trap 'rm -rf "$docker_config_cleanup"' EXIT
+  fi
+
   echo "Logging in to GHCR..."
   printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 fi
