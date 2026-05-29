@@ -115,7 +115,8 @@ services:
         ]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 12
+      start_period: 180s
     mem_limit: 512m
     memswap_limit: 512m
     restart: unless-stopped
