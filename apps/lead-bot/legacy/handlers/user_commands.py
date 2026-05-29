@@ -432,8 +432,8 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("Conversation reset for user %s", user.id)
 
             await update.message.reply_text(
-                "История диалога очищена. Начнем сначала!\n\n"
-                "Чем могу помочь вам сегодня?"
+                content.RESET_MESSAGE,
+                parse_mode="HTML",
             )
         else:
             await start_command(update, context)

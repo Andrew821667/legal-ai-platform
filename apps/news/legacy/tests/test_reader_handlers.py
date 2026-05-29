@@ -48,6 +48,14 @@ def test_get_article_keyboard_includes_source_links() -> None:
     assert any(button.text == "📣 Пост в канале" and button.url == "https://t.me/ai_verdict/42" for button in buttons)
 
 
+def test_reader_onboarding_intro_explains_platform_context() -> None:
+    intro = reader_handlers._PLATFORM_READER_INTRO
+    assert "часть платформы AI Verdict" in intro
+    assert "Contract AI" in intro
+    assert "ассистент" in intro
+    assert "Mini App" in intro
+
+
 def test_build_article_detail_text_truncates_and_sanitizes() -> None:
     article = _publication(text=("«Очень длинный» текст… " * 400))
 

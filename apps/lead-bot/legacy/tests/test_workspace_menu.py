@@ -70,8 +70,11 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
         include_context_intro=True,
     )
     assert "AI Verdict" in first_touch
-    assert "это полноценная платформа и ИИ-помощник" in first_touch
-    assert "Можно пользоваться всем контуром" in first_touch
+    assert "это единая платформа для юридической AI-работы" in first_touch
+    assert "а не отдельный бот" in first_touch
+    assert "Contract AI" in first_touch
+    assert "reader-бот" in first_touch
+    assert "Mini App" in first_touch
     assert "С чего удобно начать" in first_touch
     assert "Проверить договор" in first_touch
 
@@ -104,9 +107,12 @@ def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "это полноценная платформа и ИИ-помощник" in welcome
+    assert "это единая платформа для юридической AI-работы" in welcome
+    assert "а не отдельный бот" in welcome
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in welcome
-    assert "всеми элементами платформы" in welcome
+    assert "Contract AI" in welcome
+    assert "reader-бот" in welcome
+    assert "Mini App" in welcome
     assert "вопросы к юристам приходят хаотично" in welcome
     assert "Можно начать без специальных терминов" in welcome
     assert "💬 <b>Необязательно ждать подходящую кнопку" in welcome
@@ -118,10 +124,33 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
     assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in start_entry
-    assert "Можно пользоваться всем контуром" in start_entry
+    assert "Вам доступен весь контур платформы" in start_entry
+    assert "Contract AI" in start_entry
+    assert "reader-бот" in start_entry
+    assert "Mini App" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
     assert "Сейчас активен:" in start_entry
     assert "💬 <b>Необязательно ждать подходящую кнопку" in start_entry
+
+
+def test_help_message_keeps_platform_context() -> None:
+    assert "это единая платформа для юридической AI-работы" in content.HELP_MESSAGE
+    assert "а не отдельный бот" in content.HELP_MESSAGE
+    assert "Contract AI" in content.HELP_MESSAGE
+    assert "reader-бот" in content.HELP_MESSAGE
+    assert "Mini App" in content.HELP_MESSAGE
+
+
+def test_reset_message_returns_user_to_platform_assistant() -> None:
+    assert "ассистенте платформы <b>AI Verdict</b>" in content.RESET_MESSAGE
+    assert "другие элементы платформы" in content.RESET_MESSAGE
+
+
+def test_workspace_text_links_platform_elements() -> None:
+    workspace = content.build_workspace_text()
+    assert "основные разделы платформы" in workspace
+    assert "Contract AI" in workspace
+    assert "Mini App как одной системой" in workspace
 
 
 def test_contract_module_text_is_clear_for_new_user() -> None:
