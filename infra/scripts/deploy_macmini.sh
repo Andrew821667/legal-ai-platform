@@ -25,12 +25,31 @@ services=(
 
 if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
   docker_config_cleanup="$(mktemp -d)"
+  docker_source_config="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+  docker_auth="$(printf '%s:%s' "$GHCR_USERNAME" "$GHCR_TOKEN" | base64 | tr -d '\n')"
+
+  if command -v jq >/dev/null 2>&1 && [ -f "$docker_source_config" ]; then
+    jq --arg auth "$docker_auth" '
+      del(.credsStore, .credHelpers)
+      | .auths = (.auths // {})
+      | .auths["ghcr.io"] = {"auth": $auth}
+    ' "$docker_source_config" > "$docker_config_cleanup/config.json"
+  else
+    docker_context="$(docker context show 2>/dev/null || true)"
+    {
+      printf '{\n'
+      printf '  "auths": {"ghcr.io": {"auth": "%s"}}' "$docker_auth"
+      if [ -n "$docker_context" ]; then
+        printf ',\n  "currentContext": "%s"' "$docker_context"
+      fi
+      printf '\n}\n'
+    } > "$docker_config_cleanup/config.json"
+  fi
+
   export DOCKER_CONFIG="$docker_config_cleanup"
-  printf '{ "auths": {} }\n' > "$DOCKER_CONFIG/config.json"
   trap 'rm -rf "$docker_config_cleanup"' EXIT
 
-  echo "Logging in to GHCR..."
-  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+  echo "Configured GHCR credentials for this deploy."
 fi
 
 cd "$APP_DIR"
