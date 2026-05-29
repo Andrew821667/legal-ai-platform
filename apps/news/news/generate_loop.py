@@ -56,9 +56,11 @@ def _cleanup_reason_for_post(row: dict[str, object]) -> str:
     return "expired_editorial_cleanup"
 
 
-def _post_publish_at_is_future(row: dict[str, object], now_local: datetime) -> bool:
+def _expiration_reference_at(row: dict[str, object]) -> datetime | None:
     publish_at = _parse_post_datetime(str(row.get("publish_at") or ""))
-    return publish_at is not None and publish_at > now_local
+    if publish_at is not None:
+        return publish_at
+    return _parse_post_datetime(str(row.get("created_at") or ""))
 
 
 def _collect_expired_editorial_posts(
@@ -83,13 +85,11 @@ def _collect_expired_editorial_posts(
             break
         for row in rows:
             post_id = str(row.get("id") or "").strip()
-            created_at = _parse_post_datetime(str(row.get("created_at") or ""))
-            if not post_id or created_at is None:
-                continue
-            if _post_publish_at_is_future(row, now_local):
+            expiration_reference_at = _expiration_reference_at(row)
+            if not post_id or expiration_reference_at is None:
                 continue
             cutoff = now_local - timedelta(days=_retention_days_for_post(row, retention_days))
-            if created_at > cutoff:
+            if expiration_reference_at > cutoff:
                 continue
             expired.append((post_id, _cleanup_reason_for_post(row)))
         if len(rows) < _CLEANUP_BATCH_SIZE:

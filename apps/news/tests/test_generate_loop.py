@@ -86,7 +86,7 @@ def test_cleanup_expired_editorial_posts_keeps_future_scheduled_review() -> None
                 {
                     "id": "past-review",
                     "created_at": _iso_days_ago(6),
-                    "publish_at": _iso_days_ago(1),
+                    "publish_at": _iso_days_ago(4),
                     "format_type": "daily",
                 },
             ],
@@ -97,6 +97,27 @@ def test_cleanup_expired_editorial_posts_keeps_future_scheduled_review() -> None
 
     assert cleaned == 1
     assert client.patched == [("past-review", {"status": "failed", "last_error": "expired_editorial_cleanup"})]
+
+
+def test_cleanup_expired_editorial_posts_keeps_recent_due_review_by_publish_at() -> None:
+    client = _FakeClient(
+        {
+            ("draft", 0): [],
+            ("review", 0): [
+                {
+                    "id": "due-review",
+                    "created_at": _iso_days_ago(6),
+                    "publish_at": _iso_days_ago(1),
+                    "format_type": "daily",
+                },
+            ],
+        }
+    )
+
+    cleaned = _cleanup_expired_editorial_posts(client, retention_days=3)
+
+    assert cleaned == 0
+    assert client.patched == []
 
 
 def test_cleanup_expired_editorial_posts_scans_later_pages_for_shorter_retention() -> None:
