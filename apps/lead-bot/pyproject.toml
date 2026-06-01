@@ -6,7 +6,7 @@ dependencies = [
     "shared",
     "python-telegram-bot[job-queue]>=21.9",
     "requests>=2.33.0",
-    "pydantic-settings>=2.14.0",
+    "pydantic-settings>=2.14.1",
 ]
 
 [tool.uv.sources]
