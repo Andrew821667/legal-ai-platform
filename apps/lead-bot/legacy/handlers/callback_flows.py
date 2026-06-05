@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import reply_button as KeyboardButton
@@ -21,28 +21,14 @@ from .markup import (
     clip_for_edit as _clip_for_edit,
     documents_panel_markup as _documents_panel_markup,
     documents_panel_text as _documents_panel_text,
+    web_open_markup as _web_open_markup,
+    web_url_markup as _web_url_markup,
     workspace_markup_for as _workspace_markup_for,
 )
 from .start_payloads import process_pending_start_payload
 
 config = get_config()
 logger = logging.getLogger(__name__)
-
-
-_WEB_OPEN_LABELS = {
-    "contract_ai": "Открыть Contract AI",
-    "privacy": "Открыть политику ПД",
-    "transborder": "Открыть условия передачи",
-    "user_agreement": "Открыть соглашение",
-    "ai_policy": "Открыть политику ИИ",
-    "marketing_consent": "Открыть согласие на рассылки",
-}
-
-
-def _web_open_markup(target: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть веб-страницу"), callback_data=f"open_web:{target}")]]
-    )
 
 
 async def handle_open_web_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,9 +61,7 @@ async def handle_open_web_callback(update: Update, context: ContextTypes.DEFAULT
             "<b>Переход во внешний веб-адрес</b>\n\n"
             f"Адрес: <code>{content._e(url)}</code>\n\n"
             "Отключите VPN/прокси в Telegram, затем нажмите кнопку ниже.",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть"), url=url)]]
-            ),
+            reply_markup=_web_url_markup(target, url),
             action=f"open_web_{target}",
         )
 

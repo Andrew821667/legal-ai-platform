@@ -13,7 +13,7 @@ import database
 import platform_map
 import utils
 from config import get_config
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from .markup import (
@@ -23,6 +23,7 @@ from .markup import (
     quick_nav_markup_for as _quick_nav_markup_for,
     start_markup_for as _start_markup_for,
     transborder_consent_markup as _transborder_consent_markup,
+    web_open_markup as _web_open_markup,
     workspace_markup_for as _workspace_markup_for,
 )
 from .start_payloads import (
@@ -34,21 +35,6 @@ from .start_payloads import (
 
 config = get_config()
 logger = logging.getLogger(__name__)
-
-
-_WEB_OPEN_LABELS = {
-    "privacy": "Открыть политику ПД",
-    "transborder": "Открыть условия передачи",
-    "user_agreement": "Открыть соглашение",
-    "ai_policy": "Открыть политику ИИ",
-    "marketing_consent": "Открыть согласие на рассылки",
-}
-
-
-def _web_open_markup(target: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(_WEB_OPEN_LABELS.get(target, "Открыть веб-страницу"), callback_data=f"open_web:{target}")]]
-    )
 
 
 def _get_local_user_and_lead(telegram_id: int) -> tuple[dict | None, dict | None]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import content
 from handlers.constants import build_workspace_inline_menu
+from handlers.markup import web_open_markup, web_url_markup
 
 
 def test_workspace_button_maps_to_dashboard() -> None:
@@ -30,6 +31,16 @@ def test_profile_and_documents_buttons_resolve_menu_keys() -> None:
     documents_response = content.menu_response_by_button("📚 Документы")
     assert "Профиль" in profile_response
     assert "Документы" in documents_response
+
+
+def test_document_web_markups_keep_back_to_documents() -> None:
+    open_markup = web_open_markup("privacy")
+    url_markup = web_url_markup("privacy", "https://ai-verdict.ru/privacy")
+
+    assert open_markup.inline_keyboard[0][0].callback_data == "open_web:privacy"
+    assert open_markup.inline_keyboard[1][0].callback_data == "doc_menu"
+    assert url_markup.inline_keyboard[0][0].url == "https://ai-verdict.ru/privacy"
+    assert url_markup.inline_keyboard[1][0].callback_data == "doc_menu"
 
 
 def test_offer_profile_button_and_override() -> None:

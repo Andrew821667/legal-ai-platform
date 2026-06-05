@@ -47,6 +47,39 @@ def documents_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(DOCUMENTS_MENU)
 
 
+WEB_OPEN_LABELS = {
+    "contract_ai": "Открыть Contract AI",
+    "privacy": "Открыть политику ПД",
+    "transborder": "Открыть условия передачи",
+    "user_agreement": "Открыть соглашение",
+    "ai_policy": "Открыть политику ИИ",
+    "marketing_consent": "Открыть согласие на рассылки",
+}
+
+
+def web_open_markup(target: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    WEB_OPEN_LABELS.get(target, "Открыть веб-страницу"),
+                    callback_data=f"open_web:{target}",
+                )
+            ],
+            [InlineKeyboardButton("⬅️ К списку документов", callback_data="doc_menu")],
+        ]
+    )
+
+
+def web_url_markup(target: str, url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(WEB_OPEN_LABELS.get(target, "Открыть"), url=url)],
+            [InlineKeyboardButton("⬅️ К списку документов", callback_data="doc_menu")],
+        ]
+    )
+
+
 def consultation_contact_markup() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
