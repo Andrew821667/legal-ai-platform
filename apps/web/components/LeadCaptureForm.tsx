@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Check, LockKeyhole, MessageSquareText, Send, ShieldCheck } from "lucide-react";
 
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 import TurnstileWidget from "@/components/TurnstileWidget";
@@ -108,6 +109,7 @@ export default function LeadCaptureForm() {
           segment,
           message,
           offer,
+          consentAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
           [HONEYPOT_FIELD_NAME]: honeypotValue,
@@ -140,20 +142,48 @@ export default function LeadCaptureForm() {
   };
 
   return (
-    <section id="lead-form" className="py-20 bg-white">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-slate-200 shadow-lg bg-slate-50 p-6 md:p-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
-            Оставить заявку
-          </h2>
-          <p className="text-slate-600 mb-8">
-            Запрос: <span className="font-semibold">{offerLabels[offer]}</span>. Ответим в Telegram
-            или по телефону.
-          </p>
+    <section id="lead-form" className="bg-slate-950 py-16 md:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="grid overflow-hidden rounded-lg border border-slate-700 bg-slate-900 lg:grid-cols-[0.82fr_1.18fr]">
+          <div className="border-b border-slate-700 p-6 sm:p-8 lg:border-b-0 lg:border-r lg:p-10">
+            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-amber-400 text-slate-950">
+              <MessageSquareText size={22} aria-hidden="true" />
+            </div>
+            <p className="mt-7 text-xs font-semibold uppercase text-amber-300">Прямой контакт</p>
+            <h2 className="mt-2 text-3xl font-bold text-white md:text-4xl">
+              Обсудить задачу
+            </h2>
+            <p className="mt-4 max-w-md text-base leading-7 text-slate-300">
+              Текущий запрос: <span className="font-semibold text-white">{offerLabels[offer]}</span>.
+              Ответим в Telegram, по телефону или email.
+            </p>
 
-          <LegalDisclaimer variant="panel" className="mb-6" />
+            <div className="mt-8 space-y-4 border-t border-slate-700 pt-7">
+              <div className="flex gap-3">
+                <ShieldCheck className="mt-0.5 shrink-0 text-emerald-400" size={20} aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-white">Согласие фиксируется на сервере</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">Дата и версия документов сохраняются вместе с заявкой.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <LockKeyhole className="mt-0.5 shrink-0 text-sky-400" size={20} aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-white">Без скрытой подписки</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">Контакт используется для ответа по вашему запросу.</p>
+                </div>
+              </div>
+            </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+            <LegalDisclaimer variant="panel" className="mt-8" />
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-6 bg-white p-6 sm:p-8 lg:p-10">
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Шаг 1 из 2</p>
+              <h3 className="mt-1 text-xl font-bold text-slate-950">Контакт и задача</h3>
+            </div>
+
             <label
               className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
               aria-hidden="true"
@@ -168,21 +198,21 @@ export default function LeadCaptureForm() {
               />
             </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-1">Имя</span>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Имя</span>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Андрей"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
                 />
               </label>
 
               <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-1">
-                  Контакт (обязательно)
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Контакт <span className="text-red-600">*</span>
                 </span>
                 <input
                   type="text"
@@ -190,68 +220,96 @@ export default function LeadCaptureForm() {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder="+7..., email, @telegram"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
                 />
               </label>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Тип запроса</span>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  ["consultation", "Консультация"],
+                  ["demo", "Разбор"],
+                  ["checklist", "Гайд"],
+                  ["sample_report", "Отчёт"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setOffer(value)}
+                    className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold transition ${
+                      offer === value
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[0.42fr_0.58fr]">
               <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-1">Сегмент</span>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Кто вы</span>
                 <select
                   value={segment}
                   onChange={(e) => setSegment(e.target.value as LeadSegment)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
                 >
                   <option value="other">Другое</option>
-                  <option value="inhouse">Юридический отдел компании</option>
+                  <option value="inhouse">Юридический отдел</option>
                   <option value="law_firm">Юридическая фирма</option>
                   <option value="entrepreneur">Предприниматель</option>
                 </select>
               </label>
-
               <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-1">Тип запроса</span>
-                <select
-                  value={offer}
-                  onChange={(e) => setOffer(e.target.value as LeadOffer)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                >
-                  <option value="consultation">Консультация</option>
-                  <option value="checklist">Гайд</option>
-                  <option value="demo">Демонстрационный разбор договора</option>
-                  <option value="sample_report">Пример отчета по договору</option>
-                  <option value="unknown">Общий запрос</option>
-                </select>
-              </label>
-            </div>
-
-            <label className="block">
-              <span className="block text-sm font-medium text-slate-700 mb-1">Комментарий</span>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Комментарий</span>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Кратко опишите задачу"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  className="w-full resize-none rounded-md border border-slate-300 bg-white px-3.5 py-3 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
               />
-            </label>
+              </label>
+            </div>
 
-            <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <label
+              className={`flex cursor-pointer items-start gap-4 rounded-md border p-4 transition ${
+                consentAccepted
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-amber-400 bg-amber-50 hover:border-amber-500"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={consentAccepted}
                 onChange={(e) => setConsentAccepted(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                className="sr-only"
               />
-              <span className="text-sm text-slate-600">
-                Я соглашаюсь на обработку персональных данных и, при использовании зарубежной
-                инфраструктуры аналитики и хостинга, на возможную трансграничную передачу данных в
-                объеме, необходимом для работы сайта. Подробнее:{" "}
-                <Link href="/privacy" className="text-amber-700 underline">
-                  политика конфиденциальности
-                </Link>
-                .
+              <span
+                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border ${
+                  consentAccepted
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-amber-500 bg-white text-transparent"
+                }`}
+              >
+                <Check size={16} strokeWidth={3} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-bold text-slate-950">
+                  {consentAccepted ? "Согласие принято" : "Требуется ваше согласие"}
+                </span>
+                <span className="mt-1 block text-sm leading-6 text-slate-600">
+                  Разрешаю обработку персональных данных и необходимую трансграничную передачу.
+                  Условия описаны в{" "}
+                  <Link href="/privacy" target="_blank" className="font-semibold text-slate-950 underline">
+                    политике конфиденциальности
+                  </Link>
+                  .
+                </span>
               </span>
             </label>
 
@@ -262,29 +320,31 @@ export default function LeadCaptureForm() {
             />
 
             {error && (
-              <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div role="alert" className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <div role="status" className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                 {success}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full md:w-auto inline-flex items-center justify-center rounded-lg bg-amber-600 px-6 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-            >
-              {isSubmitting ? "Отправка..." : "Отправить заявку"}
-            </button>
+            <div className="flex flex-col gap-3 border-t border-slate-200 pt-1 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-5 text-slate-500">
+                Отправка доступна после принятия политики.
+              </p>
+              <button
+                type="submit"
+                disabled={isSubmitting || !consentAccepted}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-amber-500 px-6 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 sm:w-auto"
+              >
+                {isSubmitting ? "Отправляем..." : "Отправить заявку"}
+                {!isSubmitting && <Send size={17} aria-hidden="true" />}
+              </button>
+            </div>
           </form>
-
-          <p className="text-xs text-slate-500 mt-4">
-            Форму используем только для связи по вашему запросу и первичной квалификации задачи.
-          </p>
         </div>
       </div>
     </section>

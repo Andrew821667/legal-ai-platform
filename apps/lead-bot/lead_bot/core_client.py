@@ -24,6 +24,25 @@ class CoreClient:
             timeout=self.timeout,
         )
 
+    def post_user(self, payload: dict, idempotency_key: str | None = None) -> requests.Response:
+        headers = dict(self._headers)
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        return requests.post(
+            f"{self.base_url}/api/v1/users",
+            json=payload,
+            headers=headers,
+            timeout=self.timeout,
+        )
+
+    def get_users(self, params: dict) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/api/v1/users",
+            params=params,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+
     def post_event(self, payload: dict, idempotency_key: str | None = None) -> requests.Response:
         headers = dict(self._headers)
         if idempotency_key:

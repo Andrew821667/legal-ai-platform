@@ -32,6 +32,7 @@ export interface RegisterRequest {
   email: string;
   name: string;
   password: string;
+  legal_consent_accepted?: boolean;
 }
 
 export interface DemoActivateRequest {
@@ -46,6 +47,14 @@ export interface AuthResponse {
   refresh_token: string;
   token_type: string;
   expires_in: number;
+}
+
+export interface RegisterResponse {
+  user_id: string;
+  email: string;
+  name: string;
+  access_token: string;
+  message: string;
 }
 
 export interface DemoLinkResponse {
@@ -142,9 +151,8 @@ class APIClient {
 
   // ==================== Authentication ====================
 
-  async register(data: RegisterRequest): Promise<AuthResponse> {
-    const response = await this.client.post<AuthResponse>('/api/v1/auth/register', data);
-    this.setTokens(response.data.access_token, response.data.refresh_token);
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    const response = await this.client.post<RegisterResponse>('/api/v1/auth/register', data);
     return response.data;
   }
 
@@ -192,6 +200,14 @@ class APIClient {
     } finally {
       this.clearTokens();
     }
+  }
+
+  async acceptLegalConsent(): Promise<{ accepted: boolean; version: string }> {
+    const response = await this.client.post('/api/v1/auth/legal-consent');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('contract_ai_legal_consent_v1', 'accepted');
+    }
+    return response.data;
   }
 
   async refreshToken(): Promise<boolean> {

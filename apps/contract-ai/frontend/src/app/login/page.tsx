@@ -1,9 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import {
+  ArrowRightIcon,
+  DocumentMagnifyingGlassIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  ShieldCheckIcon,
+} from '@heroicons/react/24/outline'
 import api from '@/services/api'
+import LegalConsentPanel from '@/components/LegalConsentPanel'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -11,224 +19,149 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    setLegalAccepted(localStorage.getItem('contract_ai_legal_consent_v1') === 'accepted')
+  }, [])
+
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!legalAccepted) {
+      toast.error('Примите документы сервиса перед входом')
+      return
+    }
 
     setIsLoading(true)
-
     try {
-      const response = await api.login({
-        username: email,
-        password: password,
-      })
-
-      toast.success(`Добро пожаловать, ${response.user.name}!`, {
-        icon: '🎉',
-        style: {
-          borderRadius: '12px',
-          background: 'linear-gradient(135deg, #0ea5e9, #d946ef)',
-          color: '#fff',
-        },
-      })
+      const response = await api.login({ username: email, password })
+      await api.acceptLegalConsent()
+      toast.success(`Добро пожаловать, ${response.user.name}`)
       router.push('/dashboard')
     } catch (error: any) {
       console.error('Login error:', error)
-      toast.error(error.response?.data?.detail || 'Неверный email или пароль', {
-        icon: '❌',
-        style: {
-          borderRadius: '12px',
-        },
-      })
+      toast.error(error.response?.data?.detail || error.message || 'Неверный email или пароль')
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-500 via-secondary-500 to-accent-500 opacity-90">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-20" />
-      </div>
-
-      {/* Floating shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl"
-          animate={{
-            y: [0, 30, 0],
-            x: [0, 20, 0],
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute bottom-20 right-20 w-96 h-96 bg-secondary-400/20 rounded-full blur-3xl"
-          animate={{
-            y: [0, -40, 0],
-            x: [0, -30, 0],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute top-1/2 left-1/2 w-64 h-64 bg-accent-400/20 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 180, 360],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "linear"
-          }}
-        />
-      </div>
-
-      {/* Main Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="w-full max-w-md"
-        >
-          {/* Logo & Title */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-center mb-8"
+    <main className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto grid min-h-screen max-w-6xl lg:grid-cols-[0.86fr_1.14fr]">
+        <section className="flex flex-col justify-between border-b border-slate-800 px-6 py-8 sm:px-10 lg:border-b-0 lg:border-r lg:py-12">
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="flex w-fit items-center gap-3 text-left"
           >
-            <motion.div
-              className="inline-block mb-4"
-              whileHover={{ scale: 1.05, rotate: 5 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <div className="w-20 h-20 mx-auto bg-white rounded-2xl shadow-2xl flex items-center justify-center transform rotate-3">
-                <span className="text-4xl">📄</span>
-              </div>
-            </motion.div>
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-400 text-slate-950">
+              <DocumentMagnifyingGlassIcon className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <span>
+              <span className="block text-lg font-bold text-white">Contract AI</span>
+              <span className="block text-xs text-slate-400">AI Verdict</span>
+            </span>
+          </button>
 
-            <h1 className="text-5xl font-bold text-white mb-3">
-              Contract AI
+          <div className="my-12 max-w-md lg:my-0">
+            <p className="text-xs font-semibold uppercase text-amber-300">Рабочий контур</p>
+            <h1 className="mt-3 text-4xl font-bold leading-tight text-white">
+              Проверка договоров без визуального шума
             </h1>
-            <p className="text-xl text-white/90 font-medium">
-              Умная работа с договорами
+            <p className="mt-5 text-base leading-7 text-slate-300">
+              Загружайте документы, фиксируйте риски и собирайте рекомендации в одном защищённом пространстве.
             </p>
-          </motion.div>
+            <div className="mt-8 space-y-4 border-t border-slate-800 pt-7">
+              <div className="flex items-center gap-3 text-sm text-slate-300">
+                <ShieldCheckIcon className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+                Согласия и действия фиксируются в системе
+              </div>
+              <div className="flex items-center gap-3 text-sm text-slate-300">
+                <LockClosedIcon className="h-5 w-5 text-sky-400" aria-hidden="true" />
+                Документы доступны только авторизованному пользователю
+              </div>
+            </div>
+          </div>
 
-          {/* Login Card */}
+          <p className="text-xs text-slate-500">AI Verdict · Contract AI</p>
+        </section>
+
+        <section className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
-            className="glass backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-md"
           >
-            <h2 className="text-2xl font-bold text-white mb-6 text-center">
-              Вход в систему
-            </h2>
+            <p className="text-sm font-semibold text-amber-300">Вход в рабочее пространство</p>
+            <h2 className="mt-2 text-3xl font-bold text-white">Продолжить работу</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Используйте корпоративный или личный аккаунт Contract AI.
+            </p>
 
-            <form onSubmit={handleLogin} className="space-y-5">
-              {/* Email Field */}
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  Email
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                    </svg>
-                  </div>
+            <form onSubmit={handleLogin} className="mt-8 space-y-5">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-200">Email</span>
+                <span className="relative block">
+                  <EnvelopeIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-500" aria-hidden="true" />
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder-white/50 focus:border-white focus:ring-4 focus:ring-white/20 transition-all duration-300 outline-none backdrop-blur-sm"
-                    placeholder="user@example.com"
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-600 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/10"
+                    placeholder="name@company.ru"
+                    autoComplete="email"
                     required
                   />
-                </div>
-              </div>
+                </span>
+              </label>
 
-              {/* Password Field */}
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  Пароль
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-200">Пароль</span>
+                <span className="relative block">
+                  <LockClosedIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-500" aria-hidden="true" />
                   <input
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder-white/50 focus:border-white focus:ring-4 focus:ring-white/20 transition-all duration-300 outline-none backdrop-blur-sm"
-                    placeholder="••••••••"
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-600 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/10"
+                    placeholder="Введите пароль"
+                    autoComplete="current-password"
                     required
                   />
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 bg-white text-primary-600 font-bold rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
-              >
-                <span className="relative z-10">
-                  {isLoading ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Вход...
-                    </span>
-                  ) : (
-                    'Войти'
-                  )}
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-400 to-secondary-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              </motion.button>
-            </form>
-          </motion.div>
+              </label>
 
-          {/* Footer Links */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-            className="mt-6 text-center space-y-2"
-          >
-            <p className="text-white/80 text-sm">
-              Нет аккаунта?{' '}
+              <LegalConsentPanel
+                accepted={legalAccepted}
+                onChange={setLegalAccepted}
+                disabled={isLoading}
+                tone="dark"
+              />
+
               <button
+                type="submit"
+                disabled={isLoading || !legalAccepted}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              >
+                {isLoading ? 'Проверяем данные...' : 'Войти'}
+                {!isLoading && <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            </form>
+
+            <div className="mt-7 border-t border-slate-800 pt-6 text-center">
+              <span className="text-sm text-slate-400">Нет аккаунта? </span>
+              <button
+                type="button"
                 onClick={() => router.push('/register')}
-                className="font-semibold text-white hover:underline"
+                className="text-sm font-bold text-white underline decoration-slate-600 underline-offset-4 hover:decoration-amber-300"
               >
                 Зарегистрироваться
               </button>
-            </p>
-            <p className="text-white/60 text-xs">
-              © 2024 Contract AI System. Все права защищены.
-            </p>
+            </div>
           </motion.div>
-        </motion.div>
+        </section>
       </div>
-    </div>
+    </main>
   )
 }

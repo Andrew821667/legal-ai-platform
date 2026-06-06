@@ -19,6 +19,7 @@ from loguru import logger
 from src.models.database import get_db
 from src.models import Contract, AnalysisResult
 from src.models.auth_models import User
+from src.api.auth.routes import user_has_legal_consent
 from src.services.auth_service import AuthService
 from src.services.document_parser import DocumentParser
 from src.agents.contract_analyzer_agent import ContractAnalyzerAgent
@@ -152,6 +153,12 @@ async def upload_contract(
     **Returns:** Contract ID and status
     """
     try:
+        if not user_has_legal_consent(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Legal consent is required before contract upload"
+            )
+
         # Read file data
         file_data = await file.read()
 
@@ -192,6 +199,8 @@ async def upload_contract(
             message='Contract uploaded successfully'
         )
 
+    except HTTPException:
+        raise
     except FileValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

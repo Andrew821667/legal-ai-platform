@@ -28,6 +28,7 @@ class UserRegisterRequest(BaseModel):
     email: EmailStr
     name: str = Field(..., min_length=2, max_length=255)
     password: str = Field(..., min_length=8)
+    legal_consent_accepted: bool = False
     role: Optional[str] = "junior_lawyer"
     subscription_tier: Optional[str] = "demo"
 
@@ -71,6 +72,31 @@ class UpdateRoleRequest(BaseModel):
     """Admin: Update role request"""
     role: str = Field(..., pattern="^(admin|senior_lawyer|lawyer|junior_lawyer|demo)$")
     subscription_tier: Optional[str] = Field(None, pattern="^(demo|basic|pro|enterprise)$")
+
+
+LEGAL_CONSENT_VERSION = "contract_ai_terms_privacy_v1"
+
+
+def user_has_legal_consent(user: User) -> bool:
+    preferences = user.preferences or {}
+    consent = preferences.get("legal_consent") if isinstance(preferences, dict) else None
+    return bool(
+        isinstance(consent, dict)
+        and consent.get("accepted")
+        and consent.get("version") == LEGAL_CONSENT_VERSION
+    )
+
+
+def record_user_legal_consent(user: User, request: Request) -> None:
+    preferences = dict(user.preferences or {})
+    preferences["legal_consent"] = {
+        "accepted": True,
+        "version": LEGAL_CONSENT_VERSION,
+        "accepted_at": datetime.utcnow().isoformat(),
+        "ip_address": get_client_ip(request),
+        "user_agent": request.headers.get("User-Agent"),
+    }
+    user.preferences = preferences
 
 
 # ==================== OAuth2 Setup ====================
@@ -193,6 +219,12 @@ async def register(
     """
     auth_service = AuthService(db)
 
+    if not request_data.legal_consent_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Legal consent is required",
+        )
+
     user, error = auth_service.register_user(
         email=request_data.email,
         name=request_data.name,
@@ -204,6 +236,7 @@ async def register(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    record_user_legal_consent(user, request)
     # Create initial access token
     access_token = auth_service.create_access_token(user.id)
 
@@ -224,6 +257,25 @@ async def register(
         "access_token": access_token,
         "message": "Registration successful. Please verify your email."
     }
+
+
+@router.post("/legal-consent")
+async def accept_legal_consent(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    record_user_legal_consent(current_user, request)
+    auth_service = AuthService(db)
+    auth_service.log_action(
+        user_id=current_user.id,
+        action="legal_consent_accepted",
+        status="success",
+        ip_address=get_client_ip(request)
+    )
+    db.add(current_user)
+    db.commit()
+    return {"accepted": True, "version": LEGAL_CONSENT_VERSION}
 
 
 @router.post("/login")

@@ -35,6 +35,12 @@ def upsert_user(
     user = None
     if payload.telegram_id is not None:
         user = db.execute(select(User).where(User.telegram_id == payload.telegram_id).limit(1)).scalar_one_or_none()
+    elif payload.email:
+        user = db.execute(
+            select(User).where(func.lower(User.email) == payload.email.lower()).limit(1)
+        ).scalar_one_or_none()
+    elif payload.username:
+        user = db.execute(select(User).where(User.username == payload.username).limit(1)).scalar_one_or_none()
 
     if user is None:
         user = User(
@@ -61,7 +67,7 @@ def upsert_user(
         )
         db.add(user)
     else:
-        payload_data = payload.model_dump(exclude_none=True)
+        payload_data = payload.model_dump(exclude_none=True, exclude_unset=True)
         for key, value in payload_data.items():
             setattr(user, key, value)
         if payload.last_interaction is None:

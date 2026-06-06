@@ -4,10 +4,11 @@ import logging
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from lead_bot.buffer import LeadBuffer
 from lead_bot.core_client import CoreClient
@@ -38,6 +39,29 @@ _PLATFORM_PART_LINES = [
     "📰 <b>Новостной контур</b> — канал и reader-бот с разборами AI в legal",
     "📱 <b>Mini App</b> — персональный контур: контент, инструменты, профиль и заявка",
 ]
+_CONSENT_VERSION = "telegram_bot_pdn_v1"
+_CONSENT_ACCEPT_CALLBACK = "consent_pdn_yes"
+_CONSENT_DECLINE_CALLBACK = "consent_pdn_no"
+
+
+def _consent_text() -> str:
+    return (
+        "🔐 <b>Сначала — контроль ваших данных</b>\n\n"
+        "Для заявки и ответа нужны Telegram ID, имя, username и текст обращения. "
+        "Данные используются только для обработки запроса и связи с вами.\n\n"
+        "Выберите действие:"
+    )
+
+
+def _consent_keyboard() -> InlineKeyboardMarkup:
+    site_url = settings.public_site_url.rstrip("/") or "https://ai-verdict.ru"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✅ Разрешить и продолжить", callback_data=_CONSENT_ACCEPT_CALLBACK)],
+            [InlineKeyboardButton("📄 Открыть политику ПД", url=f"{site_url}/privacy")],
+            [InlineKeyboardButton("Не передавать данные", callback_data=_CONSENT_DECLINE_CALLBACK)],
+        ]
+    )
 
 
 def _platform_map_text() -> str:
@@ -113,30 +137,84 @@ def _build_lead_payload(update: Update) -> dict:
     }
 
 
+def _build_user_payload(update: Update, *, consent_given: bool | None = None) -> dict:
+    user = update.effective_user
+    now = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "telegram_id": user.id if user else None,
+        "username": user.username if user else None,
+        "first_name": user.first_name if user else None,
+        "last_name": user.last_name if user else None,
+        "name": user.full_name if user else None,
+        "last_interaction": now,
+    }
+    if consent_given is not None:
+        payload.update(
+            {
+                "consent_given": consent_given,
+                "consent_date": now if consent_given else None,
+                "consent_revoked": False,
+            }
+        )
+    return payload
+
+
+def _has_pdn_consent(update: Update) -> bool:
+    user = update.effective_user
+    if not user:
+        return False
+    try:
+        response = core_client.get_users({"telegram_id": user.id, "limit": 1})
+        if response.status_code != 200:
+            raise RuntimeError(f"core status {response.status_code}")
+        rows = response.json()
+        return bool(
+            rows
+            and rows[0].get("consent_given")
+            and not rows[0].get("consent_revoked")
+        )
+    except Exception:
+        logger.exception("Failed to read user consent from core")
+        return False
+
+
+async def _send_consent_gate(update: Update) -> None:
+    message = update.effective_message
+    if message:
+        await message.reply_text(
+            _consent_text(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_consent_keyboard(),
+            disable_web_page_preview=True,
+        )
+
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _ = context
-    payload = _build_lead_payload(update)
-    idem_key = str(uuid.uuid4())
+    user = update.effective_user
+    has_consent = _has_pdn_consent(update)
 
-    try:
-        resp = core_client.post_lead(payload, idempotency_key=idem_key)
-        if resp.status_code not in (200, 201):
-            raise RuntimeError(f"core status {resp.status_code}")
-    except Exception:
-        logger.exception("Core unavailable, buffering lead")
-        buffer.add(payload, idempotency_key=idem_key)
+    if user and not has_consent:
+        try:
+            core_client.post_user(_build_user_payload(update), idempotency_key=f"bot-start-user-{user.id}")
+        except Exception:
+            logger.exception("Failed to register bot user before consent")
 
     try:
         event_payload = {
             "lead_id": None,
             "type": "bot_start",
-            "payload": {"telegram_user_id": payload["telegram_user_id"]},
+            "payload": {"telegram_user_id": user.id if user else None, "consent_required": not has_consent},
         }
         core_client.post_event(event_payload, idempotency_key=str(uuid.uuid4()))
     except Exception:
         logger.exception("Failed to send bot_start event")
 
     if update.message is None:
+        return
+
+    if not has_consent:
+        await _send_consent_gate(update)
         return
 
     # Platform map first — sets the context "this bot is part of a bigger
@@ -156,8 +234,57 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+async def consent_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _ = context
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+
+    if query.data == _CONSENT_DECLINE_CALLBACK:
+        await query.edit_message_text(
+            "Данные не передаются. Без согласия бот не будет создавать заявку или пересылать сообщение менеджеру."
+        )
+        return
+    if query.data != _CONSENT_ACCEPT_CALLBACK:
+        return
+
+    try:
+        payload = _build_user_payload(update, consent_given=True)
+        response = core_client.post_user(
+            payload,
+            idempotency_key=f"bot-consent-{payload['telegram_id']}-{_CONSENT_VERSION}",
+        )
+        if response.status_code not in (200, 201):
+            raise RuntimeError(f"core status {response.status_code}: {response.text}")
+    except Exception:
+        logger.exception("Failed to save bot consent")
+        await query.edit_message_text(
+            "Не удалось сохранить согласие. Нажмите /start и попробуйте ещё раз."
+        )
+        return
+
+    await query.edit_message_text(
+        "✅ <b>Согласие сохранено</b>\n\nТеперь можно пользоваться ассистентом и отправлять заявку.",
+        parse_mode=ParseMode.HTML,
+    )
+    if query.message:
+        await query.message.reply_text(
+            _platform_map_text(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_platform_map_keyboard(),
+            disable_web_page_preview=True,
+        )
+        await query.message.reply_text(
+            "Опишите задачу одним сообщением. Я сохраню контекст и передам его менеджеру."
+        )
+
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _ = context
+    if not _has_pdn_consent(update):
+        await _send_consent_gate(update)
+        return
     payload = _build_lead_payload(update)
     payload["notes"] = update.message.text[:1000] if update.message and update.message.text else None
     idem_key = str(uuid.uuid4())
@@ -189,6 +316,7 @@ def main() -> None:
 
     app = Application.builder().token(settings.telegram_bot_token).build()
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CallbackQueryHandler(consent_callback_handler, pattern="^consent_pdn_(yes|no)$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     try:

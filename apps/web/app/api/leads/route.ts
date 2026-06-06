@@ -26,6 +26,7 @@ type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unkn
 interface LeadRequestBody {
   name?: string;
   contact?: string;
+  consentAccepted?: boolean;
   segment?: LeadSegment;
   message?: string;
   offer?: LeadOffer;
@@ -73,6 +74,16 @@ function parseCoreError(raw: string): string {
   return raw || "Core API request failed";
 }
 
+function extractEmail(contact: string): string | undefined {
+  return contact.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase();
+}
+
+function extractTelegramUsername(contact: string): string | undefined {
+  const direct = contact.trim().match(/^@([A-Za-z0-9_]{5,32})$/);
+  if (direct) return direct[1];
+  return contact.trim().match(/(?:t\.me|telegram\.me)\/([A-Za-z0-9_]{5,32})/i)?.[1];
+}
+
 export async function POST(request: NextRequest) {
   const securityConfig = getLeadSecurityConfig();
 
@@ -100,6 +111,12 @@ export async function POST(request: NextRequest) {
   if (!contact) {
     return NextResponse.json(
       { detail: "Укажите контакт: email, телефон или Telegram" },
+      { status: 400 },
+    );
+  }
+  if (payload.consentAccepted !== true) {
+    return NextResponse.json(
+      { detail: "Нужно согласие на обработку персональных данных." },
       { status: 400 },
     );
   }
@@ -172,8 +189,13 @@ export async function POST(request: NextRequest) {
 
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
   const userAgentHash = crypto.createHash("sha256").update(userAgent).digest("hex").slice(0, 12);
+  const consentAt = new Date().toISOString();
+  const consentVersion = "website_pdn_transborder_v1";
   const notesParts = [
     `offer=${offer}`,
+    "consent=accepted",
+    `consent_version=${consentVersion}`,
+    `consent_at=${consentAt}`,
     `ip_hash=${ipHash}`,
     `ua_hash=${userAgentHash}`,
     landingPage ? `landing=${landingPage}` : undefined,
@@ -193,6 +215,33 @@ export async function POST(request: NextRequest) {
     utm_content: utmContent,
     utm_term: utmTerm,
   };
+
+  const userResponse = await fetch(`${CORE_API_URL}/api/v1/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": CORE_API_BOT_KEY,
+      "Idempotency-Key": `${leadProtection.idempotencyKey}:user`,
+    },
+    body: JSON.stringify({
+      name,
+      email: extractEmail(contact),
+      username: extractTelegramUsername(contact),
+      consent_given: true,
+      consent_date: consentAt,
+      consent_revoked: false,
+      transborder_consent: true,
+      transborder_consent_date: consentAt,
+      marketing_consent: false,
+      last_interaction: consentAt,
+    }),
+    cache: "no-store",
+  });
+
+  const userRaw = await userResponse.text();
+  if (!userResponse.ok) {
+    return NextResponse.json({ detail: parseCoreError(userRaw) }, { status: userResponse.status });
+  }
 
   const response = await fetch(`${CORE_API_URL}/api/v1/leads`, {
     method: "POST",

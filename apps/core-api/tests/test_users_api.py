@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 
 from core_api.auth import cache
 from core_api.db import SessionLocal
@@ -141,6 +141,51 @@ def test_upsert_and_list_user_with_large_telegram_id() -> None:
                 db.execute(delete(User).where(User.id == created_id))
             else:
                 db.execute(delete(User).where(User.telegram_id == telegram_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
+def test_upsert_user_matches_existing_email_without_resetting_consent() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.users.email-consent-upsert"
+    raw_key = _create_api_key(Scope.bot, api_key_name)
+    email = f"website-{uuid4().hex}@example.com"
+    created_id: str | None = None
+
+    try:
+        first = client.post(
+            "/api/v1/users",
+            headers={"X-API-Key": raw_key},
+            json={
+                "email": email,
+                "name": "Website Lead",
+                "consent_given": True,
+                "transborder_consent": True,
+            },
+        )
+        assert first.status_code == 200
+        created_id = first.json()["id"]
+
+        repeated = client.post(
+            "/api/v1/users",
+            headers={"X-API-Key": raw_key},
+            json={"email": email.upper(), "name": "Website Lead Updated"},
+        )
+        assert repeated.status_code == 200
+        payload = repeated.json()
+        assert payload["id"] == created_id
+        assert payload["name"] == "Website Lead Updated"
+        assert payload["consent_given"] is True
+        assert payload["transborder_consent"] is True
+    finally:
+        db = SessionLocal()
+        try:
+            if created_id:
+                db.execute(delete(User).where(User.id == created_id))
+            else:
+                db.execute(delete(User).where(func.lower(User.email) == email.lower()))
             db.commit()
         finally:
             db.close()

@@ -4,8 +4,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  DocumentMagnifyingGlassIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  UserIcon,
+} from '@heroicons/react/24/outline'
+import api from '@/services/api'
+import LegalConsentPanel from '@/components/LegalConsentPanel'
 import toast from 'react-hot-toast'
-import Button from '@/components/ui/Button'
 
 interface RegisterFormData {
   name: string
@@ -17,213 +26,194 @@ interface RegisterFormData {
 export default function RegisterPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterFormData>()
+  const [legalAccepted, setLegalAccepted] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<RegisterFormData>()
 
   const password = watch('password')
 
   const onSubmit = async (data: RegisterFormData) => {
+    if (!legalAccepted) {
+      toast.error('Примите документы сервиса для регистрации')
+      return
+    }
+
     setIsLoading(true)
-
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Mock registration - redirect to login
+      await api.register({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        legal_consent_accepted: true,
+      })
+      localStorage.setItem('contract_ai_legal_consent_v1', 'accepted')
+      toast.success('Аккаунт создан. Теперь войдите в систему.')
       router.push('/login?registered=true')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration error:', error)
-      toast.error('Ошибка регистрации. Попробуйте снова.')
+      toast.error(error.response?.data?.detail || 'Не удалось создать аккаунт')
     } finally {
       setIsLoading(false)
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 right-20 w-96 h-96 bg-primary-200/30 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            x: [0, 30, 0],
-            y: [0, -30, 0]
-          }}
-          transition={{ duration: 8, repeat: Infinity }}
-        />
-        <motion.div
-          className="absolute bottom-20 left-20 w-96 h-96 bg-secondary-200/30 rounded-full blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            x: [0, -30, 0],
-            y: [0, 30, 0]
-          }}
-          transition={{ duration: 10, repeat: Infinity }}
-        />
-      </div>
+  const inputClass =
+    'w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-4 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10'
 
-      {/* Register Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="glass backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", duration: 0.6 }}
-              className="w-16 h-16 bg-gradient-primary rounded-2xl shadow-lg mx-auto mb-4 flex items-center justify-center"
-            >
-              <span className="text-3xl">📄</span>
-            </motion.div>
-            <h1 className="text-3xl font-bold gradient-text mb-2">
-              Регистрация
-            </h1>
-            <p className="text-gray-600">
-              Создайте аккаунт и начните работать с договорами
-            </p>
+  return (
+    <main className="min-h-screen bg-slate-100 text-slate-950">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
+          <button type="button" onClick={() => router.push('/')} className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-amber-300">
+              <DocumentMagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="text-left">
+              <span className="block text-base font-bold">Contract AI</span>
+              <span className="block text-xs text-slate-500">AI Verdict</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push('/login')}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950"
+          >
+            <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" />
+            Войти
+          </button>
+        </div>
+      </header>
+
+      <section className="mx-auto grid max-w-5xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:py-16">
+        <div className="pt-2">
+          <p className="text-xs font-semibold uppercase text-amber-700">Новый аккаунт</p>
+          <h1 className="mt-3 text-3xl font-bold leading-tight text-slate-950">
+            Подготовьте рабочее пространство
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-slate-600">
+            После регистрации вы сможете загрузить договор и получить структурированный список рисков и рекомендаций.
+          </p>
+          <div className="mt-8 border-t border-slate-300 pt-6">
+            <p className="text-sm font-bold text-slate-950">Что фиксируется при регистрации</p>
+            <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <li>• версия пользовательского соглашения;</li>
+              <li>• дата принятия политики ПД;</li>
+              <li>• технические данные для журнала безопасности.</li>
+            </ul>
+          </div>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+        >
+          <div className="border-b border-slate-200 pb-5">
+            <p className="text-xs font-semibold uppercase text-slate-500">Шаг 1 из 1</p>
+            <h2 className="mt-1 text-2xl font-bold">Данные аккаунта</h2>
           </div>
 
-          {/* Registration Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Имя
-              </label>
-              <div className="relative">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Имя</span>
+              <span className="relative block">
+                <UserIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400" aria-hidden="true" />
                 <input
                   {...register('name', {
                     required: 'Введите ваше имя',
-                    minLength: { value: 2, message: 'Минимум 2 символа' }
+                    minLength: { value: 2, message: 'Минимум 2 символа' },
                   })}
                   type="text"
                   placeholder="Иван Иванов"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl focus:border-primary-400 focus:bg-white/20 transition-all outline-none text-gray-800 placeholder-gray-500"
+                  className={inputClass}
+                  autoComplete="name"
                 />
-                <svg className="absolute left-4 top-3.5 h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              {errors.name && (
-                <p className="text-danger-600 text-sm mt-1">{errors.name.message}</p>
-              )}
-            </div>
+              </span>
+              {errors.name && <p className="mt-1 text-sm text-red-700">{errors.name.message}</p>}
+            </label>
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email
-              </label>
-              <div className="relative">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Email</span>
+              <span className="relative block">
+                <EnvelopeIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400" aria-hidden="true" />
                 <input
                   {...register('email', {
                     required: 'Введите email',
                     pattern: {
                       value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Некорректный email'
-                    }
+                      message: 'Некорректный email',
+                    },
                   })}
                   type="email"
-                  placeholder="email@example.com"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl focus:border-primary-400 focus:bg-white/20 transition-all outline-none text-gray-800 placeholder-gray-500"
+                  placeholder="name@company.ru"
+                  className={inputClass}
+                  autoComplete="email"
                 />
-                <svg className="absolute left-4 top-3.5 h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              {errors.email && (
-                <p className="text-danger-600 text-sm mt-1">{errors.email.message}</p>
-              )}
-            </div>
+              </span>
+              {errors.email && <p className="mt-1 text-sm text-red-700">{errors.email.message}</p>}
+            </label>
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Пароль
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Пароль</span>
+                <span className="relative block">
+                  <LockClosedIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400" aria-hidden="true" />
+                  <input
+                    {...register('password', {
+                      required: 'Введите пароль',
+                      minLength: { value: 8, message: 'Минимум 8 символов' },
+                    })}
+                    type="password"
+                    placeholder="Минимум 8 символов"
+                    className={inputClass}
+                    autoComplete="new-password"
+                  />
+                </span>
+                {errors.password && <p className="mt-1 text-sm text-red-700">{errors.password.message}</p>}
               </label>
-              <div className="relative">
-                <input
-                  {...register('password', {
-                    required: 'Введите пароль',
-                    minLength: { value: 8, message: 'Минимум 8 символов' }
-                  })}
-                  type="password"
-                  placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl focus:border-primary-400 focus:bg-white/20 transition-all outline-none text-gray-800 placeholder-gray-500"
-                />
-                <svg className="absolute left-4 top-3.5 h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              {errors.password && (
-                <p className="text-danger-600 text-sm mt-1">{errors.password.message}</p>
-              )}
-            </div>
 
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Подтверждение пароля
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Повторите пароль</span>
+                <span className="relative block">
+                  <LockClosedIcon className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-slate-400" aria-hidden="true" />
+                  <input
+                    {...register('confirmPassword', {
+                      required: 'Подтвердите пароль',
+                      validate: (value) => value === password || 'Пароли не совпадают',
+                    })}
+                    type="password"
+                    placeholder="Повторите пароль"
+                    className={inputClass}
+                    autoComplete="new-password"
+                  />
+                </span>
+                {errors.confirmPassword && (
+                  <p className="mt-1 text-sm text-red-700">{errors.confirmPassword.message}</p>
+                )}
               </label>
-              <div className="relative">
-                <input
-                  {...register('confirmPassword', {
-                    required: 'Подтвердите пароль',
-                    validate: value => value === password || 'Пароли не совпадают'
-                  })}
-                  type="password"
-                  placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/10 border-2 border-white/20 rounded-xl focus:border-primary-400 focus:bg-white/20 transition-all outline-none text-gray-800 placeholder-gray-500"
-                />
-                <svg className="absolute left-4 top-3.5 h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              {errors.confirmPassword && (
-                <p className="text-danger-600 text-sm mt-1">{errors.confirmPassword.message}</p>
-              )}
             </div>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full"
-              loading={isLoading}
+            <LegalConsentPanel
+              accepted={legalAccepted}
+              onChange={setLegalAccepted}
               disabled={isLoading}
-            >
-              Зарегистрироваться
-            </Button>
-          </form>
+            />
 
-          {/* Login Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Уже есть аккаунт?{' '}
-              <button
-                onClick={() => router.push('/login')}
-                className="text-primary-600 hover:text-primary-700 font-semibold"
-              >
-                Войти
-              </button>
-            </p>
-          </div>
-
-          {/* Back to Home */}
-          <div className="mt-4 text-center">
             <button
-              onClick={() => router.push('/')}
-              className="text-gray-500 hover:text-gray-700 text-sm"
+              type="submit"
+              disabled={isLoading || !legalAccepted}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
             >
-              ← На главную
+              {isLoading ? 'Создаём аккаунт...' : 'Создать аккаунт'}
+              {!isLoading && <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />}
             </button>
-          </div>
-        </div>
-      </motion.div>
-    </div>
+          </form>
+        </motion.div>
+      </section>
+    </main>
   )
 }

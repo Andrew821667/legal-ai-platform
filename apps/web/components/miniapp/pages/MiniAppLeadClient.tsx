@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Check, Send, ShieldCheck } from "lucide-react";
 import { useMiniAppState, type MiniAppAudience } from "@/components/miniapp/MiniAppStateProvider";
 import { leadBotDeepLink } from "@/lib/links";
 
@@ -55,6 +56,7 @@ export default function MiniAppLeadPage() {
   const [offer, setOffer] = useState<LeadOffer>("consultation");
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<LeadSegment>("other");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -125,6 +127,10 @@ export default function MiniAppLeadPage() {
       setError("Укажите контакт: телефон, email или Telegram.");
       return;
     }
+    if (!consentAccepted) {
+      setError("Подтвердите согласие на обработку персональных данных.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -143,6 +149,7 @@ export default function MiniAppLeadPage() {
           telegram_user_id: state.telegramUserId,
           contact,
           name,
+          consentAccepted,
           segment,
           offer,
           message,
@@ -208,15 +215,22 @@ export default function MiniAppLeadPage() {
 
   return (
     <section className="space-y-5">
-      <header className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-        <h2 className="text-base font-semibold text-amber-300">Оставить заявку</h2>
-        <p className="mt-1 text-sm text-slate-300">
-          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Запрос:{" "}
-          <span className="font-semibold text-amber-200">{offerLabels[offer]}</span>.
-        </p>
+      <header className="border-b border-slate-700 pb-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-amber-400 text-slate-950">
+            <Send size={19} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="text-lg font-bold text-white">Отправить запрос</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              Менеджер получит контакт и контекст задачи. Тип:{" "}
+              <span className="font-semibold text-amber-300">{offerLabels[offer]}</span>.
+            </p>
+          </div>
+        </div>
       </header>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5">
         <label className="block">
           <span className="block text-xs font-medium text-slate-300 mb-1">Имя</span>
           <input
@@ -282,6 +296,42 @@ export default function MiniAppLeadPage() {
           />
         </label>
 
+        <label
+          className={`flex cursor-pointer items-start gap-3 rounded-md border p-4 transition ${
+            consentAccepted
+              ? "border-emerald-500 bg-emerald-500/10"
+              : "border-amber-400 bg-amber-400/10"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={consentAccepted}
+            onChange={(event) => setConsentAccepted(event.target.checked)}
+            className="sr-only"
+          />
+          <span
+            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border ${
+              consentAccepted
+                ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                : "border-amber-400 bg-slate-900 text-transparent"
+            }`}
+          >
+            <Check size={16} strokeWidth={3} aria-hidden="true" />
+          </span>
+          <span>
+            <span className="flex items-center gap-2 text-sm font-bold text-white">
+              <ShieldCheck size={16} className="text-emerald-400" aria-hidden="true" />
+              {consentAccepted ? "Согласие принято" : "Разрешить обработку данных"}
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">
+              Контакт используется для ответа по заявке.{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-300 underline">
+                Политика ПД
+              </a>
+            </span>
+          </span>
+        </label>
+
         {error && (
           <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}
@@ -296,15 +346,12 @@ export default function MiniAppLeadPage() {
 
         <button
           type="submit"
-          disabled={isSubmitting}
-          className="w-full inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-60"
+          disabled={isSubmitting || !consentAccepted}
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
         >
           {isSubmitting ? "Отправка..." : "Отправить заявку"}
+          {!isSubmitting && <Send size={17} aria-hidden="true" />}
         </button>
-
-        <p className="text-xs text-slate-500">
-          Используем контакт только для связи по вашему запросу.
-        </p>
       </form>
     </section>
   );

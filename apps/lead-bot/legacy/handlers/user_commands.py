@@ -159,7 +159,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_data=user_data,
                 user=user,
             )
-        elif needs_pdn_consent and start_payload:
+        elif needs_pdn_consent:
             consent_text = _pdn_consent_prompt_text()
             if _READER_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (

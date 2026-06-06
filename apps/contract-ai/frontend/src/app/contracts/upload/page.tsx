@@ -1,20 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import axios from 'axios'
 import toast from 'react-hot-toast'
+import api from '@/services/api'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import FileUpload from '@/components/forms/FileUpload'
 import Badge from '@/components/ui/Badge'
+import LegalConsentPanel from '@/components/LegalConsentPanel'
 
 export default function ContractUploadPage() {
   const router = useRouter()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
   const [formData, setFormData] = useState({
     contractType: '',
@@ -35,6 +37,10 @@ export default function ContractUploadPage() {
     'Другое'
   ]
 
+  useEffect(() => {
+    setLegalAccepted(localStorage.getItem('contract_ai_legal_consent_v1') === 'accepted')
+  }, [])
+
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
   }
@@ -44,26 +50,22 @@ export default function ContractUploadPage() {
       toast.error('Пожалуйста, загрузите файл и выберите тип договора')
       return
     }
+    if (!legalAccepted) {
+      toast.error('Примите документы сервиса перед загрузкой')
+      return
+    }
 
     setUploading(true)
     setUploadProgress(0)
 
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append('file', selectedFile)
-      formDataToSend.append('contractType', formData.contractType)
-      formDataToSend.append('partyA', formData.partyA)
-      formDataToSend.append('partyB', formData.partyB)
-      formDataToSend.append('description', formData.description)
-
-      const response = await axios.post('/api/contracts/upload', formDataToSend, {
-        onUploadProgress: (event) => {
-          if (!event.total) {
-            return
-          }
-          const progress = Math.min(100, Math.round((event.loaded * 100) / event.total))
-          setUploadProgress(progress)
-        },
+      await api.acceptLegalConsent()
+      setUploadProgress(25)
+      const response = await api.uploadContract(selectedFile, {
+        contractType: formData.contractType,
+        partyA: formData.partyA,
+        partyB: formData.partyB,
+        description: formData.description,
       })
 
       setUploadProgress(100)
@@ -71,7 +73,7 @@ export default function ContractUploadPage() {
 
       // Redirect to contract details page
       setTimeout(() => {
-        router.push(`/contracts/${response.data.contractId}`)
+        router.push(`/contracts/${response.contract_id || response.contractId}`)
       }, 500)
 
     } catch (error) {
@@ -83,9 +85,9 @@ export default function ContractUploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-slate-100">
       {/* Header */}
-      <nav className="bg-white/80 backdrop-blur-lg shadow-lg border-b border-white/20">
+      <nav className="border-b border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <motion.div
@@ -94,10 +96,10 @@ export default function ContractUploadPage() {
               className="flex items-center space-x-3 cursor-pointer"
               onClick={() => router.push('/dashboard')}
             >
-              <div className="w-10 h-10 bg-gradient-primary rounded-xl shadow-lg flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950">
                 <span className="text-2xl">📄</span>
               </div>
-              <span className="text-xl font-bold gradient-text">Contract AI</span>
+              <span className="text-xl font-bold text-slate-950">Contract AI</span>
             </motion.div>
 
             <motion.div
@@ -113,17 +115,18 @@ export default function ContractUploadPage() {
       </nav>
 
       {/* Main Content */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-5xl font-bold gradient-text mb-4">
+          <p className="mb-2 text-xs font-semibold uppercase text-amber-700">Новый анализ</p>
+          <h1 className="mb-3 text-3xl font-bold text-slate-950 sm:text-4xl">
             Загрузка договора
           </h1>
-          <p className="text-xl text-gray-600">
-            Загрузите договор для автоматического анализа и обработки
+          <p className="max-w-2xl text-base leading-7 text-slate-600">
+            Выберите документ, укажите его тип и подтвердите условия обработки.
           </p>
         </motion.div>
 
@@ -253,6 +256,15 @@ export default function ContractUploadPage() {
                   </div>
                 </div>
 
+                <div className="mt-6">
+                  <LegalConsentPanel
+                    accepted={legalAccepted}
+                    onChange={setLegalAccepted}
+                    disabled={uploading}
+                    documentUpload
+                  />
+                </div>
+
                 {/* Upload Progress */}
                 {uploading && (
                   <motion.div
@@ -282,7 +294,7 @@ export default function ContractUploadPage() {
                     className="w-full"
                     onClick={handleUpload}
                     loading={uploading}
-                    disabled={!selectedFile || !formData.contractType}
+                    disabled={!selectedFile || !formData.contractType || !legalAccepted}
                   >
                     {uploading ? 'Загрузка...' : 'Загрузить и проанализировать'}
                   </Button>
