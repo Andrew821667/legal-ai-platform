@@ -7,7 +7,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pygments>=2.20.0",
-    "ruff>=0.15.14",
+    "ruff>=0.15.16",
     "pytest>=8.3",
 ]
 
