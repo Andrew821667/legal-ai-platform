@@ -125,7 +125,7 @@ export default function PlatformMap({
                   {!compact && (
                     <div className="mt-auto pt-4 flex flex-wrap gap-3 text-sm">
                       {isCurrent ? (
-                        <span className="inline-flex items-center rounded-lg border border-slate-700 px-4 py-2 text-slate-500 cursor-default">
+                        <span className="inline-flex items-center rounded-lg border border-slate-700 px-4 py-2 text-slate-700 cursor-default">
                           Вы уже здесь
                         </span>
                       ) : part.external ? (

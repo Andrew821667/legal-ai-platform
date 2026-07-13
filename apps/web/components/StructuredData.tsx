@@ -4,7 +4,6 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_PHONE_HREF,
   LEGAL_OPERATOR_NAME,
-  LEGAL_OPERATOR_STATUS,
   LEGAL_SITE_URL,
 } from "@/lib/legalProfile";
 
@@ -52,9 +51,10 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     { name: "Для бизнеса", url: `${siteUrl}/for-business` },
     { name: "Услуги", url: `${siteUrl}/services` },
     { name: "Решения", url: `${siteUrl}/solutions` },
-    { name: "Contract_AI_System", url: `${siteUrl}/contract-ai-system` },
+    { name: "Практические руководства", url: `${siteUrl}/guides` },
+    { name: "Сценарии внедрения", url: `${siteUrl}/cases` },
     { name: "Другая автоматизация", url: `${siteUrl}/services/custom-ai` },
-    { name: "Mini App", url: `${siteUrl}/miniapp` },
+    { name: "Работа с регионами", url: `${siteUrl}/regions` },
   ];
 
   const organizationSchema = {
@@ -164,7 +164,6 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     description:
       "Специалист по автоматизации юридической функции, AI-сценариям и прикладной разработке рабочих контуров.",
     url: `${siteUrl}/team`,
-    affiliation: LEGAL_OPERATOR_STATUS,
     worksFor: {
       "@id": `${siteUrl}/#organization`,
     },

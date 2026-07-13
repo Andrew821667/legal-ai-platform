@@ -283,7 +283,7 @@ export default function LeadCaptureForm() {
             </button>
           </form>
 
-          <p className="text-xs text-slate-500 mt-4">
+          <p className="text-xs text-slate-700 mt-4">
             Форму используем только для связи по вашему запросу и первичной квалификации задачи.
           </p>
         </div>

@@ -9,7 +9,7 @@ import { createPageMetadata } from "@/lib/seo";
 export const metadata: Metadata = createPageMetadata({
   title: "AI Verdict — автоматизация юридических процессов и интеграций",
   description:
-    "AI Verdict автоматизирует юридические бизнес-процессы, интегрирует их с системами компании и при необходимости разрабатывает боты, сайты, mini app, AI-модули и внутренние сервисы.",
+    "AI Verdict автоматизирует юридические процессы: договоры, претензии, комплаенс и legal intake. Интегрируем AI с CRM, ERP, 1C, ЭДО и внутренними системами.",
   path: "/",
   keywords: ["автоматизация юридической работы", "AI для юристов", "Legal AI", "legal ops"],
 });
@@ -106,8 +106,14 @@ export default function Home() {
   return (
     <main className={`${isLightOpsTheme ? "visual-light-ops" : ""} bg-slate-900 text-slate-100`}>
       <section className="relative overflow-hidden border-b border-slate-800">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.16),_transparent_52%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.14),_transparent_45%)]" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-cover bg-center sm:bg-[position:68%_center]"
+          style={{ backgroundImage: "url('/images/ai-verdict-hero-v1.jpg')" }}
+        />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#e8eef6]/96 via-[#e8eef6]/88 to-[#dfe6ef]/62" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.14),_transparent_48%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.12),_transparent_45%)]" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-18">
           <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             Юридическая автоматизация + интеграции + смежная разработка
