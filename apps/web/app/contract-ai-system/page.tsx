@@ -8,6 +8,18 @@ export const metadata: Metadata = {
   description:
     "Флагманский внешний сервис AI Verdict для проверки договоров: 3 договора бесплатно в месяц, пилот и рабочий контур.",
   alternates: { canonical: "/contract-ai-system" },
+  openGraph: {
+    title: "Contract_AI_System | AI Verdict",
+    description:
+      "AI-сервис для первичной проверки договоров, выявления рисков и запуска пилота договорной автоматизации.",
+    url: "/contract-ai-system",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contract_AI_System | AI Verdict",
+    description: "Проверка договоров, риск-профиль и понятный вход в legal automation.",
+  },
 };
 
 const valuePoints = [

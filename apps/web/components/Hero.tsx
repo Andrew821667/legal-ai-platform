@@ -44,7 +44,9 @@ export default function Hero() {
 
             <p className="text-base text-slate-400 mb-8 max-w-4xl mx-auto lg:mx-0 animate-fade-in-delay-1">
               Помогаем выстроить практичную автоматизацию для intake заявок, договорной и судебной работы,
-              комплаенса, legal ops и внутреннего контроля.
+              комплаенса, legal ops и внутреннего контроля. Если для этого нужны CRM/ERP-интеграции,
+              Telegram-боты, сайты, mini app, внутренние панели или отдельные программы — проектируем и запускаем
+              этот цифровой контур целиком.
             </p>
             
             {/* Stats - SIMPLIFIED for readability */}

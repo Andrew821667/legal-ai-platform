@@ -7,6 +7,18 @@ export const metadata: Metadata = {
   description:
     "Практические сценарии автоматизации юридической работы: договоры, претензии, контроль рисков, юридические шаблоны и legal ops.",
   alternates: { canonical: "/for-lawyers" },
+  openGraph: {
+    title: "AI Verdict для юристов",
+    description:
+      "Автоматизация договоров, претензий, legal ops, шаблонов, контроля рисков и юридической рутины.",
+    url: "/for-lawyers",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AI Verdict для юристов",
+    description: "Практические AI-сценарии для юридических команд и legal ops.",
+  },
 };
 
 const tracks = [

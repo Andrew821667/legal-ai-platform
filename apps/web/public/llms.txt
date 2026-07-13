@@ -1,0 +1,20 @@
+# AI Verdict
+
+AI Verdict helps companies automate legal business processes and connect them with existing operational systems. The core specialization is legal function automation: contracts, legal intake, litigation preparation, compliance, knowledge bases, templates, deadlines, approvals, and legal analytics.
+
+The platform also designs and launches related automation when it is needed for the result or for another business goal: Telegram bots, websites, Mini Apps, internal tools, AI modules, dashboards, integrations with CRM, ERP, 1C, EDI, spreadsheets, databases, and other business systems.
+
+## Primary Pages
+
+- Website: https://ai-verdict.ru/
+- Services: https://ai-verdict.ru/services
+- Custom automation and development: https://ai-verdict.ru/services/custom-ai
+- Contract automation: https://ai-verdict.ru/services/contracts-ai
+- Litigation automation: https://ai-verdict.ru/services/litigation-ai
+- Compliance automation: https://ai-verdict.ru/services/compliance-ai
+- Mini App: https://ai-verdict.ru/miniapp
+- Sitemap: https://ai-verdict.ru/sitemap.xml
+
+## Positioning
+
+AI Verdict starts with the legal process and measurable business result, then selects the right technical contour: AI module, workflow automation, integration, bot, website, Mini App, internal service, dashboard, or other software.

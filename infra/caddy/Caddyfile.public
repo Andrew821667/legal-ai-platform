@@ -23,6 +23,15 @@
         reverse_proxy core-api:8000
     }
 
+    handle /guacamole* {
+        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    }
+
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
         reverse_proxy web:3000
     }
@@ -67,6 +76,15 @@ https://{$DOMAIN}, https://www.{$DOMAIN} {
         reverse_proxy core-api:8000
     }
 
+    handle /guacamole* {
+        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    }
+
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
         reverse_proxy web:3000
     }
@@ -97,8 +115,16 @@ Disallow: /
         reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
     }
 
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
-        reverse_proxy {$MEMORY_HUB_UPSTREAM:host.docker.internal:8787}
+        reverse_proxy {$MEMORY_HUB_UPSTREAM:host.docker.internal:8787} {
+            lb_try_duration 30s
+            lb_try_interval 1s
+        }
     }
 }
 

@@ -7,6 +7,18 @@ export const metadata: Metadata = {
   description:
     "Экспертный контент и практические кейсы по автоматизации юридической функции, внедрению AI и управлению юридическими рисками.",
   alternates: { canonical: "/content-cases" },
+  openGraph: {
+    title: "Контент и кейсы AI Verdict",
+    description:
+      "Практические разборы legal automation, AI-инструментов, внедрения и управления юридическими рисками.",
+    url: "/content-cases",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Контент и кейсы AI Verdict",
+    description: "Кейсы, обзоры и методология внедрения AI в юридическую функцию.",
+  },
 };
 
 const caseBlocks = [

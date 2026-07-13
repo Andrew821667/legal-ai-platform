@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import { PLATFORM_PARTS } from "@/lib/platformParts";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
+import { isLightOpsTheme } from "@/lib/visualTheme";
 import {
   LEGAL_BRAND,
   LEGAL_CONTACT_EMAIL,
@@ -76,7 +77,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-slate-800 text-slate-300">
+    <footer className={`${isLightOpsTheme ? "site-footer-light-ops" : ""} bg-slate-800 text-slate-300`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8 mb-8">
           <div className="lg:col-span-2">
@@ -178,7 +179,7 @@ export default function Footer() {
                   href="/#lead-form"
                   className="text-slate-400 hover:text-amber-500 transition-colors text-sm"
                 >
-                  Форма на сайте — без VPN
+                  Форма на сайте
                 </Link>
               </div>
             </div>

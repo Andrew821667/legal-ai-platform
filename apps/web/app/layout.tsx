@@ -10,12 +10,13 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  applicationName: "AI Verdict",
   title: {
     default: "Автоматизация юридической работы | AI Verdict",
     template: "%s | AI Verdict",
   },
   description:
-    "Помогаем юридическим командам внедрять AI-сценарии для intake заявок, договорной и судебной работы, комплаенса, legal ops и типовых процессов.",
+    "Помогаем внедрять AI-сценарии для юридической функции и смежной автоматизации: договоры, legal ops, CRM/ERP-интеграции, боты, сайты, mini app и внутренние сервисы.",
   keywords: [
     "автоматизация юридической работы",
     "AI для юристов",
@@ -25,10 +26,21 @@ export const metadata: Metadata = {
     "автоматизация комплаенс",
     "внедрение ИИ в юридический отдел",
     "анализ договоров ИИ",
+    "разработка телеграм ботов",
+    "автоматизация бизнес процессов",
+    "интеграция CRM ERP",
+    "разработка mini app",
   ],
   authors: [{ name: "AI Verdict" }],
   creator: "AI Verdict",
   publisher: "AI Verdict",
+  category: "legal technology",
+  referrer: "origin-when-cross-origin",
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
@@ -39,7 +51,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title: "Автоматизация юридической работы | AI Verdict",
     description:
-      "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
+      "AI-сценарии для юридической функции, интеграции, боты, сайты, mini app и внутренняя автоматизация.",
     siteName: "AI Verdict",
     images: [
       {
@@ -54,7 +66,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Автоматизация юридической работы | AI Verdict",
     description:
-      "AI-сценарии для юридической функции: intake, договоры, судебная работа, комплаенс и legal ops.",
+      "AI-сценарии для юридической функции, интеграции, боты, сайты, mini app и внутренняя автоматизация.",
     images: [`${siteUrl}/twitter-image`],
   },
   robots: {
@@ -70,7 +82,7 @@ export const metadata: Metadata = {
   },
   verification: {
     google: "mTUEyeu5VGZOmD8i8uGmxG-XhDHU6MacydZDAWry8U0",
-    yandex: "3448a4683f1cad05",
+    yandex: "2559d6caccd0ac2b9",
   },
 };
 

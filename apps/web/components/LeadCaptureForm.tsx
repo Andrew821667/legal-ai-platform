@@ -25,7 +25,7 @@ const offerLabels: Record<LeadOffer, string> = {
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчета по договору",
-  unknown: "Общий запрос",
+  unknown: "Общий запрос / разработка под задачу",
 };
 
 export default function LeadCaptureForm() {
@@ -148,7 +148,8 @@ export default function LeadCaptureForm() {
           </h2>
           <p className="text-slate-600 mb-8">
             Запрос: <span className="font-semibold">{offerLabels[offer]}</span>. Ответим в Telegram
-            или по телефону.
+            или по телефону. Можно описать не только юридический процесс, но и любую смежную автоматизацию:
+            бота, сайт, mini app, интеграцию, внутренний сервис или отдельную программу.
           </p>
 
           <LegalDisclaimer variant="panel" className="mb-6" />
@@ -221,7 +222,7 @@ export default function LeadCaptureForm() {
                   <option value="checklist">Гайд</option>
                   <option value="demo">Демонстрационный разбор договора</option>
                   <option value="sample_report">Пример отчета по договору</option>
-                  <option value="unknown">Общий запрос</option>
+                  <option value="unknown">Общий запрос / разработка под задачу</option>
                 </select>
               </label>
             </div>
@@ -232,7 +233,7 @@ export default function LeadCaptureForm() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
-                placeholder="Кратко опишите задачу"
+                placeholder="Кратко опишите задачу: юридический процесс, интеграция, бот, сайт, mini app, внутренняя программа или другая автоматизация"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </label>

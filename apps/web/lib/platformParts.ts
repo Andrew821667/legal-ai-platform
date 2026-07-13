@@ -60,7 +60,7 @@ export const PLATFORM_PARTS: PlatformPart[] = [
     id: "site",
     name: "Сайт AI Verdict",
     description:
-      "Обзор продуктов и услуг, методология внедрения, заявка на консультацию.",
+      "Обзор продуктов, юридической автоматизации, интеграций, прикладной разработки и заявка на консультацию.",
     url: ROUTES.home,
     external: false,
     ctaLabel: "Открыть сайт",
@@ -80,7 +80,7 @@ export const PLATFORM_PARTS: PlatformPart[] = [
     id: "lead_bot",
     name: "Ассистент в Telegram",
     description:
-      "Диалоговый бот: задать вопрос, получить демо, оставить заявку.",
+      "Диалоговый бот: задать вопрос, получить демо, оставить заявку на legal tech, интеграцию, бота, сайт или внутренний сервис.",
     url: EXTERNAL_LINKS.leadBot,
     external: true,
     ctaLabel: "Открыть бота",
@@ -105,7 +105,7 @@ export const PLATFORM_PARTS: PlatformPart[] = [
     id: "miniapp",
     name: "Mini App",
     description:
-      "Личный контур внутри Telegram: контент, инструменты, профиль и заявка без перехода в браузер.",
+      "Личный контур внутри Telegram: контент, инструменты, профиль и заявка на юридическую или смежную автоматизацию.",
     url: ROUTES.miniApp,
     external: false,
     ctaLabel: "Открыть Mini App",

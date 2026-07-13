@@ -7,6 +7,18 @@ export const metadata: Metadata = {
   description:
     "О платформе AI Verdict: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
   alternates: { canonical: "/about" },
+  openGraph: {
+    title: "О платформе AI Verdict",
+    description:
+      "Методология пилота, подход к legal automation, интеграциям, AI-сценариям и прикладной разработке.",
+    url: "/about",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "О платформе AI Verdict",
+    description: "Как AI Verdict запускает автоматизацию юридических процессов и смежных задач.",
+  },
 };
 
 const principles = [
@@ -51,7 +63,7 @@ export default function AboutPage() {
               <h3 className="font-semibold text-amber-300">Оставить заявку</h3>
               <p className="mt-2 text-sm text-slate-200">
                 <a href="/#lead-form" className="hover:text-amber-300">
-                  Форма на сайте — без VPN
+                  Форма на сайте
                 </a>
               </p>
             </article>
@@ -62,7 +74,7 @@ export default function AboutPage() {
                   Ассистент AI Verdict
                 </a>
               </p>
-              <p className="mt-1 text-xs text-slate-500">Если ссылка не открывается, возможно нужно временно отключить прокси/VPN.</p>
+              <p className="mt-1 text-xs text-slate-500">Можно написать в Telegram или оставить заявку через форму на сайте.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <h3 className="font-semibold text-amber-300">Канал</h3>

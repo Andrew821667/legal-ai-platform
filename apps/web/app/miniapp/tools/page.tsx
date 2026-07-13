@@ -4,7 +4,7 @@ import MiniAppToolsClient from "@/components/miniapp/pages/MiniAppToolsClient";
 
 export const metadata: Metadata = {
   title: "Инструменты Mini App | AI Verdict",
-  description: "Практические инструменты AI Verdict: проверка договора, история анализов и сценарии внедрения.",
+  description: "Практические инструменты AI Verdict: проверка договора, история анализов, сценарии внедрения, интеграции и разработка под задачу.",
   alternates: {
     canonical: "/miniapp/tools",
   },

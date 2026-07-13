@@ -14,7 +14,7 @@ const offerLabels: Record<LeadOffer, string> = {
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчёта по договору",
-  unknown: "Общий запрос",
+  unknown: "Общий запрос / разработка под задачу",
 };
 
 const audienceToSegment: Record<MiniAppAudience, LeadSegment> = {
@@ -22,6 +22,44 @@ const audienceToSegment: Record<MiniAppAudience, LeadSegment> = {
   business: "inhouse",
   mixed: "other",
 };
+
+const requestScenarios: Array<{
+  id: string;
+  title: string;
+  description: string;
+  offer: LeadOffer;
+  segment?: LeadSegment;
+  prompt: string;
+}> = [
+  {
+    id: "contract",
+    title: "Проверить договор",
+    description: "Есть документ или договорной процесс, который нужно ускорить.",
+    offer: "demo",
+    prompt: "Нужно проверить договор или автоматизировать договорной процесс: ",
+  },
+  {
+    id: "automation",
+    title: "Автоматизировать legal-процесс",
+    description: "Заявки к юристам, согласования, документы, сроки, комплаенс или база знаний.",
+    offer: "unknown",
+    prompt: "Нужно автоматизировать юридический процесс: ",
+  },
+  {
+    id: "ai",
+    title: "Добавить AI",
+    description: "Анализ, классификация, поиск, черновики, ассистент или AI-агент.",
+    offer: "unknown",
+    prompt: "Нужна автоматизация с интеграцией ИИ: ",
+  },
+  {
+    id: "bot",
+    title: "Другая автоматизация",
+    description: "Бот, сайт, Mini App, AI-модуль, личный кабинет, внутренняя программа или сервис для другой цели.",
+    offer: "unknown",
+    prompt: "Нужна другая автоматизация: ",
+  },
+];
 
 type TelegramUserInfo = {
   first_name?: string;
@@ -55,6 +93,7 @@ export default function MiniAppLeadPage() {
   const [offer, setOffer] = useState<LeadOffer>("consultation");
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<LeadSegment>("other");
+  const [selectedScenario, setSelectedScenario] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -157,8 +196,9 @@ export default function MiniAppLeadPage() {
         throw new Error(data.detail || "Не удалось отправить заявку");
       }
 
-      setSuccess(data.message || "Заявка отправлена. Мы свяжемся в ближайшее время.");
+      setSuccess(data.message || "Заявка принята. Команда посмотрит задачу и вернётся с понятным следующим шагом.");
       setMessage("");
+      setSelectedScenario("");
 
       recordAction("miniapp_lead_submitted", {
         eventType: "lead_intent",
@@ -170,6 +210,17 @@ export default function MiniAppLeadPage() {
       setError(e instanceof Error ? e.message : "Ошибка отправки заявки");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const selectScenario = (scenario: (typeof requestScenarios)[number]) => {
+    setSelectedScenario(scenario.id);
+    setOffer(scenario.offer);
+    if (scenario.segment) {
+      setSegment(scenario.segment);
+    }
+    if (!message.trim() || requestScenarios.some((item) => message.startsWith(item.prompt))) {
+      setMessage(scenario.prompt);
     }
   };
 
@@ -211,10 +262,38 @@ export default function MiniAppLeadPage() {
       <header className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
         <h2 className="text-base font-semibold text-amber-300">Оставить заявку</h2>
         <p className="mt-1 text-sm text-slate-300">
-          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Запрос:{" "}
+          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Можно описать юридический процесс, интеграцию с существующими системами или другую автоматизацию: бота, сайт, Mini App, AI-модуль, внутреннюю программу или сервис. Запрос:{" "}
           <span className="font-semibold text-amber-200">{offerLabels[offer]}</span>.
         </p>
       </header>
+
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
+        <h2 className="text-base font-semibold text-white">Что нужно сделать</h2>
+        <p className="mt-1 text-sm text-slate-300">
+          Выберите ближайший сценарий — поля ниже подстроятся, а детали можно дописать свободным текстом.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-2">
+          {requestScenarios.map((scenario) => {
+            const active = selectedScenario === scenario.id;
+            return (
+              <button
+                key={scenario.id}
+                type="button"
+                onClick={() => selectScenario(scenario)}
+                className={[
+                  "rounded-lg border px-3 py-3 text-left transition-colors",
+                  active
+                    ? "border-amber-400 bg-amber-500/15 text-amber-100"
+                    : "border-slate-700 bg-slate-900/70 text-slate-200 hover:border-amber-400/60",
+                ].join(" ")}
+              >
+                <span className="block text-sm font-semibold">{scenario.title}</span>
+                <span className="mt-1 block text-xs text-slate-400">{scenario.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </article>
 
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block">
@@ -253,7 +332,7 @@ export default function MiniAppLeadPage() {
             <option value="checklist">Гайд</option>
             <option value="demo">Демонстрационный разбор договора</option>
             <option value="sample_report">Пример отчёта по договору</option>
-            <option value="unknown">Общий запрос</option>
+            <option value="unknown">Автоматизация / разработка под задачу</option>
           </select>
         </label>
 
@@ -277,7 +356,7 @@ export default function MiniAppLeadPage() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
-            placeholder="Кратко опишите задачу"
+            placeholder="Кратко опишите задачу: какой юридический процесс или другая цель, что сейчас делается вручную, где нужен AI, бот, сайт, Mini App, интеграция или внутренняя программа"
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
         </label>

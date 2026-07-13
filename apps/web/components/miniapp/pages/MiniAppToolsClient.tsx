@@ -23,8 +23,15 @@ const tools = [
   },
   {
     title: "Будущие инструменты",
-    description: "Сценарии для претензионной, комплаенса и внутренних legal ops процессов.",
+    description: "Сценарии для претензионной, комплаенса, внутренних legal ops процессов и смежных интеграций.",
     href: ROUTES.solutions,
+    action: MINIAPP_ACTIONS.openFutureTools,
+    external: false,
+  },
+  {
+    title: "Кастомная разработка",
+    description: "Боты, сайты, Mini App, личные кабинеты, внутренние панели и программы, которые закрывают задачу вокруг юридического процесса.",
+    href: "/services/custom-ai",
     action: MINIAPP_ACTIONS.openFutureTools,
     external: false,
   },
@@ -35,7 +42,7 @@ export default function MiniAppToolsPage() {
     <section className="space-y-4">
       <MiniAppGuideCard
         title="Как использовать экран"
-        description="Здесь собраны практические инструменты. Начните с Contract_AI_System, затем возвращайтесь к истории и расширяйте контур внедрения."
+        description="Здесь собраны практические инструменты. Начните с Contract_AI_System, затем возвращайтесь к истории и расширяйте контур внедрения через интеграции или разработку."
       />
 
       {tools.map((tool) => (

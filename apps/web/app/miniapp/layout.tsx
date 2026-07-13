@@ -6,6 +6,7 @@ import MiniAppDeepLinkSync from "@/components/miniapp/MiniAppDeepLinkSync";
 import MiniAppTopBar from "@/components/miniapp/MiniAppTopBar";
 import MiniAppNav from "@/components/miniapp/MiniAppNav";
 import { ROUTES } from "@/lib/links";
+import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export const metadata: Metadata = {
   title: "Mini App",
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 export default function MiniAppLayout({ children }: { children: React.ReactNode }) {
   return (
     <MiniAppStateProvider>
-      <main className="min-h-screen bg-slate-900 text-slate-100">
+      <main className={`${isLightOpsTheme ? "miniapp-light-ops" : ""} min-h-screen bg-slate-900 text-slate-100`}>
         <Suspense fallback={null}>
           <MiniAppDeepLinkSync />
         </Suspense>

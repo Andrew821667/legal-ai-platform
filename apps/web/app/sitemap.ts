@@ -3,7 +3,7 @@ import { regions } from "@/lib/regionsData";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
-  const lastModified = new Date(process.env.NEXT_PUBLIC_SITE_UPDATED_AT || "2026-05-28");
+  const lastModified = new Date(process.env.NEXT_PUBLIC_SITE_UPDATED_AT || "2026-06-29");
 
   const staticPages: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]; priority: number }> = [
     { path: "", changeFrequency: "weekly", priority: 1 },
@@ -16,7 +16,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/miniapp/content", changeFrequency: "weekly", priority: 0.75 },
     { path: "/miniapp/tools", changeFrequency: "weekly", priority: 0.75 },
     { path: "/miniapp/solutions", changeFrequency: "weekly", priority: 0.75 },
-    { path: "/miniapp/profile", changeFrequency: "weekly", priority: 0.7 },
     { path: "/about", changeFrequency: "monthly", priority: 0.75 },
     { path: "/privacy", changeFrequency: "monthly", priority: 0.5 },
     { path: "/terms", changeFrequency: "monthly", priority: 0.5 },
