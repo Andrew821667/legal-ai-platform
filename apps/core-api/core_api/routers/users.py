@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -35,6 +35,14 @@ def upsert_user(
     user = None
     if payload.telegram_id is not None:
         user = db.execute(select(User).where(User.telegram_id == payload.telegram_id).limit(1)).scalar_one_or_none()
+    if user is None and payload.email:
+        user = db.execute(
+            select(User).where(func.lower(User.email) == payload.email.lower()).limit(1)
+        ).scalar_one_or_none()
+    if user is None and payload.username:
+        user = db.execute(
+            select(User).where(func.lower(User.username) == payload.username.lower()).limit(1)
+        ).scalar_one_or_none()
 
     if user is None:
         user = User(
@@ -57,15 +65,15 @@ def upsert_user(
             cta_variant=payload.cta_variant,
             cta_shown=payload.cta_shown,
             cta_shown_at=payload.cta_shown_at,
-            last_interaction=payload.last_interaction or datetime.now(timezone.utc),
+            last_interaction=payload.last_interaction or datetime.now(UTC),
         )
         db.add(user)
     else:
-        payload_data = payload.model_dump(exclude_none=True)
+        payload_data = payload.model_dump(exclude_none=True, exclude_unset=True)
         for key, value in payload_data.items():
             setattr(user, key, value)
         if payload.last_interaction is None:
-            user.last_interaction = datetime.now(timezone.utc)
+            user.last_interaction = datetime.now(UTC)
 
     db.commit()
     db.refresh(user)
@@ -169,7 +177,7 @@ def gdpr_clear_user_data(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user.consent_given = False
     user.consent_date = None
     user.consent_revoked = True
@@ -222,7 +230,7 @@ def reset_user_to_new(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     lead_ids = list(
         db.execute(select(Lead.id).where(Lead.telegram_user_id == telegram_user_id)).scalars().all()
     )

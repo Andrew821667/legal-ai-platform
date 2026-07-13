@@ -94,6 +94,7 @@ export default function MiniAppLeadPage() {
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<LeadSegment>("other");
   const [selectedScenario, setSelectedScenario] = useState("");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -164,6 +165,10 @@ export default function MiniAppLeadPage() {
       setError("Укажите контакт: телефон, email или Telegram.");
       return;
     }
+    if (!consentAccepted) {
+      setError("Нужно согласие на обработку персональных данных.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -182,6 +187,7 @@ export default function MiniAppLeadPage() {
           telegram_user_id: state.telegramUserId,
           contact,
           name,
+          consentAccepted,
           segment,
           offer,
           message,
@@ -359,6 +365,26 @@ export default function MiniAppLeadPage() {
             placeholder="Кратко опишите задачу: какой юридический процесс или другая цель, что сейчас делается вручную, где нужен AI, бот, сайт, Mini App, интеграция или внутренняя программа"
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
+        </label>
+
+        <label className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-3">
+          <input
+            type="checkbox"
+            checked={consentAccepted}
+            onChange={(event) => setConsentAccepted(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-600 text-amber-500 focus:ring-amber-500"
+          />
+          <span className="text-xs leading-5 text-slate-300">
+            Я соглашаюсь на обработку персональных данных для связи по заявке.{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-300 underline"
+            >
+              Политика конфиденциальности
+            </a>
+          </span>
         </label>
 
         {error && (

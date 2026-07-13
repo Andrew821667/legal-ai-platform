@@ -19,6 +19,7 @@ interface MiniAppLeadBody {
   telegram_user_id?: number | string;
   name?: string;
   contact?: string;
+  consentAccepted?: boolean;
   segment?: LeadSegment;
   message?: string;
   offer?: LeadOffer;
@@ -70,6 +71,19 @@ function parseCoreError(raw: string): string {
   return raw || "Core API request failed";
 }
 
+function extractEmail(contact: string): string | undefined {
+  const match = contact.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match?.[0]?.toLowerCase();
+}
+
+function extractTelegramUsername(contact: string): string | undefined {
+  const trimmed = contact.trim();
+  const direct = trimmed.match(/^@([A-Za-z0-9_]{5,32})$/);
+  if (direct) return direct[1];
+  const link = trimmed.match(/(?:t\.me|telegram\.me)\/([A-Za-z0-9_]{5,32})/i);
+  return link?.[1];
+}
+
 export async function POST(request: NextRequest) {
   if (!CORE_API_BOT_KEY) {
     return NextResponse.json(
@@ -94,6 +108,12 @@ export async function POST(request: NextRequest) {
   if (!contact) {
     return NextResponse.json(
       { detail: "Укажите контакт: email, телефон или Telegram" },
+      { status: 400 },
+    );
+  }
+  if (payload.consentAccepted !== true) {
+    return NextResponse.json(
+      { detail: "Нужно согласие на обработку персональных данных." },
       { status: 400 },
     );
   }
@@ -128,9 +148,14 @@ export async function POST(request: NextRequest) {
   const utmCampaign = clean(payload.utm_campaign, 255);
   const utmContent = clean(payload.utm_content, 255);
   const utmTerm = clean(payload.utm_term, 255);
+  const consentAt = new Date().toISOString();
+  const consentVersion = "miniapp_pdn_v1";
 
   const notesParts = [
     `offer=${offer}`,
+    `consent=accepted`,
+    `consent_version=${consentVersion}`,
+    `consent_at=${consentAt}`,
     telegramUserId ? `telegram_user_id=${telegramUserId}` : undefined,
     auth.verifiedTelegramUserId
       ? `telegram_verified=1`
@@ -160,6 +185,35 @@ export async function POST(request: NextRequest) {
     .update(`${telegramUserId || "anon"}|${contact}|${offer}|${Date.now()}`)
     .digest("hex")
     .slice(0, 32);
+
+  const userEmail = extractEmail(contact);
+  const userTelegramUsername = extractTelegramUsername(contact);
+  if (telegramUserId || userEmail || userTelegramUsername) {
+    const userResponse = await fetch(`${CORE_API_URL}/api/v1/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": CORE_API_BOT_KEY,
+        "Idempotency-Key": `${idempotencyKey}:user`,
+      },
+      body: JSON.stringify({
+        telegram_id: telegramUserId,
+        email: userEmail,
+        username: userTelegramUsername,
+        name,
+        consent_given: true,
+        consent_date: consentAt,
+        consent_revoked: false,
+        last_interaction: consentAt,
+      }),
+      cache: "no-store",
+    });
+
+    const userRaw = await userResponse.text();
+    if (!userResponse.ok) {
+      return NextResponse.json({ detail: parseCoreError(userRaw) }, { status: userResponse.status });
+    }
+  }
 
   const response = await fetch(`${CORE_API_URL}/api/v1/leads`, {
     method: "POST",

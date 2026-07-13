@@ -108,6 +108,7 @@ export default function LeadCaptureForm() {
           segment,
           message,
           offer,
+          consentAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
           [HONEYPOT_FIELD_NAME]: honeypotValue,
