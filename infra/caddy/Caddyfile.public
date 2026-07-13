@@ -23,6 +23,14 @@
         reverse_proxy core-api:8000
     }
 
+    handle /lawtable {
+        redir /lawtable/app 302
+    }
+
+    handle_path /lawtable/* {
+        reverse_proxy host.docker.internal:3001
+    }
+
     handle /guacamole* {
         reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
     }
@@ -84,13 +92,12 @@ https://{$DOMAIN} {
         reverse_proxy core-api:8000
     }
 
-    handle /guacamole* {
-        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    handle /lawtable {
+        redir /lawtable/app 302
     }
 
-    handle /telegram-mcp* {
-        uri strip_prefix /telegram-mcp
-        reverse_proxy host.docker.internal:8791
+    handle_path /lawtable/* {
+        reverse_proxy host.docker.internal:3001
     }
 
     handle {
