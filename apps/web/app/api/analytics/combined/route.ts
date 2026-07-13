@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireAdminSession } from '@/lib/admin-session';
-import { loadGoogleAnalyticsPayload, type GA4MetricData } from '../google/route';
-import { loadYandexAnalyticsPayload } from '../yandex/route';
+import { loadGoogleAnalyticsPayload, type GA4MetricData } from '@/lib/analytics/google';
+import { loadYandexAnalyticsPayload } from '@/lib/analytics/yandex';
 
 /**
  * API endpoint для получения объединенных данных из Google Analytics 4 и Yandex Metrika
