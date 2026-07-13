@@ -92,7 +92,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legalai_app}:${POSTGRES_PASSWORD:-change_me_local_only}@postgres:5432/${POSTGRES_DB:-legalai_platform}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://ai-verdict.ru,http://localhost:3000}
       MINIAPP_PUBLIC_BASE_URL: ${MINIAPP_PUBLIC_BASE_URL:-https://ai-verdict.ru}
-      CORE_API_WORKERS: ${CORE_API_WORKERS:-4}
+      CORE_API_WORKERS: ${CORE_API_WORKERS:-2}
+      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-2}
       TZ: ${TZ:-Europe/Moscow}
     extra_hosts:
       - "host.docker.internal:host-gateway"
