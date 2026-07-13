@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Корпоративное право и M&A с AI",
   description:
     "AI для корпоративного права и сделок M&A: ускорение Due Diligence, анализ структуры и контроль юридических рисков.",
-  alternates: {
-    canonical: "/services/corporate-ma-ai",
-  },
-  openGraph: {
-    title: "Корпоративное право и M&A с AI | AI Verdict",
-    description:
-      "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
-    url: "/services/corporate-ma-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Корпоративное право и M&A с AI | AI Verdict",
-    description:
-      "AI для первого обзора корпоративных документов и структурирования материалов по сделке.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/corporate-ma-ai",
+  type: "article",
+});
 
 export default function CorporateMAPage() {
   return (

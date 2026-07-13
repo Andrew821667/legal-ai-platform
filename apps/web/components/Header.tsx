@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
+import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Detect scroll to add background to header
   useEffect(() => {
@@ -17,10 +20,34 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (!isMoreOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!moreMenuRef.current?.contains(event.target as Node)) {
+        setIsMoreOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMoreOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isMoreOpen]);
+
   const mainNavigation = [
     { name: "Решения", href: "/solutions" },
     { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
-    { name: "Контент / Кейсы", href: "/content-cases" },
+    { name: "Материалы", href: "/guides" },
     { name: "О платформе", href: "/about" },
   ];
 
@@ -28,6 +55,8 @@ export default function Header() {
     { name: "Главная", href: "/" },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
+    { name: "Другая автоматизация", href: "/services/custom-ai" },
+    { name: "Сценарии", href: "/cases" },
     { name: "Команда", href: "/team" },
   ];
   const contractAIActionHref = contractAIEntryHref("demo");
@@ -35,7 +64,7 @@ export default function Header() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`${isLightOpsTheme ? "site-header-light-ops" : ""} fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
           ? "bg-slate-800/95 backdrop-blur-md shadow-lg"
           : "bg-transparent"
@@ -122,24 +151,34 @@ export default function Header() {
                 </Link>
               )
             ))}
-            <details className="relative">
-              <summary className="list-none cursor-pointer text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap">
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsMoreOpen((open) => !open)}
+                className="cursor-pointer text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
+                aria-expanded={isMoreOpen}
+                aria-haspopup="menu"
+              >
                 Еще
-              </summary>
-              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
-                <div className="p-2 space-y-1">
+              </button>
+              {isMoreOpen && (
+              <div className="more-menu-surface absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-xl" role="menu">
+                <div className="p-2">
                   {secondaryNavigation.map((item) => (
                     <Link
                       key={item.name}
                       href={item.href}
-                      className="block rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors"
+                      className="more-menu-item block rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors"
+                      onClick={() => setIsMoreOpen(false)}
+                      role="menuitem"
                     >
                       {item.name}
                     </Link>
                   ))}
                 </div>
               </div>
-            </details>
+              )}
+            </div>
           </div>
 
           {/* Desktop CTA Button */}

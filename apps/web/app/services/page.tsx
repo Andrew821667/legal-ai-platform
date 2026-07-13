@@ -1,31 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Услуги Legal AI",
   description:
-    "Услуги AI Verdict: договоры, судебная работа, M&A, комплаенс, налоги, аналитика и кастомные AI-решения для юротдела.",
-  alternates: {
-    canonical: "/services",
-  },
-  openGraph: {
-    title: "Услуги Legal AI | AI Verdict",
-    description:
-      "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика и другие услуги.",
-    url: "/services",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "Услуги Legal AI | AI Verdict",
-    description:
-      "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика и другие услуги.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+    "Услуги AI Verdict: автоматизация юридической функции, договоры, судебная работа, комплаенс, аналитика, интеграции, боты, сайты и кастомная разработка.",
+  path: "/services",
+});
 
 const serviceLinks = [
   {
@@ -61,8 +43,8 @@ const serviceLinks = [
     href: "/services/legal-analytics-ai",
   },
   {
-    title: "Кастомные AI-решения",
-    description: "Интеграции и сценарии автоматизации под ваши процессы.",
+    title: "Сквозная автоматизация и разработка",
+    description: "Боты, сайты, mini app, внутренние программы и интеграции с CRM/ERP/1C/ЭДО.",
     href: "/services/custom-ai",
   },
   {
@@ -78,15 +60,30 @@ const serviceLinks = [
 ];
 
 export default function ServicesPage() {
+  const siteUrl = "https://ai-verdict.ru";
+  const itemListSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Направления внедрения Legal AI",
+    itemListElement: serviceLinks.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.title,
+      url: `${siteUrl}${item.href}`,
+    })),
+  };
+
   return (
     <main className="min-h-screen bg-slate-50">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
           Услуги AI Verdict
         </h1>
         <p className="text-lg text-slate-600 mb-10">
-          Выберите направление и посмотрите, как AI может помочь вашему
-          юридическому отделу.
+          Выберите направление и посмотрите, как AI Verdict может помочь вашему
+          юридическому отделу и смежным бизнес-процессам. Мы можем закрыть не только legaltech-сценарий,
+          но и разработку ботов, сайтов, mini app, внутренних сервисов и интеграций вокруг него.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -107,12 +104,11 @@ export default function ServicesPage() {
 
         <div className="mt-12 bg-white rounded-2xl border border-slate-200 p-8">
           <h2 className="text-2xl font-bold text-slate-900 mb-3">
-            Региональные страницы
+            Удаленная работа с командами в регионах
           </h2>
           <p className="text-slate-600 mb-4">
-            Для локального поиска мы сделали отдельные страницы под ключевые
-            регионы: Москва, Санкт-Петербург, Краснодарский край,
-            Ставропольский край, Воронежская и Новосибирская области и другие.
+            Диагностику и часть этапов внедрения можно проводить удаленно.
+            Региональный раздел показывает типовые задачи и не означает наличие локальных офисов.
           </p>
           <Link href="/regions" className="text-amber-600 font-semibold">
             Перейти к регионам →

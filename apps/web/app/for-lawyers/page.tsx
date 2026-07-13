@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Для юристов",
+export const metadata: Metadata = createPageMetadata({
+  title: "AI для юристов: практические сценарии",
   description:
     "Практические сценарии автоматизации юридической работы: договоры, претензии, контроль рисков, юридические шаблоны и legal ops.",
-  alternates: { canonical: "/for-lawyers" },
-};
+  path: "/for-lawyers",
+});
 
 const tracks = [
   {

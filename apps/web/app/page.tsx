@@ -3,124 +3,154 @@ import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
 import PlatformMap from "@/components/PlatformMap";
+import { isLightOpsTheme } from "@/lib/visualTheme";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Платформа AI Verdict",
+export const metadata: Metadata = createPageMetadata({
+  title: "AI Verdict — автоматизация юридических процессов и интеграций",
   description:
-    "Платформа для автоматизации юридической функции: бесплатный вход, флагманский Contract_AI_System для проверки договоров и этапные сценарии внедрения.",
-  alternates: {
-    canonical: "/",
-  },
-};
+    "AI Verdict автоматизирует юридические бизнес-процессы, интегрирует их с системами компании и при необходимости разрабатывает боты, сайты, mini app, AI-модули и внутренние сервисы.",
+  path: "/",
+  keywords: ["автоматизация юридической работы", "AI для юристов", "Legal AI", "legal ops"],
+});
 
-const audienceCards = [
+const roleCards = [
   {
-    title: "Для юристов",
+    title: "Юридическая команда",
     description:
-      "Ускоряем договорную и претензионную работу, снижаем рутину, стандартизируем контроль качества без потери юридической точности.",
+      "Договоры, претензии, legal intake, шаблоны, база знаний, контроль сроков и снижение ручной рутины без потери юридической точности.",
     href: ROUTES.forLawyers,
     cta: "Сценарии для юристов",
   },
   {
-    title: "Для бизнеса",
+    title: "Руководитель бизнеса",
     description:
-      "Выстраиваем управляемую юридическую функцию: быстрее согласования, прозрачные сроки реакции, контроль рисков и прогнозируемая нагрузка команды.",
+      "Прозрачные сроки, контроль рисков, управляемые согласования, понятная загрузка команды и автоматизация процессов, которые тормозят продажи или операции.",
     href: ROUTES.forBusiness,
     cta: "Сценарии для бизнеса",
+  },
+  {
+    title: "Смежный контур",
+    description:
+      "Связываем юридические процессы с заявками, статусами, уведомлениями, документами, таблицами, внутренними панелями и повторяющимися действиями между подразделениями.",
+    href: "/services/custom-ai",
+    cta: "Обсудить автоматизацию",
+  },
+  {
+    title: "IT и интеграции",
+    description:
+      "Подключаем CRM, ERP, 1C, ЭДО, Google Sheets, базы данных, Telegram, сайты и внутренние сервисы в единый управляемый процесс.",
+    href: ROUTES.solutions,
+    cta: "Посмотреть архитектуру",
   },
 ];
 
 const platformLayers = [
   {
-    title: "Контент и аналитика",
-    description: "Канал и редакционный контур: подбор тем, драфты, модерация, управляемая публикация.",
+    title: "Процесс",
+    description: "Фиксируем, где теряются заявки, документы, согласования, статусы, ответственность и время команды.",
   },
   {
-    title: "Contract_AI_System",
-    description: "Центральный продукт: проверка договора, выявление рисков, комментарии и рекомендации по правкам.",
+    title: "AI-слой",
+    description: "Добавляем анализ документов, классификацию запросов, поиск по базе знаний, генерацию черновиков и подсказки человеку.",
   },
   {
-    title: "Внедрение и сопровождение",
-    description: "Пилот, настройка процессов, обучение команды и развитие roadmap автоматизации.",
+    title: "Интерфейсы",
+    description: "Делаем Telegram-боты, Mini App, сайты, личные кабинеты, внутренние панели и рабочие экраны под роли пользователей.",
+  },
+  {
+    title: "Интеграции",
+    description: "Связываем решение с CRM, ERP, 1C, ЭДО, таблицами, базами данных и существующей инфраструктурой клиента.",
   },
 ];
 
 const cases = [
-  "Автоматизация входящих заявок и квалификации обращений",
-  "Сокращение цикла согласования договоров за счет ИИ-проверки",
-  "Единый контур юридического контента и экспертных разборов",
-  "Поддержка организации юридической работы: регламенты, шаблоны, контроль качества",
+  "Юридические процессы: договоры, претензии, legal intake, комплаенс, база знаний, шаблоны",
+  "Связанные процессы: заявки, статусы, согласования, уведомления, контроль сроков и ответственных",
+  "Интерфейсы вокруг legal-контура: Telegram-боты, сайты, Mini App, личные кабинеты, клиентские порталы",
+  "Интеграции и данные: CRM, ERP, 1C, ЭДО, таблицы, базы данных, отчеты и внутренние панели",
+  "AI-интеграции: анализ документов, классификация обращений, генерация черновиков, поиск и суммаризация",
+  "Другие автоматизации: если для отдельной цели нужен бот, сайт, Mini App, сервис или программа, можем спроектировать и запустить это тоже",
 ];
 
 const launchPath = [
   {
-    title: "1. Бесплатно познакомиться",
-    description: "Бесплатный вход в Contract_AI_System: 3 договора в месяц, чтобы проверить сценарий на практике.",
+    title: "1. Разобрать юридический процесс",
+    description: "Понимаем, где именно в legal-контуре теряются документы, заявки, согласования, сроки, ответственность или время команды.",
   },
   {
-    title: "2. Проверить гипотезу",
-    description: "Через Contract_AI_System на реальных документах и прикладном сценарии.",
+    title: "2. Собрать карту интеграций",
+    description: "Показываем, где нужен AI, где достаточно обычной логики, с какими CRM, ERP, 1C, ЭДО, таблицами или внутренними системами нужно связаться.",
   },
   {
-    title: "3. Запустить пилот",
-    description: "Ограниченный пилот на ваших документах после бесплатной проверки базового сценария.",
+    title: "3. Сделать прототип или пилот",
+    description: "Проверяем эффект на реальных документах, заявках, таблицах, чатах или системах клиента.",
   },
   {
-    title: "4. Развернуть рабочий контур",
-    description: "Рабочее решение с ролями, контролем качества, экспортом и интеграциями по необходимости.",
+    title: "4. Запустить рабочую систему",
+    description: "Разворачиваем решение с ролями, журналом действий, интеграциями, уведомлениями, поддержкой и развитием.",
   },
+];
+
+const proofPoints = [
+  "Начинаем с процесса и результата, а не с модного AI-инструмента.",
+  "Юридическая автоматизация остается основной специализацией и точкой доверия.",
+  "Можем закрыть весь legal-контур: от анализа документа до бота, сайта, базы данных и интеграции.",
+  "Если для результата или для других целей нужен бот, сайт, Mini App, внутренняя программа, AI-модуль или другая автоматизация, можем спроектировать и запустить это тоже.",
+  "AI используется там, где он реально помогает: анализ, классификация, поиск, черновики, подсказки.",
 ];
 
 export default function Home() {
   const contractAIHref = contractAIEntryHref("demo");
   const contractAIExternal = contractAIEntryIsExternal();
   return (
-    <main className="bg-slate-900 text-slate-100">
+    <main className={`${isLightOpsTheme ? "visual-light-ops" : ""} bg-slate-900 text-slate-100`}>
       <section className="relative overflow-hidden border-b border-slate-800">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.16),_transparent_52%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.14),_transparent_45%)]" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-18">
           <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
-            Платформа автоматизации юридической работы
+            Юридическая автоматизация + интеграции + смежная разработка
           </span>
           <h1 className="mt-6 max-w-4xl text-3xl font-semibold leading-tight text-white sm:text-4xl md:text-5xl">
-            AI Verdict: от бесплатной консультации и проверки договора к пилоту и рабочему внедрению
+            Автоматизируем юридические бизнес-процессы и связываем их с системами компании
           </h1>
           <p className="mt-6 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
-            Помогаем перейти от разрозненных ИИ-экспериментов к управляемой практике: сначала бесплатно помогаем
-            понять задачу, затем проверяем гипотезу в Contract_AI_System и только после этого выходим в пилот и
-            рабочий контур.
+            AI Verdict помогает юридической функции работать быстрее и прозрачнее: договоры, заявки, согласования,
+            комплаенс, документы и контроль сроков. Интегрируем решения с CRM, ERP, 1C, ЭДО, Telegram, сайтами и
+            внутренними системами. А если для результата или для других целей нужен бот, сайт, Mini App, внутренняя
+            программа, AI-модуль или другая автоматизация, можем спроектировать и запустить это тоже.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <a
+              href="#lead-form"
+              className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+            >
+              Разобрать юридический процесс
+            </a>
             {contractAIExternal ? (
               <a
                 href={contractAIHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+                className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
               >
-                Открыть сервис проверки договоров
+                Проверить договор
               </a>
             ) : (
               <Link
                 href={contractAIHref}
-                className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+                className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
               >
-                Открыть сервис проверки договоров
+                Проверить договор
               </Link>
             )}
             <Link
-              href={ROUTES.solutions}
+              href="/services/custom-ai"
               className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
             >
-              Посмотреть решения
+              Обсудить интеграцию или другое решение
             </Link>
-            <a
-              href="#lead-form"
-              className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 transition-colors hover:border-amber-500 hover:text-amber-300"
-            >
-              Получить бесплатную консультацию
-            </a>
           </div>
           <p className="mt-4 text-sm text-slate-400">
             Или напишите нам в{" "}
@@ -132,7 +162,7 @@ export default function Home() {
             >
               Telegram
             </a>
-            {" "}— если ссылка не открывается, возможно нужно временно отключить прокси/VPN.
+            {" "}— ассистент примет задачу в свободной форме.
           </p>
         </div>
       </section>
@@ -141,10 +171,11 @@ export default function Home() {
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="max-w-3xl">
-          <h2 className="text-3xl md:text-4xl font-semibold text-white">Как обычно начинается работа</h2>
+          <h2 className="text-3xl md:text-4xl font-semibold text-white">Как начинается автоматизация</h2>
           <p className="mt-4 text-slate-300">
-            Важный принцип платформы: не обещаем подписку и не продаем абстрактный сервис с первого клика. Сначала
-            бесплатный вход, затем проверка на реальном кейсе, потом пилот и только после этого рабочее внедрение.
+            Не начинаем с ответа “вам нужен бот” или “вам нужен AI”. Сначала разбираем юридический процесс, затем
+            выбираем технический контур: AI-модуль, интеграции, интерфейсы, внутренний сервис или простую автоматизацию
+            без лишней сложности.
           </p>
         </div>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -158,10 +189,17 @@ export default function Home() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {audienceCards.map((card) => (
+        <div className="max-w-3xl">
+          <h2 className="text-3xl font-semibold text-white">Маршруты под разные роли</h2>
+          <p className="mt-4 text-slate-300">
+            Юридический процесс почти всегда связан с бизнесом, операциями и IT. Поэтому показываем задачу не
+            списком технологий, а через роли, интеграции и ожидаемый результат.
+          </p>
+        </div>
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {roleCards.map((card) => (
             <article key={card.title} className="rounded-2xl border border-slate-800 bg-slate-800/60 p-7">
-              <h2 className="text-2xl font-semibold text-white">{card.title}</h2>
+              <h3 className="text-xl font-semibold text-white">{card.title}</h3>
               <p className="mt-4 text-slate-300 leading-relaxed">{card.description}</p>
               <Link href={card.href} className="mt-6 inline-flex text-amber-300 hover:text-amber-200 font-semibold">
                 {card.cta} →
@@ -174,10 +212,10 @@ export default function Home() {
       <section className="border-y border-slate-800 bg-slate-800/40" id="product-entry">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="max-w-3xl">
-            <h2 className="text-3xl md:text-4xl font-semibold text-white">Флагманский вход: Contract_AI_System</h2>
+            <h2 className="text-3xl md:text-4xl font-semibold text-white">Флагманский legal-сценарий: Contract_AI_System</h2>
             <p className="mt-4 text-slate-300">
-              Вся архитектура платформы сходится в продукте проверки договоров. Сначала выявляем риски и зоны контроля,
-              затем масштабируем подход на смежные юридические процессы.
+              Проверка договоров — самый понятный вход в платформу. На нем видно наш базовый принцип: AI помогает
+              быстро разобрать документ, но контроль, ответственность и финальное решение остаются у человека.
             </p>
           </div>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -198,7 +236,12 @@ export default function Home() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-3xl font-semibold text-white">Карта платформы</h2>
+        <h2 className="text-3xl font-semibold text-white">Контур автоматизации</h2>
+        <p className="mt-4 max-w-3xl text-slate-300">
+          Базовый фокус — юридические бизнес-процессы. Вокруг них собираем рабочий контур, где процесс, AI,
+          интерфейсы и интеграции поддерживают друг друга. Отдельные смежные автоматизации тоже можем делать,
+          если они нужны для результата или для другой задачи клиента.
+        </p>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
           {platformLayers.map((layer) => (
             <article key={layer.title} className="rounded-xl border border-slate-800 bg-slate-800/50 p-6">
@@ -211,10 +254,22 @@ export default function Home() {
 
       <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <h2 className="text-3xl font-semibold text-white">Сценарии, которые запускаем первыми</h2>
+          <h2 className="text-3xl font-semibold text-white">Что можно автоматизировать</h2>
+          <p className="mt-4 max-w-3xl text-slate-300">
+            Юридическая функция — наша сильная специализация и основная точка входа. При этом мы можем проектировать
+            и другие автоматизации: если задачу можно описать, связать с данными и превратить в повторяемый маршрут,
+            мы можем помочь ее запустить.
+          </p>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {cases.map((item) => (
               <div key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4 text-slate-200">
+                {item}
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {proofPoints.map((item) => (
+              <div key={item} className="rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-4 text-sm text-slate-300">
                 {item}
               </div>
             ))}

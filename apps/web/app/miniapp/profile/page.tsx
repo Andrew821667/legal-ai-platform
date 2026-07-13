@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/miniapp/profile",
   },
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
+  },
 };
 
 export default function MiniAppProfilePage() {

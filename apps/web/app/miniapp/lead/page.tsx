@@ -4,7 +4,7 @@ import MiniAppLeadClient from "@/components/miniapp/pages/MiniAppLeadClient";
 
 export const metadata: Metadata = {
   title: "Заявка Mini App | AI Verdict",
-  description: "Форма заявки Mini App AI Verdict для связи по пилоту или проверке договорного сценария.",
+  description: "Форма заявки Mini App AI Verdict для пилота, проверки договорного сценария, интеграции, бота, сайта, Mini App или внутреннего сервиса.",
   alternates: {
     canonical: "/miniapp/lead",
   },

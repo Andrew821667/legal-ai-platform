@@ -1,32 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
+import { contractAIEntryHref } from "@/lib/links";
 
-export const metadata: Metadata = {
-  title: "Автоматизация договоров с AI",
+export const metadata: Metadata = createPageMetadata({
+  title: "Внедрение AI в договорную работу",
   description:
-    "AI для договорной работы: быстрая проверка условий, поиск рисков и ускорение согласования документов.",
-  alternates: {
-    canonical: "/services/contracts-ai",
-  },
-  openGraph: {
-    title: "Автоматизация договоров с AI | AI Verdict",
-    description:
-      "Сокращаем время на договорную работу и уменьшаем риск ошибок в документах.",
-    url: "/services/contracts-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Автоматизация договоров с AI | AI Verdict",
-    description:
-      "Сокращаем время на договорную работу и уменьшаем риск ошибок в документах.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+    "Консалтинг по внедрению AI в договорный процесс: диагностика, правила проверки, пилот, метрики и интеграция в работу юридической команды.",
+  path: "/services/contracts-ai",
+  type: "article",
+});
 
 export default function ContractsAIPage() {
   return (
@@ -59,6 +43,22 @@ export default function ContractsAIPage() {
           </ul>
         </div>
 
+        <div className="mb-8 rounded-2xl border border-sky-200 bg-sky-50 p-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">Нужен готовый сервис для проверки договора?</h2>
+          <p className="text-slate-700 mb-5">
+            Эта страница посвящена внедрению процесса в юридическую команду. Самостоятельный анализ документов
+            доступен в отдельном продукте Contract AI System на домене contract.ai-verdict.ru.
+          </p>
+          <a
+            href={contractAIEntryHref("demo")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex rounded-lg bg-sky-700 px-6 py-3 font-semibold text-white hover:bg-sky-800"
+          >
+            Проверить договор в Contract AI System →
+          </a>
+        </div>
+
         <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8">
           <h2 className="text-2xl font-bold text-slate-900 mb-4">
             Когда это особенно полезно
@@ -81,7 +81,7 @@ export default function ContractsAIPage() {
             href="/cases"
             className="inline-block bg-white border border-slate-300 text-slate-700 font-semibold px-8 py-4 rounded-lg text-center hover:bg-slate-100"
           >
-            Посмотреть кейсы
+            Посмотреть сценарии
           </Link>
         </div>
       </section>

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { EXTERNAL_LINKS, leadBotDeepLink } from "@/lib/links";
 import { LEGAL_CONTACT_EMAIL } from "@/lib/legalProfile";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "О платформе",
   description:
     "О платформе AI Verdict: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
-  alternates: { canonical: "/about" },
-};
+  path: "/about",
+});
 
 const principles = [
   "Решаем прикладные задачи юридической функции, а не внедряем AI ради AI.",
@@ -51,7 +52,7 @@ export default function AboutPage() {
               <h3 className="font-semibold text-amber-300">Оставить заявку</h3>
               <p className="mt-2 text-sm text-slate-200">
                 <a href="/#lead-form" className="hover:text-amber-300">
-                  Форма на сайте — без VPN
+                  Форма на сайте
                 </a>
               </p>
             </article>
@@ -62,7 +63,7 @@ export default function AboutPage() {
                   Ассистент AI Verdict
                 </a>
               </p>
-              <p className="mt-1 text-xs text-slate-500">Если ссылка не открывается, возможно нужно временно отключить прокси/VPN.</p>
+              <p className="mt-1 text-xs text-slate-500">Можно написать в Telegram или оставить заявку через форму на сайте.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <h3 className="font-semibold text-amber-300">Канал</h3>

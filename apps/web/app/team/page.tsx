@@ -1,31 +1,14 @@
 import type { Metadata } from "next";
 import AboutTeam from "@/components/AboutTeam";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "О команде",
   description:
-    "Как команда AI Verdict подходит к автоматизации юридической функции: процессы, данные, контроль и внедрение.",
-  alternates: {
-    canonical: "/team",
-  },
-  openGraph: {
-    title: "О команде | AI Verdict",
-    description:
-      "Подход команды AI Verdict к внедрению AI в юридические процессы.",
-    url: "/team",
-    type: "profile",
-  },
-  twitter: {
-    card: "summary",
-    title: "О команде | AI Verdict",
-    description:
-      "Подход команды AI Verdict к внедрению AI в юридические процессы.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+    "Основатель AI Verdict, ответственность за продукт и материалы, а также подход к автоматизации юридической функции.",
+  path: "/team",
+  type: "profile",
+});
 
 export default function TeamPage() {
   return (

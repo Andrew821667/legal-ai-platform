@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ROUTES, contractAIEntryHref } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, leadBotDeepLink } from "@/lib/links";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
@@ -11,8 +11,8 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 
 const audienceHints = {
   lawyer: "Фокус на договорной и претензионной работе.",
-  business: "Фокус на сроках согласования, рисках и SLA.",
-  mixed: "Фокус на стыке юридической и бизнес-функции.",
+  business: "Фокус на сроках согласования, рисках, SLA и связке с операционными системами.",
+  mixed: "Фокус на стыке юридической, бизнес- и технической автоматизации.",
 } as const;
 
 type HighlightCard = {
@@ -48,6 +48,41 @@ const sectionLabel: Record<string, string> = {
   solutions: "🛠 Обсудить пилот",
   profile: "👤 Профиль",
 };
+
+const quickActions = [
+  {
+    title: "Проверить договор",
+    description: "Открыть Contract_AI_System и быстро проверить документ.",
+    href: contractAIEntryHref("demo"),
+    action: MINIAPP_ACTIONS.openContractAI,
+    variant: "primary" as const,
+    external: true,
+  },
+  {
+    title: "Собрать заявку",
+    description: "Описать юридический процесс, интеграцию или смежную автоматизацию.",
+    href: ROUTES.miniAppLead,
+    action: MINIAPP_ACTIONS.openAssistant,
+    variant: "info" as const,
+    external: false,
+  },
+  {
+    title: "Описать задачу в чат",
+    description: "Передать свободное описание ассистенту без формы.",
+    href: leadBotDeepLink("miniapp_home_task"),
+    action: MINIAPP_ACTIONS.openAssistant,
+    variant: "secondary" as const,
+    external: true,
+  },
+  {
+    title: "Выбрать сценарий",
+    description: "Посмотреть типовые маршруты автоматизации.",
+    href: ROUTES.miniAppSolutions,
+    action: MINIAPP_ACTIONS.openSolutions,
+    variant: "secondary" as const,
+    external: false,
+  },
+];
 
 export default function MiniAppHomePage() {
   const { state, ready } = useMiniAppState();
@@ -118,24 +153,35 @@ export default function MiniAppHomePage() {
   return (
     <section className="space-y-4">
       <MiniAppGuideCard
-        title="Как использовать экран"
-        description="Начните с блока «Для вас», затем переходите в Contract_AI_System или в решения. Последнее действие сохраняется, чтобы вы продолжали с нужного шага."
+        title="Быстрый пульт"
+        description="Mini App нужен не для чтения сайта внутри Telegram, а для коротких действий: проверить документ, собрать заявку по legal-процессу, описать интеграцию или смежную задачу."
       />
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
-        <h2 className="text-base font-semibold text-white">Важное сегодня</h2>
-        <ul className="mt-3 space-y-3 text-sm text-slate-300">
-          {highlights.map((item) => (
-            <li key={item.id}>
-              <p>• {item.title}</p>
-              {item.summary ? <p className="mt-1 text-xs text-slate-400">{item.summary}</p> : null}
-            </li>
+        <h2 className="text-base font-semibold text-white">Что сделать сейчас</h2>
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          {quickActions.map((action) => (
+            <div key={action.title} className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+              <p className="text-sm font-semibold text-white">{action.title}</p>
+              <p className="mt-1 text-xs text-slate-400">{action.description}</p>
+              <MiniTrackedLink
+                href={action.href}
+                action={action.action}
+                meta={{ eventType: MINIAPP_EVENT_TYPES.ctaClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
+                target={action.external ? "_blank" : undefined}
+                rel={action.external ? "noopener noreferrer" : undefined}
+                className="mt-3"
+                variant={action.variant}
+              >
+                Открыть
+              </MiniTrackedLink>
+            </div>
           ))}
-        </ul>
+        </div>
       </article>
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
-        <h2 className="text-base font-semibold text-white">Для вас</h2>
+        <h2 className="text-base font-semibold text-white">Маршрут под вашу задачу</h2>
         <p className="mt-2 text-sm text-slate-300">
           {ready ? audienceHints[state.audience] : "Подбираем маршрут под ваш профиль..."}
         </p>
@@ -164,6 +210,14 @@ export default function MiniAppHomePage() {
           >
             Сценарии внедрения
           </MiniTrackedLink>
+          <MiniTrackedLink
+            href="/services/custom-ai"
+            action={MINIAPP_ACTIONS.openSolutions}
+            meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
+            variant="secondary"
+          >
+            Сквозная автоматизация
+          </MiniTrackedLink>
         </div>
       </article>
 
@@ -178,6 +232,18 @@ export default function MiniAppHomePage() {
           Сохранено: {state.savedCount} • Событий за 24ч: {state.recentEvents24h} • Лид-интентов за 30д:{" "}
           {state.leadIntents30d}
         </p>
+      </article>
+
+      <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
+        <h2 className="text-base font-semibold text-white">Сигналы и материалы</h2>
+        <ul className="mt-3 space-y-3 text-sm text-slate-300">
+          {highlights.map((item) => (
+            <li key={item.id}>
+              <p>• {item.title}</p>
+              {item.summary ? <p className="mt-1 text-xs text-slate-400">{item.summary}</p> : null}
+            </li>
+          ))}
+        </ul>
       </article>
 
       <article className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">

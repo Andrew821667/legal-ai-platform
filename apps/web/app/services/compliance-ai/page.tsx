@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Автоматизация комплаенса с AI",
   description:
     "AI для комплаенса: мониторинг изменений законодательства, контроль рисков и повышение прозрачности процессов.",
-  alternates: {
-    canonical: "/services/compliance-ai",
-  },
-  openGraph: {
-    title: "Автоматизация комплаенса с AI | AI Verdict",
-    description:
-      "Помогаем выстроить системный комплаенс-контроль и снизить риски нарушений.",
-    url: "/services/compliance-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Автоматизация комплаенса с AI | AI Verdict",
-    description:
-      "Помогаем выстроить системный комплаенс-контроль и снизить риски нарушений.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/compliance-ai",
+  type: "article",
+});
 
 export default function ComplianceAIPage() {
   return (

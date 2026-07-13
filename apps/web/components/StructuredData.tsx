@@ -4,6 +4,7 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_PHONE_HREF,
   LEGAL_OPERATOR_NAME,
+  LEGAL_OPERATOR_STATUS,
   LEGAL_SITE_URL,
 } from "@/lib/legalProfile";
 
@@ -12,6 +13,50 @@ interface StructuredDataProps {
 }
 
 export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredDataProps) {
+  const serviceOffers = [
+    {
+      name: "Автоматизация договорной работы",
+      description: "AI-анализ договоров, выявление рисков, чек-листы, согласование правок и контроль качества.",
+      url: `${siteUrl}/services/contracts-ai`,
+    },
+    {
+      name: "Автоматизация судебной работы",
+      description: "Подготовка материалов, структурирование фактов, сбор позиции и контроль событий по делам.",
+      url: `${siteUrl}/services/litigation-ai`,
+    },
+    {
+      name: "Автоматизация комплаенса",
+      description: "Мониторинг изменений, контроль внутренних правил и сопровождение регулярных проверок.",
+      url: `${siteUrl}/services/compliance-ai`,
+    },
+    {
+      name: "Корпоративное право и M&A",
+      description: "Ускорение due diligence, анализ корпоративных документов и выявление существенных рисков.",
+      url: `${siteUrl}/services/corporate-ma-ai`,
+    },
+    {
+      name: "Юридическая аналитика",
+      description: "Риск-дашборды, KPI юридической функции и управленческая аналитика на данных компании.",
+      url: `${siteUrl}/services/legal-analytics-ai`,
+    },
+    {
+      name: "Кастомная автоматизация и разработка",
+      description: "Боты, сайты, Mini App, внутренние сервисы, программы и интеграции с CRM, ERP, 1C, ЭДО и базами данных.",
+      url: `${siteUrl}/services/custom-ai`,
+    },
+  ];
+
+  const navigationItems = [
+    { name: "Главная", url: siteUrl },
+    { name: "Для юристов", url: `${siteUrl}/for-lawyers` },
+    { name: "Для бизнеса", url: `${siteUrl}/for-business` },
+    { name: "Услуги", url: `${siteUrl}/services` },
+    { name: "Решения", url: `${siteUrl}/solutions` },
+    { name: "Contract_AI_System", url: `${siteUrl}/contract-ai-system` },
+    { name: "Другая автоматизация", url: `${siteUrl}/services/custom-ai` },
+    { name: "Mini App", url: `${siteUrl}/miniapp` },
+  ];
+
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -19,11 +64,25 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     name: LEGAL_BRAND,
     url: siteUrl,
     description:
-      "Команда, которая помогает юридическим функциям внедрять AI-сценарии для заявок, договорной работы, комплаенса и типовых процессов.",
+      "Команда, которая помогает юридическим функциям внедрять AI-сценарии, интеграции и прикладную автоматизацию: боты, сайты, mini app, внутренние сервисы и программы под бизнес-процессы.",
+    logo: `${siteUrl}/icon.svg`,
+    image: `${siteUrl}/opengraph-image`,
     areaServed: {
       "@type": "Country",
       name: "Россия",
     },
+    knowsAbout: [
+      "автоматизация юридической работы",
+      "legal tech",
+      "AI для юристов",
+      "автоматизация договоров",
+      "автоматизация судебной работы",
+      "комплаенс",
+      "CRM и ERP интеграции",
+      "Telegram-боты",
+      "Mini App",
+      "прикладная разработка",
+    ],
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer service",
@@ -33,6 +92,9 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       areaServed: "RU",
     },
     sameAs: [EXTERNAL_LINKS.channel],
+    founder: {
+      "@id": `${siteUrl}/#founder`,
+    },
   };
 
   const serviceSchema = {
@@ -40,7 +102,9 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     "@type": "ProfessionalService",
     "@id": `${siteUrl}/#service`,
     name: LEGAL_BRAND,
-    serviceType: "AI automation for legal operations",
+    url: siteUrl,
+    image: `${siteUrl}/opengraph-image`,
+    serviceType: "AI automation, legal operations automation and custom software development",
     provider: {
       "@id": `${siteUrl}/#organization`,
     },
@@ -51,17 +115,15 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal AI services",
-      itemListElement: [
-        "Автоматизация договорной работы",
-        "Автоматизация судебной работы",
-        "Комплаенс и контроль изменений",
-        "Юридическая аналитика",
-        "Кастомные AI-решения",
-      ].map((name) => ({
+      itemListElement: serviceOffers.map((offer) => ({
         "@type": "Offer",
+        url: offer.url,
         itemOffered: {
           "@type": "Service",
-          name,
+          name: offer.name,
+          description: offer.description,
+          url: offer.url,
+          areaServed: "RU",
         },
       })),
     },
@@ -73,20 +135,36 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     "@id": `${siteUrl}/#website`,
     url: siteUrl,
     name: LEGAL_BRAND,
-    description: "Сайт о внедрении AI в юридическую функцию.",
+    description: "Сайт о внедрении AI в юридическую функцию и смежной бизнес-автоматизации.",
     publisher: {
       "@id": `${siteUrl}/#organization`,
     },
     inLanguage: "ru-RU",
   };
 
+  const navigationSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "@id": `${siteUrl}/#site-navigation`,
+    name: "Основные разделы AI Verdict",
+    itemListElement: navigationItems.map((item, index) => ({
+      "@type": "SiteNavigationElement",
+      position: index + 1,
+      name: item.name,
+      url: item.url,
+    })),
+  };
+
   const personSchema = {
     "@context": "https://schema.org",
     "@type": "Person",
+    "@id": `${siteUrl}/#founder`,
     name: LEGAL_OPERATOR_NAME,
-    jobTitle: `Основатель ${LEGAL_BRAND}`,
+    jobTitle: `Основатель и ответственный за продукт ${LEGAL_BRAND}`,
     description:
-      "Специалист по автоматизации юридической функции и внедрению AI-сценариев в рабочие процессы.",
+      "Специалист по автоматизации юридической функции, AI-сценариям и прикладной разработке рабочих контуров.",
+    url: `${siteUrl}/team`,
+    affiliation: LEGAL_OPERATOR_STATUS,
     worksFor: {
       "@id": `${siteUrl}/#organization`,
     },
@@ -96,7 +174,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
 
   const structuredData = {
     "@context": "https://schema.org",
-    "@graph": [organizationSchema, serviceSchema, websiteSchema, personSchema],
+    "@graph": [organizationSchema, serviceSchema, websiteSchema, navigationSchema, personSchema],
   };
 
   return (

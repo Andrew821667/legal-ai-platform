@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Решения",
+export const metadata: Metadata = createPageMetadata({
+  title: "Решения для автоматизации юридической функции",
   description:
-    "Решения AI Verdict: автоматизация юридической функции, legal ops, интеграции и сценарии внедрения для юристов и бизнеса.",
-  alternates: { canonical: "/solutions" },
-};
+    "Решения AI Verdict: автоматизация юридической функции, legal ops, интеграции, боты, сайты, mini app и прикладная разработка для бизнеса.",
+  path: "/solutions",
+});
 
 const automationCases = [
   "Входящие юридические заявки и первичная квалификация",
@@ -25,6 +26,9 @@ const legalOpsCases = [
 
 const integrationCases = [
   "API-контур с core-сервисами платформы",
+  "Интеграции с CRM, ERP, 1С, ЭДО, Google Sheets и внутренними базами",
+  "Telegram-боты, сайты, mini app, личные кабинеты и внутренние панели",
+  "Отдельные сервисы для заявок, документов, уведомлений, отчетов и аналитики",
   "Интеграция с Telegram-ботами и каналами",
   "Поэтапный rollout без остановки текущих процессов",
   "Аудит логов и контроль чувствительных данных",
@@ -54,11 +58,11 @@ export default function SolutionsPage() {
             Решения и услуги
           </span>
           <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">
-            Конструктор внедрения под вашу юридическую функцию
+            Конструктор внедрения под юридическую функцию и смежные процессы
           </h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
             Выстраиваем дорожную карту от пилота к системной трансформации: объединяем продуктовые модули,
-            процессные настройки и сопровождение команды.
+            процессные настройки, интеграции, прикладную разработку и сопровождение команды.
           </p>
           <div className="mt-8">
             <CtaFrameworkPanel
@@ -96,7 +100,7 @@ export default function SolutionsPage() {
       </section>
 
       <section id="integrations" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-        <h2 className="text-3xl font-semibold text-white">Интеграции и архитектура</h2>
+        <h2 className="text-3xl font-semibold text-white">Интеграции, архитектура и разработка</h2>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {integrationCases.map((item) => (
             <article key={item} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-slate-200">

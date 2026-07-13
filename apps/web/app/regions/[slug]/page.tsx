@@ -25,25 +25,26 @@ export async function generateMetadata({
   }
 
   return {
-    title: `Legal AI в ${region.name}`,
-    description: `Автоматизация юридической работы в регионе ${region.name}: договоры, судебная работа, комплаенс и аналитика.`,
+    title: `Legal AI в ${region.prepositionalName}`,
+    description: `Возможные сценарии автоматизации юридической работы в ${region.prepositionalName}: договоры, судебная работа, комплаенс и аналитика.`,
     alternates: {
       canonical: `/regions/${region.slug}`,
     },
     openGraph: {
-      title: `Legal AI в ${region.name} | AI Verdict`,
-      description: `AI-решения для юридических команд в регионе ${region.name}.`,
+      title: `Legal AI в ${region.prepositionalName} | AI Verdict`,
+      description: `Сценарии AI-автоматизации для юридических команд в ${region.prepositionalName}.`,
       url: `/regions/${region.slug}`,
       type: "article",
     },
     twitter: {
       card: "summary",
-      title: `Legal AI в ${region.name} | AI Verdict`,
-      description: `AI-решения для юридических команд в регионе ${region.name}.`,
+      title: `Legal AI в ${region.prepositionalName} | AI Verdict`,
+      description: `Сценарии AI-автоматизации для юридических команд в ${region.prepositionalName}.`,
     },
     robots: {
-      index: true,
+      index: false,
       follow: true,
+      nocache: true,
     },
   };
 }
@@ -67,11 +68,11 @@ export default async function RegionPage({ params }: RegionPageProps) {
         </p>
 
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-          AI для юридической функции в регионе {region.name}
+          AI для юридической функции в {region.prepositionalName}
         </h1>
         <p className="text-lg text-slate-600 mb-10">
-          {region.shortDescription} Внедряем понятные решения для сокращения
-          рутины и ускорения юридических процессов.
+          {region.shortDescription} Ниже — ориентиры для первичной диагностики процесса.
+          Страница не означает наличие офиса или отдельного представительства в регионе.
         </p>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8">

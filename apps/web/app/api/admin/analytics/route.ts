@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdminSession } from "@/lib/admin-session";
-import { loadGoogleAnalyticsPayload, type GA4MetricData } from "../../analytics/google/route";
-import { loadYandexAnalyticsPayload } from "../../analytics/yandex/route";
+import { loadGoogleAnalyticsPayload, type GA4MetricData } from "@/lib/analytics/google";
+import { loadYandexAnalyticsPayload } from "@/lib/analytics/yandex";
 
 export const runtime = "nodejs";
 

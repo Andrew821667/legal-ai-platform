@@ -23,13 +23,30 @@
         reverse_proxy core-api:8000
     }
 
+    handle /guacamole* {
+        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    }
+
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
         reverse_proxy web:3000
     }
 }
 
-http://{$DOMAIN}, http://www.{$DOMAIN}, http://{$CONTRACT_DOMAIN}, http://{$MONITOR_DOMAIN:monitor.ai-verdict.ru}, http://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
+http://www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} 308
+}
+
+http://{$DOMAIN}, http://{$CONTRACT_DOMAIN}, http://{$MONITOR_DOMAIN:monitor.ai-verdict.ru}, http://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
     redir https://{host}{uri} 308
+}
+
+https://www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} 308
 }
 
 https://{$CONTRACT_DOMAIN} {
@@ -45,7 +62,7 @@ https://{$CONTRACT_DOMAIN} {
     reverse_proxy {$CONTRACT_AI_UPSTREAM}
 }
 
-https://{$DOMAIN}, https://www.{$DOMAIN} {
+https://{$DOMAIN} {
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -67,6 +84,15 @@ https://{$DOMAIN}, https://www.{$DOMAIN} {
         reverse_proxy core-api:8000
     }
 
+    handle /guacamole* {
+        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    }
+
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
         reverse_proxy web:3000
     }
@@ -80,6 +106,7 @@ https://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
         Referrer-Policy "strict-origin-when-cross-origin"
         X-Frame-Options "SAMEORIGIN"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        X-Robots-Tag "noindex, nofollow, noarchive"
     }
 
     handle /robots.txt {
@@ -97,8 +124,16 @@ Disallow: /
         reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
     }
 
+    handle /telegram-mcp* {
+        uri strip_prefix /telegram-mcp
+        reverse_proxy host.docker.internal:8791
+    }
+
     handle {
-        reverse_proxy {$MEMORY_HUB_UPSTREAM:host.docker.internal:8787}
+        reverse_proxy {$MEMORY_HUB_UPSTREAM:host.docker.internal:8787} {
+            lb_try_duration 30s
+            lb_try_interval 1s
+        }
     }
 }
 
@@ -110,6 +145,7 @@ https://{$MONITOR_DOMAIN:monitor.ai-verdict.ru} {
         Referrer-Policy "strict-origin-when-cross-origin"
         X-Frame-Options "SAMEORIGIN"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        X-Robots-Tag "noindex, nofollow, noarchive"
     }
 
     handle /robots.txt {

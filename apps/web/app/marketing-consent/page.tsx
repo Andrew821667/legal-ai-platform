@@ -14,6 +14,11 @@ export const metadata: Metadata = {
   alternates: {
     canonical: LEGAL_DOC_LINKS.marketingConsent,
   },
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
+  },
 };
 
 export default function MarketingConsentPage() {

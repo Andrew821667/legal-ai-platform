@@ -15,13 +15,19 @@ const blocks = [
   },
   {
     title: "Для бизнеса",
-    description: "Скорость согласований, контроль рисков, управляемая загрузка юркоманды и SLA.",
+    description: "Скорость согласований, контроль рисков, управляемая загрузка юркоманды, SLA и связь с операционными системами.",
     href: ROUTES.forBusiness,
     action: MINIAPP_ACTIONS.openSolutionsForBusiness,
   },
   {
+    title: "Сквозная автоматизация",
+    description: "CRM, ERP, 1C, ЭДО, Telegram-боты, сайты, Mini App, личные кабинеты и внутренние сервисы вокруг юридического процесса.",
+    href: "/services/custom-ai",
+    action: MINIAPP_ACTIONS.openSolutionsRoadmap,
+  },
+  {
     title: "Формат внедрения",
-    description: "Пилот, этапное расширение и сопровождение с фокусом на измеримый результат.",
+    description: "Пилот, этапное расширение, разработка недостающих инструментов и сопровождение с фокусом на измеримый результат.",
     href: ROUTES.solutions,
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
@@ -32,7 +38,7 @@ export default function MiniAppSolutionsPage() {
     <section className="space-y-4">
       <MiniAppGuideCard
         title="Как использовать экран"
-        description="Выберите ваш контур, откройте соответствующий маршрут и переходите к пилоту только после проверки гипотезы в продукте."
+        description="Выберите ваш контур: юридический процесс, бизнес-связку или разработку недостающего инструмента. К пилоту переходим после проверки гипотезы."
       />
 
       {blocks.map((block) => (

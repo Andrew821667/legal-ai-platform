@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   alternates: {
     canonical: LEGAL_DOC_LINKS.transborderConsent,
   },
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
+  },
 };
 
 export default function TransborderConsentPage() {

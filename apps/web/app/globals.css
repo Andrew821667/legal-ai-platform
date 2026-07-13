@@ -184,3 +184,226 @@ body {
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* Stage 2 visual theme. Roll back by setting NEXT_PUBLIC_AI_VERDICT_VISUAL_THEME=legacy-dark and rebuilding web. */
+.visual-light-ops {
+  background: #dfe6ef !important;
+  color: #111827 !important;
+}
+
+.visual-light-ops [class*="bg-slate-50"] {
+  background-color: #dfe6ef !important;
+}
+
+.visual-light-ops section {
+  border-color: #cbd5e1 !important;
+}
+
+.visual-light-ops [class*="from-slate-900"],
+.visual-light-ops [class*="via-slate-800"],
+.visual-light-ops [class*="to-slate-700"],
+.visual-light-ops [class*="to-slate-800"] {
+  background-image: none !important;
+  background-color: #dfe6ef !important;
+}
+
+.visual-light-ops [class*="bg-slate-900"],
+.visual-light-ops [class*="bg-slate-800"],
+.visual-light-ops [class*="bg-slate-950"] {
+  background-color: #ffffff !important;
+}
+
+.visual-light-ops [class*="bg-white/5"],
+.visual-light-ops [class*="bg-white/10"],
+.visual-light-ops [class*="bg-white/15"],
+.visual-light-ops [class*="bg-white/20"] {
+  background-color: #ffffff !important;
+}
+
+.visual-light-ops [class*="bg-slate-800/40"],
+.visual-light-ops [class*="bg-slate-800/50"],
+.visual-light-ops [class*="bg-slate-800/60"] {
+  background-color: #d1d9e6 !important;
+}
+
+.visual-light-ops [class*="border-slate-800"],
+.visual-light-ops [class*="border-slate-700"],
+.visual-light-ops [class*="border-slate-300"],
+.visual-light-ops [class*="border-slate-200"],
+.visual-light-ops [class*="border-white/10"],
+.visual-light-ops [class*="border-white/15"],
+.visual-light-ops [class*="border-white/20"],
+.visual-light-ops [class*="border-white/30"] {
+  border-color: #7c8da3 !important;
+}
+
+.visual-light-ops .text-white,
+.visual-light-ops [class*="text-slate-100"],
+.visual-light-ops [class*="text-slate-200"] {
+  color: #111827 !important;
+}
+
+.visual-light-ops [class*="text-slate-300"],
+.visual-light-ops [class*="text-slate-400"] {
+  color: #334155 !important;
+}
+
+.visual-light-ops [class*="text-amber-300"],
+.visual-light-ops [class*="text-amber-200"] {
+  color: #b45309 !important;
+}
+
+.visual-light-ops [class*="bg-amber-500"] {
+  background-color: #d97706 !important;
+}
+
+.visual-light-ops [class*="bg-amber-500/10"],
+.visual-light-ops [class*="bg-amber-500/15"],
+.visual-light-ops [class*="bg-amber-500/20"] {
+  background-color: #fff7ed !important;
+}
+
+.visual-light-ops [class*="hover:bg-amber-400"]:hover {
+  background-color: #f59e0b !important;
+}
+
+.visual-light-ops [class*="bg-sky-400"] {
+  background-color: #2563eb !important;
+}
+
+.visual-light-ops [class*="text-sky-400"] {
+  color: #2563eb !important;
+}
+
+.site-header-light-ops {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-bottom: 1px solid #94a3b8;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.site-header-light-ops .text-white,
+.site-header-light-ops [class*="text-slate-300"] {
+  color: #1f2937 !important;
+}
+
+.site-header-light-ops [class*="hover:text-amber"]:hover {
+  color: #b45309 !important;
+}
+
+.site-header-light-ops [class*="bg-slate-800"] {
+  background-color: #ffffff !important;
+  border-color: #7c8da3 !important;
+}
+
+.site-header-light-ops .more-menu-surface {
+  background-color: #f8fafc !important;
+  border-color: #64748b !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(100, 116, 139, 0.18) !important;
+}
+
+.site-header-light-ops .more-menu-item {
+  color: #111827 !important;
+  border: 1px solid transparent;
+}
+
+.site-header-light-ops .more-menu-item + .more-menu-item {
+  margin-top: 4px;
+  border-top-color: #cbd5e1;
+}
+
+.site-header-light-ops .more-menu-item:hover {
+  background-color: #e2e8f0 !important;
+  border-color: #94a3b8 !important;
+  color: #92400e !important;
+}
+
+.site-header-light-ops [class*="bg-amber-600"] {
+  background-color: #d97706 !important;
+}
+
+.site-footer-light-ops {
+  background: #111827 !important;
+  color: #cbd5e1 !important;
+}
+
+.site-footer-light-ops [class*="bg-slate-800"] {
+  background-color: #1f2937 !important;
+}
+
+.miniapp-light-ops {
+  background: #dfe6ef !important;
+  color: #111827 !important;
+}
+
+.miniapp-light-ops [class*="bg-slate-900"],
+.miniapp-light-ops [class*="bg-slate-800"],
+.miniapp-light-ops [class*="bg-slate-950"] {
+  background-color: #ffffff !important;
+}
+
+.miniapp-light-ops [class*="border-slate-800"],
+.miniapp-light-ops [class*="border-slate-700"] {
+  border-color: #7c8da3 !important;
+}
+
+.miniapp-light-ops .text-white,
+.miniapp-light-ops [class*="text-slate-100"],
+.miniapp-light-ops [class*="text-slate-200"] {
+  color: #111827 !important;
+}
+
+.miniapp-light-ops [class*="text-slate-300"],
+.miniapp-light-ops [class*="text-slate-400"],
+.miniapp-light-ops [class*="text-slate-500"] {
+  color: #475569 !important;
+}
+
+.miniapp-light-ops [class*="text-amber-300"],
+.miniapp-light-ops [class*="text-amber-200"],
+.miniapp-light-ops [class*="text-amber-100"] {
+  color: #92400e !important;
+}
+
+.miniapp-light-ops [class*="bg-amber-500"],
+.miniapp-light-ops .miniapp-action-primary {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+}
+
+.miniapp-light-ops [class*="bg-amber-500/10"],
+.miniapp-light-ops [class*="bg-amber-500/15"],
+.miniapp-light-ops [class*="bg-amber-500/20"] {
+  background-color: #fff7ed !important;
+}
+
+.miniapp-light-ops .miniapp-action-secondary {
+  background-color: #ffffff !important;
+  border-color: #7c8da3 !important;
+  color: #1f2937 !important;
+  box-shadow: none !important;
+}
+
+.miniapp-light-ops .miniapp-action-info {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.miniapp-light-ops [class*="bg-emerald-500/10"] {
+  background-color: #ecfdf5 !important;
+}
+
+.miniapp-light-ops [class*="bg-sky-500/10"],
+.miniapp-light-ops [class*="bg-sky-400"] {
+  background-color: #eff6ff !important;
+}
+
+.miniapp-light-ops [class*="bg-red-500/10"] {
+  background-color: #fef2f2 !important;
+}
+
+.miniapp-light-ops .miniapp-action-info {
+  background-color: #2563eb !important;
+  border-color: #bfdbfe !important;
+  color: #ffffff !important;
+}

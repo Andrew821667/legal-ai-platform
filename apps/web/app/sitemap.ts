@@ -1,57 +1,56 @@
 import { MetadataRoute } from "next";
-import { regions } from "@/lib/regionsData";
+
+import { guides } from "@/lib/guidesData";
+import { SEO_SITE_URL } from "@/lib/seo";
+
+type SitemapPage = {
+  path: string;
+  lastModified: string;
+  changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
+  priority: number;
+};
+
+const marketingUpdatedAt = "2026-07-13";
+
+const pages: SitemapPage[] = [
+  { path: "", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 1 },
+  { path: "/for-lawyers", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
+  { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
+  { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/services", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/services/contracts-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/services/litigation-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
+  { path: "/services/compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
+  { path: "/services/corporate-ma-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/services/tax-compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/services/land-law-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/services/custom-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
+  { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
+  { path: "/cases", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/guides", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 0.85 },
+  { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/team", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },
+  { path: "/privacy", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/terms", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/user-agreement", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.25 },
+  { path: "/ai-policy", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.4 },
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
-  const lastModified = new Date(process.env.NEXT_PUBLIC_SITE_UPDATED_AT || "2026-05-28");
+  const baseUrl = SEO_SITE_URL;
+  const guidePages: SitemapPage[] = guides.map((guide) => ({
+    path: `/guides/${guide.slug}`,
+    lastModified: guide.updatedAt,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
 
-  const staticPages: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]; priority: number }> = [
-    { path: "", changeFrequency: "weekly", priority: 1 },
-    { path: "/for-lawyers", changeFrequency: "weekly", priority: 0.9 },
-    { path: "/for-business", changeFrequency: "weekly", priority: 0.9 },
-    { path: "/contract-ai-system", changeFrequency: "weekly", priority: 0.95 },
-    { path: "/solutions", changeFrequency: "weekly", priority: 0.85 },
-    { path: "/content-cases", changeFrequency: "weekly", priority: 0.85 },
-    { path: "/miniapp", changeFrequency: "weekly", priority: 0.8 },
-    { path: "/miniapp/content", changeFrequency: "weekly", priority: 0.75 },
-    { path: "/miniapp/tools", changeFrequency: "weekly", priority: 0.75 },
-    { path: "/miniapp/solutions", changeFrequency: "weekly", priority: 0.75 },
-    { path: "/miniapp/profile", changeFrequency: "weekly", priority: 0.7 },
-    { path: "/about", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/privacy", changeFrequency: "monthly", priority: 0.5 },
-    { path: "/terms", changeFrequency: "monthly", priority: 0.5 },
-    { path: "/user-agreement", changeFrequency: "monthly", priority: 0.45 },
-    { path: "/transborder-consent", changeFrequency: "monthly", priority: 0.45 },
-    { path: "/marketing-consent", changeFrequency: "monthly", priority: 0.4 },
-    { path: "/ai-policy", changeFrequency: "monthly", priority: 0.4 },
-    { path: "/services", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/cases", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/team", changeFrequency: "monthly", priority: 0.6 },
-    { path: "/regions", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/services/contracts-ai", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/services/litigation-ai", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/services/compliance-ai", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/services/corporate-ma-ai", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/services/tax-compliance-ai", changeFrequency: "monthly", priority: 0.75 },
-    { path: "/services/land-law-ai", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/services/legal-analytics-ai", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/services/custom-ai", changeFrequency: "monthly", priority: 0.7 },
-    { path: "/services/outsourcing-ai", changeFrequency: "monthly", priority: 0.7 },
-  ];
-
-  const staticUrls: MetadataRoute.Sitemap = staticPages.map((page) => ({
+  return [...pages, ...guidePages].map((page) => ({
     url: `${baseUrl}${page.path}`,
-    lastModified,
+    lastModified: new Date(`${page.lastModified}T00:00:00.000Z`),
     changeFrequency: page.changeFrequency,
     priority: page.priority,
   }));
-
-  const regionUrls: MetadataRoute.Sitemap = regions.map((region) => ({
-    url: `${baseUrl}/regions/${region.slug}`,
-    lastModified,
-    changeFrequency: "monthly",
-    priority: 0.65,
-  }));
-
-  return [...staticUrls, ...regionUrls];
 }

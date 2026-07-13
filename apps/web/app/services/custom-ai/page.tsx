@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Кастомные AI-решения для юротдела",
+export const metadata: Metadata = createPageMetadata({
+  title: "Кастомная автоматизация и разработка",
   description:
-    "Разработка кастомных AI-решений для юридических команд: интеграции с 1С/CRM, свои сценарии, контроль безопасности.",
-  alternates: {
-    canonical: "/services/custom-ai",
-  },
-  openGraph: {
-    title: "Кастомные AI-решения для юротдела | AI Verdict",
-    description:
-      "Создаем AI-инструменты под ваши процессы, а не под шаблонный рынок.",
-    url: "/services/custom-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Кастомные AI-решения для юротдела | AI Verdict",
-    description:
-      "Создаем AI-инструменты под ваши процессы, а не под шаблонный рынок.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+    "Кастомная автоматизация AI Verdict: боты, сайты, mini app, внутренние сервисы, программы и интеграции с 1С/CRM/ERP/ЭДО.",
+  path: "/services/custom-ai",
+  type: "article",
+});
 
 export default function CustomAIPage() {
   return (
@@ -36,15 +19,16 @@ export default function CustomAIPage() {
           <Link href="/services" className="hover:text-amber-600">
             Услуги
           </Link>{" "}
-          / Кастомные AI-решения
+          / Кастомная автоматизация
         </p>
 
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-          Кастомные AI-решения для юридического отдела
+          Кастомная автоматизация и разработка под ваш процесс
         </h1>
         <p className="text-lg text-slate-600 mb-10">
-          Проектируем и внедряем AI-инструменты под ваши внутренние процессы,
-          бизнес-правила и требования безопасности.
+          Начинаем с автоматизации юридической функции, но не ограничиваемся ею. Если для результата нужны
+          CRM/ERP-интеграции, Telegram-боты, сайты, mini app, внутренние кабинеты, базы данных или отдельная программа,
+          проектируем и запускаем весь цифровой контур.
         </p>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8">
@@ -55,6 +39,8 @@ export default function CustomAIPage() {
             <li>AI-ассистент для внутренней юридической базы знаний.</li>
             <li>Интеграции с 1С, CRM, ЭДО и корпоративными системами.</li>
             <li>Сценарии согласования и проверки документов под ваш регламент.</li>
+            <li>Telegram-боты, сайты, mini app, личные кабинеты и внутренние панели.</li>
+            <li>Отдельные программы для обработки заявок, документов, отчетов и данных.</li>
             <li>On-premise или облачное размещение.</li>
           </ul>
         </div>
@@ -66,6 +52,7 @@ export default function CustomAIPage() {
           <ul className="space-y-3 text-slate-700">
             <li>Готовые продукты не учитывают ваши внутренние нюансы.</li>
             <li>Свой процесс позволяет настроить модель, правила и контроль под реальные ограничения.</li>
+            <li>Юридический процесс часто связан с продажами, операциями, бухгалтерией, CRM, ЭДО и мессенджерами.</li>
             <li>Можно развивать решение поэтапно без резкого риска.</li>
           </ul>
         </div>
