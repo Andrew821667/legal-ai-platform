@@ -1,30 +1,15 @@
 #!/bin/zsh
-# Keep the Happ Plus VPN service Connected on the Mac Mini.
-#
-# Why: news-telegram-ingest reads public Telegram channels via the
-# t.me/s/<channel> HTML preview through the host's xray HTTP proxy
-# (default :10808). The proxy only has a route to t.me while Happ Plus
-# is Connected. If Happ Plus is Disconnected (after reboot, crash, or
-# because bots_watchdog.sh deliberately stopped the tunnel to bring
-# api.telegram.org back onto the direct route), the HTML path goes
-# empty and ingest silently falls back to the user-session Telethon
-# path — which is exactly the user-account-ban risk we built the HTML
-# path to avoid.
-#
-# This watcher runs every minute via launchd (see
-# ~/Library/LaunchAgents/ru.legalai.happ-plus.watchdog.plist). It checks
-# the VPN status and starts it if needed. It does *not* try to reason
-# about why Happ Plus is down — that's bots_watchdog.sh's job. It just
-# brings the proxy back so that the next ingest tick uses HTML again.
-#
-# NB: this script is zsh because `status` is a read-only variable there,
-# so we use `vpn_state` everywhere for the local var name.
+# Observe Happ Plus without changing the active proxy-balancer routes.
+# Automatic connection is opt-in via HAPP_AUTO_START=1 because enabling the
+# tunnel can conflict with the host-level Xray balancer.
 
 set -u
 
 LOG="${HAPP_WATCHDOG_LOG:-/Users/andrej/Library/Logs/happ-plus-watchdog.log}"
 SERVICE_NAME="${HAPP_SERVICE_NAME:-Happ Plus}"
 STATE_FILE="${HAPP_WATCHDOG_STATE:-/tmp/happ-plus-watchdog.state}"
+PREFERENCES_FILE="${HAPP_PREFERENCES_FILE:-/Users/andrej/Library/Group Containers/group.su.ffg.happ.plus/Library/Preferences/group.su.ffg.happ.plus.plist}"
+AUTO_START="${HAPP_AUTO_START:-0}"
 # How long to wait after `scutil --nc start` before re-checking status.
 START_GRACE_SECONDS="${HAPP_START_GRACE_SECONDS:-8}"
 # Suppress repeated identical log lines: only re-log status if it
@@ -81,7 +66,26 @@ if [ "$vpn_state" = "Connected" ]; then
   exit 0
 fi
 
-# Anything other than Connected — try to bring it up.
+# The current production network uses the standalone proxy balancer. Merely
+# observing a disconnected Happ service must not rewrite that network state.
+if [ "$AUTO_START" != "1" ]; then
+  if [ "$should_log" -eq 1 ]; then
+    log "MONITOR_ONLY auto_start=disabled"
+  fi
+  echo "${vpn_state}:${prev_repeat}" > "$STATE_FILE"
+  exit 0
+fi
+
+# Happ can lose its active config after a subscription refresh. Starting an
+# empty tunnel briefly breaks host DNS, so wait for an explicit profile choice.
+if ! plutil -extract connectedConfigJson raw -o - "$PREFERENCES_FILE" >/dev/null 2>&1; then
+  if [ "$should_log" -eq 1 ]; then
+    log "WAITING_FOR_ACTIVE_CONFIG"
+  fi
+  echo "${vpn_state}:${prev_repeat}" > "$STATE_FILE"
+  exit 0
+fi
+
 log "STARTING service=\"$SERVICE_NAME\""
 scutil --nc start "$SERVICE_NAME" >> "$LOG" 2>&1 || true
 sleep "$START_GRACE_SECONDS"

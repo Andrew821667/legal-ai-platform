@@ -8,9 +8,8 @@
     <string>/bin/zsh</string>
     <string>/Users/andrej/bin/happ-plus-watchdog.sh</string>
   </array>
-  <!-- Check every 60 seconds. bots_watchdog.sh runs every 120s and may
-       deliberately stop the Happ Plus tunnel; this watcher reraises it
-       within ~1 minute so the t.me/s HTML fetch path stays alive. -->
+  <!-- Monitor every 60 seconds. Automatic connection remains disabled unless
+       HAPP_AUTO_START=1 is explicitly supplied in EnvironmentVariables. -->
   <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>/Users/andrej/Library/Logs/happ-plus-watchdog.stdout.log</string>
