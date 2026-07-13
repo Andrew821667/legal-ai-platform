@@ -6,6 +6,7 @@ export type GuideSection = {
 
 export type Guide = {
   slug: string;
+  seoTitle?: string;
   title: string;
   description: string;
   excerpt: string;
@@ -19,6 +20,7 @@ export type Guide = {
 export const guides: Guide[] = [
   {
     slug: "ai-contract-review-process",
+    seoTitle: "Проверка договоров с ИИ: управляемый процесс",
     title: "Проверка договоров с ИИ: как выстроить управляемый процесс",
     description:
       "Практическая схема проверки договоров с ИИ: входные данные, риск-профиль, роль юриста, метрики пилота и контроль качества.",

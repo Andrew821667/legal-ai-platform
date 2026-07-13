@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: GuidePageProps): Promise<Meta
   }
 
   return createPageMetadata({
-    title: guide.title,
+    title: guide.seoTitle || guide.title,
     description: guide.description,
     path: `/guides/${guide.slug}`,
     type: "article",
@@ -36,6 +36,12 @@ export default async function GuidePage({ params }: GuidePageProps) {
 
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const canonicalUrl = `${baseUrl}/guides/${guide.slug}`;
+  const relatedGuides = guides.filter((item) => item.slug !== guide.slug);
+  const relatedService = guide.slug === "ai-contract-review-process"
+    ? { href: "/services/contracts-ai", label: "Автоматизация договорной работы" }
+    : guide.slug === "legal-ai-data-security"
+      ? { href: "/services/custom-ai", label: "Безопасная архитектура и интеграции" }
+      : { href: "/solutions", label: "Решения для юридической автоматизации" };
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -124,6 +130,21 @@ export default async function GuidePage({ params }: GuidePageProps) {
           <p className="mt-3 text-slate-300">Опишите задачу и текущий маршрут — начнем с диагностики, а не с продажи инструмента.</p>
           <Link href="/#lead-form" className="mt-5 inline-flex rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
             Оставить заявку
+          </Link>
+        </section>
+
+        <section className="mt-10 border-t border-slate-200 pt-10">
+          <h2 className="text-2xl font-bold">Продолжить по теме</h2>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {relatedGuides.map((item) => (
+              <Link key={item.slug} href={`/guides/${item.slug}`} className="rounded-xl border border-slate-200 bg-white p-5 hover:border-amber-400">
+                <h3 className="font-semibold text-amber-800">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{item.excerpt}</p>
+              </Link>
+            ))}
+          </div>
+          <Link href={relatedService.href} className="mt-5 inline-flex font-semibold text-amber-800 hover:text-amber-950">
+            {relatedService.label} →
           </Link>
         </section>
       </article>

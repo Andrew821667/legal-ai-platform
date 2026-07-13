@@ -46,6 +46,7 @@ export default function Footer() {
     resources: [
       { name: "Сценарии внедрения", href: "/cases" },
       { name: "Практические руководства", href: "/guides" },
+      { name: "Работа с регионами", href: "/regions" },
       { name: "Практические разборы", href: "/content-cases#practical" },
       {
         name: "Проверить договор",
@@ -243,12 +244,12 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-8 pb-6">
-          <div className="text-center text-sm text-slate-500 leading-relaxed max-w-5xl mx-auto space-y-3">
+          <div className="text-center text-sm text-slate-400 leading-relaxed max-w-5xl mx-auto space-y-3">
             <p>
               <strong className="text-slate-400">{LEGAL_BRAND}</strong>: внедрение AI в юридическую функцию,
               автоматизация договорных и типовых правовых процессов, проектирование legal ops контуров.
             </p>
-            <LegalDisclaimer className="mx-auto max-w-4xl text-slate-500" />
+            <LegalDisclaimer className="mx-auto max-w-4xl !text-slate-400" />
             <div className="pt-2 flex items-center justify-center gap-4 text-xs">
               <span className="text-emerald-400">
                 ✓ Обновлено: {LEGAL_UPDATED_AT}
@@ -262,18 +263,18 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-500 text-sm">© {LEGAL_COPYRIGHT_YEAR} {LEGAL_BRAND}. Все права защищены.</p>
-          <div className="flex gap-6 text-sm">
-            <Link href="/privacy" className="text-slate-500 hover:text-amber-500 transition-colors">
+          <p className="text-slate-400 text-sm">© {LEGAL_COPYRIGHT_YEAR} {LEGAL_BRAND}. Все права защищены.</p>
+          <div className="flex max-w-full flex-wrap justify-center gap-x-6 gap-y-3 text-sm md:justify-end">
+            <Link href="/privacy" className="text-slate-400 hover:text-amber-500 transition-colors">
               Политика конфиденциальности
             </Link>
-            <Link href="/terms" className="text-slate-500 hover:text-amber-500 transition-colors">
+            <Link href="/terms" className="text-slate-400 hover:text-amber-500 transition-colors">
               Условия использования
             </Link>
-            <Link href="/user-agreement" className="text-slate-500 hover:text-amber-500 transition-colors">
+            <Link href="/user-agreement" className="text-slate-400 hover:text-amber-500 transition-colors">
               Соглашение
             </Link>
-            <Link href="/ai-policy" className="text-slate-500 hover:text-amber-500 transition-colors">
+            <Link href="/ai-policy" className="text-slate-400 hover:text-amber-500 transition-colors">
               AI policy
             </Link>
           </div>

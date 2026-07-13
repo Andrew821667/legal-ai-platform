@@ -14,7 +14,8 @@ import {
 
 export const metadata: Metadata = createPageMetadata({
   title: "Пользовательское соглашение",
-  description: "Базовые условия использования сайта, ботов и материалов AI Verdict.",
+  description:
+    "Условия использования сайта, Telegram-ботов, AI-инструментов и информационных материалов платформы AI Verdict.",
   path: LEGAL_DOC_LINKS.userAgreement,
   type: "article",
 });

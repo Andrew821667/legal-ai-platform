@@ -1,79 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import LeadCaptureForm from "@/components/LeadCaptureForm";
+
+import ServiceDetailPage from "@/components/ServiceDetailPage";
 import { createPageMetadata } from "@/lib/seo";
+import { serviceDetails } from "@/lib/serviceDetailData";
+
+const service = serviceDetails["custom-ai"];
 
 export const metadata: Metadata = createPageMetadata({
-  title: "Кастомная автоматизация и разработка",
-  description:
-    "Кастомная автоматизация AI Verdict: боты, сайты, mini app, внутренние сервисы, программы и интеграции с 1С/CRM/ERP/ЭДО.",
-  path: "/services/custom-ai",
-  type: "article",
+  title: service.seoTitle,
+  description: service.description,
+  path: `/services/${service.slug}`,
 });
 
 export default function CustomAIPage() {
-  return (
-    <main className="min-h-screen bg-slate-50">
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <p className="text-sm text-slate-500 mb-4">
-          <Link href="/services" className="hover:text-amber-600">
-            Услуги
-          </Link>{" "}
-          / Кастомная автоматизация
-        </p>
-
-        <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-          Кастомная автоматизация и разработка под ваш процесс
-        </h1>
-        <p className="text-lg text-slate-600 mb-10">
-          Начинаем с автоматизации юридической функции, но не ограничиваемся ею. Если для результата нужны
-          CRM/ERP-интеграции, Telegram-боты, сайты, mini app, внутренние кабинеты, базы данных или отдельная программа,
-          проектируем и запускаем весь цифровой контур.
-        </p>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">
-            Что можно сделать
-          </h2>
-          <ul className="space-y-3 text-slate-700">
-            <li>AI-ассистент для внутренней юридической базы знаний.</li>
-            <li>Интеграции с 1С, CRM, ЭДО и корпоративными системами.</li>
-            <li>Сценарии согласования и проверки документов под ваш регламент.</li>
-            <li>Telegram-боты, сайты, mini app, личные кабинеты и внутренние панели.</li>
-            <li>Отдельные программы для обработки заявок, документов, отчетов и данных.</li>
-            <li>On-premise или облачное размещение.</li>
-          </ul>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">
-            Почему кастомный подход
-          </h2>
-          <ul className="space-y-3 text-slate-700">
-            <li>Готовые продукты не учитывают ваши внутренние нюансы.</li>
-            <li>Свой процесс позволяет настроить модель, правила и контроль под реальные ограничения.</li>
-            <li>Юридический процесс часто связан с продажами, операциями, бухгалтерией, CRM, ЭДО и мессенджерами.</li>
-            <li>Можно развивать решение поэтапно без резкого риска.</li>
-          </ul>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4">
-          <a
-            href="#lead-form"
-            className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-lg text-center"
-          >
-            Запросить аудит задач
-          </a>
-          <Link
-            href="/services/legal-analytics-ai"
-            className="inline-block bg-white border border-slate-300 text-slate-700 font-semibold px-8 py-4 rounded-lg text-center hover:bg-slate-100"
-          >
-            Смотреть юридическую аналитику
-          </Link>
-        </div>
-      </section>
-
-      <LeadCaptureForm />
-    </main>
-  );
+  return <ServiceDetailPage service={service} />;
 }
