@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     api_key_news: str = ""
     api_key_admin: str = ""
     telegram_bot_token: str = ""
+    telegram_api_proxy_url: str = ""
     news_admin_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_channel_username: str = ""
@@ -18,6 +19,8 @@ class Settings(BaseSettings):
     news_admin_ids: str = ""
     news_source_keys: str = ""
     news_source_urls: str = ""
+    news_rss_fetch_timeout_seconds: int = 12
+    news_max_source_age_days: int = 3
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_session_name: str = "apps/news/legacy/telegram_bot"

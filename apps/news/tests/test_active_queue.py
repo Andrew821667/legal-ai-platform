@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from news.active_queue import rebalance_active_publish_queue
 
@@ -36,7 +36,7 @@ class _FakeClient:
 
 
 def test_rebalance_active_publish_queue_demotes_extra_scheduled_and_promotes_missing(monkeypatch) -> None:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     monkeypatch.setattr(
         "news.active_queue.next_active_slot_by_kind",
         lambda **kwargs: {
@@ -62,7 +62,7 @@ def test_rebalance_active_publish_queue_demotes_extra_scheduled_and_promotes_mis
 
 
 def test_rebalance_active_publish_queue_keeps_due_scheduled_post(monkeypatch) -> None:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     monkeypatch.setattr(
         "news.active_queue.next_active_slot_by_kind",
         lambda **kwargs: {"daily": now_utc + timedelta(hours=1)},
@@ -80,3 +80,28 @@ def test_rebalance_active_publish_queue_keeps_due_scheduled_post(monkeypatch) ->
     assert result == {"demoted": 1, "promoted": 0, "rescheduled": 0}
     assert ("daily-future", {"status": "ready"}) in client.patched
     assert all(post_id != "daily-due" for post_id, _ in client.patched)
+
+
+def test_rebalance_active_publish_queue_keeps_pending_retry(monkeypatch) -> None:
+    now_utc = datetime.now(UTC)
+    monkeypatch.setattr(
+        "news.active_queue.next_active_slot_by_kind",
+        lambda **kwargs: {"practice": now_utc + timedelta(days=7)},
+    )
+    client = _FakeClient(
+        scheduled_rows=[
+            {
+                "id": "practice-retry",
+                "format_type": "practice",
+                "publish_at": (now_utc + timedelta(minutes=10)).isoformat(),
+                "attempts": 1,
+                "last_error": "Telegram connection timed out",
+            }
+        ],
+        ready_rows=[],
+    )
+
+    result = rebalance_active_publish_queue(client)
+
+    assert result == {"demoted": 0, "promoted": 0, "rescheduled": 0}
+    assert client.patched == []

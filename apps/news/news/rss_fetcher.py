@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 import feedparser
+import requests
 
 from news.pipeline import ArticleCandidate, canonicalize_url
+from news.settings import settings
 
 logger = logging.getLogger(__name__)
 _HTML_RE = re.compile(r"<[^>]+>")
@@ -23,15 +25,15 @@ def _parse_published(entry: feedparser.FeedParserDict) -> datetime | None:
         try:
             dt = parsedate_to_datetime(published_raw)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
         except Exception:
             pass
 
     parsed = entry.get("published_parsed") or entry.get("updated_parsed")
     if parsed:
         try:
-            return datetime(*parsed[:6], tzinfo=timezone.utc)
+            return datetime(*parsed[:6], tzinfo=UTC)
         except Exception:
             return None
     return None
@@ -42,7 +44,13 @@ def fetch_rss_articles(source_urls: list[str], per_source_limit: int = 30) -> li
 
     for source_url in source_urls:
         try:
-            feed = feedparser.parse(source_url)
+            response = requests.get(
+                source_url,
+                timeout=max(3, settings.news_rss_fetch_timeout_seconds),
+                headers={"User-Agent": "AI-Verdict-News/1.0"},
+            )
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
             if feed.get("bozo"):
                 logger.warning(
                     "rss_source_parse_warning",
