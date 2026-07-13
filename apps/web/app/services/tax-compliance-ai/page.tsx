@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Налоговый комплаенс с AI",
   description:
     "AI для налогового комплаенса: мониторинг изменений, анализ налоговых рисков и автоматизация регулярной отчетности.",
-  alternates: {
-    canonical: "/services/tax-compliance-ai",
-  },
-  openGraph: {
-    title: "Налоговый комплаенс с AI | AI Verdict",
-    description:
-      "Помогаем юридической и финансовой функции быстрее реагировать на изменения налоговой практики.",
-    url: "/services/tax-compliance-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Налоговый комплаенс с AI | AI Verdict",
-    description:
-      "Помогаем юридической и финансовой функции быстрее реагировать на изменения налоговой практики.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/tax-compliance-ai",
+  type: "article",
+});
 
 export default function TaxComplianceAIPage() {
   return (

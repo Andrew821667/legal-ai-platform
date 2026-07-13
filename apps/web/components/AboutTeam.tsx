@@ -1,6 +1,11 @@
 "use client";
 
 import { Scale, Bot, Workflow, ShieldCheck } from "lucide-react";
+import {
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_OPERATOR_NAME,
+  LEGAL_OPERATOR_STATUS,
+} from "@/lib/legalProfile";
 
 const pillars = [
   {
@@ -56,6 +61,27 @@ export default function AboutTeam() {
           <p className="text-xl text-slate-300 max-w-3xl mx-auto">
             Мы строим AI-сценарии для юридической функции как инженерный продукт:
             от маршрута заявки и договорного потока до контроля рисков и внутренних регламентов.
+          </p>
+        </div>
+
+        <div className="mb-12 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8">
+          <p className="text-sm font-semibold uppercase tracking-wider text-amber-300">
+            Ответственный за продукт и материалы
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold text-white">{LEGAL_OPERATOR_NAME}</h2>
+          <p className="mt-2 text-slate-300">
+            Основатель AI Verdict, {LEGAL_OPERATOR_STATUS}. Отвечает за продуктовую концепцию,
+            методологию внедрения и редакционную проверку практических материалов.
+          </p>
+          <p className="mt-4 text-sm text-slate-400">
+            Связаться по вопросам продукта и содержания: {" "}
+            <a className="text-amber-300 hover:text-amber-200" href={`mailto:${LEGAL_CONTACT_EMAIL}`}>
+              {LEGAL_CONTACT_EMAIL}
+            </a>
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-slate-400">
+            AI Verdict не заменяет индивидуальную юридическую консультацию. Материалы сайта описывают
+            процессы автоматизации и требуют проверки применительно к фактам конкретной задачи.
           </p>
         </div>
 

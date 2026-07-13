@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 import {
   LEGAL_BRAND,
   LEGAL_CONTACT_EMAIL,
@@ -13,29 +14,12 @@ import {
   LEGAL_SITE_URL,
 } from "@/lib/legalProfile";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Условия использования",
   description: "Условия использования сайта ai-verdict.ru. Правила предоставления услуг по разработке AI-решений, автоматизации юридической работы, интеграций и прикладного ПО.",
-  alternates: {
-    canonical: "/terms",
-  },
-  openGraph: {
-    title: "Условия использования | AI Verdict",
-    description:
-      "Правила использования сайта и оказания услуг AI Verdict.",
-    url: "/terms",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Условия использования | AI Verdict",
-    description: "Правила использования сайта и оказания услуг AI Verdict.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/terms",
+  type: "article",
+});
 
 export default function TermsOfService() {
   return (

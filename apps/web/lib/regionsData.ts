@@ -1,6 +1,7 @@
 export interface RegionLanding {
   slug: string;
   name: string;
+  prepositionalName: string;
   shortDescription: string;
   focus: string[];
 }
@@ -9,6 +10,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "moscow",
     name: "Москва",
+    prepositionalName: "Москве",
     shortDescription:
       "Крупный деловой центр с высоким объемом договорной, судебной и комплаенс-работы.",
     focus: [
@@ -20,6 +22,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "saint-petersburg",
     name: "Санкт-Петербург",
+    prepositionalName: "Санкт-Петербурге",
     shortDescription:
       "Сильная промышленная и сервисная база, где важно быстро масштабировать юридические процессы.",
     focus: [
@@ -31,6 +34,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "krasnodar-krai",
     name: "Краснодарский край",
+    prepositionalName: "Краснодарском крае",
     shortDescription:
       "Один из ключевых аграрных регионов РФ с высокой нагрузкой на земельные и договорные процессы.",
     focus: [
@@ -42,6 +46,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "stavropol-krai",
     name: "Ставропольский край",
+    prepositionalName: "Ставропольском крае",
     shortDescription:
       "Регион с активным агробизнесом, где критичны скорость проверки документов и контроль рисков.",
     focus: [
@@ -53,6 +58,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "voronezh-oblast",
     name: "Воронежская область",
+    prepositionalName: "Воронежской области",
     shortDescription:
       "Крупный регион агропромышленного и промышленного бизнеса с большим объемом юридического документооборота.",
     focus: [
@@ -64,6 +70,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "novosibirsk-oblast",
     name: "Новосибирская область",
+    prepositionalName: "Новосибирской области",
     shortDescription:
       "Важный экономический центр Сибири, где особенно востребованы удаленные и масштабируемые Legal AI-процессы.",
     focus: [
@@ -75,6 +82,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "rostov-oblast",
     name: "Ростовская область",
+    prepositionalName: "Ростовской области",
     shortDescription:
       "Регион с сильным агропромышленным комплексом и интенсивной договорной работой.",
     focus: [
@@ -86,6 +94,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "belgorod-oblast",
     name: "Белгородская область",
+    prepositionalName: "Белгородской области",
     shortDescription:
       "Крупный аграрный регион, где важны точность и скорость юридической проверки документов.",
     focus: [
@@ -97,6 +106,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "altai-krai",
     name: "Алтайский край",
+    prepositionalName: "Алтайском крае",
     shortDescription:
       "Крупный сельскохозяйственный регион с высокой потребностью в автоматизации юридических процессов.",
     focus: [
@@ -108,6 +118,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "tambov-oblast",
     name: "Тамбовская область",
+    prepositionalName: "Тамбовской области",
     shortDescription:
       "Регион с развитым агросектором, где важна оперативная работа с договорами и рисками.",
     focus: [
@@ -119,6 +130,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "kursk-oblast",
     name: "Курская область",
+    prepositionalName: "Курской области",
     shortDescription:
       "Аграрный регион с масштабной земельной и договорной деятельностью бизнеса.",
     focus: [
@@ -130,6 +142,7 @@ export const regions: RegionLanding[] = [
   {
     slug: "saratov-oblast",
     name: "Саратовская область",
+    prepositionalName: "Саратовской области",
     shortDescription:
       "Крупный регион с активной хозяйственной деятельностью и высокой юридической нагрузкой.",
     focus: [

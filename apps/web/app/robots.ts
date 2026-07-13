@@ -1,9 +1,8 @@
 import { MetadataRoute } from 'next'
+import { SEO_SITE_URL } from '@/lib/seo'
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ai-verdict.ru'
   const privatePaths = ['/api', '/admin', '/monitor', '/miniapp/lead', '/miniapp/profile']
-
   return {
     rules: [
       {
@@ -24,6 +23,7 @@ export default function robots(): MetadataRoute.Robots {
         crawlDelay: 1,
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: `${SEO_SITE_URL}/sitemap.xml`,
+    host: SEO_SITE_URL,
   }
 }

@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Юридический аутсорсинг с AI",
   description:
     "Гибридная модель: юрист + AI. Передайте рутинные юридические задачи и получите контролируемый результат в срок.",
-  alternates: {
-    canonical: "/services/outsourcing-ai",
-  },
-  openGraph: {
-    title: "Юридический аутсорсинг с AI | AI Verdict",
-    description:
-      "Сочетаем экспертную юридическую работу и AI-инструменты для снижения нагрузки на команду.",
-    url: "/services/outsourcing-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Юридический аутсорсинг с AI | AI Verdict",
-    description:
-      "Сочетаем экспертную юридическую работу и AI-инструменты для снижения нагрузки на команду.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/outsourcing-ai",
+  type: "article",
+});
 
 export default function OutsourcingAIPage() {
   return (

@@ -1,25 +1,14 @@
 import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Решения",
+export const metadata: Metadata = createPageMetadata({
+  title: "Решения для автоматизации юридической функции",
   description:
     "Решения AI Verdict: автоматизация юридической функции, legal ops, интеграции, боты, сайты, mini app и прикладная разработка для бизнеса.",
-  alternates: { canonical: "/solutions" },
-  openGraph: {
-    title: "Решения AI Verdict",
-    description:
-      "Маршруты внедрения: legal ops, AI-модули, интеграции, Telegram-боты, сайты, Mini App и внутренняя разработка.",
-    url: "/solutions",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Решения AI Verdict",
-    description: "Конструктор внедрения под юридическую функцию и смежные бизнес-процессы.",
-  },
-};
+  path: "/solutions",
+});
 
 const automationCases = [
   "Входящие юридические заявки и первичная квалификация",

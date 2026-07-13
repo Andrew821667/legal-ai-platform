@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Кастомная автоматизация и разработка",
   description:
     "Кастомная автоматизация AI Verdict: боты, сайты, mini app, внутренние сервисы, программы и интеграции с 1С/CRM/ERP/ЭДО.",
-  alternates: {
-    canonical: "/services/custom-ai",
-  },
-  openGraph: {
-    title: "Кастомная автоматизация и разработка | AI Verdict",
-    description:
-      "Создаем AI-инструменты, ботов, сайты, mini app, внутренние сервисы и интеграции под ваши процессы.",
-    url: "/services/custom-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Кастомная автоматизация и разработка | AI Verdict",
-    description:
-      "Создаем AI-инструменты, ботов, сайты, mini app, внутренние сервисы и интеграции под ваши процессы.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/custom-ai",
+  type: "article",
+});
 
 export default function CustomAIPage() {
   return (

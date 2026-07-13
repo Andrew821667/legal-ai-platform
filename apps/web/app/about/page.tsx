@@ -1,25 +1,14 @@
 import type { Metadata } from "next";
 import { EXTERNAL_LINKS, leadBotDeepLink } from "@/lib/links";
 import { LEGAL_CONTACT_EMAIL } from "@/lib/legalProfile";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "О платформе",
   description:
     "О платформе AI Verdict: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
-  alternates: { canonical: "/about" },
-  openGraph: {
-    title: "О платформе AI Verdict",
-    description:
-      "Методология пилота, подход к legal automation, интеграциям, AI-сценариям и прикладной разработке.",
-    url: "/about",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "О платформе AI Verdict",
-    description: "Как AI Verdict запускает автоматизацию юридических процессов и смежных задач.",
-  },
-};
+  path: "/about",
+});
 
 const principles = [
   "Решаем прикладные задачи юридической функции, а не внедряем AI ради AI.",

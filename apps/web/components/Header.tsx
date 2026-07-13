@@ -47,7 +47,7 @@ export default function Header() {
   const mainNavigation = [
     { name: "Решения", href: "/solutions" },
     { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
-    { name: "Контент / Кейсы", href: "/content-cases" },
+    { name: "Материалы", href: "/guides" },
     { name: "О платформе", href: "/about" },
   ];
 
@@ -56,6 +56,7 @@ export default function Header() {
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
     { name: "Другая автоматизация", href: "/services/custom-ai" },
+    { name: "Сценарии", href: "/cases" },
     { name: "Команда", href: "/team" },
   ];
   const contractAIActionHref = contractAIEntryHref("demo");

@@ -1,31 +1,14 @@
 import type { Metadata } from "next";
 import CaseStudies from "@/components/CaseStudies";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Сценарии внедрения Legal AI",
   description:
     "Типовые сценарии внедрения AI в юридической функции: договоры, судебный контур и обзор массивов документов.",
-  alternates: {
-    canonical: "/cases",
-  },
-  openGraph: {
-    title: "Сценарии внедрения Legal AI | AI Verdict",
-    description:
-      "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
-    url: "/cases",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Сценарии внедрения Legal AI | AI Verdict",
-    description:
-      "Типовые паттерны внедрения AI в юридической работе и то, где они обычно дают эффект.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/cases",
+  type: "article",
+});
 
 export default function CasesPage() {
   return (

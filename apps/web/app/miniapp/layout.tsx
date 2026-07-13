@@ -11,6 +11,11 @@ import { isLightOpsTheme } from "@/lib/visualTheme";
 export const metadata: Metadata = {
   title: "Mini App",
   description: "Мини-приложение AI Verdict: контент, инструменты, решения и персональный контур.",
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
+  },
 };
 
 export default function MiniAppLayout({ children }: { children: React.ReactNode }) {

@@ -4,28 +4,15 @@ import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink
 import LeadCaptureForm from "@/components/LeadCaptureForm";
 import PlatformMap from "@/components/PlatformMap";
 import { isLightOpsTheme } from "@/lib/visualTheme";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "AI Verdict — автоматизация юридических процессов и интеграций",
   description:
     "AI Verdict автоматизирует юридические бизнес-процессы, интегрирует их с системами компании и при необходимости разрабатывает боты, сайты, mini app, AI-модули и внутренние сервисы.",
-  alternates: {
-    canonical: "/",
-  },
-  openGraph: {
-    title: "AI Verdict — автоматизация юридических бизнес-процессов",
-    description:
-      "AI-сценарии, интеграции, боты, сайты, Mini App и внутренние сервисы вокруг юридической функции и смежных процессов.",
-    url: "/",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "AI Verdict — автоматизация юридических бизнес-процессов",
-    description:
-      "Автоматизируем legal-процессы, интеграции и прикладные решения с AI там, где он действительно нужен.",
-  },
-};
+  path: "/",
+  keywords: ["автоматизация юридической работы", "AI для юристов", "Legal AI", "legal ops"],
+});
 
 const roleCards = [
   {

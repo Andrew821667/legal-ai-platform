@@ -1,25 +1,14 @@
 import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Для бизнеса",
+export const metadata: Metadata = createPageMetadata({
+  title: "Legal AI для бизнеса и руководителей",
   description:
     "Сценарии для руководителей и операционных команд: управляемая юридическая функция, SLA, снижение рисков, интеграции и прикладная автоматизация.",
-  alternates: { canonical: "/for-business" },
-  openGraph: {
-    title: "AI Verdict для бизнеса",
-    description:
-      "Управляемая юридическая функция, SLA, снижение рисков, интеграции и автоматизация смежных процессов.",
-    url: "/for-business",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "AI Verdict для бизнеса",
-    description: "Юридическая функция как управляемая часть бизнеса, а не узкое место.",
-  },
-};
+  path: "/for-business",
+});
 
 const outcomes = [
   "Сокращение срока согласования договоров и приложений",

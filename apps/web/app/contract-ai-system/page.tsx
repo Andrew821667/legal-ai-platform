@@ -6,7 +6,7 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 export const metadata: Metadata = {
   title: "Contract_AI_System",
   description:
-    "Флагманский внешний сервис AI Verdict для проверки договоров: 3 договора бесплатно в месяц, пилот и рабочий контур.",
+    "Интеграционная страница AI Verdict о внешнем Contract_AI_System: сценарий проверки договора, переход в продукт и запуск пилота.",
   alternates: { canonical: "/contract-ai-system" },
   openGraph: {
     title: "Contract_AI_System | AI Verdict",
@@ -19,6 +19,11 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Contract_AI_System | AI Verdict",
     description: "Проверка договоров, риск-профиль и понятный вход в legal automation.",
+  },
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
   },
 };
 

@@ -4,6 +4,7 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_PHONE_HREF,
   LEGAL_OPERATOR_NAME,
+  LEGAL_OPERATOR_STATUS,
   LEGAL_SITE_URL,
 } from "@/lib/legalProfile";
 
@@ -91,6 +92,9 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       areaServed: "RU",
     },
     sameAs: [EXTERNAL_LINKS.channel],
+    founder: {
+      "@id": `${siteUrl}/#founder`,
+    },
   };
 
   const serviceSchema = {
@@ -154,10 +158,13 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
   const personSchema = {
     "@context": "https://schema.org",
     "@type": "Person",
+    "@id": `${siteUrl}/#founder`,
     name: LEGAL_OPERATOR_NAME,
-    jobTitle: `Основатель ${LEGAL_BRAND}`,
+    jobTitle: `Основатель и ответственный за продукт ${LEGAL_BRAND}`,
     description:
       "Специалист по автоматизации юридической функции, AI-сценариям и прикладной разработке рабочих контуров.",
+    url: `${siteUrl}/team`,
+    affiliation: LEGAL_OPERATOR_STATUS,
     worksFor: {
       "@id": `${siteUrl}/#organization`,
     },

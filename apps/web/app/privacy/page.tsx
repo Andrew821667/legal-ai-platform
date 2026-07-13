@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 import {
   LEGAL_BRAND,
   LEGAL_CONTACT_EMAIL,
@@ -13,30 +14,12 @@ import {
   LEGAL_SITE_URL,
 } from "@/lib/legalProfile";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Политика конфиденциальности",
   description: "Политика конфиденциальности и обработки персональных данных AI Verdict. Защита информации пользователей в соответствии с 152-ФЗ.",
-  alternates: {
-    canonical: "/privacy",
-  },
-  openGraph: {
-    title: "Политика конфиденциальности | AI Verdict",
-    description:
-      "Как AI Verdict обрабатывает и защищает персональные данные пользователей.",
-    url: "/privacy",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Политика конфиденциальности | AI Verdict",
-    description:
-      "Как AI Verdict обрабатывает и защищает персональные данные пользователей.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/privacy",
+  type: "article",
+});
 
 export default function PrivacyPolicy() {
   return (

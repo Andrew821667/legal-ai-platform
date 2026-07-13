@@ -6,7 +6,7 @@ const FALLBACKS = {
   contactEmail: "a.popov.gv@gmail.com",
   contactPhone: "+7 909 233-09-09",
   contactTelegram: "@legal_ai_helper_new_bot",
-  updatedAt: "11 марта 2026 года",
+  updatedAt: "13 июля 2026 года",
 } as const;
 
 function normalizeText(value: string | undefined): string | undefined {
@@ -36,18 +36,32 @@ const envContactPhone = normalizeText(process.env.NEXT_PUBLIC_CONTACT_PHONE);
 const envContactTelegram = normalizeText(process.env.NEXT_PUBLIC_CONTACT_TELEGRAM);
 const envSiteUrl = normalizeText(process.env.NEXT_PUBLIC_SITE_URL);
 
+function publicSiteUrl(value: string | undefined): string {
+  try {
+    const url = new URL(value ?? FALLBACKS.siteUrl);
+    const hostname = url.hostname.toLowerCase();
+    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname)) {
+      return FALLBACKS.siteUrl;
+    }
+    return url.origin;
+  } catch {
+    return FALLBACKS.siteUrl;
+  }
+}
+
 export const LEGAL_BRAND = FALLBACKS.brand;
 export const LEGAL_OPERATOR_NAME = envOperatorName ?? FALLBACKS.operatorName;
 export const LEGAL_OPERATOR_STATUS = envOperatorStatus ?? FALLBACKS.operatorStatus;
 export const LEGAL_OPERATOR_INN = envOperatorInn ?? "";
 export const LEGAL_OPERATOR_DETAILS = envOperatorDetails ?? "";
-export const LEGAL_SITE_URL = envSiteUrl ?? FALLBACKS.siteUrl;
+export const LEGAL_SITE_URL = publicSiteUrl(envSiteUrl);
 export const LEGAL_CONTACT_EMAIL = envPrivacyContactEmail ?? FALLBACKS.contactEmail;
 export const LEGAL_CONTACT_PHONE = envContactPhone ?? FALLBACKS.contactPhone;
 export const LEGAL_CONTACT_PHONE_HREF = normalizePhoneHref(LEGAL_CONTACT_PHONE);
 export const LEGAL_CONTACT_TELEGRAM = normalizeTelegramHandle(envContactTelegram ?? FALLBACKS.contactTelegram);
 export const LEGAL_CONTACT_TELEGRAM_URL = `https://t.me/${LEGAL_CONTACT_TELEGRAM.replace(/^@/, "")}`;
 export const LEGAL_UPDATED_AT = FALLBACKS.updatedAt;
+export const LEGAL_COPYRIGHT_YEAR = 2026;
 
 const missingPublicDisclosureVars = [
   !envOperatorName && "NEXT_PUBLIC_OPERATOR_NAME",

@@ -8,6 +8,8 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_PHONE,
   LEGAL_CONTACT_PHONE_HREF,
+  LEGAL_COPYRIGHT_YEAR,
+  LEGAL_UPDATED_AT,
 } from "@/lib/legalProfile";
 
 type NavItem = {
@@ -30,6 +32,7 @@ export default function Footer() {
       { name: "Для бизнеса", href: ROUTES.forBusiness },
       { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
       { name: "О платформе", href: ROUTES.about },
+      { name: "Команда и автор", href: "/team" },
       { name: "Контакты", href: `${ROUTES.about}#contacts` },
     ],
     services: [
@@ -41,7 +44,8 @@ export default function Footer() {
       { name: "Сценарии для юристов", href: ROUTES.forLawyers },
     ],
     resources: [
-      { name: "Контент / Кейсы", href: ROUTES.contentCases },
+      { name: "Сценарии внедрения", href: "/cases" },
+      { name: "Практические руководства", href: "/guides" },
       { name: "Практические разборы", href: "/content-cases#practical" },
       {
         name: "Проверить договор",
@@ -247,12 +251,7 @@ export default function Footer() {
             <LegalDisclaimer className="mx-auto max-w-4xl text-slate-500" />
             <div className="pt-2 flex items-center justify-center gap-4 text-xs">
               <span className="text-emerald-400">
-                ✓ Обновлено:{" "}
-                {new Date().toLocaleDateString("ru-RU", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+                ✓ Обновлено: {LEGAL_UPDATED_AT}
               </span>
               <span className="text-slate-600">|</span>
               <Link href="/about" className="text-amber-500 hover:text-amber-400 transition-colors">
@@ -263,7 +262,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-500 text-sm">© {new Date().getFullYear()} {LEGAL_BRAND}. Все права защищены.</p>
+          <p className="text-slate-500 text-sm">© {LEGAL_COPYRIGHT_YEAR} {LEGAL_BRAND}. Все права защищены.</p>
           <div className="flex gap-6 text-sm">
             <Link href="/privacy" className="text-slate-500 hover:text-amber-500 transition-colors">
               Политика конфиденциальности

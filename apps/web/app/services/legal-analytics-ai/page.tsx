@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Юридическая аналитика с AI",
   description:
     "AI-аналитика для юридического отдела: риск-дашборды, KPI и прогнозы по портфелю договоров и споров.",
-  alternates: {
-    canonical: "/services/legal-analytics-ai",
-  },
-  openGraph: {
-    title: "Юридическая аналитика с AI | AI Verdict",
-    description:
-      "Преобразуем юридические данные в дашборды и метрики для управленческих решений.",
-    url: "/services/legal-analytics-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Юридическая аналитика с AI | AI Verdict",
-    description:
-      "Преобразуем юридические данные в дашборды и метрики для управленческих решений.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/legal-analytics-ai",
+  type: "article",
+});
 
 export default function LegalAnalyticsAIPage() {
   return (

@@ -1,25 +1,14 @@
 import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Для юристов",
+export const metadata: Metadata = createPageMetadata({
+  title: "AI для юристов: практические сценарии",
   description:
     "Практические сценарии автоматизации юридической работы: договоры, претензии, контроль рисков, юридические шаблоны и legal ops.",
-  alternates: { canonical: "/for-lawyers" },
-  openGraph: {
-    title: "AI Verdict для юристов",
-    description:
-      "Автоматизация договоров, претензий, legal ops, шаблонов, контроля рисков и юридической рутины.",
-    url: "/for-lawyers",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "AI Verdict для юристов",
-    description: "Практические AI-сценарии для юридических команд и legal ops.",
-  },
-};
+  path: "/for-lawyers",
+});
 
 const tracks = [
   {

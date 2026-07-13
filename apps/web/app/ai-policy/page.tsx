@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 
 import LegalPageFrame from "@/components/LegalPageFrame";
 import { LEGAL_BRAND, LEGAL_DOC_LINKS, LEGAL_UPDATED_AT } from "@/lib/legalProfile";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Политика использования ИИ",
   description: "Принципы использования AI-функций и ограничения ответственности в AI Verdict.",
-  alternates: {
-    canonical: LEGAL_DOC_LINKS.aiPolicy,
-  },
-};
+  path: LEGAL_DOC_LINKS.aiPolicy,
+  type: "article",
+});
 
 export default function AiPolicyPage() {
   return (

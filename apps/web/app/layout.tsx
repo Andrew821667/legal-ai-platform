@@ -4,9 +4,10 @@ import AppShell from "@/components/AppShell";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import YandexMetrika from "@/components/YandexMetrika";
 import StructuredData from "@/components/StructuredData";
-import { reportLegalProfileWarnings } from "@/lib/legalProfile";
+import { LEGAL_OPERATOR_NAME, reportLegalProfileWarnings } from "@/lib/legalProfile";
+import { SEO_SITE_URL } from "@/lib/seo";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ai-verdict.ru";
+const siteUrl = SEO_SITE_URL;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     "интеграция CRM ERP",
     "разработка mini app",
   ],
-  authors: [{ name: "AI Verdict" }],
+  authors: [{ name: LEGAL_OPERATOR_NAME, url: "/team" }],
   creator: "AI Verdict",
   publisher: "AI Verdict",
   category: "legal technology",

@@ -1,30 +1,22 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ROUTES } from "@/lib/links";
+import { guides } from "@/lib/guidesData";
+import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
-export const metadata: Metadata = {
-  title: "Контент и кейсы",
+export const metadata: Metadata = createPageMetadata({
+  title: "Практические сценарии Legal AI",
   description:
-    "Экспертный контент и практические кейсы по автоматизации юридической функции, внедрению AI и управлению юридическими рисками.",
-  alternates: { canonical: "/content-cases" },
-  openGraph: {
-    title: "Контент и кейсы AI Verdict",
-    description:
-      "Практические разборы legal automation, AI-инструментов, внедрения и управления юридическими рисками.",
-    url: "/content-cases",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Контент и кейсы AI Verdict",
-    description: "Кейсы, обзоры и методология внедрения AI в юридическую функцию.",
-  },
-};
+    "Практические сценарии и руководства по автоматизации юридической функции, внедрению AI и управлению рисками без вымышленных кейсов.",
+  path: "/content-cases",
+  index: false,
+});
 
 const caseBlocks = [
   {
-    title: "Кейсы внедрения",
-    description: "Реальные сценарии: что автоматизировали, как измеряли эффект и какие ограничения учитывали.",
+    title: "Сценарии внедрения",
+    description: "Типовые процессы, метрики пилота и ограничения, которые стоит проверить на данных вашей команды.",
   },
   {
     title: "Экспертные обзоры",
@@ -61,8 +53,8 @@ export default function ContentCasesPage() {
           </span>
           <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">Контент / Кейсы</h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
-            Разбираем автоматизацию юридической работы на живых примерах: от новостей и трендов до прикладных кейсов,
-            которые можно адаптировать в вашей команде.
+            Разбираем автоматизацию юридической работы на типовых сценариях и в подробных руководствах.
+            Мы явно отделяем методические примеры от подтвержденных клиентских результатов.
           </p>
           <div className="mt-8">
             <CtaFrameworkPanel
@@ -76,6 +68,10 @@ export default function ContentCasesPage() {
       </section>
 
       <section id="practical" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+        <div className="mb-8 rounded-xl border border-sky-500/30 bg-sky-500/10 p-5 text-sm leading-relaxed text-sky-100">
+          На этой странице нет обезличенных «успешных кейсов» без проверяемых исходных данных.
+          До публикации согласованных результатов мы показываем сценарии внедрения и методику оценки эффекта.
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {caseBlocks.map((item) => (
             <article key={item.title} className="rounded-xl border border-slate-800 bg-slate-800/60 p-6">
@@ -83,6 +79,28 @@ export default function ContentCasesPage() {
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">{item.description}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="border-y border-slate-800 bg-slate-950/50">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-semibold text-white">Подробные руководства</h2>
+          <div className="mt-7 grid gap-5 md:grid-cols-3">
+            {guides.map((guide) => (
+              <article key={guide.slug} className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+                <p className="text-xs text-slate-400">{guide.readingTime}</p>
+                <h3 className="mt-3 text-xl font-semibold text-white">
+                  <Link href={`/guides/${guide.slug}`} className="hover:text-amber-300">
+                    {guide.title}
+                  </Link>
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-slate-300">{guide.excerpt}</p>
+                <Link href={`/guides/${guide.slug}`} className="mt-5 inline-flex text-sm font-semibold text-amber-300">
+                  Читать руководство →
+                </Link>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 

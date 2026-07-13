@@ -37,8 +37,16 @@
     }
 }
 
-http://{$DOMAIN}, http://www.{$DOMAIN}, http://{$CONTRACT_DOMAIN}, http://{$MONITOR_DOMAIN:monitor.ai-verdict.ru}, http://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
+http://www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} 308
+}
+
+http://{$DOMAIN}, http://{$CONTRACT_DOMAIN}, http://{$MONITOR_DOMAIN:monitor.ai-verdict.ru}, http://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
     redir https://{host}{uri} 308
+}
+
+https://www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} 308
 }
 
 https://{$CONTRACT_DOMAIN} {
@@ -54,7 +62,7 @@ https://{$CONTRACT_DOMAIN} {
     reverse_proxy {$CONTRACT_AI_UPSTREAM}
 }
 
-https://{$DOMAIN}, https://www.{$DOMAIN} {
+https://{$DOMAIN} {
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -98,6 +106,7 @@ https://{$MEMORY_DOMAIN:memory.ai-verdict.ru} {
         Referrer-Policy "strict-origin-when-cross-origin"
         X-Frame-Options "SAMEORIGIN"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        X-Robots-Tag "noindex, nofollow, noarchive"
     }
 
     handle /robots.txt {
@@ -136,6 +145,7 @@ https://{$MONITOR_DOMAIN:monitor.ai-verdict.ru} {
         Referrer-Policy "strict-origin-when-cross-origin"
         X-Frame-Options "SAMEORIGIN"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        X-Robots-Tag "noindex, nofollow, noarchive"
     }
 
     handle /robots.txt {

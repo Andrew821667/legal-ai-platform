@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import LegalPageFrame from "@/components/LegalPageFrame";
+import { createPageMetadata } from "@/lib/seo";
 import {
   LEGAL_BRAND,
   LEGAL_DOC_LINKS,
@@ -11,13 +12,12 @@ import {
   LEGAL_UPDATED_AT,
 } from "@/lib/legalProfile";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Пользовательское соглашение",
   description: "Базовые условия использования сайта, ботов и материалов AI Verdict.",
-  alternates: {
-    canonical: LEGAL_DOC_LINKS.userAgreement,
-  },
-};
+  path: LEGAL_DOC_LINKS.userAgreement,
+  type: "article",
+});
 
 export default function UserAgreementPage() {
   return (

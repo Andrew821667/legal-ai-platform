@@ -1,32 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Автоматизация земельного права с AI",
   description:
     "AI для задач земельного права: анализ правоустанавливающих документов, проверка рисков и сопровождение сделок с землей.",
-  alternates: {
-    canonical: "/services/land-law-ai",
-  },
-  openGraph: {
-    title: "Автоматизация земельного права с AI | AI Verdict",
-    description:
-      "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
-    url: "/services/land-law-ai",
-    type: "article",
-  },
-  twitter: {
-    card: "summary",
-    title: "Автоматизация земельного права с AI | AI Verdict",
-    description:
-      "AI для анализа земельных документов, ограничений и сопровождения сделок с землей.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services/land-law-ai",
+  type: "article",
+});
 
 export default function LandLawAIPage() {
   return (

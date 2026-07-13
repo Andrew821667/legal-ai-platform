@@ -1,31 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "Услуги Legal AI",
   description:
     "Услуги AI Verdict: автоматизация юридической функции, договоры, судебная работа, комплаенс, аналитика, интеграции, боты, сайты и кастомная разработка.",
-  alternates: {
-    canonical: "/services",
-  },
-  openGraph: {
-    title: "Услуги Legal AI | AI Verdict",
-    description:
-      "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика, интеграции, боты, сайты и другие услуги.",
-    url: "/services",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "Услуги Legal AI | AI Verdict",
-    description:
-      "Выберите направление автоматизации: договоры, судебная работа, M&A, комплаенс, аналитика, интеграции, боты, сайты и другие услуги.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+  path: "/services",
+});
 
 const serviceLinks = [
   {
@@ -78,8 +60,22 @@ const serviceLinks = [
 ];
 
 export default function ServicesPage() {
+  const siteUrl = "https://ai-verdict.ru";
+  const itemListSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Направления внедрения Legal AI",
+    itemListElement: serviceLinks.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.title,
+      url: `${siteUrl}${item.href}`,
+    })),
+  };
+
   return (
     <main className="min-h-screen bg-slate-50">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }} />
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
           Услуги AI Verdict
@@ -108,12 +104,11 @@ export default function ServicesPage() {
 
         <div className="mt-12 bg-white rounded-2xl border border-slate-200 p-8">
           <h2 className="text-2xl font-bold text-slate-900 mb-3">
-            Региональные страницы
+            Удаленная работа с командами в регионах
           </h2>
           <p className="text-slate-600 mb-4">
-            Для локального поиска мы сделали отдельные страницы под ключевые
-            регионы: Москва, Санкт-Петербург, Краснодарский край,
-            Ставропольский край, Воронежская и Новосибирская области и другие.
+            Диагностику и часть этапов внедрения можно проводить удаленно.
+            Региональный раздел показывает типовые задачи и не означает наличие локальных офисов.
           </p>
           <Link href="/regions" className="text-amber-600 font-semibold">
             Перейти к регионам →
