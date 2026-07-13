@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from news.llm_writer import LLMNewsWriter, compose_manual_post_html
 from news.pipeline import ArticleCandidate
@@ -338,7 +338,7 @@ def test_fallback_weekly_post_passes_quality_gate_for_dirty_summary() -> None:
             "2. LIGA360 запустила Contractum для автоматизации договорной работы.\n"
             "3. 10. 2.\n"
         ),
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     result = writer._fallback_post(article, format_type="weekly_review", cta_type="soft", pillar="implementation")
     assert len(result["text"]) >= 2800
@@ -362,7 +362,7 @@ def test_relevance_bias_hint_for_enterprise_ai_signal() -> None:
             "Вендор представил enterprise AI assistant с agentic workflow и multimodal reasoning. "
             "Релиз влияет на vendor selection, governance и автоматизацию корпоративных процессов."
         ),
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     hint = LLMNewsWriter._relevance_bias_hint(article, "tools")
     assert "пограничный, но приоритетный ИИ-сигнал" in hint
@@ -374,7 +374,7 @@ def test_relevance_bias_hint_empty_for_noise() -> None:
         article_url="https://habr.com/ru/news/misc-tech",
         title="Новый USB-хаб для домашних рабочих мест",
         summary="Материал про периферию для домашнего офиса без AI-контекста и бизнес-сигнала.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     assert LLMNewsWriter._relevance_bias_hint(article, "tools") == ""
 
@@ -391,8 +391,8 @@ def test_temporal_guard_rejects_near_term_forecast_same_day() -> None:
     )
     reason = LLMNewsWriter._temporal_guard_failure_reason(
         text,
-        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=timezone.utc),
-        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=UTC),
+        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
         format_type="daily",
     )
     assert reason == "needs_temporal_recheck:near_term_forecast"
@@ -414,8 +414,8 @@ def test_temporal_guard_rejects_elapsed_weekly_calendar_window() -> None:
     )
     reason = LLMNewsWriter._temporal_guard_failure_reason(
         text,
-        target_publish_at=datetime(2026, 3, 29, 12, 0, tzinfo=timezone.utc),
-        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+        target_publish_at=datetime(2026, 3, 29, 12, 0, tzinfo=UTC),
+        source_published_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
         format_type="weekly_review",
     )
     assert reason == "needs_temporal_recheck:elapsed_calendar_window"
@@ -436,7 +436,7 @@ def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None
         article_url="https://example.com/article",
         title="Ипотечные квартиры и аренда",
         summary="Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье для покрытия кредитных платежей.",
-        published_at=datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc),
+        published_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
     )
     result = writer.generate_post(
         article,
@@ -444,7 +444,7 @@ def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None
         format_type="daily",
         cta_type="soft",
         pillar="market",
-        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=timezone.utc),
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=UTC),
     )
     assert result is not None
     assert "сдают жилье" in result["text"]
@@ -465,6 +465,38 @@ def test_quality_gate_rejects_weak_daily_third_block() -> None:
         "#AIVerdict #AI #LegalTech"
     )
     assert LLMNewsWriter._quality_gate_failure_reason(text, "daily") == "weak_daily_third_block:47"
+
+
+def test_language_gate_rejects_english_title_and_body() -> None:
+    text = (
+        "<b>New AI platform changes legal operations</b>\n\n"
+        "<b>Что произошло</b>\nA new platform was launched for corporate legal teams. "
+        "It automates contract review, intake and document analysis across multiple business systems.\n\n"
+        "<b>Почему это важно</b>\nThe release changes how teams purchase and deploy legal technology. "
+        "Buyers should review data access, audit logs, service levels and supplier accountability.\n\n"
+        "<b>Что это значит для рынка</b>\nVendors will compete on workflow integration, measurable outcomes and governance. "
+        "Legal departments should define a pilot, owner and quality metrics before scaling.\n\n"
+        "<b>Источник</b>: https://example.com/news\n#AIVerdict #LegalTech"
+    )
+
+    reason = LLMNewsWriter._language_gate_failure_reason(text)
+
+    assert reason == "language_title_not_russian"
+
+
+def test_language_gate_allows_russian_post_with_product_names() -> None:
+    text = (
+        "<b>OpenAI обновила платформу для корпоративных команд</b>\n\n"
+        "<b>Что произошло</b>\nКомпания представила обновление API для автоматизации повторяющихся операций. "
+        "В центре релиза находятся управляемые рабочие процессы, журналирование и интеграция с внутренними системами.\n\n"
+        "<b>Почему это важно</b>\nЮридическим департаментам нужно оценивать не название модели, а качество результата, "
+        "режим доступа к данным, договорную ответственность поставщика и стоимость одной операции.\n\n"
+        "<b>Что это значит для рынка</b>\nПеред пилотом стоит зафиксировать владельца процесса, SLA, метрики и порядок проверки человеком. "
+        "Так команда сможет измерить эффект и контролировать риски до масштабирования.\n\n"
+        "<b>Источник</b>: https://example.com/news\n#AIVerdict #LegalTech"
+    )
+
+    assert LLMNewsWriter._language_gate_failure_reason(text) is None
 
 
 def test_shorten_with_prefer_sentence_never_cuts_mid_sentence() -> None:
@@ -490,7 +522,7 @@ def test_infer_legal_focus_hint_for_privacy_article() -> None:
         article_url="https://example.com/privacy-ai",
         title="AI privacy and cross-border data transfers",
         summary="The article discusses AI privacy, GDPR obligations and cross-border data transfers.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     hint = LLMNewsWriter._infer_legal_focus_hint(article, "regulation")
     assert "трансгранич" in hint.lower()
@@ -503,7 +535,7 @@ def test_fallback_legal_commentary_for_contract_tooling_is_specific() -> None:
         article_url="https://example.com/contract-ai-platform",
         title="AI contract review platform adds new SLA terms",
         summary="A vendor expanded its AI contract review platform and updated SLA commitments for enterprise clients.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "contracts")
     lowered = text.lower()
@@ -518,7 +550,7 @@ def test_infer_rubric_hint_for_litigation_article() -> None:
         article_url="https://example.com/legal-hold-ai",
         title="AI document review and legal hold in litigation",
         summary="The article discusses AI document review, legal hold and chain of custody requirements.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     assert LLMNewsWriter._infer_rubric_hint(article, "case") == "litigation"
 
@@ -529,7 +561,7 @@ def test_fallback_legal_commentary_for_regulation_article_is_specific() -> None:
         article_url="https://example.com/ai-act-governance",
         title="AI Act governance and risk classification update",
         summary="The article covers AI Act obligations, governance and logging duties for enterprise deployments.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "regulation", "regulation")
     lowered = text.lower()
@@ -544,7 +576,7 @@ def test_fallback_legal_commentary_for_ai_law_article_is_specific() -> None:
         article_url="https://example.com/output-copyright",
         title="AI output copyright and automated decision making",
         summary="The article discusses copyright in AI output, training data and automated decision making.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "tools", "ai_law")
     lowered = text.lower()
@@ -559,7 +591,7 @@ def test_fallback_legal_commentary_for_litigation_article_is_specific() -> None:
         article_url="https://example.com/ediscovery-ai",
         title="AI in e-discovery and document review",
         summary="The article discusses e-discovery, document review and explainability in litigation workflows.",
-        published_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
     )
     text = LLMNewsWriter._fallback_legal_commentary(article, "case", "litigation")
     lowered = text.lower()
