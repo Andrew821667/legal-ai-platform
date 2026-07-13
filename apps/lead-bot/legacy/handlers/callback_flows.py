@@ -3,11 +3,6 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
-from telegram.error import TelegramError
-from telegram.ext import ContextTypes
-from telegram_ui import reply_button as KeyboardButton
-
 import admin_interface
 import content
 import database
@@ -15,14 +10,29 @@ import funnel
 import lead_qualifier
 import utils
 from config import get_config
+from telegram import InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram.error import TelegramError
+from telegram.ext import ContextTypes
+from telegram_ui import reply_button as KeyboardButton
+
 from .constants import CONSENT_PDN_MENU
 from .helpers import notify_admin_new_lead
 from .markup import (
     clip_for_edit as _clip_for_edit,
+)
+from .markup import (
     documents_panel_markup as _documents_panel_markup,
+)
+from .markup import (
     documents_panel_text as _documents_panel_text,
+)
+from .markup import (
     web_open_markup as _web_open_markup,
+)
+from .markup import (
     web_url_markup as _web_url_markup,
+)
+from .markup import (
     workspace_markup_for as _workspace_markup_for,
 )
 from .start_payloads import process_pending_start_payload
@@ -277,24 +287,6 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         logger.warning("Failed to answer consent callback: %s", answer_error)
 
     user = query.from_user
-    user_data = database.db.get_user_by_telegram_id(user.id)
-    if not user_data:
-        user_id = database.db.create_or_update_user(
-            telegram_id=user.id,
-            username=user.username,
-            first_name=user.first_name,
-            last_name=user.last_name,
-        )
-        user_data = database.db.get_user_by_id(user_id)
-
-    if not user_data:
-        await utils.safe_reply_text(
-            query.message,
-            "Ошибка инициализации профиля. Нажмите /start еще раз.",
-            action="consent_profile_error",
-        )
-        return
-
     action = query.data or ""
 
     if action == "consent_doc_privacy":
@@ -319,19 +311,30 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         await utils.safe_edit_html(query.message, content.CONSENT_DENIED_TEXT, action="consent_pdn_no")
         return
 
+    user_data = database.db.get_user_by_telegram_id(user.id)
+    if not user_data and action == "consent_pdn_yes":
+        user_id = database.db.create_or_update_user(
+            telegram_id=user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+        )
+        user_data = database.db.get_user_by_id(user_id)
+
+    if not user_data:
+        await utils.safe_reply_text(
+            query.message,
+            "Ошибка инициализации профиля. Нажмите /start еще раз.",
+            action="consent_profile_error",
+        )
+        return
+
     if action == "consent_pdn_yes":
         database.db.grant_user_consent(user_data["id"])
         await utils.safe_edit_html(
             query.message,
             "<b>✅ Согласие на обработку ПД сохранено.</b>\n\n"
-            "Теперь можно оставить заявку, передать контакт и получать материалы.\n"
-            "Для ИИ-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
-            action="consent_pdn_yes",
-        )
-
-        await utils.safe_reply_html(
-            query.message,
-            content.build_workspace_text(
+            + content.build_workspace_text(
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
                 selected_profile=database.db.get_user_offer_profile(user_data["id"]),
                 emphasize_profile_choice=True,
@@ -340,7 +343,7 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
                 lead=database.db.get_local_lead_by_user_id(user_data["id"]),
                 selected_profile=database.db.get_user_offer_profile(user_data["id"]),
             ),
-            action="consent_workspace_after_yes",
+            action="consent_pdn_yes",
         )
         await process_pending_start_payload(
             message=query.message,

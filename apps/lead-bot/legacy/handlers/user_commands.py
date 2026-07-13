@@ -10,27 +10,43 @@ from typing import Dict, Optional
 import admin_interface
 import content
 import database
-import platform_map
 import utils
 from config import get_config
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+
 from .markup import (
     documents_markup as _documents_markup,
+)
+from .markup import (
     pdn_consent_markup as _pdn_consent_markup,
+)
+from .markup import (
     profile_panel_markup as _profile_panel_markup,
+)
+from .markup import (
     quick_nav_markup_for as _quick_nav_markup_for,
+)
+from .markup import (
     start_markup_for as _start_markup_for,
+)
+from .markup import (
     transborder_consent_markup as _transborder_consent_markup,
+)
+from .markup import (
     web_open_markup as _web_open_markup,
+)
+from .markup import (
     workspace_markup_for as _workspace_markup_for,
 )
 from .start_payloads import (
-    PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
     _CONTRACT_START_PAYLOAD_RE,
     _READER_START_PAYLOAD_RE,
     process_pending_start_payload,
+)
+from .start_payloads import (
+    PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
 )
 
 config = get_config()
@@ -107,59 +123,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data[_PENDING_START_PAYLOAD_KEY] = start_payload
         logger.info("User %s started bot", user.id)
 
-        # Plain /start (no deep-link payload) — show the platform map first so
-        # the user understands this bot is one of several connected entry
-        # points, not a standalone tool. Skipped for deep-link arrivals
-        # because those users already know which scenario they're in.
-        if not start_payload and update.message is not None:
-            try:
-                await utils.safe_reply_html(
-                    update.message,
-                    platform_map.build_text(),
-                    reply_markup=platform_map.build_keyboard(),
-                    action="platform_map",
-                )
-            except Exception:
-                logger.exception("Failed to send platform map greeting")
-
-        user_id = database.db.create_or_update_user(
-            telegram_id=user.id,
-            username=user.username,
-            first_name=user.first_name,
-            last_name=user.last_name,
+        existing_user = database.db.get_local_user_by_telegram_id(user.id)
+        existing_consent_state = (
+            database.db.get_user_consent_state(existing_user["id"])
+            if existing_user
+            else {}
         )
-        chat = update.effective_chat
-        if chat is not None:
-            database.db.set_chat_mode(int(chat.id), "bot")
-
-        lead = database.db.get_local_lead_by_user_id(user_id)
-        selected_profile = database.db.get_user_offer_profile(user_id)
-        consent_state = database.db.get_user_consent_state(user_id)
-        needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
-        start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
-
-        await utils.safe_reply_html(
-            update.message,
-            content.build_start_entry_text(
-                first_name=user.first_name,
-                lead=lead,
-                selected_profile=selected_profile,
-                emphasize_profile_choice=True,
-            ),
-            reply_markup=start_markup,
-            action="start_entry",
+        needs_pdn_consent = _should_require_pdn_consent(
+            user.id == config.ADMIN_TELEGRAM_ID,
+            existing_consent_state,
         )
-        logger.info("Start entry sent on /start for user %s", user.id)
-
-        user_data = database.db.get_local_user_by_id(user_id)
-        if user_data and not needs_pdn_consent:
-            await process_pending_start_payload(
-                message=update.message,
-                context=context,
-                user_data=user_data,
-                user=user,
-            )
-        elif needs_pdn_consent and start_payload:
+        if needs_pdn_consent:
             consent_text = _pdn_consent_prompt_text()
             if _READER_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (
@@ -176,6 +150,44 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 consent_text,
                 reply_markup=_pdn_consent_markup(),
                 action="start_consent_step_1",
+            )
+            logger.info("Start consent prompt sent on /start for user %s", user.id)
+            return
+
+        user_id = database.db.create_or_update_user(
+            telegram_id=user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+        )
+        chat = update.effective_chat
+        if chat is not None:
+            database.db.set_chat_mode(int(chat.id), "bot")
+
+        lead = database.db.get_local_lead_by_user_id(user_id)
+        selected_profile = database.db.get_user_offer_profile(user_id)
+        start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
+
+        await utils.safe_reply_html(
+            update.message,
+            content.build_start_entry_text(
+                first_name=user.first_name,
+                lead=lead,
+                selected_profile=selected_profile,
+                emphasize_profile_choice=True,
+            ),
+            reply_markup=start_markup,
+            action="start_entry",
+        )
+        logger.info("Start entry sent on /start for user %s", user.id)
+
+        user_data = database.db.get_local_user_by_id(user_id)
+        if user_data:
+            await process_pending_start_payload(
+                message=update.message,
+                context=context,
+                user_data=user_data,
+                user=user,
             )
 
     except (sqlite3.Error, TelegramError, KeyError, AttributeError) as error:
