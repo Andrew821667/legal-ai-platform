@@ -41,6 +41,8 @@ def _parse_published(entry: feedparser.FeedParserDict) -> datetime | None:
 
 def fetch_rss_articles(source_urls: list[str], per_source_limit: int = 30) -> list[ArticleCandidate]:
     items: list[ArticleCandidate] = []
+    proxy_url = settings.news_rss_proxy_url.strip()
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
     for source_url in source_urls:
         try:
@@ -48,6 +50,7 @@ def fetch_rss_articles(source_urls: list[str], per_source_limit: int = 30) -> li
                 source_url,
                 timeout=max(3, settings.news_rss_fetch_timeout_seconds),
                 headers={"User-Agent": "AI-Verdict-News/1.0"},
+                proxies=proxies,
             )
             response.raise_for_status()
             feed = feedparser.parse(response.content)

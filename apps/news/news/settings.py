@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     news_source_keys: str = ""
     news_source_urls: str = ""
     news_rss_fetch_timeout_seconds: int = 12
+    news_rss_proxy_url: str = ""
     news_max_source_age_days: int = 3
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
