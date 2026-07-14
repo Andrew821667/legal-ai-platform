@@ -8,6 +8,7 @@ import { LEGAL_OPERATOR_NAME, reportLegalProfileWarnings } from "@/lib/legalProf
 import { SEO_SITE_URL } from "@/lib/seo";
 
 const siteUrl = SEO_SITE_URL;
+const yandexMetrikaId = process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -104,9 +105,7 @@ export default function RootLayout({
           <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
         )}
 
-        {process.env.NEXT_PUBLIC_YM_COUNTER_ID && (
-          <YandexMetrika counterId={process.env.NEXT_PUBLIC_YM_COUNTER_ID} />
-        )}
+        <YandexMetrika counterId={yandexMetrikaId} />
 
         <AppShell>{children}</AppShell>
       </body>

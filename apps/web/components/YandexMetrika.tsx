@@ -11,7 +11,7 @@ interface YandexMetrikaProps {
  *
  * Устанавливает счетчик Яндекс.Метрики на сайт для сбора аналитики.
  *
- * @param counterId - ID счетчика из Яндекс.Метрики (8-значное число)
+ * @param counterId - ID счетчика из Яндекс.Метрики
  */
 export default function YandexMetrika({ counterId }: YandexMetrikaProps) {
   // Если нет ID счетчика - не показываем скрипт
@@ -38,10 +38,12 @@ export default function YandexMetrika({ counterId }: YandexMetrikaProps) {
             (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
 
             ym(${counterId}, "init", {
+              ssr:true,
               clickmap:true,
               trackLinks:true,
               accurateTrackBounce:true,
-              webvisor:true
+              referrer:document.referrer,
+              url:location.href
             });
           `,
         }}
