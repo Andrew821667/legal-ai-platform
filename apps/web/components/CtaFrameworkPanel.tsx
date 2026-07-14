@@ -28,7 +28,7 @@ export default function CtaFrameworkPanel({
     const isPrimary = kind === primary;
     if (kind === "consult") {
       return isPrimary
-        ? "rounded-lg bg-sky-500 px-4 py-3 text-center font-semibold text-slate-950 hover:bg-sky-400 transition-colors"
+        ? "rounded-lg bg-sky-500 px-4 py-3 text-center font-semibold text-[#ffffff] hover:bg-sky-400 transition-colors"
         : "rounded-lg border border-sky-500/60 px-4 py-3 text-center font-semibold text-sky-200 hover:border-sky-300 transition-colors";
     }
     if (isPrimary) {

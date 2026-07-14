@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getGuideBySlug, guides } from "@/lib/guidesData";
 import { LEGAL_OPERATOR_NAME, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import { createPageMetadata } from "@/lib/seo";
+import HeroBackdrop from "@/components/HeroBackdrop";
 
 type GuidePageProps = {
   params: Promise<{ slug: string }>;
@@ -83,22 +84,27 @@ export default async function GuidePage({ params }: GuidePageProps) {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-        <nav aria-label="Хлебные крошки" className="text-sm text-slate-500">
-          <Link href="/guides" className="hover:text-amber-700">Руководства</Link> / {guide.title}
-        </nav>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <section className="relative overflow-hidden border-b border-slate-300 bg-slate-100">
+        <HeroBackdrop variant="insights" tone="light" />
+        <div className="relative mx-auto max-w-4xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+          <nav aria-label="Хлебные крошки" className="text-sm text-slate-600">
+            <Link href="/guides" className="hover:text-amber-800">Руководства</Link> / {guide.title}
+          </nav>
+          <header className="mt-6">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">Практическое руководство</p>
+            <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">{guide.title}</h1>
+            <p className="mt-6 text-lg leading-relaxed text-slate-700">{guide.excerpt}</p>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+              <span>Автор: <Link href="/team" className="font-medium text-slate-800 underline">{LEGAL_OPERATOR_NAME}</Link></span>
+              <span>Обновлено: 13 июля 2026 года</span>
+              <span>{guide.readingTime}</span>
+            </div>
+          </header>
+        </div>
+      </section>
 
-        <header className="mt-6 border-b border-slate-200 pb-10">
-          <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Практическое руководство</p>
-          <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">{guide.title}</h1>
-          <p className="mt-6 text-lg leading-relaxed text-slate-600">{guide.excerpt}</p>
-          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
-            <span>Автор: <Link href="/team" className="font-medium text-slate-700 underline">{LEGAL_OPERATOR_NAME}</Link></span>
-            <span>Обновлено: 13 июля 2026 года</span>
-            <span>{guide.readingTime}</span>
-          </div>
-        </header>
+      <article className="mx-auto max-w-4xl px-4 pb-16 sm:px-6 lg:px-8">
 
         <div className="mt-10 space-y-12">
           {guide.sections.map((section) => (

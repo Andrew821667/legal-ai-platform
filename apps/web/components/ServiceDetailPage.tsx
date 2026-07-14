@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import LeadCaptureForm from "@/components/LeadCaptureForm";
+import HeroBackdrop from "@/components/HeroBackdrop";
 import { LEGAL_BRAND, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import type { ServiceDetail } from "@/lib/serviceDetailData";
 
@@ -44,8 +45,9 @@ export default function ServiceDetailPage({ service }: { service: ServiceDetail 
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
 
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <section className="relative overflow-hidden border-b border-slate-300 bg-slate-100">
+        <HeroBackdrop variant="services" tone="light" />
+        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8 lg:pb-20 lg:pt-32">
           <nav aria-label="Хлебные крошки" className="text-sm text-slate-500">
             <Link href="/services" className="hover:text-amber-700">Услуги</Link> / {service.eyebrow}
           </nav>

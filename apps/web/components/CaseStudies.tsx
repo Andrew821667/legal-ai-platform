@@ -1,5 +1,7 @@
 "use client";
 
+import HeroBackdrop from "@/components/HeroBackdrop";
+
 const cases = [
   {
     title: "Поток договоров и согласований",
@@ -59,18 +61,23 @@ const cases = [
 
 export default function CaseStudies() {
   return (
-    <section className="py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-14">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Типовые сценарии внедрения
-          </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto">
-            Ниже не “маркетинговые кейсы с красивыми цифрами”, а типовые паттерны задач,
-            в которых AI обычно дает эффект для юридической функции.
-          </p>
+    <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
+      <div className="relative overflow-hidden border-b border-slate-700">
+        <HeroBackdrop variant="insights" tone="light" />
+        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Типовые сценарии внедрения
+            </h1>
+            <p className="text-xl text-slate-200 max-w-3xl mx-auto">
+              Ниже не “маркетинговые кейсы с красивыми цифрами”, а типовые паттерны задач,
+              в которых AI обычно дает эффект для юридической функции.
+            </p>
+          </div>
         </div>
+      </div>
 
+      <div className="max-w-6xl mx-auto px-4 py-14 sm:px-6 lg:px-8">
         <div className="space-y-8">
           {cases.map((item) => (
             <article

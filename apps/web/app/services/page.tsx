@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createPageMetadata } from "@/lib/seo";
+import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
   title: "Услуги Legal AI",
@@ -76,16 +77,21 @@ export default function ServicesPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }} />
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-          Услуги AI Verdict
-        </h1>
-        <p className="text-lg text-slate-600 mb-10">
-          Выберите направление и посмотрите, как AI Verdict может помочь вашему
-          юридическому отделу и смежным бизнес-процессам. Мы можем закрыть не только legaltech-сценарий,
-          но и разработку ботов, сайтов, mini app, внутренних сервисов и интеграций вокруг него.
-        </p>
+      <section className="relative overflow-hidden border-b border-slate-300 bg-slate-100">
+        <HeroBackdrop variant="services" tone="light" />
+        <div className="relative mx-auto max-w-5xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
+          <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
+            Услуги AI Verdict
+          </h1>
+          <p className="max-w-3xl text-lg text-slate-700">
+            Выберите направление и посмотрите, как AI Verdict может помочь вашему
+            юридическому отделу и смежным бизнес-процессам. Мы можем закрыть не только legaltech-сценарий,
+            но и разработку ботов, сайтов, mini app, внутренних сервисов и интеграций вокруг него.
+          </p>
+        </div>
+      </section>
 
+      <section className="mx-auto max-w-5xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {serviceLinks.map((item) => (
             <Link

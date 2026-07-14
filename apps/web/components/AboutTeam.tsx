@@ -1,6 +1,7 @@
 "use client";
 
 import { Scale, Bot, Workflow, ShieldCheck } from "lucide-react";
+import HeroBackdrop from "@/components/HeroBackdrop";
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_OPERATOR_NAME,
@@ -52,18 +53,23 @@ const stack = [
 
 export default function AboutTeam() {
   return (
-    <section id="about" className="py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-14">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            О команде
-          </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto">
-            Мы строим AI-сценарии для юридической функции как инженерный продукт:
-            от маршрута заявки и договорного потока до контроля рисков и внутренних регламентов.
-          </p>
+    <section id="about" className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
+      <div className="relative overflow-hidden border-b border-slate-700">
+        <HeroBackdrop variant="collaboration" tone="light" />
+        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              О команде
+            </h1>
+            <p className="text-xl text-slate-200 max-w-3xl mx-auto">
+              Мы строим AI-сценарии для юридической функции как инженерный продукт:
+              от маршрута заявки и договорного потока до контроля рисков и внутренних регламентов.
+            </p>
+          </div>
         </div>
+      </div>
 
+      <div className="max-w-6xl mx-auto px-4 py-14 sm:px-6 lg:px-8">
         <div className="mb-12 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8">
           <p className="text-sm font-semibold uppercase tracking-wider text-amber-300">
             Ответственный за продукт и материалы
