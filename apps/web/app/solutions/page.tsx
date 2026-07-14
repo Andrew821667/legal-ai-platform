@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ROUTES } from "@/lib/links";
 import { createPageMetadata } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
+import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
   title: "Решения для автоматизации юридической функции",
@@ -52,8 +53,9 @@ const launchFormats = [
 export default function SolutionsPage() {
   return (
     <main className="bg-slate-900 text-slate-100 min-h-screen">
-      <section className="border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
+      <section className="relative overflow-hidden border-b border-slate-700">
+        <HeroBackdrop variant="solutions" tone="light" />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             Решения и услуги
           </span>

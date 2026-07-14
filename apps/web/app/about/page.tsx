@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { EXTERNAL_LINKS, leadBotDeepLink } from "@/lib/links";
 import { LEGAL_CONTACT_EMAIL } from "@/lib/legalProfile";
 import { createPageMetadata } from "@/lib/seo";
+import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
   title: "О платформе",
@@ -20,8 +21,9 @@ const principles = [
 export default function AboutPage() {
   return (
     <main className="bg-slate-900 text-slate-100 min-h-screen">
-      <section className="border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
+      <section className="relative overflow-hidden border-b border-slate-700">
+        <HeroBackdrop variant="collaboration" tone="light" />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             О платформе и подходе
           </span>
