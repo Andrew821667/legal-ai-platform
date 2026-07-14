@@ -7,7 +7,7 @@ import HeroBackdrop from "@/components/HeroBackdrop";
 export const metadata = createPageMetadata({
   title: "Практические руководства по Legal AI",
   description:
-    "Практические материалы AI Verdict по проверке договоров, внедрению ИИ в юридический отдел и безопасности данных.",
+    "Практические материалы по выбору ИИ для юриста, проверке договоров, внедрению Legal AI в юридический отдел и безопасности данных.",
   path: "/guides",
 });
 
@@ -22,13 +22,13 @@ export default function GuidesPage() {
             Практические руководства по Legal AI
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-slate-200">
-            Без обещаний заменить юриста: разбираем процессы, метрики пилота, контроль качества и требования к данным.
+            Без обещаний заменить юриста: разбираем выбор инструмента, процессы, метрики пилота, контроль качества и требования к данным.
           </p>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {guides.map((guide) => (
             <article key={guide.slug} className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900 p-6">
               <p className="text-xs uppercase tracking-wide text-slate-400">{guide.readingTime}</p>

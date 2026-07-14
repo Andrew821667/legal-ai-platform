@@ -206,8 +206,14 @@ jobs:
             done
             return 1
           }
+          remote_cmd='cd /Users/legalai/projects/legal-ai-platform &&
+            if [ -n "$(git status --porcelain)" ]; then
+              backup_name="pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)"
+              git stash push --include-untracked -m "$backup_name"
+            fi &&
+            git pull --ff-only origin main'
           ssh_retry legalai@"$MACMINI_HOST" \
-            "cd /Users/legalai/projects/legal-ai-platform && git pull --ff-only origin main"
+            "$remote_cmd"
 
       - id: image_owner
         run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"

@@ -8,10 +8,13 @@ The platform also designs and launches related automation when it is needed for 
 
 - Website: https://ai-verdict.ru/
 - Services: https://ai-verdict.ru/services
+- AI for lawyers: https://ai-verdict.ru/for-lawyers
 - Custom automation and development: https://ai-verdict.ru/services/custom-ai
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Litigation automation: https://ai-verdict.ru/services/litigation-ai
 - Compliance automation: https://ai-verdict.ru/services/compliance-ai
+- Legal AI guides: https://ai-verdict.ru/guides
+- Choosing AI for legal work: https://ai-verdict.ru/guides/ai-for-lawyers-selection
 - Mini App: https://ai-verdict.ru/miniapp
 - Sitemap: https://ai-verdict.ru/sitemap.xml
 
