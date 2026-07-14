@@ -449,7 +449,11 @@ class LLMNewsWriter:
             raise RuntimeError("openai package is required for news generation") from exc
         self.client = OpenAI(**client_kwargs)
         self.model = settings.news_model
-        self._use_max_tokens_param = "deepseek" in (settings.openai_base_url or "").lower()
+        provider_fingerprint = f"{settings.openai_base_url} {self.model}".lower()
+        self._use_max_tokens_param = "deepseek" in provider_fingerprint
+        self._reasoning_token_reserve = (
+            max(settings.news_reasoning_token_reserve, 0) if "deepseek" in provider_fingerprint else 0
+        )
 
     @staticmethod
     def _article_haystack(article: ArticleCandidate) -> str:
@@ -484,11 +488,15 @@ class LLMNewsWriter:
             )
         )
 
-    def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
-        token_limit = _FORMAT_MAX_OUTPUT_TOKENS.get(format_type, _FORMAT_MAX_OUTPUT_TOKENS["standard"])
+    def _token_limit_kwargs(self, token_limit: int) -> dict[str, Any]:
+        token_limit += max(int(getattr(self, "_reasoning_token_reserve", 0)), 0)
         if self._use_max_tokens_param:
             return {"max_tokens": token_limit}
         return {"max_completion_tokens": token_limit}
+
+    def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
+        token_limit = _FORMAT_MAX_OUTPUT_TOKENS.get(format_type, _FORMAT_MAX_OUTPUT_TOKENS["standard"])
+        return self._token_limit_kwargs(token_limit)
 
     @staticmethod
     def _format_dt(dt: datetime | None) -> str:
@@ -914,11 +922,7 @@ class LLMNewsWriter:
                 f"Adoption patterns: {'; '.join(normalized_patterns) if normalized_patterns else '—'}",
             ) if part
         )
-        completion_kwargs: dict[str, Any]
-        if self._use_max_tokens_param:
-            completion_kwargs = {"max_tokens": 260}
-        else:
-            completion_kwargs = {"max_completion_tokens": 260}
+        completion_kwargs = self._token_limit_kwargs(260)
 
         try:
             response = self.client.chat.completions.create(
