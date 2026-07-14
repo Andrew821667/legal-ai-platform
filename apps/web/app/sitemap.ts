@@ -10,7 +10,7 @@ type SitemapPage = {
   priority: number;
 };
 
-const marketingUpdatedAt = "2026-07-13";
+const marketingUpdatedAt = "2026-07-14";
 
 const pages: SitemapPage[] = [
   { path: "", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 1 },
@@ -32,7 +32,7 @@ const pages: SitemapPage[] = [
   { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/team", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },
-  { path: "/privacy", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/privacy", lastModified: "2026-07-14", changeFrequency: "yearly", priority: 0.3 },
   { path: "/terms", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
   { path: "/user-agreement", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.25 },
   { path: "/ai-policy", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.4 },

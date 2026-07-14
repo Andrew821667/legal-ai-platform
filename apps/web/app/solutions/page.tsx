@@ -5,10 +5,11 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "Решения для автоматизации юридической функции",
+  title: "Автоматизация юридических процессов: решения",
   description:
-    "Решения AI Verdict: автоматизация юридической функции, legal ops, интеграции, боты, сайты, mini app и прикладная разработка для бизнеса.",
+    "Решения для автоматизации юридических процессов: договоры, legal intake, комплаенс, legal ops, интеграции с CRM, ERP, 1С, ЭДО и внутренними системами.",
   path: "/solutions",
+  keywords: ["автоматизация юридических процессов", "автоматизация юридической функции", "legal ops", "Legal AI"],
 });
 
 const automationCases = [
@@ -60,11 +61,11 @@ export default function SolutionsPage() {
             Решения и услуги
           </span>
           <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">
-            Конструктор внедрения под юридическую функцию и смежные процессы
+            Автоматизация юридических процессов: решения для компании
           </h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
-            Выстраиваем дорожную карту от пилота к системной трансформации: объединяем продуктовые модули,
-            процессные настройки, интеграции, прикладную разработку и сопровождение команды.
+            Выстраиваем дорожную карту от одного пилота к рабочему legal-контуру: договоры, юридические заявки,
+            комплаенс, база знаний и контроль сроков связываются с процессными правилами, интеграциями и ролями команды.
           </p>
           <div className="mt-8">
             <CtaFrameworkPanel

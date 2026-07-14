@@ -12,7 +12,7 @@ export const metadata: Metadata = createPageMetadata({
   description:
     "AI Verdict автоматизирует юридические процессы: договоры, претензии, комплаенс и legal intake. Интегрируем AI с CRM, ERP, 1C, ЭДО и внутренними системами.",
   path: "/",
-  keywords: ["автоматизация юридической работы", "AI для юристов", "Legal AI", "legal ops"],
+  keywords: ["автоматизация юридических процессов", "автоматизация юридической работы", "Legal AI", "legal ops"],
 });
 
 const roleCards = [

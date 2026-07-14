@@ -37,9 +37,17 @@ export default async function GuidePage({ params }: GuidePageProps) {
 
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const canonicalUrl = `${baseUrl}/guides/${guide.slug}`;
+  const updatedAt = new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${guide.updatedAt}T00:00:00.000Z`));
   const relatedGuides = guides.filter((item) => item.slug !== guide.slug);
   const relatedService = guide.slug === "ai-contract-review-process"
     ? { href: "/services/contracts-ai", label: "Автоматизация договорной работы" }
+    : guide.slug === "ai-for-lawyers-selection"
+      ? { href: "/for-lawyers", label: "ИИ для юристов: практические сценарии" }
     : guide.slug === "legal-ai-data-security"
       ? { href: "/services/custom-ai", label: "Безопасная архитектура и интеграции" }
       : { href: "/solutions", label: "Решения для юридической автоматизации" };
@@ -97,7 +105,7 @@ export default async function GuidePage({ params }: GuidePageProps) {
             <p className="mt-6 text-lg leading-relaxed text-slate-700">{guide.excerpt}</p>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
               <span>Автор: <Link href="/team" className="font-medium text-slate-800 underline">{LEGAL_OPERATOR_NAME}</Link></span>
-              <span>Обновлено: 13 июля 2026 года</span>
+              <span>Обновлено: {updatedAt}</span>
               <span>{guide.readingTime}</span>
             </div>
           </header>
