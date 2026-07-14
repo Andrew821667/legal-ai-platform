@@ -100,6 +100,10 @@ https://{$DOMAIN} {
         reverse_proxy host.docker.internal:3001
     }
 
+    handle /guacamole* {
+        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
+    }
+
     handle {
         reverse_proxy web:3000
     }
