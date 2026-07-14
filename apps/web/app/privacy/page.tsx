@@ -162,7 +162,7 @@ export default function PrivacyPolicy() {
             
             <ul className="list-disc pl-6 text-slate-700 space-y-2">
               <li><strong>Google Analytics 4:</strong> анализ трафика и поведения пользователей</li>
-              <li><strong>Yandex Metrika:</strong> веб-аналитика и тепловые карты</li>
+              <li><strong>Yandex Metrika:</strong> анализ посещаемости и источников трафика без Вебвизора и записи содержимого форм</li>
             </ul>
           </section>
 
