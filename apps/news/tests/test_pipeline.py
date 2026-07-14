@@ -300,7 +300,7 @@ def test_normalize_post_text_removes_markdown_artifacts() -> None:
     assert "###" not in normalized
     assert "[источник](" not in normalized
     assert "• Пункт 1" in normalized
-    assert normalized.endswith(".")
+    assert normalized.endswith("#AIVerdict #LegalTech")
 
 
 def test_normalize_post_text_russifies_common_editorial_anglicisms_without_touching_links() -> None:

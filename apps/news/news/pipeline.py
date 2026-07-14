@@ -916,7 +916,7 @@ def _cleanup_technical_symbols(text: str) -> str:
     cleaned = cleaned.replace("```", "")
 
     # Remove markdown headings/blockquote markers that leak into final Telegram copy.
-    cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
+    cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}[ \t]+", "", cleaned)
     cleaned = re.sub(r"(?m)^\s*>\s?", "", cleaned)
 
     # Convert common markdown emphasis to plain text.
@@ -933,10 +933,6 @@ def _cleanup_technical_symbols(text: str) -> str:
 
     # Strip isolated markdown list marks if they stay as raw symbols.
     cleaned = re.sub(r"(?m)^\s*[-*]\s+", "• ", cleaned)
-
-    # If tail is hashtags-only, close sentence to pass quality gate checks.
-    if re.search(r"(?:#\w+\s*)+$", cleaned) and not re.search(r"[.!?…]\s*$", cleaned):
-        cleaned = cleaned.rstrip() + "."
 
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
