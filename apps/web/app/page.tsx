@@ -212,7 +212,7 @@ export default function Home() {
       <section className="border-y border-slate-800 bg-slate-800/40" id="product-entry">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="max-w-3xl">
-            <h2 className="text-3xl md:text-4xl font-semibold text-white">Флагманский legal-сценарий: Contract_AI_System</h2>
+            <h2 className="text-3xl md:text-4xl font-semibold text-white">Флагманский legal-сценарий: Contract AI</h2>
             <p className="mt-4 text-slate-300">
               Проверка договоров — самый понятный вход в платформу. На нем видно наш базовый принцип: AI помогает
               быстро разобрать документ, но контроль, ответственность и финальное решение остаются у человека.
@@ -232,6 +232,12 @@ export default function Home() {
               <p className="mt-2 text-sm text-slate-400">Подтвердить эффект на ограниченном процессе и только потом масштабировать в рабочий контур.</p>
             </div>
           </div>
+          <Link
+            href={ROUTES.contractAI}
+            className="mt-7 inline-flex font-semibold text-sky-300 transition-colors hover:text-sky-200"
+          >
+            Подробнее о Contract AI и бесплатной проверке договоров →
+          </Link>
         </div>
       </section>
 

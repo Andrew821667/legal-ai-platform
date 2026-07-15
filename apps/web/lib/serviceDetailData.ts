@@ -84,7 +84,7 @@ export const serviceDetails: Record<string, ServiceDetail> = {
     ],
     related: [
       { href: "/guides/ai-contract-review-process", label: "Как проверить договор с помощью ИИ", description: "Как подготовить матрицу рисков, набор документов и KPI пилота." },
-      { href: "https://contract.ai-verdict.ru/demo", label: "Проверить договор в Contract AI", description: "Отдельный сервис для самостоятельного анализа документа.", external: true },
+      { href: "/contract-ai-system", label: "Contract AI — бесплатная проверка договоров", description: "Возможности продукта, бесплатный режим и переход в отдельный сервис." },
       { href: "/for-lawyers", label: "ИИ для юристов", description: "Практические сценарии, критерии выбора и безопасный запуск пилота." },
     ],
   },

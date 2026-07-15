@@ -10,7 +10,7 @@ type SitemapPage = {
   priority: number;
 };
 
-const marketingUpdatedAt = "2026-07-14";
+const marketingUpdatedAt = "2026-07-15";
 
 const pages: SitemapPage[] = [
   { path: "", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 1 },
@@ -19,6 +19,7 @@ const pages: SitemapPage[] = [
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services/contracts-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/contract-ai-system", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
   { path: "/services/litigation-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/services/compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/services/corporate-ma-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },

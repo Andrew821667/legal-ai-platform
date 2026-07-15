@@ -42,7 +42,7 @@ export default function MiniAppToolsPage() {
     <section className="space-y-4">
       <MiniAppGuideCard
         title="Как использовать экран"
-        description="Здесь собраны практические инструменты. Начните с Contract_AI_System, затем возвращайтесь к истории и расширяйте контур внедрения через интеграции или разработку."
+        description="Здесь собраны практические инструменты. Начните с Contract AI, затем возвращайтесь к истории и расширяйте контур внедрения через интеграции или разработку."
       />
 
       {tools.map((tool) => (
