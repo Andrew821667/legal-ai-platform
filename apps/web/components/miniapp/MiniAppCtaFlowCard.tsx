@@ -49,7 +49,7 @@ export default function MiniAppCtaFlowCard({
           rel={contractAIExternal ? "noopener noreferrer" : undefined}
           variant="primary"
         >
-          🧪 Проверить в Contract_AI_System
+          🧪 Проверить в Contract AI
         </MiniTrackedLink>
 
         <MiniTrackedLink

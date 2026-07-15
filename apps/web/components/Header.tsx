@@ -47,7 +47,7 @@ export default function Header() {
 
   const mainNavigation = [
     { name: "Решения", href: "/solutions" },
-    { name: "Contract_AI_System", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
+    { name: "Contract AI", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
     { name: "Материалы", href: "/guides" },
     { name: "О платформе", href: "/about" },
   ];

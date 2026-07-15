@@ -52,7 +52,7 @@ const sectionLabel: Record<string, string> = {
 const quickActions = [
   {
     title: "Проверить договор",
-    description: "Открыть Contract_AI_System и быстро проверить документ.",
+    description: "Открыть Contract AI и быстро проверить документ.",
     href: contractAIEntryHref("demo"),
     action: MINIAPP_ACTIONS.openContractAI,
     variant: "primary" as const,

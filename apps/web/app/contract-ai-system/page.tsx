@@ -1,29 +1,66 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, contractAISsoUrl } from "@/lib/links";
+import { SEO_SITE_URL } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 
 export const metadata: Metadata = {
-  title: "Contract_AI_System",
+  title: "Contract AI — нейросеть для анализа и проверки договоров",
   description:
-    "Интеграционная страница AI Verdict о внешнем Contract_AI_System: сценарий проверки договора, переход в продукт и запуск пилота.",
+    "Contract AI от AI Verdict: анализ и проверка договоров нейросетью, поиск юридических рисков и рекомендации по правкам. До 3 договоров в месяц бесплатно.",
   alternates: { canonical: "/contract-ai-system" },
   openGraph: {
-    title: "Contract_AI_System | AI Verdict",
+    title: "Contract AI — анализ и проверка договоров с ИИ | AI Verdict",
     description:
       "AI-сервис для первичной проверки договоров, выявления рисков и запуска пилота договорной автоматизации.",
     url: "/contract-ai-system",
     type: "website",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Contract AI от AI Verdict" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Contract_AI_System | AI Verdict",
-    description: "Проверка договоров, риск-профиль и понятный вход в legal automation.",
+    title: "Contract AI — анализ и проверка договоров с ИИ | AI Verdict",
+    description: "Проверка договоров нейросетью, риск-профиль и бесплатный старт.",
+    images: ["/opengraph-image"],
   },
   robots: {
-    index: false,
+    index: true,
     follow: true,
-    nocache: true,
+  },
+};
+
+const contractProductUrl = "https://contract.ai-verdict.ru";
+
+const softwareSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "@id": `${contractProductUrl}/#application`,
+  name: "Contract AI by AI Verdict",
+  alternateName: "Contract AI System",
+  url: contractProductUrl,
+  mainEntityOfPage: `${SEO_SITE_URL}/contract-ai-system`,
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  inLanguage: "ru-RU",
+  description: "Сервис анализа, проверки, подготовки и согласования договоров с помощью ИИ.",
+  featureList: [
+    "Анализ условий и юридических рисков",
+    "Рекомендации по правкам",
+    "Сравнение версий договоров",
+    "Протоколы разногласий",
+  ],
+  offers: {
+    "@type": "Offer",
+    name: "Бесплатный режим",
+    price: "0",
+    priceCurrency: "RUB",
+    description: "До 3 договоров в месяц.",
+  },
+  provider: {
+    "@type": "Organization",
+    "@id": `${SEO_SITE_URL}/#organization`,
+    name: "AI Verdict",
+    url: SEO_SITE_URL,
   },
 };
 
@@ -89,12 +126,15 @@ export default function ContractAISystemPage() {
   const ssoUrl = contractAISsoUrl();
   return (
     <main className="bg-slate-900 text-slate-100 min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-300">
             Флагманский продукт платформы
           </span>
-          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">Contract_AI_System</h1>
+          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">
+            Contract AI — анализ и проверка договоров с ИИ
+          </h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
             Это флагманский внешний сервис проверки договоров. Через него удобно быстро проверить гипотезу на реальных
             документах: начать с 3 бесплатных договоров в месяц, увидеть риски, получить рекомендации по правкам
@@ -104,7 +144,7 @@ export default function ContractAISystemPage() {
             <CtaFrameworkPanel
               leadStart="contract_demo"
               miniAppHref={ROUTES.miniAppTools}
-              title="Маршрут Contract_AI_System: Узнать -> Проверить -> Обсудить пилот"
+              title="Маршрут Contract AI: Узнать -> Проверить -> Обсудить пилот"
               variant="validate-first"
             />
           </div>
