@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import BrandMark from "@/components/BrandMark";
 
 export const runtime = "edge";
 export const alt = "AI Verdict";
@@ -25,7 +26,10 @@ export default function Image() {
           gap: "18px",
         }}
       >
-        <div style={{ fontSize: 28, color: "#fbbf24" }}>AI Verdict</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: 28, color: "#fbbf24" }}>
+          <BrandMark size={52} />
+          <div>AI Verdict</div>
+        </div>
         <div style={{ fontSize: 58, fontWeight: 700, lineHeight: 1.1 }}>
           AI для юридических команд
         </div>
