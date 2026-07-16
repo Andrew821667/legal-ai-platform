@@ -147,6 +147,52 @@ def test_upsert_and_list_user_with_large_telegram_id() -> None:
         _delete_api_key_by_name(api_key_name)
 
 
+def test_upsert_user_does_not_reset_omitted_consents() -> None:
+    client = TestClient(app)
+    api_key_name = "pytest.users.preserve-consent"
+    raw_key = _create_api_key(Scope.bot, api_key_name)
+    telegram_id = 6_000_000_000 + (uuid4().int % 100_000_000)
+    created_id: str | None = None
+
+    try:
+        created = client.post(
+            "/api/v1/users",
+            headers={"X-API-Key": raw_key},
+            json={
+                "telegram_id": telegram_id,
+                "consent_given": True,
+                "transborder_consent": True,
+                "marketing_consent": True,
+            },
+        )
+        assert created.status_code == 200
+        created_id = created.json()["id"]
+
+        updated = client.post(
+            "/api/v1/users",
+            headers={"X-API-Key": raw_key},
+            json={"telegram_id": telegram_id, "name": "Updated name"},
+        )
+        assert updated.status_code == 200
+        payload = updated.json()
+        assert payload["id"] == created_id
+        assert payload["name"] == "Updated name"
+        assert payload["consent_given"] is True
+        assert payload["transborder_consent"] is True
+        assert payload["marketing_consent"] is True
+    finally:
+        db = SessionLocal()
+        try:
+            if created_id:
+                db.execute(delete(User).where(User.id == created_id))
+            else:
+                db.execute(delete(User).where(User.telegram_id == telegram_id))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(api_key_name)
+
+
 def test_admin_user_data_operations_by_telegram_id() -> None:
     client = TestClient(app)
     admin_key_name = "pytest.users.admin.ops"

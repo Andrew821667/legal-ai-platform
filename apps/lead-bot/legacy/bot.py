@@ -111,6 +111,8 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
     ],
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 _LOCK_FILE_HANDLE = None
 

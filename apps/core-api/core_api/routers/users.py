@@ -61,7 +61,7 @@ def upsert_user(
         )
         db.add(user)
     else:
-        payload_data = payload.model_dump(exclude_none=True)
+        payload_data = payload.model_dump(exclude_none=True, exclude_unset=True)
         for key, value in payload_data.items():
             setattr(user, key, value)
         if payload.last_interaction is None:
