@@ -62,6 +62,7 @@ from .user_routing import (
     maybe_handle_static_reply_action,
 )
 from .start_payloads import process_pending_start_payload
+from .legal_help import maybe_handle_legal_help_message
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await handle_profile_edit_input(
             update,
             context,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+        ):
+            return
+
+        if await maybe_handle_legal_help_message(
+            update=update,
+            context=context,
             message_text=message_text,
             user=user,
             user_data=user_data,

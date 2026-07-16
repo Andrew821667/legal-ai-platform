@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import requests
 
 from core_api.config import get_settings
-from core_api.models import Lead, LeadSegment, LeadSource
+from core_api.models import Lead, LeadSegment, LeadSource, LegalIntake
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,33 @@ _AUDIENCE_LABELS: dict[str, str] = {
     "lawyer": "Юрист",
     "business": "Бизнес",
     "mixed": "Смешанная",
+}
+
+_LEGAL_CLIENT_LABELS = {
+    "company": "Компания",
+    "entrepreneur": "Предприниматель",
+    "individual": "Частное лицо",
+    "unknown": "Не указан",
+}
+
+_LEGAL_AREA_LABELS = {
+    "contracts": "Договоры и сделки",
+    "disputes": "Претензии и споры",
+    "corporate": "Корпоративные вопросы",
+    "employment": "Трудовые отношения",
+    "tax_compliance": "Налоги и комплаенс",
+    "real_estate": "Недвижимость и земля",
+    "it_ip_data": "IT, интеллектуальная собственность и данные",
+    "family_inheritance": "Семейные и наследственные вопросы",
+    "debt_bankruptcy": "Долги и банкротство",
+    "other": "Другая юридическая задача",
+}
+
+_LEGAL_URGENCY_LABELS = {
+    "urgent": "Срок сегодня или завтра",
+    "high": "Срок до трёх дней",
+    "normal": "Срок позднее",
+    "no_deadline": "Срок не указан",
 }
 
 # Тех-флаги внутри notes, которые менеджеру показывать не нужно.
@@ -87,7 +114,7 @@ def _format_timestamp(value: datetime | None) -> str | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     local = value.astimezone(_DISPLAY_TZ)
     return local.strftime("%d.%m.%Y %H:%M (Мск)")
 
@@ -196,8 +223,9 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
     Best-effort: any failure is logged and swallowed so it never affects
     the request that created the lead.
     """
-    from core_api.db import SessionLocal
     from sqlalchemy import select
+
+    from core_api.db import SessionLocal
 
     settings = get_settings()
     token = settings.lead_notify_bot_token
@@ -220,3 +248,58 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         _post_telegram_message(token, chat_id, text)
     except Exception:
         logger.exception("Failed to send new-lead Telegram notification", extra={"lead_id": str(lead_id)})
+
+
+def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
+    """Notify the manager about a legal-help intake without attaching documents."""
+    from sqlalchemy import select
+
+    from core_api.db import SessionLocal
+
+    settings = get_settings()
+    token = settings.lead_notify_bot_token
+    chat_id = settings.lead_notify_chat_id
+    if not token or not chat_id:
+        logger.debug("Legal intake notify not configured", extra={"intake_id": str(intake_id)})
+        return
+
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            select(LegalIntake, Lead)
+            .join(Lead, Lead.id == LegalIntake.lead_id)
+            .where(LegalIntake.id == intake_id)
+        ).one_or_none()
+        if row is None:
+            logger.warning("Legal intake %s vanished before notify", intake_id)
+            return
+        item, lead = row
+        header = "СРОЧНОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ" if item.urgency.value == "urgent" else "НОВОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ"
+        lines = [
+            header,
+            "",
+            f"Клиент: {_LEGAL_CLIENT_LABELS[item.client_type.value]}",
+            f"Направление: {_LEGAL_AREA_LABELS[item.legal_area.value]}",
+            f"Срочность: {_LEGAL_URGENCY_LABELS[item.urgency.value]}",
+            f"Контакт: {lead.contact or 'не указан'}",
+        ]
+        if lead.name:
+            lines.append(f"Имя: {lead.name}")
+        if lead.company:
+            lines.append(f"Организация: {lead.company}")
+        if item.region:
+            lines.append(f"Регион: {item.region}")
+        if item.deadline:
+            lines.append(f"Ближайший срок: {item.deadline}")
+        lines.extend(["", "Краткое описание:", item.description[:600], "", f"ID: {item.id}"])
+        text = "\n".join(lines)
+    finally:
+        db.close()
+
+    try:
+        _post_telegram_message(token, chat_id, text)
+    except Exception:
+        logger.exception(
+            "Failed to send legal-intake Telegram notification",
+            extra={"intake_id": str(intake_id)},
+        )

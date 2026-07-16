@@ -24,6 +24,7 @@ def test_workspace_inline_menu_contains_profile_and_documents() -> None:
     assert "menu_offer_profile" in callback_values
     assert "menu_documents" in callback_values
     assert "open_web:contract_ai" in callback_values
+    assert "legal_help_start" in callback_values
 
 
 def test_profile_and_documents_buttons_resolve_menu_keys() -> None:

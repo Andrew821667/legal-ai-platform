@@ -4,7 +4,20 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text as sa_text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +58,51 @@ class LeadStatus(str, enum.Enum):
     proposal = "proposal"
     won = "won"
     lost = "lost"
+
+
+class LegalClientType(str, enum.Enum):
+    company = "company"
+    entrepreneur = "entrepreneur"
+    individual = "individual"
+    unknown = "unknown"
+
+
+class LegalArea(str, enum.Enum):
+    contracts = "contracts"
+    disputes = "disputes"
+    corporate = "corporate"
+    employment = "employment"
+    tax_compliance = "tax_compliance"
+    real_estate = "real_estate"
+    it_ip_data = "it_ip_data"
+    family_inheritance = "family_inheritance"
+    debt_bankruptcy = "debt_bankruptcy"
+    other = "other"
+
+
+class LegalUrgency(str, enum.Enum):
+    urgent = "urgent"
+    high = "high"
+    normal = "normal"
+    no_deadline = "no_deadline"
+
+
+class LegalIntakeStatus(str, enum.Enum):
+    received = "received"
+    needs_clarification = "needs_clarification"
+    conflict_check = "conflict_check"
+    scope_preparation = "scope_preparation"
+    proposal_sent = "proposal_sent"
+    accepted = "accepted"
+    declined = "declined"
+    closed = "closed"
+
+
+class ConflictCheckStatus(str, enum.Enum):
+    unchecked = "unchecked"
+    clear = "clear"
+    potential = "potential"
+    conflict = "conflict"
 
 
 class SpecialConsultationOrderSource(str, enum.Enum):
@@ -232,6 +290,59 @@ class Lead(Base):
         ),
         Index("ix_leads_status", "status"),
         Index("ix_leads_temperature", "temperature"),
+    )
+
+
+class LegalIntake(Base):
+    __tablename__ = "legal_intakes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("leads.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    client_type: Mapped[LegalClientType] = mapped_column(
+        Enum(LegalClientType, name="legal_client_type_enum"),
+        nullable=False,
+        default=LegalClientType.unknown,
+    )
+    legal_area: Mapped[LegalArea] = mapped_column(
+        Enum(LegalArea, name="legal_area_enum"),
+        nullable=False,
+        default=LegalArea.other,
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    urgency: Mapped[LegalUrgency] = mapped_column(
+        Enum(LegalUrgency, name="legal_urgency_enum"),
+        nullable=False,
+        default=LegalUrgency.no_deadline,
+    )
+    deadline: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_context: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[LegalIntakeStatus] = mapped_column(
+        Enum(LegalIntakeStatus, name="legal_intake_status_enum"),
+        nullable=False,
+        default=LegalIntakeStatus.received,
+    )
+    conflict_status: Mapped[ConflictCheckStatus] = mapped_column(
+        Enum(ConflictCheckStatus, name="conflict_check_status_enum"),
+        nullable=False,
+        default=ConflictCheckStatus.unchecked,
+    )
+    assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    internal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_legal_intakes_status_created", "status", "created_at"),
+        Index("ix_legal_intakes_urgency_created", "urgency", "created_at"),
+        Index("ix_legal_intakes_area", "legal_area"),
     )
 
 

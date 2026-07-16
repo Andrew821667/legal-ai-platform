@@ -174,6 +174,19 @@ class CoreApiBridge:
             logger.info("Legacy lead %s mirrored to core-api as %s", lead.get("id"), core_id)
         return core_id
 
+    def create_legal_intake(
+        self,
+        payload: dict[str, Any],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        """Create a dedicated legal-help intake in core-api."""
+        return self._post(
+            "/api/v1/legal-intakes",
+            payload,
+            idempotency_key=idempotency_key,
+        )
+
     def sync_user(self, user_data: dict) -> str | None:
         if not self.enabled:
             return None

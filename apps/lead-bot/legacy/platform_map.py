@@ -1,10 +1,10 @@
 """Inline-keyboard "platform map" greeting for /start.
 
 Mirrors the layout produced by apps/web/components/PlatformMap.tsx so a
-user landing in the Telegram bot sees the same five parts of the platform
+user landing in the Telegram bot sees the same platform parts
 they'd see on the site, instead of treating the bot as a standalone tool.
 
-Keep the five parts here in sync with apps/web/lib/platformParts.ts.
+Keep these parts here in sync with apps/web/lib/platformParts.ts.
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ _PART_LINES = (
     "💬 <b>Ассистент</b> — вопросы, демо, заявки и маршрут внедрения",
     "📰 <b>Новостной контур</b> — канал и reader-бот с разборами AI в legal",
     "📱 <b>Mini App</b> — персональный контур: контент, инструменты, профиль и заявка",
+    "⚖️ <b>Юридическая помощь</b> — быстро передать правовую задачу юристу",
 )
 
 
@@ -73,6 +74,7 @@ def build_keyboard() -> InlineKeyboardMarkup:
     site_url = _site_url()
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton("🌐 Открыть сайт", url=site_url)],
+        [InlineKeyboardButton("⚖️ Юридическая помощь", callback_data="legal_help_start")],
         [InlineKeyboardButton("📄 Contract AI", url=_contract_url())],
         [
             InlineKeyboardButton("📰 Канал", url=_channel_url()),

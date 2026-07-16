@@ -605,6 +605,16 @@ class DatabaseFacadeMixin:
             lead_data=lead_data,
         )
 
+    def create_new_local_lead(self, user_id: int, lead_data: Dict) -> int:
+        """Create a fallback lead without mirroring it as a generic core lead."""
+        return database_leads.create_new_lead(
+            self.get_connection,
+            lambda _lead_id: None,
+            _LEADS_COLUMNS,
+            user_id=user_id,
+            lead_data=lead_data,
+        )
+
     def get_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
         """Получение последнего лида по user_id"""
         return database_leads.get_lead_by_user_id(

@@ -17,6 +17,7 @@ export const MINIAPP_EVENT_SOURCES = {
   content: "miniapp.content",
   tools: "miniapp.tools",
   solutions: "miniapp.solutions",
+  legalHelp: "miniapp.legal_help",
   profile: "miniapp.profile",
   flow: "miniapp.flow",
   deeplink: "miniapp.deeplink",
@@ -37,6 +38,7 @@ export const MINIAPP_SCREENS = {
   content: "/miniapp/content",
   tools: "/miniapp/tools",
   solutions: "/miniapp/solutions",
+  legalHelp: "/miniapp/legal-help",
   profile: "/miniapp/profile",
 } as const;
 
@@ -45,6 +47,7 @@ export const MINIAPP_ACTIONS = {
   openContentItem: "open.content_item",
   openContractAI: "open.contract_ai",
   openSolutions: "open.solutions",
+  openLegalHelp: "open.legal_help",
   openRecommendedStep: "open.recommended_step",
   openOnboarding: "open.onboarding",
   openProfile: "open.profile",
@@ -62,6 +65,7 @@ export const MINIAPP_ACTIONS = {
   openMiniAppContent: "open.miniapp.content",
   openMiniAppTools: "open.miniapp.tools",
   openMiniAppSolutions: "open.miniapp.solutions",
+  openMiniAppLegalHelp: "open.miniapp.legal_help",
   openMiniAppProfile: "open.miniapp.profile",
   openMiniAppResume: "open.miniapp.resume",
 } as const;
@@ -85,6 +89,9 @@ export function resolveMiniAppScreen(value: string): MiniAppScreen {
   if (input === MINIAPP_SCREENS.solutions || input === "solutions") {
     return MINIAPP_SCREENS.solutions;
   }
+  if (input === MINIAPP_SCREENS.legalHelp || input === "legal_help" || input === "legal-help") {
+    return MINIAPP_SCREENS.legalHelp;
+  }
   if (input === MINIAPP_SCREENS.profile || input === "profile") {
     return MINIAPP_SCREENS.profile;
   }
@@ -99,6 +106,8 @@ export function defaultActionForScreen(screen: MiniAppScreen): MiniAppAction {
       return MINIAPP_ACTIONS.openMiniAppTools;
     case MINIAPP_SCREENS.solutions:
       return MINIAPP_ACTIONS.openMiniAppSolutions;
+    case MINIAPP_SCREENS.legalHelp:
+      return MINIAPP_ACTIONS.openMiniAppLegalHelp;
     case MINIAPP_SCREENS.profile:
       return MINIAPP_ACTIONS.openMiniAppProfile;
     default:

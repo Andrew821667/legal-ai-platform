@@ -2,24 +2,34 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from shared.schemas import ContractJobCreateBase, EventCreateBase, LeadCreateBase, ScheduledPostCreateBase
+from shared.schemas import (
+    ContractJobCreateBase,
+    EventCreateBase,
+    LeadCreateBase,
+    ScheduledPostCreateBase,
+)
 
 from core_api.models import (
+    ConflictCheckStatus,
     ContractJobStatus,
     InputMode,
     LeadSegment,
     LeadSource,
     LeadStatus,
+    LegalArea,
+    LegalClientType,
+    LegalIntakeStatus,
+    LegalUrgency,
     PaymentProvider,
     PaymentTransactionStatus,
     PostFeedbackSource,
     ScheduledPostStatus,
+    Scope,
     SpecialConsultationOrderSource,
     SpecialConsultationOrderStatus,
-    Scope,
     UserRole,
 )
 
@@ -185,6 +195,59 @@ class LeadOut(BaseModel):
     utm_term: str | None
 
     model_config = {"from_attributes": True}
+
+
+class LegalIntakeCreate(BaseModel):
+    source: LeadSource
+    telegram_user_id: int | None = None
+    name: str | None = Field(default=None, max_length=120)
+    contact: str = Field(min_length=3, max_length=255)
+    company: str | None = Field(default=None, max_length=255)
+    client_type: LegalClientType = LegalClientType.unknown
+    legal_area: LegalArea = LegalArea.other
+    description: str = Field(min_length=20, max_length=4000)
+    urgency: LegalUrgency = LegalUrgency.no_deadline
+    deadline: str | None = Field(default=None, max_length=255)
+    region: str | None = Field(default=None, max_length=255)
+    source_context: str | None = Field(default=None, max_length=255)
+    consent_accepted: Literal[True]
+    consent_version: str = Field(min_length=1, max_length=100)
+    consent_at: datetime
+    notes: str | None = Field(default=None, max_length=4000)
+    utm_source: str | None = Field(default=None, max_length=255)
+    utm_medium: str | None = Field(default=None, max_length=255)
+    utm_campaign: str | None = Field(default=None, max_length=255)
+    utm_content: str | None = Field(default=None, max_length=255)
+    utm_term: str | None = Field(default=None, max_length=255)
+
+
+class LegalIntakePatch(BaseModel):
+    status: LegalIntakeStatus | None = None
+    conflict_status: ConflictCheckStatus | None = None
+    assigned_to: str | None = Field(default=None, max_length=255)
+    internal_note: str | None = Field(default=None, max_length=4000)
+
+
+class LegalIntakeOut(BaseModel):
+    id: uuid.UUID
+    lead_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    client_type: LegalClientType
+    legal_area: LegalArea
+    description: str
+    urgency: LegalUrgency
+    deadline: str | None
+    region: str | None
+    source_context: str | None
+    status: LegalIntakeStatus
+    conflict_status: ConflictCheckStatus
+    assigned_to: str | None
+    internal_note: str | None
+    lead_name: str | None
+    lead_contact: str | None
+    lead_company: str | None
+    lead_source: LeadSource
 
 
 class LeadStatsOut(BaseModel):

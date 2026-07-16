@@ -169,6 +169,25 @@ export default function Home() {
 
       <PlatformMap highlightId="site" />
 
+      <section className="border-y border-slate-800 bg-slate-800/40">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold text-amber-300">Отдельное юридическое направление</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">Нужна помощь юриста, а не проект автоматизации?</h2>
+            <p className="mt-3 text-slate-300">
+              Мы работаем не только с технологиями, но и с правом на практике. Опишите ситуацию и ближайший срок,
+              а юрист предложит понятный дальнейший порядок работы.
+            </p>
+          </div>
+          <Link
+            href={ROUTES.legalHelp}
+            className="shrink-0 rounded-lg bg-slate-900 px-6 py-3 text-center font-semibold text-slate-100 transition-colors hover:bg-slate-800 hover:text-amber-300"
+          >
+            Перейти к юридической помощи
+          </Link>
+        </div>
+      </section>
+
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="max-w-3xl">
           <h2 className="text-3xl md:text-4xl font-semibold text-white">Как начинается автоматизация</h2>

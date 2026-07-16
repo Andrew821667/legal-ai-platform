@@ -25,6 +25,7 @@ _CONTRACT_START_PAYLOAD_RE = re.compile(
     r"^contract_(?P<entry>demo|checklist|sample_report|consultation|cabinet)$"
 )
 PENDING_START_PAYLOAD_KEY = "pending_start_payload"
+LEGAL_HELP_START_PAYLOAD = "legal_help"
 
 
 def news_api_key() -> str:
@@ -249,6 +250,11 @@ async def process_pending_start_payload(
 
     match = _READER_START_PAYLOAD_RE.match(payload)
     if not match:
+        if payload == LEGAL_HELP_START_PAYLOAD:
+            from .legal_help import prompt_legal_help_client_type
+
+            await prompt_legal_help_client_type(message, context)
+            return True
         return await handle_contract_start_payload(
             message=message,
             context=context,
