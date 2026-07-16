@@ -4,6 +4,7 @@ import {
   Globe,
   MessageCircle,
   Newspaper,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ export type PlatformPartId =
   | "site"
   | "contract"
   | "lead_bot"
+  | "legal_help"
   | "news"
   | "miniapp";
 
@@ -85,6 +87,16 @@ export const PLATFORM_PARTS: PlatformPart[] = [
     external: true,
     ctaLabel: "Открыть бота",
     icon: MessageCircle,
+  },
+  {
+    id: "legal_help",
+    name: "Юридическая помощь",
+    description:
+      "Отдельный человеческий маршрут для конкретной правовой задачи бизнеса или частного клиента.",
+    url: ROUTES.legalHelp,
+    external: false,
+    ctaLabel: "Описать задачу",
+    icon: Scale,
   },
   {
     id: "news",

@@ -5,6 +5,9 @@ export const ROUTES = {
   contractAI: "/contract-ai-system",
   solutions: "/solutions",
   contentCases: "/content-cases",
+  legalHelp: "/legal-help",
+  legalHelpBusiness: "/legal-help/business",
+  legalHelpIndividuals: "/legal-help/individuals",
   about: "/about",
   miniApp: "/miniapp",
   miniAppContent: "/miniapp/content",
@@ -12,6 +15,7 @@ export const ROUTES = {
   miniAppSolutions: "/miniapp/solutions",
   miniAppProfile: "/miniapp/profile",
   miniAppLead: "/miniapp/lead",
+  miniAppLegalHelp: "/miniapp/legal-help",
 } as const;
 
 const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_ai_helper_new_bot").trim();

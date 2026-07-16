@@ -8,7 +8,7 @@ from handlers import user_commands
 
 
 @pytest.mark.anyio
-async def test_start_command_sends_platform_map_and_start_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyPatch) -> None:
     messages: list[tuple[str, object | None]] = []
 
     async def _fake_reply_html(message, text, **kwargs) -> None:
@@ -40,10 +40,8 @@ async def test_start_command_sends_platform_map_and_start_entry(monkeypatch: pyt
 
     await user_commands.start_command(update, context)
 
-    assert len(messages) == 2
-    assert "это не отдельный бот, а полноценная платформа" in messages[0][0]
-    assert "Все части связаны между собой" in messages[0][0]
+    assert len(messages) == 1
+    assert "это единая платформа" in messages[0][0]
+    assert "С чего удобно начать" in messages[0][0]
+    assert "Проверить договор" in messages[0][0]
     assert messages[0][1] is not None
-    assert "С чего удобно начать" in messages[1][0]
-    assert "Проверить договор" in messages[1][0]
-    assert messages[1][1] is not None

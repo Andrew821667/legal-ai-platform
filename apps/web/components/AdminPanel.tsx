@@ -23,7 +23,8 @@ import {
   AlertCircle,
   ExternalLink,
   Settings2,
-  Brain
+  Brain,
+  Scale
 } from 'lucide-react';
 import SEOChart from './admin/SEOChart';
 import ExportButton from './admin/ExportButton';
@@ -32,8 +33,9 @@ import IssueFilters from './admin/IssueFilters';
 import AutomationControlsPanel from './admin/AutomationControlsPanel';
 import SystemMonitorPanel from './admin/SystemMonitorPanel';
 import AnalyticsPanel from './admin/AnalyticsPanel';
+import LegalIntakesPanel from './admin/LegalIntakesPanel';
 
-type AdminTab = 'seo' | 'analytics' | 'system' | 'technical' | 'github' | 'automation';
+type AdminTab = 'seo' | 'analytics' | 'legal' | 'system' | 'technical' | 'github' | 'automation';
 
 interface AdminPanelProps {
   initialOpen?: boolean;
@@ -466,10 +468,11 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                   /* Dashboard */
                   <div className="p-6">
                     {/* Tabs */}
-                    <div className="flex gap-2 mb-6 border-b border-slate-800">
+                    <div className="flex gap-2 mb-6 overflow-x-auto border-b border-slate-800">
                       {[
                         { id: 'seo' as const, label: 'SEO & Аналитика', icon: BarChart3 },
                         { id: 'analytics' as const, label: 'Аналитика', icon: Brain },
+                        { id: 'legal' as const, label: 'Юридические обращения', icon: Scale },
                         { id: 'system' as const, label: 'System Monitor', icon: Server },
                         { id: 'technical' as const, label: 'Технические данные', icon: Zap },
                         { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github },
@@ -624,6 +627,12 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                         animate={{ opacity: 1, y: 0 }}
                       >
                         <AnalyticsPanel />
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'legal' && (
+                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                        <LegalIntakesPanel />
                       </motion.div>
                     )}
 

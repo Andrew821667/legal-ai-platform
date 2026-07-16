@@ -67,6 +67,14 @@ const quickActions = [
     external: false,
   },
   {
+    title: "Получить юридическую помощь",
+    description: "Кратко описать ситуацию и передать ее юристу.",
+    href: ROUTES.miniAppLegalHelp,
+    action: MINIAPP_ACTIONS.openLegalHelp,
+    variant: "info" as const,
+    external: false,
+  },
+  {
     title: "Описать задачу в чат",
     description: "Передать свободное описание ассистенту без формы.",
     href: leadBotDeepLink("miniapp_home_task"),
@@ -209,6 +217,14 @@ export default function MiniAppHomePage() {
             variant="secondary"
           >
             Сценарии внедрения
+          </MiniTrackedLink>
+          <MiniTrackedLink
+            href={ROUTES.miniAppLegalHelp}
+            action={MINIAPP_ACTIONS.openLegalHelp}
+            meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
+            variant="info"
+          >
+            Юридическая помощь
           </MiniTrackedLink>
           <MiniTrackedLink
             href="/services/custom-ai"

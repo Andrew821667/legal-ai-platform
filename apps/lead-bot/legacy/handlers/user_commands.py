@@ -10,7 +10,6 @@ from typing import Dict, Optional
 import admin_interface
 import content
 import database
-import platform_map
 import utils
 from config import get_config
 from telegram import Update
@@ -27,6 +26,7 @@ from .markup import (
     workspace_markup_for as _workspace_markup_for,
 )
 from .start_payloads import (
+    LEGAL_HELP_START_PAYLOAD,
     PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
     _CONTRACT_START_PAYLOAD_RE,
     _READER_START_PAYLOAD_RE,
@@ -107,21 +107,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data[_PENDING_START_PAYLOAD_KEY] = start_payload
         logger.info("User %s started bot", user.id)
 
-        # Plain /start (no deep-link payload) — show the platform map first so
-        # the user understands this bot is one of several connected entry
-        # points, not a standalone tool. Skipped for deep-link arrivals
-        # because those users already know which scenario they're in.
-        if not start_payload and update.message is not None:
-            try:
-                await utils.safe_reply_html(
-                    update.message,
-                    platform_map.build_text(),
-                    reply_markup=platform_map.build_keyboard(),
-                    action="platform_map",
-                )
-            except Exception:
-                logger.exception("Failed to send platform map greeting")
-
         user_id = database.db.create_or_update_user(
             telegram_id=user.id,
             username=user.username,
@@ -138,18 +123,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
         start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
 
-        await utils.safe_reply_html(
-            update.message,
-            content.build_start_entry_text(
-                first_name=user.first_name,
-                lead=lead,
-                selected_profile=selected_profile,
-                emphasize_profile_choice=True,
-            ),
-            reply_markup=start_markup,
-            action="start_entry",
-        )
-        logger.info("Start entry sent on /start for user %s", user.id)
+        if not start_payload:
+            await utils.safe_reply_html(
+                update.message,
+                content.build_start_entry_text(
+                    first_name=user.first_name,
+                    lead=lead,
+                    selected_profile=selected_profile,
+                    emphasize_profile_choice=True,
+                ),
+                reply_markup=start_markup,
+                action="start_entry",
+            )
+            logger.info("Start entry sent on /start for user %s", user.id)
 
         user_data = database.db.get_local_user_by_id(user_id)
         if user_data and not needs_pdn_consent:
@@ -170,6 +156,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 consent_text = (
                     f"{consent_text}\n\n"
                     "После подтверждения согласия сразу переведу вас в сервис проверки договоров Contract_AI_System."
+                )
+            elif start_payload == LEGAL_HELP_START_PAYLOAD:
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения вы сможете одним сообщением описать ситуацию для юриста."
                 )
             await utils.safe_reply_html(
                 update.message,

@@ -26,6 +26,12 @@ const blocks = [
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
   {
+    title: "Юридическая помощь",
+    description: "Быстро передать юристу договорный, судебный, корпоративный или личный правовой вопрос без регистрации и загрузки документов.",
+    href: ROUTES.miniAppLegalHelp,
+    action: MINIAPP_ACTIONS.openLegalHelp,
+  },
+  {
     title: "Формат внедрения",
     description: "Пилот, этапное расширение, разработка недостающих инструментов и сопровождение с фокусом на измеримый результат.",
     href: ROUTES.solutions,

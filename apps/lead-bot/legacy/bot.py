@@ -73,6 +73,7 @@ from handlers.contract_analysis import (
     handle_contract_analysis_start,
     handle_contract_result_open,
 )
+from handlers.legal_help import handle_legal_help_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from handlers.user import (
@@ -776,6 +777,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         data = query.data or ""
         if data.startswith("open_web:"):
             await handle_open_web_callback(update, context)
+        elif data == "legal_help_start" or data.startswith("legal_client:"):
+            await handle_legal_help_callback(update, context)
         elif data == "menu_contract_ai":
             await handle_business_menu_callback(update, context)
         elif data.startswith("menu_"):

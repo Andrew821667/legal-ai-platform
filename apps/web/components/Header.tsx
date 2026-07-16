@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import BrandMark from "@/components/BrandMark";
-import { contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
+import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function Header() {
@@ -46,7 +46,8 @@ export default function Header() {
   }, [isMoreOpen]);
 
   const mainNavigation = [
-    { name: "Решения", href: "/solutions" },
+    { name: "Автоматизация", href: "/solutions" },
+    { name: "Юридическая помощь", href: ROUTES.legalHelp },
     { name: "Contract AI", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
     { name: "Материалы", href: "/guides" },
     { name: "О платформе", href: "/about" },
@@ -72,7 +73,7 @@ export default function Header() {
       }`}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between gap-6 h-20">
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center gap-3 group">
               <BrandMark className="transition-transform duration-300 group-hover:scale-105" />
@@ -83,7 +84,7 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden xl:flex items-center gap-8">
             {mainNavigation.map((item) => (
               item.external ? (
                 <a
@@ -136,7 +137,7 @@ export default function Header() {
           </div>
 
           {/* Desktop CTA Button */}
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             {contractAIActionExternal ? (
               <a
                 href={contractAIActionHref}
@@ -157,7 +158,7 @@ export default function Header() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="xl:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="text-slate-300 hover:text-white p-2"
@@ -198,7 +199,7 @@ export default function Header() {
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
+          <div className="xl:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
             <div className="px-4 py-2 space-y-1">
               {mainNavigation.map((item) => (
                 item.external ? (
