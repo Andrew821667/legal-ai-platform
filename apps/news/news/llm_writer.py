@@ -178,6 +178,26 @@ _INCOMPLETE_TITLE_END_RE = re.compile(
     r"\b(?:и|или|не|но|а|что|чтобы|потому|поэтому|если|когда|на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без|через)\s*$",
     re.IGNORECASE,
 )
+_COMPLETE_SHORT_TITLE_WORDS = {
+    "дело",
+    "закон",
+    "итог",
+    "кейс",
+    "право",
+    "риск",
+    "роль",
+    "рынок",
+    "суд",
+    "цена",
+}
+_KNOWN_TRUNCATED_TITLE_STEMS = {
+    "авто",
+    "дого",
+    "корп",
+    "рабо",
+    "регу",
+    "юри",
+}
 _TRAILING_PREPOSITIONAL_PHRASE_RE = re.compile(
     r"(?:\b(?:на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без)\b)\s+\S+\s*$",
     re.IGNORECASE,
@@ -1735,6 +1755,22 @@ class LLMNewsWriter:
             return "missing_title"
         if _INCOMPLETE_TITLE_END_RE.search(title):
             return "incomplete_title"
+        last_word_match = re.search(r"([А-Яа-яЁё-]+)$", title)
+        if last_word_match is not None:
+            last_word = last_word_match.group(1).lower().replace("ё", "е")
+            body = html.unescape(re.sub(r"<[^>]+>", " ", (text or "")[title_match.end():])).lower()
+            exact_word = re.search(rf"\b{re.escape(last_word)}\b", body)
+            longer_word = re.search(rf"\b{re.escape(last_word)}[а-яё]{{2,}}\b", body)
+            suspicious_stem = last_word in _KNOWN_TRUNCATED_TITLE_STEMS or (
+                len(last_word) >= 7 and last_word.endswith("н")
+            )
+            if (
+                suspicious_stem
+                and last_word not in _COMPLETE_SHORT_TITLE_WORDS
+                and exact_word is None
+                and longer_word is not None
+            ):
+                return "incomplete_title_word"
         return None
 
     @staticmethod
