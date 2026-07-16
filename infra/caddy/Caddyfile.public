@@ -32,6 +32,14 @@
         reverse_proxy host.docker.internal:8791
     }
 
+    handle /lawtable {
+        redir /lawtable/app 302
+    }
+
+    handle_path /lawtable/* {
+        reverse_proxy host.docker.internal:3001
+    }
+
     handle {
         reverse_proxy web:3000
     }
@@ -91,6 +99,14 @@ https://{$DOMAIN} {
     handle /telegram-mcp* {
         uri strip_prefix /telegram-mcp
         reverse_proxy host.docker.internal:8791
+    }
+
+    handle /lawtable {
+        redir /lawtable/app 302
+    }
+
+    handle_path /lawtable/* {
+        reverse_proxy host.docker.internal:3001
     }
 
     handle {
