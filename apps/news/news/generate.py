@@ -346,6 +346,36 @@ def _drop_stale_source_articles(
     return filtered, skipped_stale, skipped_without_date
 
 
+def _source_claim_ambiguity_reason(article: ArticleCandidate) -> str | None:
+    text = f"{article.title or ''}\n{article.summary or ''}".lower().replace("ё", "е")
+    adopted = any(marker in text for marker in ("закон принят", "закон уже принят"))
+    pending = any(
+        marker in text
+        for marker in ("закон примут", "закон еще не принят", "закон пока не принят")
+    )
+    if adopted and pending:
+        return "ambiguous_legislative_status"
+    return None
+
+
+def _drop_ambiguous_claim_sources(
+    articles: list[ArticleCandidate],
+) -> tuple[list[ArticleCandidate], int]:
+    filtered: list[ArticleCandidate] = []
+    skipped = 0
+    for article in articles:
+        reason = _source_claim_ambiguity_reason(article)
+        if reason is None:
+            filtered.append(article)
+            continue
+        skipped += 1
+        logger.warning(
+            "ambiguous_source_claim_skipped",
+            extra={"source_url": article.article_url, "reason": reason},
+        )
+    return filtered, skipped
+
+
 def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[str, Any]]) -> ArticleCandidate | None:
     if not posted_items:
         return None
@@ -532,6 +562,12 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 "without_date": undated_sources_skipped,
                 "max_age_days": settings.news_max_source_age_days,
             },
+        )
+    articles, ambiguous_sources_skipped = _drop_ambiguous_claim_sources(articles)
+    if ambiguous_sources_skipped:
+        logger.info(
+            "ambiguous_source_claims_prefiltered",
+            extra={"count": ambiguous_sources_skipped},
         )
     articles, prefiltered_duplicates = _drop_existing_source_articles(articles, existing_source_urls)
     if prefiltered_duplicates:

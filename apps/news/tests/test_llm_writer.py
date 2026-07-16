@@ -462,7 +462,8 @@ def test_completion_kwargs_reserve_space_for_deepseek_reasoning() -> None:
     writer._use_max_tokens_param = True
     writer._reasoning_token_reserve = 3000
 
-    assert writer._completion_kwargs("daily") == {"max_tokens": 4200}
+    assert writer._completion_kwargs("daily") == {"max_tokens": 4800}
+    assert writer._completion_kwargs("weekly_review") == {"max_tokens": 6400}
     assert writer._token_limit_kwargs(260) == {"max_tokens": 3260}
 
 
@@ -471,7 +472,7 @@ def test_completion_kwargs_keep_plain_provider_budget() -> None:
     writer._use_max_tokens_param = False
     writer._reasoning_token_reserve = 0
 
-    assert writer._completion_kwargs("daily") == {"max_completion_tokens": 1200}
+    assert writer._completion_kwargs("daily") == {"max_completion_tokens": 1800}
 
 
 def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None:

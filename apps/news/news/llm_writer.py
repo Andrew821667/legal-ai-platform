@@ -67,15 +67,15 @@ _FORMAT_MIN_CHARS = {
     "humor": 1000,
 }
 _FORMAT_MAX_OUTPUT_TOKENS = {
-    "signal": 900,
-    "standard": 1100,
-    "deep": 1400,
-    "digest": 1500,
-    "daily": 1200,
-    "weekly_review": 2200,
-    "longread": 2300,
-    "practice": 1000,
-    "humor": 1000,
+    "signal": 1200,
+    "standard": 1600,
+    "deep": 2200,
+    "digest": 2200,
+    "daily": 1800,
+    "weekly_review": 3400,
+    "longread": 3400,
+    "practice": 1800,
+    "humor": 1800,
 }
 _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
     "signal": {"what": 320, "effect": 240, "risks": 220, "step": 90, "steps": 3, "hashtags": 3},
