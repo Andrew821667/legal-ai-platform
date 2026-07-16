@@ -421,8 +421,9 @@ _FACT_CHECK_SYSTEM_PROMPT = (
     "2) Исправляй перепутанные роли и субъекты действия: кто сдает, кто арендует, кто покупает, кто продает, кто подал иск, кто ответчик, кто кредитор, кто заемщик.\n"
     "3) Дата итогового поста важнее исходной временной формулировки. Если в тексте остались устаревшие прогнозы, near-term ожидания или дедлайны, перепиши их в нейтральный актуальный вид или убери.\n"
     "4) Для weekly_review нельзя оставлять устаревшие прогнозы как будто они еще впереди.\n"
-    "5) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
-    "6) Верни строго JSON: "
+    "5) Опрос, исследование или маркетинговый материал поставщика не доказывает, что читателю нужно покупать именно этот класс решений. Убирай категоричные закупочные рекомендации; оставляй сравнение вариантов, пилот и проверку ограничений выборки.\n"
+    "6) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
+    "7) Верни строго JSON: "
     '{"approved": true, "reason": "", "title": "исправленный заголовок", "text": "исправленный HTML-пост"}'
 )
 _FALLBACK_SUMMARY_META_PREFIXES = (
@@ -1812,6 +1813,16 @@ class LLMNewsWriter:
             third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
             if len(third_block) < 120:
                 return f"weak_daily_third_block:{len(third_block)}"
+            third_heading_pattern = "|".join(re.escape(item) for item in _DAILY_THIRD_BLOCK_HEADINGS)
+            third_section_match = re.search(
+                rf"<b>(?:{third_heading_pattern})</b>\s*(.*?)(?=\n\s*\n?<b>|\Z)",
+                normalized,
+                flags=re.DOTALL,
+            )
+            if third_section_match is not None:
+                list_items = re.findall(r"(?m)^\s*•\s+", third_section_match.group(1))
+                if list_items and len(list_items) < 2:
+                    return f"weak_daily_list_items:{len(list_items)}"
         if format_type == "weekly_review":
             raw_points = re.findall(r"(?m)^\s*\d+\.\s*(.+)$", normalized)
             points_count = len(raw_points)

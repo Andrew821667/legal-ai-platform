@@ -136,6 +136,21 @@ def test_quality_gate_rejects_unclosed_parenthesis() -> None:
     assert LLMNewsWriter._quality_gate_failure_reason(text, "weekly_review") == "unbalanced_parentheses"
 
 
+def test_quality_gate_rejects_daily_with_single_action_item() -> None:
+    text = (
+        "<b>Law Insider: как юристы используют ИИ в договорной работе</b>\n\n"
+        "Опрос 534 трансакционных юристов из 75 стран показывает, какие инструменты участники используют в договорной работе. Выборка собрана внутри сообщества поставщика.\n\n"
+        "<b>Что произошло</b>\nLaw Insider опросил участников своего сообщества об использовании ИИ. В числе популярных инструментов оказались фундаментальные модели и специализированные решения для договоров, однако состав выборки ограничивает перенос выводов на весь рынок.\n\n"
+        "<b>Почему это важно</b>\nЮридическим командам полезно учитывать знакомство сотрудников с базовыми моделями, но опрос поставщика сам по себе не доказывает преимущество одного класса продуктов. Решение о закупке требует сравнения на собственных документах.\n\n"
+        "<b>Где это можно применить</b>\n"
+        "• Сразу заключить прямой контракт с поставщиком фундаментальной модели и установить жесткий SLA для всех договорных задач.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict #AI #LegalTech"
+    )
+
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "daily") == "weak_daily_list_items:1"
+
+
 def test_format_daily_uses_contextual_market_block() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     title, text, rubric = writer._format_post(
