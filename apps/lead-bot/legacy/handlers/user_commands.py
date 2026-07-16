@@ -123,7 +123,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
         start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
 
-        if not start_payload:
+        if not start_payload and not needs_pdn_consent:
             await utils.safe_reply_html(
                 update.message,
                 content.build_start_entry_text(
@@ -145,7 +145,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_data=user_data,
                 user=user,
             )
-        elif needs_pdn_consent and start_payload:
+        elif needs_pdn_consent:
             consent_text = _pdn_consent_prompt_text()
             if _READER_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (

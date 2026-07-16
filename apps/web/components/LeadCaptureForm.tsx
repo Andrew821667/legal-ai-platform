@@ -108,6 +108,7 @@ export default function LeadCaptureForm() {
           segment,
           message,
           offer,
+          consentAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
           [HONEYPOT_FIELD_NAME]: honeypotValue,
@@ -276,7 +277,7 @@ export default function LeadCaptureForm() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !consentAccepted}
               className="w-full md:w-auto inline-flex items-center justify-center rounded-lg bg-amber-600 px-6 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
             >
               {isSubmitting ? "Отправка..." : "Отправить заявку"}

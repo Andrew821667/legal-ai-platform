@@ -26,6 +26,7 @@ type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unkn
 interface LeadRequestBody {
   name?: string;
   contact?: string;
+  consentAccepted?: boolean;
   segment?: LeadSegment;
   message?: string;
   offer?: LeadOffer;
@@ -103,6 +104,12 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (payload.consentAccepted !== true) {
+    return NextResponse.json(
+      { detail: "Нужно согласие на обработку персональных данных." },
+      { status: 400 },
+    );
+  }
 
   const normalizedContact = normalizeLeadContact(contact);
   const ip = resolveLeadClientIp(request.headers);
@@ -172,8 +179,13 @@ export async function POST(request: NextRequest) {
 
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
   const userAgentHash = crypto.createHash("sha256").update(userAgent).digest("hex").slice(0, 12);
+  const consentAt = new Date().toISOString();
   const notesParts = [
     `offer=${offer}`,
+    "consent=accepted",
+    "consent_version=website_pdn_transborder_v1",
+    `consent_at=${consentAt}`,
+    "transborder_consent=accepted",
     `ip_hash=${ipHash}`,
     `ua_hash=${userAgentHash}`,
     landingPage ? `landing=${landingPage}` : undefined,

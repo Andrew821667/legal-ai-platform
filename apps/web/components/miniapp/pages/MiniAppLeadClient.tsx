@@ -94,6 +94,7 @@ export default function MiniAppLeadPage() {
   const [message, setMessage] = useState("");
   const [segment, setSegment] = useState<LeadSegment>("other");
   const [selectedScenario, setSelectedScenario] = useState("");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -164,6 +165,10 @@ export default function MiniAppLeadPage() {
       setError("Укажите контакт: телефон, email или Telegram.");
       return;
     }
+    if (!consentAccepted) {
+      setError("Подтвердите согласие на обработку персональных данных.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -182,6 +187,7 @@ export default function MiniAppLeadPage() {
           telegram_user_id: state.telegramUserId,
           contact,
           name,
+          consentAccepted,
           segment,
           offer,
           message,
@@ -361,6 +367,22 @@ export default function MiniAppLeadPage() {
           />
         </label>
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800/70 p-4">
+          <input
+            type="checkbox"
+            checked={consentAccepted}
+            onChange={(event) => setConsentAccepted(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-slate-600 text-amber-500"
+          />
+          <span className="text-xs leading-5 text-slate-300">
+            Я согласен на обработку данных для рассмотрения заявки и связи со мной. Подробнее в{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-300 underline">
+              политике конфиденциальности
+            </a>
+            .
+          </span>
+        </label>
+
         {error && (
           <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}
@@ -375,7 +397,7 @@ export default function MiniAppLeadPage() {
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !consentAccepted}
           className="w-full inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-60"
         >
           {isSubmitting ? "Отправка..." : "Отправить заявку"}
