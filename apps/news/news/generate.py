@@ -299,6 +299,83 @@ def _drop_existing_source_articles(
     return filtered, skipped
 
 
+def _article_published_at_utc(article: ArticleCandidate) -> datetime | None:
+    published_at = article.published_at
+    if published_at is None:
+        return None
+    if published_at.tzinfo is None:
+        return published_at.replace(tzinfo=UTC)
+    return published_at.astimezone(UTC)
+
+
+def _drop_stale_source_articles(
+    articles: list[ArticleCandidate],
+    now_utc: datetime,
+) -> tuple[list[ArticleCandidate], int, int]:
+    max_age_days = max(1, settings.news_max_source_age_days)
+    cutoff = now_utc - timedelta(days=max_age_days)
+    filtered: list[ArticleCandidate] = []
+    skipped_stale = 0
+    skipped_without_date = 0
+
+    for article in articles:
+        if str(article.article_url or "").startswith("internal://"):
+            filtered.append(article)
+            continue
+        published_at = _article_published_at_utc(article)
+        if published_at is None:
+            skipped_without_date += 1
+            logger.info(
+                "candidate_without_source_date_skipped",
+                extra={"source_url": article.article_url, "max_age_days": max_age_days},
+            )
+            continue
+        if published_at < cutoff:
+            skipped_stale += 1
+            logger.info(
+                "stale_source_candidate_skipped",
+                extra={
+                    "source_url": article.article_url,
+                    "published_at": published_at.isoformat(),
+                    "max_age_days": max_age_days,
+                },
+            )
+            continue
+        filtered.append(article)
+
+    return filtered, skipped_stale, skipped_without_date
+
+
+def _source_claim_ambiguity_reason(article: ArticleCandidate) -> str | None:
+    text = f"{article.title or ''}\n{article.summary or ''}".lower().replace("ё", "е")
+    adopted = any(marker in text for marker in ("закон принят", "закон уже принят"))
+    pending = any(
+        marker in text
+        for marker in ("закон примут", "закон еще не принят", "закон пока не принят")
+    )
+    if adopted and pending:
+        return "ambiguous_legislative_status"
+    return None
+
+
+def _drop_ambiguous_claim_sources(
+    articles: list[ArticleCandidate],
+) -> tuple[list[ArticleCandidate], int]:
+    filtered: list[ArticleCandidate] = []
+    skipped = 0
+    for article in articles:
+        reason = _source_claim_ambiguity_reason(article)
+        if reason is None:
+            filtered.append(article)
+            continue
+        skipped += 1
+        logger.warning(
+            "ambiguous_source_claim_skipped",
+            extra={"source_url": article.article_url, "reason": reason},
+        )
+    return filtered, skipped
+
+
 def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[str, Any]]) -> ArticleCandidate | None:
     if not posted_items:
         return None
@@ -476,6 +553,22 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         for article in articles
         if article_matches_enabled_generation_themes(article, enabled_generation_themes)
     ]
+    articles, stale_sources_skipped, undated_sources_skipped = _drop_stale_source_articles(articles, now_utc)
+    if stale_sources_skipped or undated_sources_skipped:
+        logger.info(
+            "source_freshness_prefiltered",
+            extra={
+                "stale": stale_sources_skipped,
+                "without_date": undated_sources_skipped,
+                "max_age_days": settings.news_max_source_age_days,
+            },
+        )
+    articles, ambiguous_sources_skipped = _drop_ambiguous_claim_sources(articles)
+    if ambiguous_sources_skipped:
+        logger.info(
+            "ambiguous_source_claims_prefiltered",
+            extra={"count": ambiguous_sources_skipped},
+        )
     articles, prefiltered_duplicates = _drop_existing_source_articles(articles, existing_source_urls)
     if prefiltered_duplicates:
         logger.info("existing_source_articles_prefiltered", extra={"count": prefiltered_duplicates})
@@ -536,6 +629,18 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         publication_kind = slot.publication_kind
         format_type = slot.format_type
         cta_type = slot.cta_type
+        publish_at_utc = slot.publish_at_local.astimezone(UTC)
+        freshness_window = timedelta(days=max(1, settings.news_max_source_age_days))
+        if publish_at_utc > now_utc + freshness_window:
+            skipped_slots += 1
+            logger.info(
+                "publish_slot_outside_freshness_window_skipped",
+                extra={
+                    "publish_at": publish_at_utc.isoformat(),
+                    "max_age_days": settings.news_max_source_age_days,
+                },
+            )
+            continue
 
         for _ in range(0, 80):
             synthetic_slot = False
@@ -570,6 +675,30 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 logger.info("source_url_duplicate_skipped", extra={"source_url": article.article_url})
                 continue
 
+            if not synthetic_slot:
+                source_published_at_utc = _article_published_at_utc(article)
+                if source_published_at_utc is None:
+                    logger.info(
+                        "candidate_without_source_date_skipped_for_slot",
+                        extra={
+                            "source_url": article.article_url,
+                            "publish_at": publish_at_utc.isoformat(),
+                            "max_age_days": settings.news_max_source_age_days,
+                        },
+                    )
+                    continue
+                if source_published_at_utc < publish_at_utc - freshness_window:
+                    logger.info(
+                        "candidate_stale_for_publish_slot_skipped",
+                        extra={
+                            "source_url": article.article_url,
+                            "published_at": source_published_at_utc.isoformat(),
+                            "publish_at": publish_at_utc.isoformat(),
+                            "max_age_days": settings.news_max_source_age_days,
+                        },
+                    )
+                    continue
+
             if feedback_guard_enabled and negative_feedback_examples:
                 candidate_text = f"{article.title}\n{article.summary}"
                 blocked_example: dict[str, str] | None = None
@@ -603,7 +732,6 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 rag_context = []
             pillar = pillar_for_article(article)
             try:
-                publish_at_utc = slot.publish_at_local.astimezone(UTC)
                 generated = writer.generate_post(
                     article,
                     rag_context,
@@ -714,6 +842,22 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 if synthetic_slot:
                     break
                 continue
+
+            quality_gate = getattr(writer, "_quality_gate_failure_reason", None)
+            if callable(quality_gate):
+                quality_failure = quality_gate(generated["text"], format_type)
+                if quality_failure is not None:
+                    logger.warning(
+                        "generated_preview_failed_quality_gate",
+                        extra={
+                            "source_url": article.article_url,
+                            "format_type": format_type,
+                            "reason": quality_failure,
+                        },
+                    )
+                    if synthetic_slot:
+                        break
+                    continue
 
             source_hash = build_source_hash(article.article_url, article.title, article.published_at)
             preview = {

@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
+import requests
 from news.publish import (
+    PublishQualityError,
     TelegramRequestError,
+    _ambiguous_delivery_review_patch,
     _autofill_publish_at,
     _demote_stale_scheduled_posts,
     _normalize_text_before_publish,
     _promote_due_editorial_posts_for_idle_publisher,
     _promote_ready_posts_for_idle_queue,
+    _publish_quality_review_patch,
     _retryable_publish_patch,
+    _telegram_request,
 )
 from news.publish import (
     main as publish_main,
@@ -73,6 +79,33 @@ class _FakeMainClient(_FakeClient):
         return _FakeResponse([], status_code=204)
 
 
+def _valid_daily_post(title: str = "Legal AI меняет работу юрфункции") -> dict[str, object]:
+    text = (
+        f"<b>{title}</b>\n\n"
+        "<b>Что произошло</b>\n"
+        "Свежий материал описывает, как Legal AI переходит из экспериментов в рабочие процессы юридических департаментов. "
+        "Команды уже тестируют agentic AI, пересматривают бюджет на технологии и связывают внедрение с конкретными операциями: "
+        "договорной проверкой, intake, поиском по базе знаний и подготовкой типовых правовых документов.\n\n"
+        "<b>Почему это важно</b>\n"
+        "Для юрфункции это означает, что эффект больше нельзя оценивать по числу купленных лицензий. "
+        "Нужны процесс, владелец результата, контроль качества, логирование действий модели, понятный SLA и договорная ответственность поставщика. "
+        "Иначе пилот быстро превращается в красивую демонстрацию без управляемой экономики.\n\n"
+        "<b>Что это значит для рынка</b>\n"
+        "Закупка Legal AI будет смещаться от выбора модели к выбору операционного контура. "
+        "Победят поставщики, которые умеют встраиваться в реальные юридические процессы, считать стоимость одной операции, "
+        "показывать аудит результата и поддерживать проверку человеком в спорных сценариях.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict #LegalTech #AI"
+    )
+    return {
+        "title": title,
+        "text": text,
+        "format_type": "daily",
+        "rubric": "market",
+        "cta_type": "soft",
+    }
+
+
 def test_autofill_publish_at_keeps_future_publish_time() -> None:
     now_utc = datetime(2026, 3, 16, 12, 0, tzinfo=UTC)
     future = now_utc + timedelta(hours=5)
@@ -114,10 +147,15 @@ def test_due_editorial_fallback_promotes_due_ready_before_review(monkeypatch) ->
     monkeypatch.setattr(settings, "tz_name", "UTC")
     monkeypatch.setattr(settings, "news_publish_editorial_fallback_grace_minutes", 45)
     now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    due_ready = {
+        **_valid_daily_post("Готовый пост"),
+        "id": "due-ready",
+        "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat(),
+    }
     client = _FakeClient(
         ready_rows=[
             {"id": "future-ready", "publish_at": (now_utc + timedelta(hours=2)).isoformat()},
-            {"id": "due-ready", "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat()},
+            due_ready,
         ],
         review_rows=[{"id": "due-review", "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat()}],
     )
@@ -125,22 +163,56 @@ def test_due_editorial_fallback_promotes_due_ready_before_review(monkeypatch) ->
     promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
 
     assert promoted == 1
-    assert client.patched == [("due-ready", {"status": "scheduled", "last_error": None})]
+    assert client.patched[0][0] == "due-ready"
+    assert client.patched[0][1]["status"] == "scheduled"
+    assert client.patched[0][1]["last_error"] is None
 
 
-def test_due_editorial_fallback_promotes_due_review_when_ready_has_no_due_posts(monkeypatch) -> None:
+def test_due_editorial_fallback_promotes_quality_checked_review_posts(monkeypatch) -> None:
     monkeypatch.setattr(settings, "tz_name", "UTC")
     monkeypatch.setattr(settings, "news_publish_editorial_fallback_grace_minutes", 45)
     now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    due_review = {
+        **_valid_daily_post("Пост после проверки"),
+        "id": "due-review",
+        "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat(),
+    }
     client = _FakeClient(
         ready_rows=[{"id": "future-ready", "publish_at": (now_utc + timedelta(hours=2)).isoformat()}],
-        review_rows=[{"id": "due-review", "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat()}],
+        review_rows=[due_review],
     )
 
     promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
 
     assert promoted == 1
-    assert client.patched == [("due-review", {"status": "scheduled", "last_error": None})]
+    assert client.patched[0][0] == "due-review"
+    assert client.patched[0][1]["status"] == "scheduled"
+    assert client.patched[0][1]["last_error"] is None
+
+
+def test_due_editorial_fallback_keeps_weak_review_post_in_review(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "tz_name", "UTC")
+    monkeypatch.setattr(settings, "news_publish_editorial_fallback_grace_minutes", 45)
+    now_utc = datetime(2026, 5, 14, 9, 15, tzinfo=UTC)
+    client = _FakeClient(
+        ready_rows=[],
+        review_rows=[
+            {
+                "id": "weak-review",
+                "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat(),
+                "format_type": "daily",
+                "rubric": "market",
+                "text": "<b>Заголовок</b>\n\n<b>Источник</b>: ссылка",
+            }
+        ],
+    )
+
+    promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
+
+    assert promoted == 0
+    assert client.patched[0][0] == "weak-review"
+    assert client.patched[0][1]["status"] == "review"
+    assert str(client.patched[0][1]["last_error"]).startswith("publish_quality_gate: writer_quality_gate:")
 
 
 def test_due_editorial_fallback_skips_future_review_posts(monkeypatch) -> None:
@@ -166,14 +238,20 @@ def test_due_editorial_fallback_skips_posts_outside_current_slot_window(monkeypa
         ready_rows=[],
         review_rows=[
             {"id": "stale-review", "publish_at": datetime(2026, 5, 13, 9, 0, tzinfo=UTC).isoformat()},
-            {"id": "fresh-review", "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat()},
+            {
+                **_valid_daily_post("Свежий пост"),
+                "id": "fresh-review",
+                "publish_at": datetime(2026, 5, 14, 9, 0, tzinfo=UTC).isoformat(),
+            },
         ],
     )
 
     promoted = _promote_due_editorial_posts_for_idle_publisher(client, limit=1, now_utc=now_utc)
 
     assert promoted == 1
-    assert client.patched == [("fresh-review", {"status": "scheduled", "last_error": None})]
+    assert client.patched[0][0] == "fresh-review"
+    assert client.patched[0][1]["status"] == "scheduled"
+    assert client.patched[0][1]["last_error"] is None
 
 
 def test_due_editorial_fallback_skips_slot_that_was_already_posted(monkeypatch) -> None:
@@ -312,6 +390,78 @@ def test_retryable_publish_patch_ignores_non_retryable_error() -> None:
     assert patch is None
 
 
+def test_ambiguous_delivery_review_patch_moves_post_to_review() -> None:
+    patch = _ambiguous_delivery_review_patch(
+        {"attempts": 1, "max_attempts": 3},
+        TelegramRequestError("read timeout", ambiguous_delivery=True),
+    )
+
+    assert patch is not None
+    assert patch["status"] == "review"
+    assert patch["attempts"] == 2
+    assert str(patch["last_error"]).startswith("ambiguous_telegram_delivery:")
+
+
+def test_publish_quality_review_patch_moves_post_to_review() -> None:
+    patch = _publish_quality_review_patch(
+        {"attempts": 0},
+        PublishQualityError("weak_generic_conclusion"),
+    )
+
+    assert patch is not None
+    assert patch["status"] == "review"
+    assert patch["attempts"] == 1
+    assert patch["last_error"] == "publish_quality_gate: weak_generic_conclusion"
+
+
+def test_telegram_request_does_not_retry_read_timeout(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def fake_post(url, **kwargs):
+        _ = (url, kwargs)
+        calls["count"] += 1
+        raise requests.exceptions.ReadTimeout("read timed out")
+
+    monkeypatch.setattr("news.publish.requests.post", fake_post)
+    monkeypatch.setattr(
+        "news.publish.settings",
+        SimpleNamespace(telegram_bot_token="test-token", telegram_api_proxy_url=""),
+    )
+
+    try:
+        _telegram_request("sendMessage", {"chat_id": "@channel", "text": "test"}, retries=3)
+    except TelegramRequestError as exc:
+        assert exc.retryable is False
+        assert exc.ambiguous_delivery is True
+    else:
+        raise AssertionError("expected TelegramRequestError")
+
+    assert calls["count"] == 1
+
+
+def test_telegram_request_uses_configured_proxy(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return _FakeResponse({"ok": True, "result": {"message_id": 1}})
+
+    monkeypatch.setattr("news.publish.requests.post", fake_post)
+    monkeypatch.setattr(
+        "news.publish.settings",
+        SimpleNamespace(
+            telegram_bot_token="test-token",
+            telegram_api_proxy_url="http://host.docker.internal:18080",
+        ),
+    )
+
+    result = _telegram_request("sendMessage", {"chat_id": "@channel", "text": "test"}, retries=1)
+
+    assert result["ok"] is True
+    assert captured["proxies"] == {"https": "http://host.docker.internal:18080"}
+
+
 def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> None:
     original = (
         "<b>Заголовок</b>\n\n"
@@ -330,6 +480,51 @@ def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> No
     assert "Асистент" not in normalized
     assert "Напишите в" not in normalized
     assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
+
+
+def test_normalize_text_before_publish_rejects_generic_practical_conclusion() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "<b>Что произошло</b>\nТекст поста про Legal AI.\n\n"
+        "<b>Бизнес-эффект</b>\nКейс показывает, как сократить ручную работу.\n\n"
+        "<b>Юридические риски</b>\nПроверить данные, SLA и ответственность.\n\n"
+        "<b>Что делать</b>\n• Проверить процесс и данные.\n\n"
+        "<b>Вывод</b>\n"
+        "Практический смысл здесь не в самой новости, а в том, какие процессы и роли можно пересобрать внутри юрфункции.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    try:
+        _normalize_text_before_publish(
+            original,
+            {"title": "Заголовок", "format_type": "standard", "cta_type": "soft", "rubric": "legal_ops"},
+        )
+    except PublishQualityError as exc:
+        assert str(exc) == "weak_generic_conclusion"
+    else:
+        raise AssertionError("expected PublishQualityError")
+
+
+def test_normalize_text_before_publish_allows_actionable_practical_conclusion() -> None:
+    original = (
+        "<b>Заголовок</b>\n\n"
+        "<b>Что произошло</b>\nТекст поста про Legal AI.\n\n"
+        "<b>Бизнес-эффект</b>\nСценарий влияет на стоимость операций и контроль качества.\n\n"
+        "<b>Юридические риски</b>\nПроверить данные, SLA и ответственность.\n\n"
+        "<b>Что делать</b>\n• Проверить процесс и данные.\n\n"
+        "<b>Вывод</b>\n"
+        "Перед пилотом нужно зафиксировать владельца процесса, перечень данных, SLA, метрику стоимости операции и правило контроля результата юристом.\n\n"
+        "<b>Источник</b>: ссылка\n"
+        "#AIVerdict"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Заголовок", "format_type": "standard", "cta_type": "soft", "rubric": "legal_ops"},
+    )
+
+    assert "Перед пилотом нужно зафиксировать" in normalized
 
 
 def test_normalize_text_before_publish_adds_missing_footer_for_applicable_ready_post() -> None:

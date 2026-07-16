@@ -84,7 +84,7 @@ def _fetch_via_html(channels: list[str], fetch_limit: int | None) -> list[Articl
     results: list[ArticleCandidate] = []
     proxy_url = (settings.news_telegram_html_proxy_url or "").strip() or None
     by_channel = fetch_html_channels(channels, fetch_limit=fetch_limit, proxy_url=proxy_url)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, settings.news_max_source_age_days))
     for channel, posts in by_channel.items():
         for post in posts:
             if post.published_at is not None and post.published_at < cutoff:
@@ -352,7 +352,9 @@ async def _fetch_telegram_articles_async(channels: list[str], *, fetch_limit: in
                     published_at = published_at.replace(tzinfo=timezone.utc)
                 else:
                     published_at = published_at.astimezone(timezone.utc)
-                if published_at < datetime.now(timezone.utc) - timedelta(days=7):
+                if published_at < datetime.now(timezone.utc) - timedelta(
+                    days=max(1, settings.news_max_source_age_days)
+                ):
                     continue
 
                 lines = [line.strip() for line in text.splitlines() if line.strip()]

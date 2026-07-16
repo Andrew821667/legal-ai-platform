@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import html
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -29,12 +31,95 @@ _REVIEW_AUTOFILL_SCAN_LIMIT = 10
 _REVIEW_AUTOFILL_LOOKAHEAD_HOURS = 36
 _REVIEW_AUTOFILL_MAX_STALENESS_HOURS = 24
 _EDITORIAL_FALLBACK_STATUSES = ("ready", "review")
+_WEAK_PRACTICAL_CONCLUSION_PATTERNS = (
+    "практический смысл здесь не в самой новости",
+    "не в самой новости, а в том",
+    "какие процессы и роли можно пересобрать",
+    "кейс показывает, как сократить ручную работу",
+    "важно заранее подумать",
+    "стоит обратить внимание",
+    "рынок движется",
+)
+_PRACTICAL_ACTION_MARKERS = (
+    "аудит",
+    "договор",
+    "данн",
+    "закуп",
+    "зафикс",
+    "измер",
+    "контрол",
+    "логирован",
+    "метрик",
+    "назнач",
+    "ответствен",
+    "пилот",
+    "провер",
+    "процесс",
+    "соглас",
+    "sla",
+    "стоимост",
+)
 
 
 class TelegramRequestError(RuntimeError):
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
+    def __init__(self, message: str, *, retryable: bool = False, ambiguous_delivery: bool = False) -> None:
         super().__init__(message)
         self.retryable = retryable
+        self.ambiguous_delivery = ambiguous_delivery
+
+
+class PublishQualityError(RuntimeError):
+    """Raised when a post is technically sendable but not fit for the public channel."""
+
+
+def _post_datetime(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _post_exceeds_freshness_limit(row: dict[str, Any], *, now_utc: datetime) -> bool:
+    created_at = _post_datetime(row.get("created_at"))
+    if created_at is None:
+        return False
+    max_age = timedelta(days=max(1, settings.news_max_source_age_days))
+    publish_at = _post_datetime(row.get("publish_at"))
+    return created_at < now_utc - max_age or (publish_at is not None and publish_at > created_at + max_age)
+
+
+def _expire_stale_publication_queue(client: CoreClient, *, scan_limit: int = 100) -> int:
+    now_utc = datetime.now(UTC)
+    expired = 0
+    for status in ("review", "ready", "scheduled", "publishing"):
+        response = client.list_posts(limit=max(scan_limit, 1), status=status, newest_first=False)
+        response.raise_for_status()
+        for row in list(response.json() or []):
+            if not _post_exceeds_freshness_limit(row, now_utc=now_utc):
+                continue
+            post_id = str(row.get("id") or "").strip()
+            if not post_id:
+                continue
+            client.patch_post(
+                post_id,
+                {
+                    "status": "failed",
+                    "last_error": f"expired_freshness_{max(1, settings.news_max_source_age_days)}d",
+                },
+            ).raise_for_status()
+            expired += 1
+    if expired:
+        logger.info(
+            "stale_publication_queue_expired",
+            extra={"count": expired, "max_age_days": settings.news_max_source_age_days},
+        )
+    return expired
 
 
 def _demote_stale_scheduled_posts(client: CoreClient, *, scan_limit: int = 100) -> int:
@@ -142,7 +227,7 @@ def _promote_due_editorial_posts_for_idle_publisher(
         response = client.list_posts(limit=scan_limit, status=source_status, newest_first=False)
         response.raise_for_status()
         rows = list(response.json() or [])
-        due_rows = []
+        due_rows: list[tuple[dict[str, Any], str]] = []
         for row in rows:
             publish_at = parse_post_datetime(row.get("publish_at"))
             slot_key = _publish_slot_key(publish_at, local_tz)
@@ -150,7 +235,26 @@ def _promote_due_editorial_posts_for_idle_publisher(
                 continue
             if slot_key is None or slot_key not in eligible_slot_keys or slot_key in posted_slot_keys:
                 continue
-            due_rows.append(row)
+            post_id = str(row.get("id") or "").strip()
+            if not post_id:
+                continue
+            try:
+                normalized_text = _normalize_text_before_publish(
+                    str(row.get("text") or ""),
+                    row,
+                    intelligent_footer=intelligent_footer_enabled(control_rows or []),
+                    strict_quality=True,
+                )
+            except PublishQualityError as exc:
+                quality_patch = _publish_quality_review_patch(row, exc)
+                if quality_patch is not None:
+                    client.patch_post(post_id, quality_patch).raise_for_status()
+                logger.warning(
+                    "due_editorial_fallback_quality_gate_review",
+                    extra={"source_status": source_status, "post_id": post_id, "reason": str(exc)},
+                )
+                continue
+            due_rows.append((row, normalized_text))
             posted_slot_keys.add(slot_key)
             if len(due_rows) >= promote_limit:
                 break
@@ -158,16 +262,20 @@ def _promote_due_editorial_posts_for_idle_publisher(
             continue
 
         promoted = 0
-        for row in due_rows:
+        for row, normalized_text in due_rows:
             post_id = str(row.get("id") or "").strip()
             if not post_id:
                 continue
+            original_text = str(row.get("text") or "").strip()
+            patch_payload: dict[str, Any] = {
+                "status": "scheduled",
+                "last_error": None,
+            }
+            if normalized_text != original_text:
+                patch_payload["text"] = normalized_text
             client.patch_post(
                 post_id,
-                {
-                    "status": "scheduled",
-                    "last_error": None,
-                },
+                patch_payload,
             ).raise_for_status()
             promoted += 1
 
@@ -247,10 +355,13 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
     last_error: Exception | None = None
     last_error_retryable = False
+    last_error_ambiguous_delivery = False
 
     for attempt in range(1, retries + 1):
         try:
-            response = requests.post(url, data=payload, timeout=20)
+            proxy_url = str(getattr(settings, "telegram_api_proxy_url", "") or "").strip()
+            proxies = {"https": proxy_url} if proxy_url else None
+            response = requests.post(url, data=payload, timeout=20, proxies=proxies)
             if response.status_code == 429:
                 retry_after = 3
                 try:
@@ -276,9 +387,15 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
         except TelegramRequestError as exc:
             last_error = exc
             last_error_retryable = exc.retryable
+            last_error_ambiguous_delivery = exc.ambiguous_delivery
             if attempt < retries and exc.retryable:
                 time.sleep(attempt)
                 continue
+            break
+        except requests.exceptions.ReadTimeout as exc:
+            last_error = exc
+            last_error_retryable = False
+            last_error_ambiguous_delivery = True
             break
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
             last_error = exc
@@ -295,7 +412,33 @@ def _telegram_request(method: str, payload: dict[str, Any], retries: int = 3) ->
                 continue
             break
 
-    raise TelegramRequestError(f"Telegram request failed: {last_error}", retryable=last_error_retryable)
+    raise TelegramRequestError(
+        f"Telegram request failed: {last_error}",
+        retryable=last_error_retryable,
+        ambiguous_delivery=last_error_ambiguous_delivery,
+    )
+
+
+def _ambiguous_delivery_review_patch(post: dict[str, Any], exc: Exception) -> dict[str, Any] | None:
+    if not isinstance(exc, TelegramRequestError) or not exc.ambiguous_delivery:
+        return None
+    attempts = int(post.get("attempts") or 0)
+    return {
+        "status": "review",
+        "attempts": attempts + 1,
+        "last_error": f"ambiguous_telegram_delivery: {str(exc)[:450]}",
+    }
+
+
+def _publish_quality_review_patch(post: dict[str, Any], exc: Exception) -> dict[str, Any] | None:
+    if not isinstance(exc, PublishQualityError):
+        return None
+    attempts = int(post.get("attempts") or 0)
+    return {
+        "status": "review",
+        "attempts": attempts + 1,
+        "last_error": f"publish_quality_gate: {str(exc)[:450]}",
+    }
 
 
 def _retryable_publish_patch(post: dict[str, Any], exc: Exception, *, now_utc: datetime) -> dict[str, Any] | None:
@@ -440,15 +583,76 @@ def _ensure_intelligent_footer_before_publish(text: str, post: dict[str, Any], *
     return LLMNewsWriter.normalize_post_footer_blocks(_insert_footer_before_source(normalized, footer_html))
 
 
+def _plain_text(value: str) -> str:
+    return " ".join(
+        html.unescape(value)
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n")
+        .split()
+    )
+
+
+def _extract_html_block(text: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"<b>\s*{re.escape(heading)}\s*</b>\s*(.*?)(?=\n\n<b>|\n<b>|<b>Источник</b>|\n\n#|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(text or "")
+    return match.group(1).strip() if match else ""
+
+
+def _practical_conclusion_failure_reason(text: str, post: dict[str, Any] | None) -> str | None:
+    normalized = text or ""
+    format_type = _normalize_format_type((post or {}).get("format_type"))
+    conclusion = _extract_html_block(normalized, "Практический вывод") or _extract_html_block(normalized, "Вывод")
+    if not conclusion:
+        return None
+
+    plain = re.sub(r"<[^>]+>", " ", conclusion)
+    plain = _plain_text(plain).lower()
+    if any(pattern in plain for pattern in _WEAK_PRACTICAL_CONCLUSION_PATTERNS):
+        return "weak_generic_conclusion"
+    if format_type in {"daily", "weekly_review"}:
+        return None
+    marker_count = sum(1 for marker in _PRACTICAL_ACTION_MARKERS if marker in plain)
+    if len(plain) < 90 or marker_count < 2:
+        return "conclusion_not_practical_enough"
+    return None
+
+
+def _ensure_practical_output_before_publish(text: str, post: dict[str, Any] | None) -> str:
+    reason = _practical_conclusion_failure_reason(text, post)
+    if reason is not None:
+        raise PublishQualityError(reason)
+    return text
+
+
+def _ensure_writer_quality_before_publish(text: str, post: dict[str, Any] | None) -> str:
+    if post is None:
+        return text
+    format_type = _normalize_format_type(post.get("format_type"))
+    reason = LLMNewsWriter._quality_gate_failure_reason(text, format_type)
+    if reason is not None:
+        raise PublishQualityError(f"writer_quality_gate:{reason}")
+    return text
+
+
 def _normalize_text_before_publish(
     text: str,
     post: dict[str, Any] | None = None,
     *,
     intelligent_footer: bool = True,
+    strict_quality: bool = False,
 ) -> str:
     if post is None:
         return LLMNewsWriter.normalize_post_footer_blocks(text)
-    return _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
+    normalized = _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
+    normalized = _ensure_practical_output_before_publish(normalized, post)
+    if strict_quality:
+        normalized = _ensure_writer_quality_before_publish(normalized, post)
+    return normalized
+
 
 
 def main(*, allow_idle_fallback: bool = True) -> int:
@@ -474,6 +678,13 @@ def main(*, allow_idle_fallback: bool = True) -> int:
             return 0
     except Exception as exc:
         logger.warning("publish_controls_fetch_failed", extra={"error": str(exc)})
+
+    try:
+        expired_queue = _expire_stale_publication_queue(client)
+        if expired_queue:
+            logger.info("stale_publication_queue_processed", extra={"count": expired_queue})
+    except Exception as exc:
+        logger.warning("stale_publication_queue_expire_failed", extra={"error": str(exc)})
 
     try:
         stale_demoted = _demote_stale_scheduled_posts(client)
@@ -530,11 +741,23 @@ def main(*, allow_idle_fallback: bool = True) -> int:
     for post in posts:
         post_id = post["id"]
         try:
+            if _post_exceeds_freshness_limit(post, now_utc=datetime.now(UTC)):
+                client.patch_post(
+                    post_id,
+                    {
+                        "status": "failed",
+                        "last_error": f"expired_freshness_{max(1, settings.news_max_source_age_days)}d",
+                    },
+                ).raise_for_status()
+                logger.warning("claimed_stale_post_expired", extra={"post_id": post_id})
+                continue
+
             original_text = str(post.get("text") or "")
             normalized_text = _normalize_text_before_publish(
                 original_text,
                 post,
                 intelligent_footer=publish_intelligent_footer,
+                strict_quality=True,
             )
             message_id = _send_to_telegram(normalized_text, post.get("media_urls"))
             patch_payload: dict[str, Any] = {
@@ -555,6 +778,36 @@ def main(*, allow_idle_fallback: bool = True) -> int:
         except Exception as exc:
             consecutive_errors += 1
             logger.exception("post_publish_failed", extra={"post_id": post_id, "error": str(exc)})
+            ambiguous_patch = _ambiguous_delivery_review_patch(post, exc)
+            if ambiguous_patch is not None:
+                ambiguous = client.patch_post(post_id, ambiguous_patch)
+                if ambiguous.status_code >= 400:
+                    logger.error("post_ambiguous_delivery_patch_error", extra={"post_id": post_id, "status": ambiguous.status_code})
+                else:
+                    logger.warning(
+                        "post_publish_ambiguous_delivery_review",
+                        extra={
+                            "post_id": post_id,
+                            "attempts": ambiguous_patch["attempts"],
+                        },
+                    )
+                    continue
+
+            quality_patch = _publish_quality_review_patch(post, exc)
+            if quality_patch is not None:
+                quality = client.patch_post(post_id, quality_patch)
+                if quality.status_code >= 400:
+                    logger.error("post_quality_gate_patch_error", extra={"post_id": post_id, "status": quality.status_code})
+                else:
+                    logger.warning(
+                        "post_publish_quality_gate_review",
+                        extra={
+                            "post_id": post_id,
+                            "reason": quality_patch["last_error"],
+                        },
+                    )
+                    continue
+
             retry_patch = _retryable_publish_patch(post, exc, now_utc=datetime.now(UTC))
             if retry_patch is not None:
                 retry = client.patch_post(post_id, retry_patch)

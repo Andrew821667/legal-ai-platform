@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from news.settings import settings
@@ -24,8 +24,8 @@ def parse_post_datetime(value: object) -> datetime | None:
         except ValueError:
             return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def row_publication_kind(row: dict[str, object]) -> str:
@@ -39,7 +39,7 @@ def next_active_slot_by_kind(*, control_rows: list[dict[str, object]] | None = N
         kind = slot.publication_kind
         if kind not in ACTIVE_PUBLICATION_KINDS or kind in result:
             continue
-        result[kind] = slot.publish_at_local.astimezone(timezone.utc)
+        result[kind] = slot.publish_at_local.astimezone(UTC)
         if len(result) == len(ACTIVE_PUBLICATION_KINDS):
             break
     return result
@@ -60,10 +60,21 @@ def rebalance_active_publish_queue(
 
     scheduled_rows = list(scheduled_response.json() or [])
     ready_rows = list(ready_response.json() or [])
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
 
     def _row_time(row: dict[str, object]) -> datetime:
-        return parse_post_datetime(row.get("publish_at")) or datetime.max.replace(tzinfo=timezone.utc)
+        return parse_post_datetime(row.get("publish_at")) or datetime.max.replace(tzinfo=UTC)
+
+    retry_guard = timedelta(
+        minutes=max(settings.news_retry_failed_after_minutes, 1),
+        seconds=max(settings.news_publish_interval_seconds, 0),
+    )
+
+    def _is_pending_retry(row: dict[str, object]) -> bool:
+        row_time = parse_post_datetime(row.get("publish_at"))
+        if row_time is None or not (now_utc < row_time <= now_utc + retry_guard):
+            return False
+        return int(row.get("attempts") or 0) > 0 and bool(str(row.get("last_error") or "").strip())
 
     by_kind: dict[str, list[dict[str, object]]] = {}
     for row in scheduled_rows:
@@ -79,9 +90,12 @@ def rebalance_active_publish_queue(
     for kind, rows in by_kind.items():
         rows.sort(key=_row_time)
         due_rows = [row for row in rows if (_time := parse_post_datetime(row.get("publish_at"))) and _time <= now_utc]
+        retry_rows = [row for row in rows if _is_pending_retry(row)]
         keep_row: dict[str, object]
         if due_rows:
             keep_row = due_rows[0]
+        elif retry_rows:
+            keep_row = retry_rows[0]
         elif preferred_post_id is not None:
             preferred = next((row for row in rows if str(row.get("id") or "") == preferred_post_id), None)
             keep_row = preferred or rows[0]
@@ -91,7 +105,9 @@ def rebalance_active_publish_queue(
         keep_id = str(keep_row.get("id") or "").strip()
         keep_time = parse_post_datetime(keep_row.get("publish_at"))
         desired_time = next_slot_map[kind]
-        if keep_id and (keep_time is None or (keep_time > now_utc and keep_time != desired_time)):
+        if keep_id and not _is_pending_retry(keep_row) and (
+            keep_time is None or (keep_time > now_utc and keep_time != desired_time)
+        ):
             client.patch_post(
                 keep_id,
                 {"status": "scheduled", "publish_at": desired_time.isoformat()},

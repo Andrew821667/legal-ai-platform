@@ -4,10 +4,15 @@ import html
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT, build_news_writer_system_prompt
+from prompts.news import (
+    NEWS_FOOTER_DECISION_SYSTEM_PROMPT,
+    NEWS_WRITER_SYSTEM_PROMPT,
+    build_news_writer_system_prompt,
+)
+
 from news.pipeline import ArticleCandidate, RAGExample, normalize_post_text
 from news.settings import settings
 
@@ -62,15 +67,15 @@ _FORMAT_MIN_CHARS = {
     "humor": 1000,
 }
 _FORMAT_MAX_OUTPUT_TOKENS = {
-    "signal": 900,
-    "standard": 1100,
-    "deep": 1400,
-    "digest": 1500,
-    "daily": 1200,
-    "weekly_review": 2200,
-    "longread": 2300,
-    "practice": 1000,
-    "humor": 1000,
+    "signal": 1200,
+    "standard": 1600,
+    "deep": 2200,
+    "digest": 2200,
+    "daily": 1800,
+    "weekly_review": 3400,
+    "longread": 3400,
+    "practice": 1800,
+    "humor": 1800,
 }
 _FORMAT_FIELD_LIMITS: dict[str, dict[str, int]] = {
     "signal": {"what": 320, "effect": 240, "risks": 220, "step": 90, "steps": 3, "hashtags": 3},
@@ -169,6 +174,30 @@ _INCOMPLETE_TRAILING_WORDS = (
     "для",
     "через",
 )
+_INCOMPLETE_TITLE_END_RE = re.compile(
+    r"\b(?:и|или|не|но|а|что|чтобы|потому|поэтому|если|когда|на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без|через)\s*$",
+    re.IGNORECASE,
+)
+_COMPLETE_SHORT_TITLE_WORDS = {
+    "дело",
+    "закон",
+    "итог",
+    "кейс",
+    "право",
+    "риск",
+    "роль",
+    "рынок",
+    "суд",
+    "цена",
+}
+_KNOWN_TRUNCATED_TITLE_STEMS = {
+    "авто",
+    "дого",
+    "корп",
+    "рабо",
+    "регу",
+    "юри",
+}
 _TRAILING_PREPOSITIONAL_PHRASE_RE = re.compile(
     r"(?:\b(?:на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без)\b)\s+\S+\s*$",
     re.IGNORECASE,
@@ -392,8 +421,9 @@ _FACT_CHECK_SYSTEM_PROMPT = (
     "2) Исправляй перепутанные роли и субъекты действия: кто сдает, кто арендует, кто покупает, кто продает, кто подал иск, кто ответчик, кто кредитор, кто заемщик.\n"
     "3) Дата итогового поста важнее исходной временной формулировки. Если в тексте остались устаревшие прогнозы, near-term ожидания или дедлайны, перепиши их в нейтральный актуальный вид или убери.\n"
     "4) Для weekly_review нельзя оставлять устаревшие прогнозы как будто они еще впереди.\n"
-    "5) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
-    "6) Верни строго JSON: "
+    "5) Опрос, исследование или маркетинговый материал поставщика не доказывает, что читателю нужно покупать именно этот класс решений. Убирай категоричные закупочные рекомендации; оставляй сравнение вариантов, пилот и проверку ограничений выборки.\n"
+    "6) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
+    "7) Верни строго JSON: "
     '{"approved": true, "reason": "", "title": "исправленный заголовок", "text": "исправленный HTML-пост"}'
 )
 _FALLBACK_SUMMARY_META_PREFIXES = (
@@ -444,7 +474,11 @@ class LLMNewsWriter:
             raise RuntimeError("openai package is required for news generation") from exc
         self.client = OpenAI(**client_kwargs)
         self.model = settings.news_model
-        self._use_max_tokens_param = "deepseek" in (settings.openai_base_url or "").lower()
+        provider_fingerprint = f"{settings.openai_base_url} {self.model}".lower()
+        self._use_max_tokens_param = "deepseek" in provider_fingerprint
+        self._reasoning_token_reserve = (
+            max(settings.news_reasoning_token_reserve, 0) if "deepseek" in provider_fingerprint else 0
+        )
 
     @staticmethod
     def _article_haystack(article: ArticleCandidate) -> str:
@@ -479,18 +513,22 @@ class LLMNewsWriter:
             )
         )
 
-    def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
-        token_limit = _FORMAT_MAX_OUTPUT_TOKENS.get(format_type, _FORMAT_MAX_OUTPUT_TOKENS["standard"])
+    def _token_limit_kwargs(self, token_limit: int) -> dict[str, Any]:
+        token_limit += max(int(getattr(self, "_reasoning_token_reserve", 0)), 0)
         if self._use_max_tokens_param:
             return {"max_tokens": token_limit}
         return {"max_completion_tokens": token_limit}
+
+    def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
+        token_limit = _FORMAT_MAX_OUTPUT_TOKENS.get(format_type, _FORMAT_MAX_OUTPUT_TOKENS["standard"])
+        return self._token_limit_kwargs(token_limit)
 
     @staticmethod
     def _format_dt(dt: datetime | None) -> str:
         if dt is None:
             return "не указана"
-        normalized = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-        return normalized.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        normalized = dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+        return normalized.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     @staticmethod
     def _plain_text(text: str) -> str:
@@ -525,7 +563,7 @@ class LLMNewsWriter:
             return None
         lowered = cls._plain_text(text)
         if any(marker in lowered for marker in _TEMPORAL_RECHECK_MARKERS) and source_published_at is not None:
-            source_dt = source_published_at if source_published_at.tzinfo is not None else source_published_at.replace(tzinfo=timezone.utc)
+            source_dt = source_published_at if source_published_at.tzinfo is not None else source_published_at.replace(tzinfo=UTC)
             if abs((target_publish_at.date() - source_dt.date()).days) <= 3:
                 return "needs_temporal_recheck:near_term_forecast"
         if format_type == "weekly_review" and cls._calendar_window_is_elapsed(lowered, target_publish_at):
@@ -651,12 +689,12 @@ class LLMNewsWriter:
                 text = "\n".join(lines[1:-1]).strip()
 
         try:
-            return json.loads(text)
+            return json.loads(text, strict=False)
         except json.JSONDecodeError:
             left = text.find("{")
             right = text.rfind("}")
             if left != -1 and right != -1 and right > left:
-                return json.loads(text[left : right + 1])
+                return json.loads(text[left : right + 1], strict=False)
             raise
 
     @staticmethod
@@ -909,11 +947,7 @@ class LLMNewsWriter:
                 f"Adoption patterns: {'; '.join(normalized_patterns) if normalized_patterns else '—'}",
             ) if part
         )
-        completion_kwargs: dict[str, Any]
-        if self._use_max_tokens_param:
-            completion_kwargs = {"max_tokens": 260}
-        else:
-            completion_kwargs = {"max_completion_tokens": 260}
+        completion_kwargs = self._token_limit_kwargs(260)
 
         try:
             response = self.client.chat.completions.create(
@@ -1631,13 +1665,13 @@ class LLMNewsWriter:
                 + f"{source_block}\n"
                 + f"{hashtags_line}"
             )
-        elif format_type == "humor":
+        elif format_type in {"practice", "humor"}:
             body = (
                 f"<b>{escaped_title}</b>\n\n"
                 + (f"{escaped_lead}\n\n" if escaped_lead else "")
                 + f"<b>Ситуация недели</b>\n{escaped_what_happened}\n\n"
                 + f"<b>Где узкое место</b>\n{escaped_business_effect}\n\n"
-                + f"<b>Что взять в работу</b>\n{escaped_legal_risks}\n\n"
+                + f"<b>Что взять в работу</b>\n{steps_block}\n\n"
                 + f"{source_block}\n"
                 + f"{hashtags_line}"
             )
@@ -1680,6 +1714,67 @@ class LLMNewsWriter:
         return title, text, rubric
 
     @staticmethod
+    def _plain_text_for_language_gate(text: str) -> str:
+        plain = html.unescape(re.sub(r"<[^>]+>", " ", text or ""))
+        plain = re.sub(r"https?://\S+", " ", plain)
+        plain = re.sub(r"\b(?:Источник|AIVerdict|LegalTech|Legal AI|AI)\b", " ", plain, flags=re.IGNORECASE)
+        lines = []
+        for line in plain.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.lower().startswith("источник"):
+                continue
+            lines.append(stripped)
+        return re.sub(r"\s+", " ", " ".join(lines)).strip()
+
+    @classmethod
+    def _language_gate_failure_reason(cls, text: str) -> str | None:
+        plain = cls._plain_text_for_language_gate(text)
+        if not plain:
+            return "language_empty"
+
+        title_match = re.search(r"<b>\s*(.*?)\s*</b>", text or "", flags=re.IGNORECASE | re.DOTALL)
+        title = html.unescape(re.sub(r"<[^>]+>", " ", title_match.group(1))).strip() if title_match else plain[:180]
+        if title and not re.search(r"[А-Яа-яЁё]", title):
+            return "language_title_not_russian"
+
+        cyrillic_count = len(re.findall(r"[А-Яа-яЁё]", plain))
+        latin_count = len(re.findall(r"[A-Za-z]", plain))
+        if latin_count > max(cyrillic_count * 1.25, cyrillic_count + 80):
+            return f"language_latin_dominant:{latin_count}>{cyrillic_count}"
+        return None
+
+    @staticmethod
+    def _title_gate_failure_reason(text: str) -> str | None:
+        title_match = re.search(r"<b>\s*(.*?)\s*</b>", text or "", flags=re.IGNORECASE | re.DOTALL)
+        if title_match is None:
+            return "missing_title"
+        title = html.unescape(re.sub(r"<[^>]+>", " ", title_match.group(1)))
+        title = re.sub(r"\s+", " ", title).strip(" ,;:-")
+        if not title:
+            return "missing_title"
+        if _INCOMPLETE_TITLE_END_RE.search(title):
+            return "incomplete_title"
+        last_word_match = re.search(r"([А-Яа-яЁё-]+)$", title)
+        if last_word_match is not None:
+            last_word = last_word_match.group(1).lower().replace("ё", "е")
+            body = html.unescape(re.sub(r"<[^>]+>", " ", (text or "")[title_match.end():])).lower()
+            exact_word = re.search(rf"\b{re.escape(last_word)}\b", body)
+            longer_word = re.search(rf"\b{re.escape(last_word)}[а-яё]{{2,}}\b", body)
+            suspicious_stem = last_word in _KNOWN_TRUNCATED_TITLE_STEMS or (
+                len(last_word) >= 7 and last_word.endswith("н")
+            )
+            if (
+                suspicious_stem
+                and last_word not in _COMPLETE_SHORT_TITLE_WORDS
+                and exact_word is None
+                and longer_word is not None
+            ):
+                return "incomplete_title_word"
+        return None
+
+    @staticmethod
     def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
         normalized = (text or "").strip()
         plain_lower = html.unescape(re.sub(r"<[^>]+>", "", normalized)).lower()
@@ -1688,10 +1783,18 @@ class LLMNewsWriter:
                 return f"prompt_leak:{marker}"
         if "&lt;" in normalized or "&gt;" in normalized:
             return "escaped_markup"
+        title_failure = LLMNewsWriter._title_gate_failure_reason(normalized)
+        if title_failure:
+            return title_failure
+        if plain_lower.count("(") != plain_lower.count(")"):
+            return "unbalanced_parentheses"
+        if plain_lower.count("«") != plain_lower.count("»"):
+            return "unbalanced_quotes"
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
             "daily": ("Что произошло", "Почему это важно", "Источник"),
+            "practice": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
             "humor": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
         }
         required_markers = format_markers.get(
@@ -1710,6 +1813,16 @@ class LLMNewsWriter:
             third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
             if len(third_block) < 120:
                 return f"weak_daily_third_block:{len(third_block)}"
+            third_heading_pattern = "|".join(re.escape(item) for item in _DAILY_THIRD_BLOCK_HEADINGS)
+            third_section_match = re.search(
+                rf"<b>(?:{third_heading_pattern})</b>\s*(.*?)(?=\n\s*\n?<b>|\Z)",
+                normalized,
+                flags=re.DOTALL,
+            )
+            if third_section_match is not None:
+                list_items = re.findall(r"(?m)^\s*•\s+", third_section_match.group(1))
+                if list_items and len(list_items) < 2:
+                    return f"weak_daily_list_items:{len(list_items)}"
         if format_type == "weekly_review":
             raw_points = re.findall(r"(?m)^\s*\d+\.\s*(.+)$", normalized)
             points_count = len(raw_points)
@@ -1723,6 +1836,9 @@ class LLMNewsWriter:
                 return f"weak_weekly_points_clean:{len(cleaned_points)}"
             if len(LLMNewsWriter._dedupe_weekly_points(cleaned_points)) < 8:
                 return "weak_weekly_points_duplicates"
+        language_failure = LLMNewsWriter._language_gate_failure_reason(normalized)
+        if language_failure:
+            return language_failure
         if not LLMNewsWriter._has_specificity_signal(normalized):
             return "not_specific_enough"
         if len(normalized) >= 3980:
@@ -1796,14 +1912,20 @@ class LLMNewsWriter:
             business_effect = "Новость показывает, как меняется контур выбора ИИ-инструментов и требований к поставщикам со стороны корпоративных команд."
             conclusion = "Дальше важны не общие обещания поставщика, а режим доступа к данным, качество результата и договорные ограничения."
         elif pillar in {"implementation", "case"}:
-            conclusion = "Практический смысл здесь не в самой новости, а в том, какие процессы и роли можно пересобрать внутри юрфункции."
+            conclusion = (
+                "Практический вывод: до пилота нужно зафиксировать процесс, входные данные, владельца проверки "
+                "и метрику результата. Если это нельзя описать заранее, внедрение рано масштабировать."
+            )
         base: dict[str, Any] = {
             "title": title,
             "rubric": _DEFAULT_RUBRIC_BY_PILLAR.get(pillar, "legal_ai"),
             "what_happened": summary[:450],
             "business_effect": business_effect,
             "legal_risks": legal_risks,
-            "next_steps": "Описать процесс и данные в нем; проверить PDn и договорные ограничения; выбрать 1-2 этапа для пилота; согласовать критерии качества и контроля",
+            "next_steps": (
+                "Описать процесс и данные в нем; проверить персональные данные и договорные ограничения; "
+                "выбрать 1-2 этапа для пилота; согласовать критерии качества и контроля"
+            ),
             "conclusion": conclusion,
             "hashtags": list(_DEFAULT_HASHTAGS),
         }
@@ -1882,6 +2004,35 @@ class LLMNewsWriter:
                 text = normalize_post_text(f"{text}\n\n{booster_block}")
         return {"title": title, "text": text, "rubric": rubric}
 
+    def _fallback_post_checked(
+        self,
+        article: ArticleCandidate,
+        *,
+        format_type: str,
+        cta_type: str,
+        pillar: str,
+        intelligent_footer_enabled: bool = True,
+    ) -> dict[str, str] | None:
+        fallback = self._fallback_post(
+            article,
+            format_type=format_type,
+            cta_type=cta_type,
+            pillar=pillar,
+            intelligent_footer_enabled=intelligent_footer_enabled,
+        )
+        failure_reason = self._quality_gate_failure_reason(fallback.get("text", ""), format_type)
+        if failure_reason:
+            logger.warning(
+                "fallback_post_failed_quality_gate",
+                extra={
+                    "article_url": article.article_url,
+                    "format_type": format_type,
+                    "reason": failure_reason,
+                },
+            )
+            return None
+        return fallback
+
     def generate_post(
         self,
         article: ArticleCandidate,
@@ -1920,17 +2071,26 @@ class LLMNewsWriter:
             f"{negative_feedback_context or 'Негативных сигналов по похожим постам не найдено.'}"
         )
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.35,
-            **self._completion_kwargs(format_type),
-        )
-
-        raw = response.choices[0].message.content or ""
+        raw = ""
+        for attempt in range(3):
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.35,
+                **self._completion_kwargs(format_type),
+            )
+            raw = response.choices[0].message.content or ""
+            try:
+                self._extract_json(raw)
+                break
+            except Exception as parse_exc:
+                logger.warning(
+                    "llm_post_parse_retry",
+                    extra={"attempt": attempt + 1, "error": str(parse_exc), "format_type": format_type},
+                )
         try:
             data = self._extract_json(raw)
             if data.get("is_relevant") is False:
@@ -2038,7 +2198,7 @@ class LLMNewsWriter:
                         extra={"title": title[:80], "rubric": rubric, "format_type": format_type},
                     )
                     return None
-                return self._fallback_post(
+                return self._fallback_post_checked(
                     article,
                     format_type=format_type,
                     cta_type=cta_type,
@@ -2049,7 +2209,7 @@ class LLMNewsWriter:
             return {"title": title[:160], "text": text, "rubric": rubric[:100]}
         except Exception as exc:
             logger.warning("llm_post_parse_failed", extra={"error": str(exc), "format_type": format_type})
-            return self._fallback_post(
+            return self._fallback_post_checked(
                 article,
                 format_type=format_type,
                 cta_type=cta_type,
@@ -2066,15 +2226,17 @@ class LLMNewsWriter:
         pillar: str = "implementation",
         intelligent_footer_enabled: bool = True,
     ) -> dict[str, str]:
-        """Public fallback wrapper for caller-side hardening in generation pipeline."""
-        return self._fallback_post(
+        """Build a fallback only when it passes the same public quality gate."""
+        fallback = self._fallback_post_checked(
             article,
             format_type=format_type,
             cta_type=cta_type,
             pillar=pillar,
             intelligent_footer_enabled=intelligent_footer_enabled,
         )
-
+        if fallback is None:
+            raise RuntimeError("fallback_post_failed_quality_gate")
+        return fallback
 
 def build_manual_footer(post_kind: str) -> str:
     template = _MANUAL_FOOTER_LIBRARY.get(post_kind)
