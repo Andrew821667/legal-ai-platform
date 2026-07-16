@@ -174,6 +174,10 @@ _INCOMPLETE_TRAILING_WORDS = (
     "для",
     "через",
 )
+_INCOMPLETE_TITLE_END_RE = re.compile(
+    r"\b(?:и|или|не|но|а|что|чтобы|потому|поэтому|если|когда|на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без|через)\s*$",
+    re.IGNORECASE,
+)
 _TRAILING_PREPOSITIONAL_PHRASE_RE = re.compile(
     r"(?:\b(?:на|по|для|в|во|о|об|при|под|над|с|со|к|из|от|до|без)\b)\s+\S+\s*$",
     re.IGNORECASE,
@@ -1721,6 +1725,19 @@ class LLMNewsWriter:
         return None
 
     @staticmethod
+    def _title_gate_failure_reason(text: str) -> str | None:
+        title_match = re.search(r"<b>\s*(.*?)\s*</b>", text or "", flags=re.IGNORECASE | re.DOTALL)
+        if title_match is None:
+            return "missing_title"
+        title = html.unescape(re.sub(r"<[^>]+>", " ", title_match.group(1)))
+        title = re.sub(r"\s+", " ", title).strip(" ,;:-")
+        if not title:
+            return "missing_title"
+        if _INCOMPLETE_TITLE_END_RE.search(title):
+            return "incomplete_title"
+        return None
+
+    @staticmethod
     def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
         normalized = (text or "").strip()
         plain_lower = html.unescape(re.sub(r"<[^>]+>", "", normalized)).lower()
@@ -1729,6 +1746,13 @@ class LLMNewsWriter:
                 return f"prompt_leak:{marker}"
         if "&lt;" in normalized or "&gt;" in normalized:
             return "escaped_markup"
+        title_failure = LLMNewsWriter._title_gate_failure_reason(normalized)
+        if title_failure:
+            return title_failure
+        if plain_lower.count("(") != plain_lower.count(")"):
+            return "unbalanced_parentheses"
+        if plain_lower.count("«") != plain_lower.count("»"):
+            return "unbalanced_quotes"
         format_markers = {
             "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
             "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
