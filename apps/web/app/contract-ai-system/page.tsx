@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, contractAISsoUrl } from "@/lib/links";
 import { SEO_SITE_URL } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
+import PageFAQ from "@/components/PageFAQ";
 
 export const metadata: Metadata = {
   title: "Contract AI — нейросеть для анализа и проверки договоров",
@@ -30,6 +31,39 @@ export const metadata: Metadata = {
 };
 
 const contractProductUrl = "https://contract.ai-verdict.ru";
+
+const contractBreadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "@id": `${SEO_SITE_URL}/contract-ai-system#breadcrumb`,
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Главная", item: SEO_SITE_URL },
+    { "@type": "ListItem", position: 2, name: "Contract AI", item: `${SEO_SITE_URL}/contract-ai-system` },
+  ],
+};
+
+const contractFaqItems = [
+  {
+    question: "Сколько стоит проверка договора в Contract AI?",
+    answer:
+      "Стартовый режим бесплатный — до 3 договоров в месяц. Этого достаточно, чтобы проверить сервис на реальных документах, а для регулярной работы обсуждается пилот и рабочий контур.",
+  },
+  {
+    question: "Что делает Contract AI при проверке договора?",
+    answer:
+      "Сервис анализирует условия документа, выделяет юридические риски и предлагает рекомендации по правкам. Также он умеет сравнивать версии договоров и готовить протоколы разногласий.",
+  },
+  {
+    question: "Заменяет ли Contract AI юриста?",
+    answer:
+      "Нет. Сервис ускоряет первичную проверку и подсвечивает риски, а решения остаётся принимать юристу — это принцип всей платформы AI Verdict.",
+  },
+  {
+    question: "Как начать работу с Contract AI?",
+    answer:
+      "Откройте сервис contract.ai-verdict.ru, загрузите договор и получите разбор рисков. Бесплатного режима хватает для первой проверки, дальше можно обсудить пилот под ваши процессы.",
+  },
+];
 
 const softwareSchema = {
   "@context": "https://schema.org",
@@ -127,6 +161,7 @@ export default function ContractAISystemPage() {
   return (
     <main className="bg-slate-900 text-slate-100 min-h-screen">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(contractBreadcrumbSchema) }} />
       <section className="border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-14">
           <span className="inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 text-sm text-emerald-300">
@@ -264,6 +299,7 @@ export default function ContractAISystemPage() {
           </div>
         </div>
       </section>
+      <PageFAQ items={contractFaqItems} pageUrl={`${SEO_SITE_URL}/contract-ai-system`} title="Частые вопросы о Contract AI" />
     </main>
   );
 }
