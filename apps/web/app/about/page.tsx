@@ -5,9 +5,9 @@ import { createPageMetadata } from "@/lib/seo";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "О платформе",
+  title: "О платформе: внедрение Legal AI и автоматизация юрфункции",
   description:
-    "О платформе AI Verdict: подход к внедрению, методология пилота, роль команды и контакты для запуска проекта.",
+    "О платформе AI Verdict: кто мы, подход к внедрению Legal AI, методология пилота, автоматизация юридической функции и контакты для запуска проекта.",
   path: "/about",
 });
 
@@ -27,7 +27,7 @@ export default function AboutPage() {
           <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
             О платформе и подходе
           </span>
-          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">AI Verdict</h1>
+          <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">Платформа AI Verdict: внедрение Legal AI и автоматизация юрфункции</h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
             Строим единую систему, где контент, продукт и внедрение работают вместе: от экспертного контекста и
             проверки договоров до управляемых юридических процессов в компании.

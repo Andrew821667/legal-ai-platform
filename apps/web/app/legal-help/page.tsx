@@ -4,6 +4,7 @@ import { Building2, FileText, Landmark, Scale, ShieldCheck, UserRound } from "lu
 
 import HeroBackdrop from "@/components/HeroBackdrop";
 import LegalHelpForm from "@/components/LegalHelpForm";
+import PageFAQ from "@/components/PageFAQ";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
@@ -22,6 +23,29 @@ const areas = [
   { icon: Landmark, title: "Недвижимость, земля и долги", text: "Сделки, имущественные споры, взыскание и вопросы банкротства." },
   { icon: ShieldCheck, title: "Налоги, комплаенс, IT и данные", text: "Регуляторные риски, персональные данные, цифровые продукты и интеллектуальная собственность." },
   { icon: UserRound, title: "Личные юридические вопросы", text: "Трудовые, семейные, наследственные, потребительские и другие ситуации." },
+];
+
+const legalHelpFaqItems = [
+  {
+    question: "Как получить юридическую помощь в AI Verdict?",
+    answer:
+      "Опишите задачу, укажите ближайший срок и оставьте контакт через форму на этой странице. Юрист изучит обращение и предложит понятный следующий шаг, а работа начинается только после согласования формата и стоимости.",
+  },
+  {
+    question: "С какими задачами вы работаете?",
+    answer:
+      "Договоры и сделки, претензии и споры, корпоративные и трудовые вопросы, налоги и комплаенс, недвижимость и земля, IT и персональные данные, а также личные юридические ситуации.",
+  },
+  {
+    question: "Вы помогаете только бизнесу?",
+    answer:
+      "Нет, работаем и с компаниями, и с частными клиентами. У каждого направления есть отдельная страница с деталями: юридические услуги для бизнеса и помощь частным лицам.",
+  },
+  {
+    question: "Чем ваш подход отличается от обычной юридической фирмы?",
+    answer:
+      "Мы совмещаем юридическую практику с технологиями AI Verdict: рутинные этапы ускоряет автоматизация, а решения по существу принимает юрист.",
+  },
 ];
 
 export default function LegalHelpPage() {
@@ -99,6 +123,8 @@ export default function LegalHelpPage() {
           </div>
         </div>
       </section>
+
+      <PageFAQ items={legalHelpFaqItems} pageUrl={`${SEO_SITE_URL}/legal-help`} title="Частые вопросы о юридической помощи" />
 
       <LegalHelpForm sourceContext="web_legal_help" />
     </main>
