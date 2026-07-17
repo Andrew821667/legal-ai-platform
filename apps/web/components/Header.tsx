@@ -84,7 +84,7 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden xl:flex items-center gap-8">
+          <div className="hidden xl:flex items-center gap-6">
             {mainNavigation.map((item) => (
               item.external ? (
                 <a
@@ -143,14 +143,14 @@ export default function Header() {
                 href={contractAIActionHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
+                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-4 py-3 rounded-lg transition-all transform hover:scale-105"
               >
                 Открыть сервис проверки договоров →
               </a>
             ) : (
               <Link
                 href={contractAIActionHref}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105"
+                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-4 py-3 rounded-lg transition-all transform hover:scale-105"
               >
                 Открыть сервис проверки договоров →
               </Link>
