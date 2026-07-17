@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import LegalHelpForm from "@/components/LegalHelpForm";
-import { createPageMetadata } from "@/lib/seo";
+import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export const metadata: Metadata = createPageMetadata({
@@ -22,9 +22,21 @@ const items = [
   "Другие юридические ситуации",
 ];
 
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "@id": `${SEO_SITE_URL}/legal-help/individuals#breadcrumb`,
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Главная", item: SEO_SITE_URL },
+    { "@type": "ListItem", position: 2, name: "Юридическая помощь", item: `${SEO_SITE_URL}/legal-help` },
+    { "@type": "ListItem", position: 3, name: "Юридическая помощь частным лицам", item: `${SEO_SITE_URL}/legal-help/individuals` },
+  ],
+};
+
 export default function IndividualLegalHelpPage() {
   return (
     <main className={`${isLightOpsTheme ? "visual-light-ops" : ""} min-h-screen bg-slate-900 text-slate-100`}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <section className="border-b border-slate-800">
         <div className="mx-auto max-w-6xl px-4 pb-14 pt-28 sm:px-6 lg:px-8">
           <Link href="/legal-help" className="text-sm text-amber-300 hover:text-amber-200">Юридическая помощь</Link>
