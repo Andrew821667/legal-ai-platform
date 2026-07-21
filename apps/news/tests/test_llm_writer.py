@@ -213,6 +213,19 @@ def test_build_news_writer_system_prompt_prefers_russian_terms() -> None:
     assert "выбор поставщика" in prompt
 
 
+def test_build_news_writer_system_prompt_blocks_competitor_promotion() -> None:
+    prompt = build_news_writer_system_prompt(adoption_module_enabled=True)
+
+    assert "Не продвигай сторонних российских Legal AI-вендоров" in prompt
+    assert "competitor_marketing = true" in prompt
+    assert '"competitor_marketing": false' in prompt
+
+
+def test_quality_gate_rejects_competitor_brand_leak() -> None:
+    text = "<b>LawGPT выпустил новую функцию</b>\n\nРекламный материал конкурента."
+    assert LLMNewsWriter._quality_gate_failure_reason(text, "daily") == "competitor_brand_mention"
+
+
 def test_daily_format_prefers_adoption_block_when_present() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     title, text, rubric = writer._format_post(

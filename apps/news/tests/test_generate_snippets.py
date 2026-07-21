@@ -4,7 +4,13 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import news.generate as generate_module
-from news.generate import _collect_history, _drop_existing_source_articles, _normalize_snippet
+from news.generate import (
+    _anonymize_competitor_articles,
+    _collect_history,
+    _drop_competitor_source_articles,
+    _drop_existing_source_articles,
+    _normalize_snippet,
+)
 from news.pipeline import ArticleCandidate
 
 
@@ -48,6 +54,35 @@ def test_drop_existing_source_articles_keeps_fresh_candidates() -> None:
 
     assert filtered == [fresh_article]
     assert skipped == 1
+
+
+def test_competitor_prefilter_blocks_direct_source_and_anonymizes_independent_report(monkeypatch) -> None:
+    monkeypatch.setattr(generate_module.settings, "news_competitor_channels", "law_gpt", raising=False)
+    monkeypatch.setattr(generate_module.settings, "news_competitor_domains", "lawgpt.ru", raising=False)
+    monkeypatch.setattr(generate_module.settings, "news_competitor_brands", "LawGPT,ЗаконГПТ", raising=False)
+    direct = ArticleCandidate(
+        source_url="https://t.me/Law_GPT",
+        article_url="https://t.me/Law_GPT/144",
+        title="LawGPT выпустил функцию",
+        summary="Рекламный материал поставщика.",
+        published_at=datetime.now(UTC),
+    )
+    independent = ArticleCandidate(
+        source_url="https://example.com/rss",
+        article_url="https://example.com/legal-ai-market",
+        title="LawGPT появился в отраслевом обзоре",
+        summary="Независимый материал описывает ЗаконГПТ как один из рыночных сигналов.",
+        published_at=datetime.now(UTC),
+    )
+
+    filtered, skipped = _drop_competitor_source_articles([direct, independent])
+    anonymized, changed = _anonymize_competitor_articles(filtered)
+
+    assert skipped == 1
+    assert changed == 1
+    assert len(anonymized) == 1
+    assert "LawGPT" not in anonymized[0].title
+    assert "ЗаконГПТ" not in anonymized[0].summary
 
 
 def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(monkeypatch) -> None:

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     telegram_api_hash: str = ""
     telegram_session_name: str = "apps/news/legacy/telegram_bot"
     telegram_channels: str = ""
+    news_competitor_channels: str = "law_gpt,zakongpt,zakon_gpt"
+    news_competitor_domains: str = "lawgpt.ru,rfgpt.ru,legalai-service.ru"
+    news_competitor_brands: str = (
+        "LawGPT,Law GPT,ЗаконГПТ,Закон GPT,ZakonGPT,Zakon GPT,"
+        "Моментальный Юрист,Neurolegal"
+    )
     telegram_fetch_limit: int = 50
     telegram_fetch_enabled: bool = True
     # Source for Telegram channel posts. Options:
@@ -172,7 +178,24 @@ class Settings(BaseSettings):
 
     @property
     def telegram_channels_list(self) -> list[str]:
-        return [item.strip() for item in self.telegram_channels.split(",") if item.strip()]
+        blocked = {item.lower() for item in self.news_competitor_channels_list}
+        return [
+            item.strip()
+            for item in self.telegram_channels.split(",")
+            if item.strip() and item.strip().lstrip("@").lower() not in blocked
+        ]
+
+    @property
+    def news_competitor_channels_list(self) -> list[str]:
+        return [item.strip().lstrip("@").lower() for item in self.news_competitor_channels.split(",") if item.strip()]
+
+    @property
+    def news_competitor_domains_list(self) -> list[str]:
+        return [item.strip().lower() for item in self.news_competitor_domains.split(",") if item.strip()]
+
+    @property
+    def news_competitor_brands_list(self) -> list[str]:
+        return [item.strip() for item in self.news_competitor_brands.split(",") if item.strip()]
 
     @property
     def news_daily_morning_options_list(self) -> list[str]:

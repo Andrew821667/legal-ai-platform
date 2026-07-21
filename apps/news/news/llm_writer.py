@@ -13,6 +13,11 @@ from prompts.news import (
     build_news_writer_system_prompt,
 )
 
+from news.competitor_policy import (
+    anonymize_competitor_mentions,
+    competitor_mentions,
+    competitor_policy_failure_reason,
+)
 from news.pipeline import ArticleCandidate, RAGExample, normalize_post_text
 from news.settings import settings
 
@@ -1778,6 +1783,12 @@ class LLMNewsWriter:
     def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
         normalized = (text or "").strip()
         plain_lower = html.unescape(re.sub(r"<[^>]+>", "", normalized)).lower()
+        competitor_failure = competitor_policy_failure_reason(
+            text=normalized,
+            brands=settings.news_competitor_brands_list,
+        )
+        if competitor_failure is not None:
+            return competitor_failure
         for marker in _PROMPT_LEAK_MARKERS:
             if marker in plain_lower:
                 return f"prompt_leak:{marker}"
@@ -2044,11 +2055,43 @@ class LLMNewsWriter:
         target_publish_at: datetime | None = None,
         intelligent_footer_enabled: bool = True,
     ) -> dict[str, str] | None:
+        source_failure = competitor_policy_failure_reason(
+            text="",
+            source_url=article.source_url,
+            article_url=article.article_url,
+            blocked_channels=settings.news_competitor_channels_list,
+            blocked_domains=settings.news_competitor_domains_list,
+            brands=settings.news_competitor_brands_list,
+        )
+        if source_failure is not None:
+            logger.info(
+                "llm_post_rejected_by_competitor_source_policy",
+                extra={"article_url": article.article_url, "reason": source_failure},
+            )
+            return None
+
+        competitor_context = bool(
+            competitor_mentions(f"{article.title}\n{article.summary}", settings.news_competitor_brands_list)
+        )
+        article = ArticleCandidate(
+            source_url=article.source_url,
+            article_url=article.article_url,
+            title=anonymize_competitor_mentions(article.title, settings.news_competitor_brands_list),
+            summary=anonymize_competitor_mentions(article.summary, settings.news_competitor_brands_list),
+            published_at=article.published_at,
+        )
         format_hint = _FORMAT_HINTS.get(format_type, _FORMAT_HINTS["standard"])
         inferred_rubric = self._infer_rubric_hint(article, pillar)
         relevance_bias_hint = self._relevance_bias_hint(article, pillar)
         adoption_module_enabled = self._should_enable_adoption_module(article, pillar, format_type)
         system_prompt = self._build_writer_system_prompt(adoption_module_enabled=adoption_module_enabled)
+        competitor_hint = (
+            "Редакционный режим конкурентов: исходный материал упоминал прямого российского Legal AI-конкурента; бренд уже обезличен. "
+            "Если суть материала — его релиз, функция, тариф, достижение или клиентский кейс, верни competitor_marketing = true и is_relevant = false. "
+            "Если независимый отраслевой факт полезен сам по себе, оставь бренд обезличенным и перенеси акцент на задачу клиента, проверяемые риски и применимый процесс."
+            if competitor_context
+            else "Редакционный режим конкурентов: не добавляй в пост названия и ссылки сторонних российских Legal AI-вендоров."
+        )
         user_prompt = (
             f"Источник: {article.source_url}\n"
             f"URL статьи: {article.article_url}\n"
@@ -2056,6 +2099,7 @@ class LLMNewsWriter:
             f"Дата публикации: {article.published_at.isoformat() if article.published_at else 'не указана'}\n\n"
             f"Дата публикации итогового поста: {target_publish_at.isoformat() if target_publish_at else 'не указана'}\n"
             "Временной режим: считай дату публикации итогового поста главной. Не переноси в текст устаревшие прогнозы и ближайшие ожидания как будто они еще впереди.\n\n"
+            f"{competitor_hint}\n\n"
             f"{self._build_prompt_module_note(adoption_module_enabled=adoption_module_enabled)}\n"
             f"Целевая смысловая корзина: {pillar}\n"
             f"Предполагаемая рубрика: {inferred_rubric}\n"
@@ -2093,12 +2137,16 @@ class LLMNewsWriter:
                 )
         try:
             data = self._extract_json(raw)
-            if data.get("is_relevant") is False:
+            if data.get("is_relevant") is False or data.get("competitor_marketing") is True:
                 logger.info(
                     "llm_post_rejected_by_relevance_gate",
                     extra={
                         "article_url": article.article_url,
-                        "reason": str(data.get("reject_reason") or "")[:180],
+                        "reason": (
+                            "competitor_marketing"
+                            if data.get("competitor_marketing") is True
+                            else str(data.get("reject_reason") or "")[:180]
+                        ),
                         "format_type": format_type,
                     },
                 )
