@@ -4,7 +4,9 @@ import { Building2, FileText, Landmark, Scale, ShieldCheck, UserRound } from "lu
 
 import HeroBackdrop from "@/components/HeroBackdrop";
 import LegalHelpForm from "@/components/LegalHelpForm";
+import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
+import { LEGAL_HELP_REVIEWED_AT } from "@/lib/legalHelpPages";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
@@ -17,12 +19,14 @@ export const metadata: Metadata = createPageMetadata({
 });
 
 const areas = [
-  { icon: FileText, title: "Договоры и сделки", text: "Проверка, подготовка, переговоры и сопровождение исполнения." },
-  { icon: Scale, title: "Претензии и споры", text: "Оценка ситуации, досудебная работа и судебное сопровождение." },
-  { icon: Building2, title: "Бизнес и корпоративные вопросы", text: "Корпоративные процедуры, сделки, внутренние документы и сопровождение бизнеса." },
-  { icon: Landmark, title: "Недвижимость, земля и долги", text: "Сделки, имущественные споры, взыскание и вопросы банкротства." },
-  { icon: ShieldCheck, title: "Налоги, комплаенс, IT и данные", text: "Регуляторные риски, персональные данные, цифровые продукты и интеллектуальная собственность." },
-  { icon: UserRound, title: "Личные юридические вопросы", text: "Трудовые, семейные, наследственные, потребительские и другие ситуации." },
+  { icon: FileText, href: "/legal-help/contracts", title: "Договоры и сделки", text: "Проверка, подготовка, переговоры и сопровождение исполнения." },
+  { icon: Scale, href: "/legal-help/litigation", title: "Судебные споры", text: "Оценка перспектив, претензии, процессуальные документы и представительство." },
+  { icon: Building2, href: "/legal-help/corporate", title: "Корпоративные вопросы", text: "Решения участников, полномочия, внутренние документы и сделки бизнеса." },
+  { icon: Landmark, href: "/legal-help/real-estate", title: "Недвижимость и земля", text: "Проверка сделок, регистрационные вопросы и имущественные споры." },
+  { icon: UserRound, href: "/legal-help/family", title: "Семейные дела", text: "Развод, дети, алименты, раздел имущества и соглашения." },
+  { icon: ShieldCheck, href: "/legal-help/inheritance", title: "Наследство", text: "Оформление прав, сроки, завещания, доли и наследственные споры." },
+  { icon: Scale, href: "/legal-help/debt-collection", title: "Взыскание долгов", text: "Претензия, суд, расчёт задолженности и исполнительный этап." },
+  { icon: Building2, href: "/legal-help/employment", title: "Трудовые вопросы", text: "Документы, процедуры, выплаты, увольнение и трудовые споры." },
 ];
 
 const legalHelpFaqItems = [
@@ -49,14 +53,48 @@ const legalHelpFaqItems = [
 ];
 
 export default function LegalHelpPage() {
+  const canonicalUrl = `${SEO_SITE_URL}/legal-help`;
   const schema = {
     "@context": "https://schema.org",
-    "@type": "Service",
-    name: "Юридическая помощь AI Verdict",
-    serviceType: "Юридические услуги",
-    provider: { "@type": "Organization", name: "AI Verdict", url: SEO_SITE_URL },
-    areaServed: "RU",
-    url: `${SEO_SITE_URL}/legal-help`,
+    "@graph": [
+      {
+        "@type": "Service",
+        "@id": `${canonicalUrl}#service`,
+        name: "Юридическая помощь AI Verdict",
+        serviceType: "Юридические услуги",
+        provider: { "@id": `${SEO_SITE_URL}/#organization` },
+        areaServed: { "@type": "Country", name: "Россия" },
+        url: canonicalUrl,
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: "Направления юридической помощи",
+          itemListElement: areas.map((area) => ({
+            "@type": "Offer",
+            itemOffered: {
+              "@type": "Service",
+              name: area.title,
+              url: `${SEO_SITE_URL}${area.href}`,
+            },
+          })),
+        },
+      },
+      {
+        "@type": "WebPage",
+        "@id": canonicalUrl,
+        name: "Юридическая помощь для бизнеса и частных клиентов",
+        dateModified: LEGAL_HELP_REVIEWED_AT,
+        inLanguage: "ru-RU",
+        mainEntity: { "@id": `${canonicalUrl}#service` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Главная", item: SEO_SITE_URL },
+          { "@type": "ListItem", position: 2, name: "Юридическая помощь", item: canonicalUrl },
+        ],
+      },
+    ],
   };
 
   return (
@@ -95,11 +133,11 @@ export default function LegalHelpPage() {
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {areas.map((area) => (
-            <article key={area.title} className="rounded-lg border border-slate-800 bg-slate-800/60 p-6">
+            <Link key={area.title} href={area.href} className="rounded-lg border border-slate-800 bg-slate-800/60 p-6 hover:border-amber-400">
               <area.icon className="h-6 w-6 text-amber-300" />
-              <h3 className="mt-4 text-lg font-semibold text-white">{area.title}</h3>
+              <h3 className="mt-4 text-lg font-semibold text-white">{area.title} →</h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-300">{area.text}</p>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
@@ -124,7 +162,9 @@ export default function LegalHelpPage() {
         </div>
       </section>
 
-      <PageFAQ items={legalHelpFaqItems} pageUrl={`${SEO_SITE_URL}/legal-help`} title="Частые вопросы о юридической помощи" />
+      <LegalHelpTrust />
+
+      <PageFAQ items={legalHelpFaqItems} pageUrl={canonicalUrl} title="Частые вопросы о юридической помощи" />
 
       <LegalHelpForm sourceContext="web_legal_help" />
     </main>

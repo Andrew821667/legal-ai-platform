@@ -36,6 +36,11 @@ export default function Footer() {
       { name: "Контакты", href: `${ROUTES.about}#contacts` },
     ],
     services: [
+      { name: "Юридическая помощь", href: ROUTES.legalHelp },
+      { name: "Юрист для бизнеса", href: ROUTES.legalHelpBusiness },
+      { name: "Помощь частным лицам", href: ROUTES.legalHelpIndividuals },
+      { name: "Договоры и сделки", href: "/legal-help/contracts" },
+      { name: "Судебные споры", href: "/legal-help/litigation" },
       { name: "Решения и услуги", href: ROUTES.solutions },
       { name: "Автоматизация юрфункции", href: "/solutions#automation" },
       { name: "Внедрение AI в legal ops", href: "/solutions#legal-ops" },
@@ -156,7 +161,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="text-white font-semibold mb-4">Решения</h4>
+            <h4 className="text-white font-semibold mb-4">Помощь и решения</h4>
             <ul className="space-y-3">
               {navigation.services.map((item) => (
                 <li key={item.name}>{renderNavItem(item)}</li>
