@@ -482,6 +482,38 @@ def test_normalize_text_before_publish_collapses_duplicate_footer_blocks() -> No
     assert normalized.index("<b>Следующий шаг</b>") < normalized.index("<b>Источник</b>")
 
 
+def test_normalize_text_before_publish_rejects_competitor_source() -> None:
+    try:
+        _normalize_text_before_publish(
+            "<b>Нейтральный заголовок</b>\n\nТекст редакционного материала.",
+            {
+                "title": "Нейтральный заголовок",
+                "source_url": "https://t.me/Law_GPT/144",
+                "format_type": "daily",
+            },
+        )
+    except PublishQualityError as exc:
+        assert str(exc) == "competitor_source"
+    else:
+        raise AssertionError("expected PublishQualityError")
+
+
+def test_normalize_text_before_publish_rejects_competitor_brand_leak() -> None:
+    try:
+        _normalize_text_before_publish(
+            "<b>LawGPT выпустил новую функцию</b>\n\nТекст рекламного материала.",
+            {
+                "title": "LawGPT выпустил новую функцию",
+                "source_url": "https://example.com/news",
+                "format_type": "daily",
+            },
+        )
+    except PublishQualityError as exc:
+        assert str(exc) == "competitor_brand_mention"
+    else:
+        raise AssertionError("expected PublishQualityError")
+
+
 def test_normalize_text_before_publish_rejects_generic_practical_conclusion() -> None:
     original = (
         "<b>Заголовок</b>\n\n"

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from news.active_queue import parse_post_datetime, rebalance_active_publish_queue
+from news.competitor_policy import competitor_policy_failure_reason
 from news.control_plane import (
     intelligent_footer_enabled,
     publish_claim_limit,
@@ -638,6 +639,22 @@ def _ensure_writer_quality_before_publish(text: str, post: dict[str, Any] | None
     return text
 
 
+def _ensure_competitor_policy_before_publish(text: str, post: dict[str, Any] | None) -> str:
+    if post is None:
+        return text
+    reason = competitor_policy_failure_reason(
+        text=text,
+        title=str(post.get("title") or ""),
+        source_url=str(post.get("source_url") or ""),
+        blocked_channels=settings.news_competitor_channels_list,
+        blocked_domains=settings.news_competitor_domains_list,
+        brands=settings.news_competitor_brands_list,
+    )
+    if reason is not None:
+        raise PublishQualityError(reason)
+    return text
+
+
 def _normalize_text_before_publish(
     text: str,
     post: dict[str, Any] | None = None,
@@ -647,7 +664,8 @@ def _normalize_text_before_publish(
 ) -> str:
     if post is None:
         return LLMNewsWriter.normalize_post_footer_blocks(text)
-    normalized = _ensure_intelligent_footer_before_publish(text, post, enabled=intelligent_footer)
+    normalized = _ensure_competitor_policy_before_publish(text, post)
+    normalized = _ensure_intelligent_footer_before_publish(normalized, post, enabled=intelligent_footer)
     normalized = _ensure_practical_output_before_publish(normalized, post)
     if strict_quality:
         normalized = _ensure_writer_quality_before_publish(normalized, post)

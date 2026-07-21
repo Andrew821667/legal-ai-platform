@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+from news.competitor_policy import anonymize_competitor_mentions, is_competitor_source_url
 from news.control_plane import enabled_telegram_channels, intelligent_footer_enabled
 from news.core_client import CoreClient
 from news.feedback import render_negative_feedback_context, select_negative_feedback_examples
@@ -299,6 +300,48 @@ def _drop_existing_source_articles(
     return filtered, skipped
 
 
+def _drop_competitor_source_articles(
+    articles: list[ArticleCandidate],
+) -> tuple[list[ArticleCandidate], int]:
+    filtered: list[ArticleCandidate] = []
+    skipped = 0
+    for article in articles:
+        blocked = any(
+            is_competitor_source_url(
+                value,
+                blocked_channels=settings.news_competitor_channels_list,
+                blocked_domains=settings.news_competitor_domains_list,
+            )
+            for value in (article.source_url, article.article_url)
+        )
+        if blocked:
+            skipped += 1
+            continue
+        filtered.append(article)
+    return filtered, skipped
+
+
+def _anonymize_competitor_articles(
+    articles: list[ArticleCandidate],
+) -> tuple[list[ArticleCandidate], int]:
+    result: list[ArticleCandidate] = []
+    changed = 0
+    for article in articles:
+        title = anonymize_competitor_mentions(article.title, settings.news_competitor_brands_list)
+        summary = anonymize_competitor_mentions(article.summary, settings.news_competitor_brands_list)
+        if title != article.title or summary != article.summary:
+            changed += 1
+            article = ArticleCandidate(
+                source_url=article.source_url,
+                article_url=article.article_url,
+                title=title,
+                summary=summary,
+                published_at=article.published_at,
+            )
+        result.append(article)
+    return result, changed
+
+
 def _article_published_at_utc(article: ArticleCandidate) -> datetime | None:
     published_at = article.published_at
     if published_at is None:
@@ -548,6 +591,16 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         )
         source_priorities.update(telegram_channel_priority_map(settings, enabled_channels))
         source_buckets.update(telegram_channel_bucket_map(enabled_channels))
+    articles, competitor_sources_skipped = _drop_competitor_source_articles(articles)
+    articles, competitor_mentions_anonymized = _anonymize_competitor_articles(articles)
+    if competitor_sources_skipped or competitor_mentions_anonymized:
+        logger.info(
+            "competitor_policy_prefiltered",
+            extra={
+                "sources_skipped": competitor_sources_skipped,
+                "articles_anonymized": competitor_mentions_anonymized,
+            },
+        )
     articles = [
         article
         for article in articles

@@ -45,6 +45,14 @@ def test_source_catalog_marks_telegram_configured_when_env_complete() -> None:
     assert catalog['telegram_channels'].integrated is True
 
 
+def test_settings_remove_competitor_channels_from_editorial_pool() -> None:
+    settings = Settings(
+        telegram_channels="@allthingslegal,@Law_GPT,@ai_newz",
+        news_competitor_channels="law_gpt",
+    )
+    assert settings.telegram_channels_list == ["@allthingslegal", "@ai_newz"]
+
+
 def test_source_catalog_includes_extended_google_news_buckets() -> None:
     settings = Settings(news_source_keys="", news_source_urls="")
     catalog = source_catalog(settings)

@@ -23,7 +23,6 @@ class SourceSpec:
 _TELEGRAM_CHANNEL_PRIORITIES: dict[str, float] = {
     "allthingslegal": 1.9,
     "legal_tech": 1.8,
-    "law_gpt": 1.7,
     "docusafe": 1.65,
     "reutersworldchannel": 1.45,
     "associated_press_news": 1.4,
@@ -61,7 +60,6 @@ _TELEGRAM_CHANNEL_PRIORITIES: dict[str, float] = {
 _TELEGRAM_CHANNEL_BUCKETS: dict[str, str] = {
     "allthingslegal": "core",
     "legal_tech": "core",
-    "law_gpt": "core",
     "docusafe": "core",
     "reutersworldchannel": "core",
     "associated_press_news": "core",
