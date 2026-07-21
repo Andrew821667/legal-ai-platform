@@ -7,6 +7,7 @@ from news.competitor_policy import (
     competitor_policy_failure_reason,
     is_competitor_channel,
     is_competitor_source_url,
+    looks_like_russian_legal_ai_vendor_marketing,
 )
 
 
@@ -24,8 +25,13 @@ def test_competitor_domain_matches_subdomains_only() -> None:
 
 
 def test_competitor_mentions_cover_brand_variants() -> None:
-    text = "Law_GPT и ЗаконГПТ представили обновление"
-    assert set(item.lower() for item in competitor_mentions(text)) == {"law_gpt", "законгпт"}
+    text = "Law_GPT, ЗаконГПТ, ИИ Кодекс и ThomasMore представили обновление"
+    assert set(item.lower() for item in competitor_mentions(text)) == {
+        "law_gpt",
+        "законгпт",
+        "ии кодекс",
+        "thomasmore",
+    }
 
 
 def test_anonymize_competitor_mentions_keeps_industry_fact_without_brand() -> None:
@@ -50,3 +56,18 @@ def test_competitor_policy_rejects_source_and_public_brand_leak() -> None:
         )
         == "competitor_brand_mention"
     )
+
+
+def test_generic_russian_legal_ai_launch_is_rejected_without_known_brand() -> None:
+    text = (
+        "На российский рынок вышел сервис «ЮрБот». "
+        "Новый продукт позиционируется как ИИ-юрист для проверки договоров."
+    )
+    assert looks_like_russian_legal_ai_vendor_marketing(text)
+    assert competitor_policy_failure_reason(text=text) == "competitor_marketing_pattern"
+
+
+def test_russian_ai_regulation_is_not_mistaken_for_vendor_marketing() -> None:
+    text = "В России опубликованы рекомендации по контролю юридических рисков систем искусственного интеллекта."
+    assert not looks_like_russian_legal_ai_vendor_marketing(text)
+    assert competitor_policy_failure_reason(text=text) is None

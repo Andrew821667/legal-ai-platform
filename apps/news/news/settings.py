@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     telegram_session_name: str = "apps/news/legacy/telegram_bot"
     telegram_channels: str = ""
     news_competitor_channels: str = "law_gpt,zakongpt,zakon_gpt"
-    news_competitor_domains: str = "lawgpt.ru,rfgpt.ru,legalai-service.ru"
+    news_competitor_domains: str = "lawgpt.ru,rfgpt.ru,legalai-service.ru,aikodex.ru,thomasmoreai.com"
     news_competitor_brands: str = (
         "LawGPT,Law GPT,ЗаконГПТ,Закон GPT,ZakonGPT,Zakon GPT,"
-        "Моментальный Юрист,Neurolegal"
+        "Моментальный Юрист,Neurolegal,ИИ Кодекс,AI KODEX,AiKODEX,ThomasMore,Thomas More"
     )
     telegram_fetch_limit: int = 50
     telegram_fetch_enabled: bool = True
