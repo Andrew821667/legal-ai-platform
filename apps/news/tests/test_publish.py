@@ -514,6 +514,22 @@ def test_normalize_text_before_publish_rejects_competitor_brand_leak() -> None:
         raise AssertionError("expected PublishQualityError")
 
 
+def test_normalize_text_before_publish_rejects_unknown_russian_vendor_launch() -> None:
+    try:
+        _normalize_text_before_publish(
+            "На российский рынок вышел сервис «ЮрБот». Новый продукт — ИИ-юрист для проверки договоров.",
+            {
+                "title": "На рынок вышел новый ИИ-юрист",
+                "source_url": "https://example.com/news",
+                "format_type": "daily",
+            },
+        )
+    except PublishQualityError as exc:
+        assert str(exc) == "competitor_marketing_pattern"
+    else:
+        raise AssertionError("expected PublishQualityError")
+
+
 def test_normalize_text_before_publish_rejects_generic_practical_conclusion() -> None:
     original = (
         "<b>Заголовок</b>\n\n"

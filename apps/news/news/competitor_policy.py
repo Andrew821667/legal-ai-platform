@@ -5,7 +5,13 @@ from collections.abc import Iterable
 from urllib.parse import urlparse
 
 DEFAULT_COMPETITOR_CHANNELS = ("law_gpt", "zakongpt", "zakon_gpt")
-DEFAULT_COMPETITOR_DOMAINS = ("lawgpt.ru", "rfgpt.ru", "legalai-service.ru")
+DEFAULT_COMPETITOR_DOMAINS = (
+    "lawgpt.ru",
+    "rfgpt.ru",
+    "legalai-service.ru",
+    "aikodex.ru",
+    "thomasmoreai.com",
+)
 DEFAULT_COMPETITOR_BRANDS = (
     "LawGPT",
     "Law GPT",
@@ -15,8 +21,34 @@ DEFAULT_COMPETITOR_BRANDS = (
     "Zakon GPT",
     "Моментальный Юрист",
     "Neurolegal",
+    "ИИ Кодекс",
+    "AI KODEX",
+    "AiKODEX",
+    "ThomasMore",
+    "Thomas More",
 )
 COMPETITOR_REPLACEMENT = "сторонний российский Legal AI-сервис"
+
+_RUSSIAN_MARKERS = ("российск", "в россии", "рынок рф", "для российского рынка")
+_PRODUCT_MARKERS = ("сервис", "платформ", "продукт", "решение", "инструмент", "ии-юрист", "ии юрист")
+_PROMO_MARKERS = (
+    "на рынок выш",
+    "запуст",
+    "представил",
+    "представила",
+    "выпуст",
+    "добавил",
+    "добавила",
+    "новая функц",
+    "новый продукт",
+    "обновил",
+    "обновила",
+    "открыл доступ",
+    "позициониру",
+)
+_LEGAL_AI_MARKERS = ("ии-юрист", "ии юрист", "legal ai", "legalai", "legaltech", "юридический ии")
+_LEGAL_MARKERS = ("юрид", "правов", "договор", "судеб", "комплаенс", "152-фз")
+_AI_MARKERS = (" искусственн", " ии ", " ai ", "нейросет")
 
 
 def normalize_channel_slug(value: str) -> str:
@@ -105,6 +137,20 @@ def anonymize_competitor_mentions(
     return pattern.sub(replacement, str(text or ""))
 
 
+def looks_like_russian_legal_ai_vendor_marketing(text: str) -> bool:
+    plain = re.sub(r"<[^>]+>", " ", str(text or "")).lower().replace("ё", "е")
+    plain = f" {' '.join(plain.split())} "
+    has_legal_ai = any(marker in plain for marker in _LEGAL_AI_MARKERS) or (
+        any(marker in plain for marker in _LEGAL_MARKERS) and any(marker in plain for marker in _AI_MARKERS)
+    )
+    return (
+        any(marker in plain for marker in _RUSSIAN_MARKERS)
+        and any(marker in plain for marker in _PRODUCT_MARKERS)
+        and any(marker in plain for marker in _PROMO_MARKERS)
+        and has_legal_ai
+    )
+
+
 def competitor_policy_failure_reason(
     *,
     text: str,
@@ -124,4 +170,6 @@ def competitor_policy_failure_reason(
             return "competitor_source"
     if competitor_mentions(f"{title}\n{text}", brands):
         return "competitor_brand_mention"
+    if looks_like_russian_legal_ai_vendor_marketing(f"{title}\n{text}"):
+        return "competitor_marketing_pattern"
     return None
