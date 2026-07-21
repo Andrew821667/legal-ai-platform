@@ -71,3 +71,12 @@ def test_russian_ai_regulation_is_not_mistaken_for_vendor_marketing() -> None:
     text = "В России опубликованы рекомендации по контролю юридических рисков систем искусственного интеллекта."
     assert not looks_like_russian_legal_ai_vendor_marketing(text)
     assert competitor_policy_failure_reason(text=text) is None
+
+
+def test_independent_russian_legaltech_market_review_is_not_vendor_marketing() -> None:
+    text = (
+        "Forbes.ru выпустил статью о российском рынке LegalTech. "
+        "Авторы сравнили сервисы и инструменты, которые помогают юридическим департаментам оценивать ИИ."
+    )
+    assert not looks_like_russian_legal_ai_vendor_marketing(text)
+    assert competitor_policy_failure_reason(text=text) is None
