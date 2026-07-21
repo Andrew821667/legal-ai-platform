@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 
 import { guides } from "@/lib/guidesData";
+import { LEGAL_HELP_REVIEWED_AT, legalHelpPageList } from "@/lib/legalHelpPages";
 import { SEO_SITE_URL } from "@/lib/seo";
 
 type SitemapPage = {
@@ -18,9 +19,9 @@ const pages: SitemapPage[] = [
   { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
-  { path: "/legal-help", lastModified: "2026-07-16", changeFrequency: "weekly", priority: 0.9 },
-  { path: "/legal-help/business", lastModified: "2026-07-16", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/legal-help/individuals", lastModified: "2026-07-16", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/legal-help", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "weekly", priority: 0.9 },
+  { path: "/legal-help/business", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/legal-help/individuals", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services/contracts-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/contract-ai-system", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
   { path: "/services/litigation-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
@@ -50,8 +51,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "monthly",
     priority: 0.8,
   }));
+  const legalPages: SitemapPage[] = legalHelpPageList.map((page) => ({
+    path: `/legal-help/${page.slug}`,
+    lastModified: LEGAL_HELP_REVIEWED_AT,
+    changeFrequency: "monthly",
+    priority: 0.75,
+  }));
 
-  return [...pages, ...guidePages].map((page) => ({
+  return [...pages, ...legalPages, ...guidePages].map((page) => ({
     url: `${baseUrl}${page.path}`,
     lastModified: new Date(`${page.lastModified}T00:00:00.000Z`),
     changeFrequency: page.changeFrequency,
