@@ -11,7 +11,6 @@ export const metadata: Metadata = createPageMetadata({
   description:
     "Практические сценарии и руководства по автоматизации юридической функции, внедрению AI и управлению рисками без вымышленных кейсов.",
   path: "/content-cases",
-  index: false,
 });
 
 const caseBlocks = [
