@@ -120,4 +120,8 @@ if [ -x "$APP_DIR/infra/scripts/macmini_deploy_check.sh" ]; then
   COMPOSE_PROJECT=compose COMPOSE_FILE="$COMPOSE_FILE" "$APP_DIR/infra/scripts/macmini_deploy_check.sh"
 fi
 
+if [ -x "$APP_DIR/infra/scripts/submit_indexnow.sh" ]; then
+  "$APP_DIR/infra/scripts/submit_indexnow.sh" || echo "IndexNow notification failed; deploy remains healthy."
+fi
+
 echo "Mac Mini deploy complete"

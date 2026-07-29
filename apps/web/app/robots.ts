@@ -22,6 +22,21 @@ export default function robots(): MetadataRoute.Robots {
         disallow: privatePaths,
         crawlDelay: 1,
       },
+      {
+        userAgent: 'Bingbot',
+        allow: '/',
+        disallow: privatePaths,
+      },
+      {
+        userAgent: 'OAI-SearchBot',
+        allow: '/',
+        disallow: privatePaths,
+      },
+      {
+        userAgent: 'ChatGPT-User',
+        allow: '/',
+        disallow: privatePaths,
+      },
     ],
     sitemap: `${SEO_SITE_URL}/sitemap.xml`,
     host: SEO_SITE_URL,

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
@@ -10,20 +11,19 @@ import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "Юридическая помощь и консультация частным лицам",
+  title: "Юридические услуги для частных лиц",
   description:
     "Юридическая помощь частным лицам: семейные и наследственные дела, недвижимость, договоры, долги, трудовые вопросы и судебные споры.",
   path: "/legal-help/individuals",
   keywords: [
     "юридическая помощь частным лицам",
-    "консультация юриста",
     "юрист для физических лиц",
     "помощь юриста",
     "юридические услуги физическим лицам",
   ],
 });
 
-const directions = ["family", "inheritance", "real-estate", "contracts", "debt-collection", "litigation", "employment"]
+const directions = ["online-consultation", "family", "inheritance", "real-estate", "contracts", "debt-collection", "litigation", "employment"]
   .map((slug) => legalHelpPages[slug]);
 
 const faq = [
@@ -62,7 +62,7 @@ export default function IndividualLegalHelpPage() {
       {
         "@type": "Service",
         "@id": `${canonicalUrl}#service`,
-        name: "Юридическая помощь частным лицам",
+        name: "Юридические услуги для частных лиц",
         description: metadata.description,
         serviceType: "Юридические услуги для физических лиц",
         provider: { "@id": `${SEO_SITE_URL}/#organization` },
@@ -73,7 +73,7 @@ export default function IndividualLegalHelpPage() {
       {
         "@type": "WebPage",
         "@id": canonicalUrl,
-        name: "Юридическая помощь частным лицам",
+        name: "Юридические услуги для частных лиц",
         dateModified: LEGAL_HELP_REVIEWED_AT,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
@@ -102,7 +102,7 @@ export default function IndividualLegalHelpPage() {
           </nav>
           <p className="mt-8 text-sm font-semibold uppercase tracking-wide text-amber-300">Для частных клиентов</p>
           <h1 className="mt-3 max-w-5xl text-4xl font-semibold leading-tight text-white md:text-5xl">
-            Юридическая помощь и консультация частным лицам
+            Юридические услуги для частных лиц
           </h1>
           <p className="mt-6 max-w-4xl text-lg leading-relaxed text-slate-200">
             Опишите ситуацию обычными словами — самостоятельно определять отрасль права не нужно. Юрист уточнит
@@ -151,6 +151,8 @@ export default function IndividualLegalHelpPage() {
           </div>
         </div>
       </section>
+
+      <LegalHelpCommercialFacts />
 
       <LegalHelpTrust />
       <PageFAQ items={faq} pageUrl={canonicalUrl} title="Частые вопросы о юридической помощи частным лицам" />

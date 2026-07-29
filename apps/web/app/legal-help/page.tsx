@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Building2, FileText, Landmark, Scale, ShieldCheck, UserRound } from "lucide-react";
+import { Building2, FileText, Landmark, MessageCircle, Scale, ShieldCheck, UserRound } from "lucide-react";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
@@ -11,14 +12,15 @@ import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "Юридическая помощь для бизнеса и частных клиентов",
+  title: "Юридические услуги для бизнеса и частных лиц",
   description:
-    "Юридическая помощь AI Verdict: договоры, споры, корпоративные, трудовые, налоговые, имущественные и другие задачи. Опишите ситуацию и получите предложение по формату работы.",
+    "Юридические услуги AI Verdict для бизнеса и частных лиц: консультации, договоры, судебные споры, недвижимость, семейные, наследственные и трудовые вопросы.",
   path: "/legal-help",
   keywords: ["юридическая помощь", "юридические услуги", "юрист для бизнеса", "консультация юриста"],
 });
 
 const areas = [
+  { icon: MessageCircle, href: "/legal-help/online-consultation", title: "Консультация юриста онлайн", text: "Разбор ситуации, документов, сроков и вариантов дальнейших действий." },
   { icon: FileText, href: "/legal-help/contracts", title: "Договоры и сделки", text: "Проверка, подготовка, переговоры и сопровождение исполнения." },
   { icon: Scale, href: "/legal-help/litigation", title: "Судебные споры", text: "Оценка перспектив, претензии, процессуальные документы и представительство." },
   { icon: Building2, href: "/legal-help/corporate", title: "Корпоративные вопросы", text: "Решения участников, полномочия, внутренние документы и сделки бизнеса." },
@@ -81,7 +83,7 @@ export default function LegalHelpPage() {
       {
         "@type": "WebPage",
         "@id": canonicalUrl,
-        name: "Юридическая помощь для бизнеса и частных клиентов",
+        name: "Юридические услуги для бизнеса и частных клиентов",
         dateModified: LEGAL_HELP_REVIEWED_AT,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
@@ -106,11 +108,12 @@ export default function LegalHelpPage() {
         <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold text-amber-300">Юридическое направление AI Verdict</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight text-white md:text-5xl">
-            Юридическая помощь для бизнеса и частных клиентов
+            Юридические услуги для бизнеса и частных клиентов
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-slate-300">
             Мы не только разрабатываем юридические технологии, но и работаем с правом на практике. Опишите задачу,
-            ближайший срок и оставьте контакт. Юрист изучит обращение и предложит понятный следующий шаг.
+            ближайший срок и оставьте контакт. Юрист изучит обращение и предложит консультацию или другой
+            понятный следующий шаг в дистанционном формате по России.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="#legal-help-form" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
@@ -140,6 +143,16 @@ export default function LegalHelpPage() {
             </Link>
           ))}
         </div>
+        <div className="mt-8 rounded-xl border border-slate-700 bg-slate-800/40 p-6">
+          <h2 className="text-xl font-semibold text-white">Юридическая помощь по регионам России</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+            Дистанционно разбираем задачи клиентов из разных регионов и отдельно проверяем подсудность,
+            способы подачи документов и необходимость очного участия.
+          </p>
+          <Link href="/legal-help/regions" className="mt-4 inline-flex font-semibold text-amber-300 hover:text-amber-200">
+            Открыть региональные направления →
+          </Link>
+        </div>
       </section>
 
       <section className="border-y border-slate-800 bg-slate-800/40">
@@ -161,6 +174,8 @@ export default function LegalHelpPage() {
           </div>
         </div>
       </section>
+
+      <LegalHelpCommercialFacts />
 
       <LegalHelpTrust />
 

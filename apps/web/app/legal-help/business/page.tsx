@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
@@ -23,7 +24,7 @@ export const metadata: Metadata = createPageMetadata({
   ],
 });
 
-const directions = ["contracts", "corporate", "litigation", "debt-collection", "employment", "real-estate"]
+const directions = ["online-consultation", "contracts", "corporate", "litigation", "debt-collection", "employment", "real-estate"]
   .map((slug) => legalHelpPages[slug]);
 
 const faq = [
@@ -168,6 +169,8 @@ export default function BusinessLegalHelpPage() {
           ))}
         </ol>
       </section>
+
+      <LegalHelpCommercialFacts />
 
       <LegalHelpTrust />
       <PageFAQ items={faq} pageUrl={canonicalUrl} title="Частые вопросы о юридических услугах для бизнеса" />
