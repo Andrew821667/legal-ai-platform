@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
@@ -28,6 +29,11 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
         areaServed: { "@type": "Country", name: "Россия" },
         provider: { "@id": `${baseUrl}/#organization` },
         termsOfService: `${baseUrl}/terms`,
+        availableChannel: {
+          "@type": "ServiceChannel",
+          serviceUrl: canonicalUrl,
+          availableLanguage: "ru-RU",
+        },
       },
       {
         "@type": "WebPage",
@@ -119,6 +125,8 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
           </div>
         </div>
       </section>
+
+      <LegalHelpCommercialFacts />
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-semibold text-white">Как проходит работа</h2>
