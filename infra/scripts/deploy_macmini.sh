@@ -62,7 +62,7 @@ cd "$APP_DIR"
 compose=(docker compose -p compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 if [ -z "$COMPOSE_BUILD_MODE" ]; then
-  if [ -n "${CORE_API_IMAGE:-}" ] || [ -n "${WEB_IMAGE:-}" ] || [ -n "${LEAD_BOT_IMAGE:-}" ] || [ -n "${NEWS_IMAGE:-}" ] || [ -n "${NEWS_READER_IMAGE:-}" ]; then
+  if [ -n "${CORE_API_IMAGE:-}" ] || [ -n "${WEB_IMAGE:-}" ] || [ -n "${LEAD_BOT_IMAGE:-}" ] || [ -n "${NEWS_IMAGE:-}" ] || [ -n "${NEWS_READER_IMAGE:-}" ] || [ -n "${CADDY_IMAGE:-}" ]; then
     COMPOSE_BUILD_MODE="--no-build"
   else
     COMPOSE_BUILD_MODE="--build"
