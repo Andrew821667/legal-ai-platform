@@ -1,15 +1,29 @@
 import type { LegalArea } from "@/lib/legalHelp";
+import { expandedLegalHelpRegions } from "@/lib/legalHelpRegionExpansion";
 
 export type LegalHelpRegion = {
   slug: string;
   name: string;
   prepositionalName: string;
+  hubTitle?: string;
+  categories?: Array<"federal-center" | "agriculture">;
   seoTitle: string;
   description: string;
   intro: string;
+  keywords?: string[];
+  serviceAreas?: Array<{
+    type: "City" | "AdministrativeArea";
+    name: string;
+  }>;
   context: string[];
   focus: string[];
   localProcess: string[];
+  agriculture?: {
+    summary: string;
+    evidence: string;
+    evidenceHref: string;
+    issues: string[];
+  };
   officialResources: Array<{
     title: string;
     href: string;
@@ -27,6 +41,7 @@ export const legalHelpRegions: Record<string, LegalHelpRegion> = {
     slug: "moscow",
     name: "Москва",
     prepositionalName: "Москве",
+    categories: ["federal-center"],
     seoTitle: "Юридическая помощь в Москве онлайн",
     description:
       "Юридическая помощь клиентам из Москвы: онлайн-консультации, договоры, споры, недвижимость, семейные и трудовые вопросы по законодательству РФ.",
@@ -94,6 +109,7 @@ export const legalHelpRegions: Record<string, LegalHelpRegion> = {
     slug: "saint-petersburg",
     name: "Санкт-Петербург",
     prepositionalName: "Санкт-Петербурге",
+    categories: ["federal-center"],
     seoTitle: "Юридическая помощь в Санкт-Петербурге онлайн",
     description:
       "Юридическая помощь клиентам из Санкт-Петербурга: дистанционные консультации, договоры, суды, недвижимость, семейные, наследственные и трудовые дела.",
@@ -157,6 +173,7 @@ export const legalHelpRegions: Record<string, LegalHelpRegion> = {
     ],
     initialArea: "other",
   },
+  ...expandedLegalHelpRegions,
 };
 
 export const legalHelpRegionList = Object.values(legalHelpRegions);
