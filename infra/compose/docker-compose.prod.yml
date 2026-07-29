@@ -372,6 +372,13 @@ services:
       CONTRACT_AI_UPSTREAM: ${CONTRACT_AI_UPSTREAM:-host.docker.internal:8080}
       MEMORY_HUB_UPSTREAM: ${MEMORY_HUB_UPSTREAM:-host.docker.internal:8787}
       GUACAMOLE_UPSTREAM: ${GUACAMOLE_UPSTREAM:-host.docker.internal:8080}
+      # basic_auth перед Guacamole. Хеш обязателен: пустое значение молча
+      # отключило бы защиту, поэтому стек намеренно не стартует без него.
+      # Сгенерировать: docker exec legal-ai-caddy caddy hash-password --plaintext '<пароль>'
+      # В .env каждый '$' должен быть удвоен ('$$2a$$14$$...'), иначе compose
+      # раскроет '$2a'/'$14' как переменные и хеш приедет битым. См. .env.example.
+      GUAC_BASIC_AUTH_USER: ${GUAC_BASIC_AUTH_USER:-av}
+      GUAC_BASIC_AUTH_HASH: ${GUAC_BASIC_AUTH_HASH:?GUAC_BASIC_AUTH_HASH is required}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
