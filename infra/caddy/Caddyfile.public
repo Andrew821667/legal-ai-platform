@@ -92,9 +92,8 @@ https://{$DOMAIN} {
         reverse_proxy core-api:8000
     }
 
-    handle /guacamole* {
-        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
-    }
+    # Guacamole намеренно не публикуется на основном домене:
+    # единственная публичная точка входа — {$MEMORY_DOMAIN}, и она закрыта basic_auth.
 
     handle /telegram-mcp* {
         uri strip_prefix /telegram-mcp
@@ -136,7 +135,14 @@ Disallow: /
         respond 404
     }
 
+    # Guacamole — шлюз удалённого доступа к хосту. Закрыт basic_auth, чтобы
+    # форма входа не отдавалась в интернет: без пароля отдаётся только 401,
+    # поэтому перебор учётных данных и эксплуатация уязвимостей самого
+    # Guacamole недоступны неаутентифицированному клиенту.
     handle /guacamole* {
+        basic_auth {
+            {$GUAC_BASIC_AUTH_USER:av} {$GUAC_BASIC_AUTH_HASH}
+        }
         reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
     }
 
