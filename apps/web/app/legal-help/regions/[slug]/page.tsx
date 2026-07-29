@@ -49,6 +49,7 @@ export async function generateMetadata({ params }: RegionPageProps): Promise<Met
       `юрист ${region.name}`,
       `юридические услуги ${region.name}`,
       `онлайн юрист ${region.name}`,
+      ...(region.keywords ?? []),
     ],
   });
 }
@@ -67,9 +68,14 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
         "@id": `${canonicalUrl}#service`,
         name: `Юридическая помощь в ${region.prepositionalName}`,
         description: region.description,
-        serviceType: "Дистанционные юридические услуги",
+        serviceType: region.agriculture
+          ? "Дистанционные юридические услуги для агробизнеса"
+          : "Дистанционные юридические услуги",
         provider: { "@id": `${SEO_SITE_URL}/#organization` },
-        areaServed: { "@type": "City", name: region.name },
+        areaServed: (region.serviceAreas ?? [{ type: "City" as const, name: region.name }]).map((area) => ({
+          "@type": area.type,
+          name: area.name,
+        })),
         availableChannel: {
           "@type": "ServiceChannel",
           serviceUrl: canonicalUrl,
@@ -115,10 +121,12 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
             <span>{region.name}</span>
           </nav>
           <p className="mt-8 text-sm font-semibold uppercase tracking-wide text-amber-300">
-            Онлайн по законодательству Российской Федерации
+            {region.agriculture ? "Юридическая помощь агробизнесу · Онлайн по России" : "Онлайн по законодательству Российской Федерации"}
           </p>
           <h1 className="mt-3 max-w-5xl text-4xl font-semibold leading-tight text-white md:text-5xl">
-            Юридическая помощь в {region.prepositionalName}
+            {region.agriculture && !region.categories?.includes("federal-center")
+              ? `Юридическая помощь агробизнесу в ${region.prepositionalName}`
+              : `Юридическая помощь в ${region.prepositionalName}`}
           </h1>
           <p className="mt-6 max-w-4xl text-lg leading-relaxed text-slate-200">{region.intro}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -169,6 +177,36 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
       </section>
 
       <LegalHelpCommercialFacts />
+
+      {region.agriculture && (
+        <section className="border-y border-emerald-500/20 bg-emerald-950/20">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-300">Аграрно-правовой профиль</p>
+            <h2 className="mt-3 text-3xl font-semibold text-white">
+              Юридическая помощь сельскохозяйственному бизнесу
+            </h2>
+            <p className="mt-5 max-w-4xl leading-7 text-slate-300">{region.agriculture.summary}</p>
+            <div className="mt-8 grid gap-5 md:grid-cols-2">
+              {region.agriculture.issues.map((item) => (
+                <article key={item} className="rounded-xl border border-emerald-500/20 bg-slate-900/60 p-6">
+                  <p className="font-semibold text-emerald-200">{item}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-7 max-w-4xl text-sm leading-6 text-slate-400">
+              {region.agriculture.evidence}{" "}
+              <a
+                href={region.agriculture.evidenceHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-emerald-300 hover:text-emerald-200"
+              >
+                Официальный источник Росстата ↗
+              </a>
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="border-y border-slate-700 bg-slate-800/40">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
