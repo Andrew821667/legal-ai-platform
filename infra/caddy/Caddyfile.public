@@ -109,7 +109,14 @@ https://{$DOMAIN} {
     }
 
     handle {
-        reverse_proxy web:3000
+        reverse_proxy web:3000 {
+            # Затираем присланный клиентом X-Forwarded-For: до приложения
+            # должен доходить только реальный адрес соединения. Иначе клиент
+            # подставляет произвольное значение, получает новый ключ
+            # троттлинга на каждом запросе и обходит лимит попыток входа
+            # в админку (/api/admin/auth).
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 }
 
@@ -182,7 +189,11 @@ Disallow: /
     }
 
     handle /api/* {
-        reverse_proxy web:3000
+        reverse_proxy web:3000 {
+            # См. комментарий на основном домене: /api/admin/* доступен и здесь,
+            # поэтому клиентский X-Forwarded-For затирается так же.
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 
     handle /_next/* {
