@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ru.legalai.resource-monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/legalai/projects/legal-ai-platform/infra/scripts/resource_monitor.sh</string>
+  </array>
+
+  <!-- Оповещения уходят в Telegram только если заданы обе переменные.
+       Без них скрипт всё равно полезен: он пишет состояние в лог, по
+       которому видно динамику потребления. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ALERT_BOT_TOKEN</key><string></string>
+    <key>ALERT_CHAT_ID</key><string></string>
+  </dict>
+
+  <!-- Раз в 5 минут: достаточно, чтобы поймать исчерпание памяти до того,
+       как система начнёт заметно тормозить, и при этом не создаёт заметной
+       нагрузки. -->
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/legalai/Library/Logs/resource-monitor.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/legalai/Library/Logs/resource-monitor.stderr.log</string>
+</dict>
+</plist>

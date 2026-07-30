@@ -330,7 +330,7 @@ Cron оставляем для служебных задач:
 */10 * * * * /opt/legal-ai/infra/scripts/cron_reset_stale_posts.sh >> /var/log/stale-posts.log 2>&1
 */5 * * * * /opt/legal-ai/infra/scripts/healthcheck.sh >> /var/log/healthcheck.log 2>&1
 */10 * * * * /opt/legal-ai/infra/scripts/cron_contract_jobs_maintenance.sh >> /var/log/contract-jobs-maintenance.log 2>&1
-*/15 * * * * /opt/legal-ai/infra/scripts/disk_monitor.sh
+*/5 * * * * /opt/legal-ai/infra/scripts/resource_monitor.sh >> /var/log/resource-monitor.log 2>&1
 0 3 * * * /opt/legal-ai/infra/scripts/backup_postgres.sh >> /var/log/backup.log 2>&1
 0 4 * * * /opt/legal-ai/infra/scripts/cron_cleanup_idempotency.sh >> /var/log/cleanup.log 2>&1
 ```

@@ -42,14 +42,47 @@ def _delete_api_key(name: str) -> None:
         db.close()
 
 
-def test_health_detailed_is_public_infra_endpoint() -> None:
+def test_health_detailed_stays_public_but_hides_host_metrics() -> None:
+    """Без ключа эндпоинт доступен, но метрик хоста не отдаёт.
+
+    Публичность нужна внешним проверкам живости, а загрузка диска и памяти
+    подсказывает атакующему момент, когда сервер близок к исчерпанию ресурсов.
+    """
     client = TestClient(app)
     ok = client.get("/health/detailed")
     assert ok.status_code == 200
     body = ok.json()
-    assert set(body.keys()) == {"status", "db_ok", "disk_usage_pct", "memory_usage_pct", "uptime_seconds"}
+    assert set(body.keys()) == {"status", "db_ok"}
     assert isinstance(body["db_ok"], bool)
     assert body["status"] in {"ok", "degraded"}
+
+
+def test_health_detailed_returns_host_metrics_for_ops_key() -> None:
+    client = TestClient(app)
+    admin_name = "pytest.ops.health"
+    admin_key = _create_api_key(Scope.admin, admin_name)
+
+    try:
+        response = client.get("/health/detailed", headers={"X-API-Key": admin_key})
+        assert response.status_code == 200
+        body = response.json()
+        assert set(body.keys()) == {
+            "status",
+            "db_ok",
+            "disk_usage_pct",
+            "memory_usage_pct",
+            "uptime_seconds",
+        }
+    finally:
+        _delete_api_key(admin_name)
+
+
+def test_health_detailed_ignores_invalid_key_without_failing() -> None:
+    """Битый ключ не должен ронять проверку живости в 401."""
+    client = TestClient(app)
+    response = client.get("/health/detailed", headers={"X-API-Key": "ak_invalid"})
+    assert response.status_code == 200
+    assert set(response.json().keys()) == {"status", "db_ok"}
 
 
 def test_workers_status_shape_for_admin() -> None:
