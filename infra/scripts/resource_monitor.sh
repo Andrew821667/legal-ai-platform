@@ -62,24 +62,26 @@ disk_usage_pct() {
 }
 
 # Доля занятой оперативной памяти.
+#
+# В macOS нельзя считать занятость как active+wired+compressed по vm_stat:
+# система намеренно держит свободных страниц около нуля, сжимает неиспользуемое
+# и вытесняет неактивное. Такой расчёт показывал 76-80% занятости в момент,
+# когда memory_pressure сообщал о 44% свободной памяти, то есть монитор слал бы
+# ложные тревоги на здоровой системе.
+#
+# memory_pressure отражает реальное давление: он учитывает, что неактивные и
+# сжатые страницы освобождаются по требованию.
 memory_usage_pct() {
   if [ "$(uname -s)" = "Darwin" ]; then
-    # vm_stat отдаёт счётчики в страницах; размер страницы берём из заголовка,
-    # чтобы не зашивать 4096 или 16384 под конкретное железо.
-    vm_stat | awk '
-      /page size of/ { for (i = 1; i <= NF; i++) if ($i == "of") { page = $(i + 1); break } }
-      /^Pages free/ { gsub(/\./, "", $3); free = $3 }
-      /^Pages active/ { gsub(/\./, "", $3); active = $3 }
-      /^Pages inactive/ { gsub(/\./, "", $3); inactive = $3 }
-      /^Pages speculative/ { gsub(/\./, "", $3); spec = $3 }
-      /^Pages wired down/ { gsub(/\./, "", $4); wired = $4 }
-      /^Pages occupied by compressor/ { gsub(/\./, "", $5); compressed = $5 }
-      END {
-        total = free + active + inactive + spec + wired + compressed
-        if (total <= 0) { print 0; exit }
-        used = active + wired + compressed
-        printf "%d", (used * 100) / total
-      }'
+    local free_pct
+    free_pct=$(memory_pressure 2>/dev/null | awk '/free percentage/ { gsub(/%/, "", $NF); print $NF }')
+    if [ -n "$free_pct" ]; then
+      printf "%d" "$((100 - free_pct))"
+    else
+      # memory_pressure недоступен — отдаём 0, чтобы не поднимать ложную
+      # тревогу по заведомо неверной метрике.
+      printf "0"
+    fi
   else
     free | awk '/^Mem:/ { if ($2 > 0) printf "%d", ($3 * 100) / $2; else print 0 }'
   fi
@@ -109,7 +111,14 @@ swap=$(swap_usage_pct || echo 0)
 problems=()
 [ "${disk:-0}" -gt "$DISK_THRESHOLD_PCT" ] && problems+=("диск ${disk}%")
 [ "${memory:-0}" -gt "$MEMORY_THRESHOLD_PCT" ] && problems+=("память ${memory}%")
-[ "${swap:-0}" -gt "$SWAP_THRESHOLD_PCT" ] && problems+=("swap ${swap}%")
+
+# На macOS swap не является признаком нехватки памяти: система расширяет его
+# динамически (на боевом хосте total вырос с 7 до 11 ГБ за сутки) и держит
+# почти полным, поэтому процент заполнения почти всегда высокий. Триггерить по
+# нему — гарантированные ложные тревоги, поэтому значение только показываем.
+if [ "$(uname -s)" != "Darwin" ]; then
+  [ "${swap:-0}" -gt "$SWAP_THRESHOLD_PCT" ] && problems+=("swap ${swap}%")
+fi
 
 if [ "${#problems[@]}" -gt 0 ]; then
   # IFS склеивает элементы только одним символом, поэтому собираем строку
