@@ -17,6 +17,29 @@
 
 set -euo pipefail
 
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+ENV_FILE="${ENV_FILE:-${PROJECT_DIR}/.env}"
+
+# cron запускает задачи с почти пустым окружением, поэтому токен бота нужно
+# взять из .env самому. Значение читается точечно через grep, а не через
+# `source`: файл содержит произвольные строки с кавычками и подстановками,
+# и исполнять его целиком ради двух переменных небезопасно.
+read_env_value() {
+  local key="$1"
+  [ -f "$ENV_FILE" ] || return 0
+  sed -n "s/^${key}=//p" "$ENV_FILE" | head -n 1 | sed -e 's/^"//' -e 's/"$//'
+}
+
+ALERT_BOT_TOKEN="${ALERT_BOT_TOKEN:-$(read_env_value ALERT_BOT_TOKEN)}"
+ALERT_CHAT_ID="${ALERT_CHAT_ID:-$(read_env_value ALERT_CHAT_ID)}"
+
+# С этого хоста api.telegram.org по DNS не разрешается — запрос просто виснет
+# до таймаута. Контейнеры обходят это через extra_hosts с прямым адресом,
+# здесь делаем то же самое через --resolve. Значение берём из .env, чтобы
+# смена адреса не требовала правки скрипта.
+TELEGRAM_API_HOST_IP="${TELEGRAM_API_HOST_IP:-$(read_env_value TELEGRAM_API_HOST_IP)}"
+TELEGRAM_API_HOST_IP="${TELEGRAM_API_HOST_IP:-149.154.167.220}"
+
 DISK_THRESHOLD_PCT="${DISK_THRESHOLD_PCT:-85}"
 MEMORY_THRESHOLD_PCT="${MEMORY_THRESHOLD_PCT:-92}"
 SWAP_THRESHOLD_PCT="${SWAP_THRESHOLD_PCT:-90}"
@@ -25,7 +48,9 @@ notify() {
   local message="$1"
   echo "$message"
   if [ -n "${ALERT_BOT_TOKEN:-}" ] && [ -n "${ALERT_CHAT_ID:-}" ]; then
-    curl -fsS --max-time 15 "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
+    curl -fsS --max-time 15 \
+      --resolve "api.telegram.org:443:${TELEGRAM_API_HOST_IP}" \
+      "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
       -d "chat_id=${ALERT_CHAT_ID}" \
       -d "text=${message}" >/dev/null || echo "warn: не удалось отправить оповещение в Telegram"
   fi
