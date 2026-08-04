@@ -30,10 +30,8 @@ const QUICK_PROMPTS = [
 ];
 
 function newSessionId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `session_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return `session_${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function readSession(): { sessionId: string; messages: ChatMessage[] } {
