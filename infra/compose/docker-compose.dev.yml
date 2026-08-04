@@ -33,11 +33,44 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: ${CORE_API_URL:-http://core-api:8000}
+      ASSISTANT_API_URL: ${ASSISTANT_API_DOCKER_URL:-http://assistant-api:8080}
+      WEB_ASSISTANT_INTERNAL_KEY: ${WEB_ASSISTANT_INTERNAL_KEY:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
     ports:
       - "${WEB_PUBLISH_PORT:-3000}:3000"
     depends_on:
-      - core-api
+      core-api:
+        condition: service_started
+      assistant-api:
+        condition: service_healthy
+
+  assistant-api:
+    build:
+      context: ../..
+      dockerfile: apps/lead-bot/legacy/Dockerfile
+    env_file:
+      - ../../.env
+    environment:
+      DB_PATH: /tmp/web-assistant.db
+      LOG_FILE: /tmp/web-assistant.log
+      CORE_API_SYNC_ENABLED: "0"
+      WEB_ASSISTANT_INTERNAL_KEY: ${WEB_ASSISTANT_INTERNAL_KEY:-}
+    command: ["python", "-m", "uvicorn", "web_assistant_api:app", "--host", "0.0.0.0", "--port", "8080"]
+    user: "appuser:appgroup"
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health').getcode() == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_dev_data:

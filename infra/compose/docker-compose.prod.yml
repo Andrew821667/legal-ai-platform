@@ -49,12 +49,16 @@ services:
       - ../../.env
     environment:
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
+      ASSISTANT_API_URL: ${ASSISTANT_API_DOCKER_URL:-http://assistant-api:8080}
+      WEB_ASSISTANT_INTERNAL_KEY: ${WEB_ASSISTANT_INTERNAL_KEY:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
       NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL: ${NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL:-https://contract.ai-verdict.ru}
       ADMIN_SECURITY_STORE_PATH: ${ADMIN_SECURITY_STORE_PATH:-/app/data/web-admin-security.json}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
       core-api:
+        condition: service_healthy
+      assistant-api:
         condition: service_healthy
     volumes:
       - web_data:/app/data
@@ -152,6 +156,48 @@ services:
       - no-new-privileges:true
     mem_limit: 256m
     memswap_limit: 256m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  assistant-api:
+    image: ${LEAD_BOT_IMAGE:-legal-ai-lead-bot:local}
+    build:
+      context: ../..
+      dockerfile: apps/lead-bot/legacy/Dockerfile
+    container_name: legal-ai-assistant-api
+    env_file:
+      - ../../.env
+    environment:
+      DB_PATH: /tmp/web-assistant.db
+      LOG_FILE: /tmp/web-assistant.log
+      CORE_API_SYNC_ENABLED: "0"
+      WEB_ASSISTANT_INTERNAL_KEY: ${WEB_ASSISTANT_INTERNAL_KEY:-}
+      TZ: ${TZ:-Europe/Moscow}
+    command: ["python", "-m", "uvicorn", "web_assistant_api:app", "--host", "0.0.0.0", "--port", "8080"]
+    user: "appuser:appgroup"
+    expose:
+      - "8080"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health').getcode() == 200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    mem_limit: 192m
+    memswap_limit: 192m
     restart: unless-stopped
     logging:
       driver: json-file
