@@ -303,11 +303,11 @@ class AIBrain:
             response = await self.async_client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=500,
+                **self._completion_token_kwargs(),
                 temperature=0.3
             )
 
-            response_text = response.choices[0].message.content
+            response_text = response.choices[0].message.content or ""
             logger.debug("Received async extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             lead_data = _parse_lead_data_response(response_text)
@@ -459,11 +459,11 @@ class AIBrain:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=500,
+                **self._completion_token_kwargs(),
                 temperature=0.3  # Низкая температура для более точного извлечения
             )
 
-            response_text = response.choices[0].message.content
+            response_text = response.choices[0].message.content or ""
             logger.debug("Received extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             lead_data = _parse_lead_data_response(response_text)

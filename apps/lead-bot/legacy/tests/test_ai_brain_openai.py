@@ -128,6 +128,9 @@ async def test_extract_lead_data_async_parses_fenced_json(monkeypatch: pytest.Mo
     assert payload["lead_temperature"] == "warm"
     assert "pain_point" in payload
     assert len(calls) == 1
+    token_kwargs = brain._completion_token_kwargs()
+    token_key = next(iter(token_kwargs))
+    assert calls[0][token_key] == token_kwargs[token_key]
 
 
 @pytest.mark.anyio
