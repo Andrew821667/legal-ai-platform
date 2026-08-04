@@ -128,9 +128,22 @@ async def test_extract_lead_data_async_parses_fenced_json(monkeypatch: pytest.Mo
     assert payload["lead_temperature"] == "warm"
     assert "pain_point" in payload
     assert len(calls) == 1
-    token_kwargs = brain._completion_token_kwargs()
+    token_kwargs = brain._completion_token_kwargs(
+        minimum=ai_brain_module._LEAD_EXTRACTION_MIN_TOKENS
+    )
     token_key = next(iter(token_kwargs))
     assert calls[0][token_key] == token_kwargs[token_key]
+
+
+def test_lead_extraction_token_budget_has_reasoning_headroom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    brain = _make_brain(monkeypatch)
+    token_kwargs = brain._completion_token_kwargs(
+        minimum=ai_brain_module._LEAD_EXTRACTION_MIN_TOKENS
+    )
+
+    assert next(iter(token_kwargs.values())) >= 2000
 
 
 @pytest.mark.anyio
