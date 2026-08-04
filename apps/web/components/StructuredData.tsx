@@ -39,8 +39,8 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       url: `${siteUrl}/services/legal-analytics-ai`,
     },
     {
-      name: "Кастомная автоматизация и разработка",
-      description: "Боты, сайты, Mini App, внутренние сервисы, программы и интеграции с CRM, ERP, 1C, ЭДО и базами данных.",
+      name: "Инженерная практика",
+      description: "Отдельное направление разработки ботов, сайтов, Mini App, внутренних сервисов, AI-модулей и интеграций.",
       url: `${siteUrl}/services/custom-ai`,
     },
   ];
@@ -53,7 +53,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     { name: "Решения", url: `${siteUrl}/solutions` },
     { name: "Практические руководства", url: `${siteUrl}/guides` },
     { name: "Сценарии внедрения", url: `${siteUrl}/cases` },
-    { name: "Другая автоматизация", url: `${siteUrl}/services/custom-ai` },
+    { name: "Инженерная практика", url: `${siteUrl}/services/custom-ai` },
     { name: "Работа с регионами", url: `${siteUrl}/regions` },
   ];
 

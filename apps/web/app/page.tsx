@@ -65,13 +65,40 @@ const platformLayers = [
   },
 ];
 
+const practices = [
+  {
+    label: "Основная практика",
+    title: "Автоматизация юридической функции",
+    description:
+      "Проектируем legal-процессы, AI-сценарии и интеграции с CRM, ERP, 1C, ЭДО и внутренними системами компании.",
+    href: ROUTES.solutions,
+    cta: "Посмотреть решения",
+  },
+  {
+    label: "Отдельная юридическая практика",
+    title: "Юридические услуги",
+    description:
+      "Договорные, судебные, корпоративные и личные правовые вопросы принимает профильный юрист по простому маршруту обращения.",
+    href: ROUTES.legalHelp,
+    cta: "Обратиться к юристу",
+  },
+  {
+    label: "Отдельная инженерная практика",
+    title: "Разработка и интеграции",
+    description:
+      "Боты, сайты, Mini App, внутренние программы, AI-модули и самостоятельные интеграционные проекты ведет профильная команда разработки.",
+    href: "/services/custom-ai",
+    cta: "Обсудить разработку",
+  },
+];
+
 const cases = [
   "Юридические процессы: договоры, претензии, legal intake, комплаенс, база знаний, шаблоны",
   "Связанные процессы: заявки, статусы, согласования, уведомления, контроль сроков и ответственных",
   "Интерфейсы вокруг legal-контура: Telegram-боты, сайты, Mini App, личные кабинеты, клиентские порталы",
   "Интеграции и данные: CRM, ERP, 1C, ЭДО, таблицы, базы данных, отчеты и внутренние панели",
   "AI-интеграции: анализ документов, классификация обращений, генерация черновиков, поиск и суммаризация",
-  "Другие автоматизации: если для отдельной цели нужен бот, сайт, Mini App, сервис или программа, можем спроектировать и запустить это тоже",
+  "Инженерные проекты: отдельная практика оценивает и запускает боты, сайты, Mini App, сервисы, программы и интеграции",
 ];
 
 const launchPath = [
@@ -97,7 +124,7 @@ const proofPoints = [
   "Начинаем с процесса и результата, а не с модного AI-инструмента.",
   "Юридическая автоматизация остается основной специализацией и точкой доверия.",
   "Можем закрыть весь legal-контур: от анализа документа до бота, сайта, базы данных и интеграции.",
-  "Если для результата или для других целей нужен бот, сайт, Mini App, внутренняя программа, AI-модуль или другая автоматизация, можем спроектировать и запустить это тоже.",
+  "Самостоятельные программные задачи передаются отдельной инженерной практике, а не смешиваются с legal-проектом.",
   "AI используется там, где он реально помогает: анализ, классификация, поиск, черновики, подсказки.",
 ];
 
@@ -110,7 +137,7 @@ export default function Home() {
         <HeroBackdrop variant="home" tone="light" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-18">
           <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-1 text-sm text-amber-300">
-            Юридическая автоматизация + интеграции + смежная разработка
+            Основная практика: автоматизация юридической функции
           </span>
           <h1 className="mt-6 max-w-4xl text-3xl font-semibold leading-tight text-white sm:text-4xl md:text-5xl">
             Автоматизируем юридические бизнес-процессы и связываем их с системами компании
@@ -118,8 +145,8 @@ export default function Home() {
           <p className="mt-6 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
             AI Verdict помогает юридической функции работать быстрее и прозрачнее: договоры, заявки, согласования,
             комплаенс, документы и контроль сроков. Интегрируем решения с CRM, ERP, 1C, ЭДО, Telegram, сайтами и
-            внутренними системами. А если для результата или для других целей нужен бот, сайт, Mini App, внутренняя
-            программа, AI-модуль или другая автоматизация, можем спроектировать и запустить это тоже.
+            внутренними системами. Юридические услуги и самостоятельные программные проекты ведут отдельные
+            профильные практики AI Verdict.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <a
@@ -170,21 +197,27 @@ export default function Home() {
       <PlatformMap highlightId="site" />
 
       <section className="border-y border-slate-800 bg-slate-800/40">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold text-amber-300">Отдельное юридическое направление</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">Нужна помощь юриста, а не проект автоматизации?</h2>
+            <p className="text-sm font-semibold text-amber-300">Структура AI Verdict</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">Три задачи — три профильные практики</h2>
             <p className="mt-3 text-slate-300">
-              Мы работаем не только с технологиями, но и с правом на практике. Опишите ситуацию и ближайший срок,
-              а юрист предложит понятный дальнейший порядок работы.
+              Клиент не попадает в универсальную команду: запрос сразу направляется специалистам нужного профиля.
+              При этом автоматизация юридической функции остается центральной специализацией платформы.
             </p>
           </div>
-          <Link
-            href={ROUTES.legalHelp}
-            className="shrink-0 rounded-lg bg-slate-900 px-6 py-3 text-center font-semibold text-slate-100 transition-colors hover:bg-slate-800 hover:text-amber-300"
-          >
-            Перейти к юридической помощи
-          </Link>
+          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+            {practices.map((practice) => (
+              <article key={practice.title} className="rounded-lg border border-slate-700 bg-slate-900/60 p-6">
+                <p className="text-xs font-semibold uppercase text-amber-300">{practice.label}</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">{practice.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-slate-300">{practice.description}</p>
+                <Link href={practice.href} className="mt-5 inline-flex font-semibold text-sky-300 hover:text-sky-200">
+                  {practice.cta} →
+                </Link>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -264,8 +297,8 @@ export default function Home() {
         <h2 className="text-3xl font-semibold text-white">Контур автоматизации</h2>
         <p className="mt-4 max-w-3xl text-slate-300">
           Базовый фокус — юридические бизнес-процессы. Вокруг них собираем рабочий контур, где процесс, AI,
-          интерфейсы и интеграции поддерживают друг друга. Отдельные смежные автоматизации тоже можем делать,
-          если они нужны для результата или для другой задачи клиента.
+          интерфейсы и интеграции поддерживают друг друга. Самостоятельные программные задачи принимает
+          инженерная практика с отдельной оценкой и маршрутом проекта.
         </p>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
           {platformLayers.map((layer) => (
@@ -279,11 +312,10 @@ export default function Home() {
 
       <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <h2 className="text-3xl font-semibold text-white">Что можно автоматизировать</h2>
+          <h2 className="text-3xl font-semibold text-white">Что автоматизируют наши практики</h2>
           <p className="mt-4 max-w-3xl text-slate-300">
-            Юридическая функция — наша сильная специализация и основная точка входа. При этом мы можем проектировать
-            и другие автоматизации: если задачу можно описать, связать с данными и превратить в повторяемый маршрут,
-            мы можем помочь ее запустить.
+            Юридическая функция — основная точка входа и центральная специализация. Другие инженерные проекты
+            рассматриваются отдельной командой: она проверяет задачу, границы решения, данные и реалистичность запуска.
           </p>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             {cases.map((item) => (

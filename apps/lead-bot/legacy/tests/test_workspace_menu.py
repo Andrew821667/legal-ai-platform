@@ -123,7 +123,8 @@ def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
     assert "это единая платформа для юридической AI-работы" in welcome
     assert "а не отдельный бот" in welcome
-    assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in welcome
+    assert "внедрять ИИ в <b>юридические бизнес-процессы</b>" in welcome
+    assert "три специализированных направления" in welcome
     assert "Contract AI" in welcome
     assert "reader-бот" in welcome
     assert "Mini App" in welcome
@@ -137,15 +138,16 @@ def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
 def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
-    assert "внедрять ИИ в <b>юридические и бизнес-процессы</b>" in start_entry
+    assert "внедрять ИИ в <b>юридические бизнес-процессы</b>" in start_entry
     assert "Вам доступен весь контур платформы" in start_entry
     assert "Contract AI" in start_entry
     assert "reader-бот" in start_entry
     assert "Mini App" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
-    assert "оказываем юридическую помощь" in start_entry
-    assert "для результата или другой цели нужен бот" in start_entry
-    assert "🛠 Разработка" in start_entry
+    assert "Юридическая практика" in start_entry
+    assert "три специализированных направления" in start_entry
+    assert "Инженерная практика" in start_entry
+    assert "🛠 Инженерная практика" in start_entry
     assert "Сейчас активен:" in start_entry
     assert "💬 <b>Необязательно ждать подходящую кнопку" in start_entry
 
@@ -156,25 +158,26 @@ def test_help_message_keeps_platform_context() -> None:
     assert "Contract AI" in content.HELP_MESSAGE
     assert "reader-бот" in content.HELP_MESSAGE
     assert "Mini App" in content.HELP_MESSAGE
-    assert "обычную правовую задачу" in content.HELP_MESSAGE
-    assert "Telegram-бот для другой задачи" in content.HELP_MESSAGE
+    assert "юридическую практику" in content.HELP_MESSAGE
+    assert "инженерная разработка Telegram-бота" in content.HELP_MESSAGE
 
 
 def test_services_cover_legal_help_and_development_for_other_goals() -> None:
     services = content.menu_response_by_key("menu_services", selected_profile="business")
     development = content.menu_response_by_key("menu_custom_development")
 
-    assert "юридическая помощь бизнесу, ИП и частным клиентам" in services
-    assert "для результата или другой цели" in services
+    assert "юридическая практика для бизнеса, ИП и частных клиентов" in services
+    assert "инженерная практика" in services
     assert "Основное направление AI Verdict" in development
-    assert "мы можем" in development
+    assert "Отдельная инженерная практика" in development
     assert "CRM/ERP/1C/ЭДО" in development
 
 
 def test_system_prompt_forbids_denial_of_expanded_services() -> None:
-    assert "обычные юридические услуги" in prompts.SYSTEM_PROMPT
+    assert "Отдельная юридическая практика" in prompts.SYSTEM_PROMPT
     assert "может быть не связана с юридической автоматизацией" in prompts.SYSTEM_PROMPT
     assert "Никогда не утверждай" in prompts.SYSTEM_PROMPT
+    assert "для любых задач" in prompts.SYSTEM_PROMPT
 
 
 def test_reset_message_returns_user_to_platform_assistant() -> None:

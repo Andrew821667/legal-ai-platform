@@ -59,19 +59,27 @@ const quickActions = [
     external: true,
   },
   {
-    title: "Собрать заявку",
-    description: "Описать юридический процесс, интеграцию или смежную автоматизацию.",
+    title: "Автоматизировать юрфункцию",
+    description: "Описать legal-процесс, AI-сценарий или интеграцию с системами компании.",
     href: ROUTES.miniAppLead,
     action: MINIAPP_ACTIONS.openAssistant,
     variant: "info" as const,
     external: false,
   },
   {
-    title: "Получить юридическую помощь",
-    description: "Кратко описать ситуацию и передать ее юристу.",
+    title: "Юридическая практика",
+    description: "Кратко описать правовую ситуацию и передать ее профильному юристу.",
     href: ROUTES.miniAppLegalHelp,
     action: MINIAPP_ACTIONS.openLegalHelp,
     variant: "info" as const,
+    external: false,
+  },
+  {
+    title: "Инженерная практика",
+    description: "Обсудить отдельную разработку: бот, сайт, Mini App, сервис, AI-модуль или интеграцию.",
+    href: ROUTES.miniAppLead,
+    action: MINIAPP_ACTIONS.openAssistant,
+    variant: "secondary" as const,
     external: false,
   },
   {
@@ -161,8 +169,8 @@ export default function MiniAppHomePage() {
   return (
     <section className="space-y-4">
       <MiniAppGuideCard
-        title="Быстрый пульт"
-        description="Mini App нужен не для чтения сайта внутри Telegram, а для коротких действий: проверить документ, собрать заявку по legal-процессу, описать интеграцию или смежную задачу."
+        title="Три профильных направления"
+        description="Основной фокус — автоматизация юридической функции. Правовые задачи принимает отдельная юридическая практика, а самостоятельную разработку — инженерная практика."
       />
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
@@ -224,7 +232,7 @@ export default function MiniAppHomePage() {
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             variant="info"
           >
-            Юридическая помощь
+            Юридическая практика
           </MiniTrackedLink>
           <MiniTrackedLink
             href="/services/custom-ai"
@@ -232,7 +240,7 @@ export default function MiniAppHomePage() {
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             variant="secondary"
           >
-            Сквозная автоматизация
+            Инженерная практика
           </MiniTrackedLink>
         </div>
       </article>

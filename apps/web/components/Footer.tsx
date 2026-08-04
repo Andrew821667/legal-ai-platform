@@ -37,6 +37,7 @@ export default function Footer() {
     ],
     services: [
       { name: "Юридическая помощь", href: ROUTES.legalHelp },
+      { name: "Инженерная практика", href: "/services/custom-ai" },
       { name: "Консультация юриста онлайн", href: "/legal-help/online-consultation" },
       { name: "Юридическая помощь по регионам", href: "/legal-help/regions" },
       { name: "Юрист для бизнеса", href: ROUTES.legalHelpBusiness },

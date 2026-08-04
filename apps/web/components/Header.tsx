@@ -57,7 +57,7 @@ export default function Header() {
     { name: "Главная", href: "/" },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
-    { name: "Другая автоматизация", href: "/services/custom-ai" },
+    { name: "Инженерная практика", href: "/services/custom-ai" },
     { name: "Сценарии", href: "/cases" },
     { name: "Команда", href: "/team" },
   ];
