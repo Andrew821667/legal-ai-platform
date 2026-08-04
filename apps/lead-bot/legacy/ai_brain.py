@@ -56,6 +56,7 @@ _ALLOWED_SERVICE_CATEGORIES = {
     "Кастомная разработка",
 }
 _LEAD_TEMPERATURE_RANK = {"cold": 0, "warm": 1, "hot": 2}
+_LEAD_EXTRACTION_MIN_TOKENS = 2000
 
 
 def _check_prompt_injection(text: str) -> bool:
@@ -200,15 +201,16 @@ class AIBrain:
         self.temperature = config.TEMPERATURE
         self._use_max_tokens_param = "deepseek" in (config.OPENAI_BASE_URL or "").lower()
 
-    def _completion_token_kwargs(self) -> Dict[str, int]:
+    def _completion_token_kwargs(self, *, minimum: int = 0) -> Dict[str, int]:
         """
         Совместимость провайдеров:
         - OpenAI: max_completion_tokens
         - DeepSeek (OpenAI-compatible): max_tokens
         """
+        limit = max(config.MAX_COMPLETION_TOKENS, minimum)
         if self._use_max_tokens_param:
-            return {"max_tokens": config.MAX_COMPLETION_TOKENS}
-        return {"max_completion_tokens": config.MAX_COMPLETION_TOKENS}
+            return {"max_tokens": limit}
+        return {"max_completion_tokens": limit}
 
     async def generate_response_stream(
         self,
@@ -303,7 +305,7 @@ class AIBrain:
             response = await self.async_client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                **self._completion_token_kwargs(),
+                **self._completion_token_kwargs(minimum=_LEAD_EXTRACTION_MIN_TOKENS),
                 temperature=0.3
             )
 
@@ -459,7 +461,7 @@ class AIBrain:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                **self._completion_token_kwargs(),
+                **self._completion_token_kwargs(minimum=_LEAD_EXTRACTION_MIN_TOKENS),
                 temperature=0.3  # Низкая температура для более точного извлечения
             )
 
