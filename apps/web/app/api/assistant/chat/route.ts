@@ -18,7 +18,13 @@ export async function POST(request: NextRequest) {
   if (!ASSISTANT_KEY) {
     return NextResponse.json({ detail: "Ассистент временно недоступен" }, { status: 503 });
   }
-  if (!isTrustedAssistantOrigin(request.headers.get("origin"), request.nextUrl.host)) {
+  const trustedHosts = [
+    request.nextUrl.host,
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+    process.env.NEXT_PUBLIC_SITE_URL,
+  ].filter((value): value is string => Boolean(value));
+  if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHosts)) {
     return NextResponse.json({ detail: "Недопустимый источник запроса" }, { status: 403 });
   }
   const contentLength = Number(request.headers.get("content-length") || "0");

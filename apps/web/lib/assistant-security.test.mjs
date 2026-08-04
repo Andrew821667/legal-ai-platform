@@ -64,4 +64,8 @@ test("assistant accepts only same-origin browser requests", () => {
   assert.equal(isTrustedAssistantOrigin("https://ai-verdict.ru", "ai-verdict.ru"), true);
   assert.equal(isTrustedAssistantOrigin("https://example.com", "ai-verdict.ru"), false);
   assert.equal(isTrustedAssistantOrigin(null, "ai-verdict.ru"), false);
+  assert.equal(isTrustedAssistantOrigin(
+    "https://ai-verdict.ru",
+    ["legal-ai-web:3000", "https://ai-verdict.ru"],
+  ), true);
 });
