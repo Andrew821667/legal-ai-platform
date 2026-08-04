@@ -44,6 +44,8 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     assert "это единая платформа" in messages[0][0]
     assert "С чего удобно начать" in messages[0][0]
     assert "Проверить договор" in messages[0][0]
+    assert "Юридическая помощь" in messages[0][0]
+    assert "Разработка" in messages[0][0]
     assert messages[0][1] is not None
 
 
