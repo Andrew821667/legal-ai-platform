@@ -82,3 +82,17 @@ def test_should_fast_track_handoff_when_contact_and_consultation_requested():
         "Готов на консультацию, мой телефон +7 909 233-09-09",
         {},
     ) is True
+
+
+def test_should_not_treat_document_preparation_as_handoff_readiness():
+    assert funnel.should_fast_track_handoff(
+        "Вы оказываете обычные юридические услуги: подготовку договоров и сопровождение споров?",
+        {"phone": "+7 900 000-00-00"},
+    ) is False
+
+
+def test_should_recognize_ready_as_a_separate_word():
+    assert funnel.should_fast_track_handoff(
+        "Готов продолжить",
+        {"phone": "+7 900 000-00-00"},
+    ) is True

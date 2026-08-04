@@ -91,6 +91,7 @@ _FAST_TRACK_HINTS = (
 
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _PHONE_RE = re.compile(r"(?:\+7|8|7)[\s\-()]*(?:\d[\s\-()]*){10,11}")
+_READY_RE = re.compile(r"\bготов(?:а|ы)?\b", re.IGNORECASE)
 
 
 def _contains_any(text: str, tokens: tuple[str, ...]) -> bool:
@@ -114,7 +115,7 @@ def should_fast_track_handoff(user_message: str, lead_data: Optional[Dict] = Non
 
     if asks_handoff:
         return True
-    if has_contact and (asks_next_step or explicit_fast_track or "готов" in message):
+    if has_contact and (asks_next_step or explicit_fast_track or _READY_RE.search(message)):
         return True
     return False
 
