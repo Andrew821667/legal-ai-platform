@@ -67,4 +67,4 @@ flake8==7.0.0
 mypy==1.8.0
 
 # Security
-cryptography==46.0.7
+cryptography==50.0.0
