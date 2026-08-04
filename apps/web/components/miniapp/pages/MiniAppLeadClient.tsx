@@ -14,7 +14,7 @@ const offerLabels: Record<LeadOffer, string> = {
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчёта по договору",
-  unknown: "Общий запрос / разработка под задачу",
+  unknown: "Автоматизация / инженерная разработка",
 };
 
 const audienceToSegment: Record<MiniAppAudience, LeadSegment> = {
@@ -54,10 +54,10 @@ const requestScenarios: Array<{
   },
   {
     id: "bot",
-    title: "Другая автоматизация",
-    description: "Бот, сайт, Mini App, AI-модуль, личный кабинет, внутренняя программа или сервис для другой цели.",
+    title: "Инженерная практика",
+    description: "Отдельная команда рассматривает разработку бота, сайта, Mini App, AI-модуля, программы или сервиса.",
     offer: "unknown",
-    prompt: "Нужна другая автоматизация: ",
+    prompt: "Запрос для инженерной практики: ",
   },
 ];
 
@@ -268,7 +268,7 @@ export default function MiniAppLeadPage() {
       <header className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
         <h2 className="text-base font-semibold text-amber-300">Оставить заявку</h2>
         <p className="mt-1 text-sm text-slate-300">
-          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Можно описать юридический процесс, интеграцию с существующими системами или другую автоматизацию: бота, сайт, Mini App, AI-модуль, внутреннюю программу или сервис. Запрос:{" "}
+          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Автоматизацию юридической функции ведёт основная практика; самостоятельную программную разработку принимает отдельная инженерная практика. Запрос:{" "}
           <span className="font-semibold text-amber-200">{offerLabels[offer]}</span>.
         </p>
       </header>
@@ -338,7 +338,7 @@ export default function MiniAppLeadPage() {
             <option value="checklist">Гайд</option>
             <option value="demo">Демонстрационный разбор договора</option>
             <option value="sample_report">Пример отчёта по договору</option>
-            <option value="unknown">Автоматизация / разработка под задачу</option>
+            <option value="unknown">Автоматизация / инженерная разработка</option>
           </select>
         </label>
 
@@ -362,7 +362,7 @@ export default function MiniAppLeadPage() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
-            placeholder="Кратко опишите задачу: какой юридический процесс или другая цель, что сейчас делается вручную, где нужен AI, бот, сайт, Mini App, интеграция или внутренняя программа"
+            placeholder="Кратко опишите задачу и ожидаемый результат: legal-процесс, AI-сценарий, интеграция либо отдельная инженерная разработка"
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
         </label>

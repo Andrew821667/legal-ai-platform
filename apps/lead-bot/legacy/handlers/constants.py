@@ -25,8 +25,8 @@ def contract_ai_menu_url() -> str:
 def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
-        [InlineKeyboardButton("⚖️ Юридическая помощь", callback_data="legal_help_start")],
-        [InlineKeyboardButton("🛠 Разработка и интеграции", callback_data="menu_custom_development")],
+        [InlineKeyboardButton("⚖️ Юридическая практика", callback_data="legal_help_start")],
+        [InlineKeyboardButton("🛠 Инженерная практика", callback_data="menu_custom_development")],
         [
             InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
             InlineKeyboardButton("💰 Цены", callback_data="menu_prices"),
@@ -52,8 +52,8 @@ def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LAB
 def build_start_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
-        [InlineKeyboardButton("⚖️ Юридическая помощь", callback_data="legal_help_start")],
-        [InlineKeyboardButton("🛠 Разработка и интеграции", callback_data="menu_custom_development")],
+        [InlineKeyboardButton("⚖️ Юридическая практика", callback_data="legal_help_start")],
+        [InlineKeyboardButton("🛠 Инженерная практика", callback_data="menu_custom_development")],
         [
             InlineKeyboardButton("🧪 Проверить договор", callback_data=contract_ai_menu_url()),
             InlineKeyboardButton("📞 Консультация", callback_data="menu_consultation"),
@@ -75,8 +75,8 @@ def build_start_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
 def build_quick_nav_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
-        [InlineKeyboardButton("⚖️ Юридическая помощь", callback_data="legal_help_start")],
-        [InlineKeyboardButton("🛠 Разработка и интеграции", callback_data="menu_custom_development")],
+        [InlineKeyboardButton("⚖️ Юридическая практика", callback_data="legal_help_start")],
+        [InlineKeyboardButton("🛠 Инженерная практика", callback_data="menu_custom_development")],
         [
             InlineKeyboardButton("🧭 Рабочий стол", callback_data="menu_dashboard"),
             InlineKeyboardButton("🧪 Проверить договор", callback_data=contract_ai_menu_url()),
