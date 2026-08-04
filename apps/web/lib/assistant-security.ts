@@ -102,10 +102,16 @@ export function recordAssistantRequest(
   return { allowed: true, retryAfter: 0 };
 }
 
-export function isTrustedAssistantOrigin(origin: string | null, host: string): boolean {
+export function isTrustedAssistantOrigin(origin: string | null, hosts: string | string[]): boolean {
   if (!origin) return false;
   try {
-    return new URL(origin).host === host;
+    const originHost = new URL(origin).host;
+    const candidates = Array.isArray(hosts) ? hosts : [hosts];
+    return candidates.some((candidate) => {
+      const value = candidate.trim().split(",", 1)[0];
+      if (!value) return false;
+      return originHost === (value.includes("://") ? new URL(value).host : value);
+    });
   } catch {
     return false;
   }
