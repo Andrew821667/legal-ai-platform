@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import content
+import prompts
 from handlers.constants import build_workspace_inline_menu
 from handlers.markup import web_open_markup, web_url_markup
 
@@ -25,6 +26,7 @@ def test_workspace_inline_menu_contains_profile_and_documents() -> None:
     assert "menu_documents" in callback_values
     assert "open_web:contract_ai" in callback_values
     assert "legal_help_start" in callback_values
+    assert "menu_custom_development" in callback_values
 
 
 def test_profile_and_documents_buttons_resolve_menu_keys() -> None:
@@ -141,6 +143,9 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
     assert "reader-бот" in start_entry
     assert "Mini App" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
+    assert "оказываем юридическую помощь" in start_entry
+    assert "для результата или другой цели нужен бот" in start_entry
+    assert "🛠 Разработка" in start_entry
     assert "Сейчас активен:" in start_entry
     assert "💬 <b>Необязательно ждать подходящую кнопку" in start_entry
 
@@ -151,6 +156,25 @@ def test_help_message_keeps_platform_context() -> None:
     assert "Contract AI" in content.HELP_MESSAGE
     assert "reader-бот" in content.HELP_MESSAGE
     assert "Mini App" in content.HELP_MESSAGE
+    assert "обычную правовую задачу" in content.HELP_MESSAGE
+    assert "Telegram-бот для другой задачи" in content.HELP_MESSAGE
+
+
+def test_services_cover_legal_help_and_development_for_other_goals() -> None:
+    services = content.menu_response_by_key("menu_services", selected_profile="business")
+    development = content.menu_response_by_key("menu_custom_development")
+
+    assert "юридическая помощь бизнесу, ИП и частным клиентам" in services
+    assert "для результата или другой цели" in services
+    assert "Основное направление AI Verdict" in development
+    assert "мы можем" in development
+    assert "CRM/ERP/1C/ЭДО" in development
+
+
+def test_system_prompt_forbids_denial_of_expanded_services() -> None:
+    assert "обычные юридические услуги" in prompts.SYSTEM_PROMPT
+    assert "может быть не связана с юридической автоматизацией" in prompts.SYSTEM_PROMPT
+    assert "Никогда не утверждай" in prompts.SYSTEM_PROMPT
 
 
 def test_reset_message_returns_user_to_platform_assistant() -> None:
