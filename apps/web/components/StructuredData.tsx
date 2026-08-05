@@ -12,7 +12,7 @@ interface StructuredDataProps {
 }
 
 export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredDataProps) {
-  const serviceOffers = [
+  const automationOffers = [
     {
       name: "Автоматизация договорной работы",
       description: "AI-анализ договоров, выявление рисков, чек-листы, согласование правок и контроль качества.",
@@ -38,11 +38,6 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       description: "Риск-дашборды, KPI юридической функции и управленческая аналитика на данных компании.",
       url: `${siteUrl}/services/legal-analytics-ai`,
     },
-    {
-      name: "Инженерная практика",
-      description: "Отдельное направление разработки ботов, сайтов, Mini App, внутренних сервисов, AI-модулей и интеграций.",
-      url: `${siteUrl}/services/custom-ai`,
-    },
   ];
 
   const navigationItems = [
@@ -64,7 +59,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     name: LEGAL_BRAND,
     url: siteUrl,
     description:
-      "Команда, которая помогает юридическим функциям внедрять AI-сценарии, интеграции и прикладную автоматизацию: боты, сайты, mini app, внутренние сервисы и программы под бизнес-процессы.",
+      "Платформа с основной практикой автоматизации юридической функции и отдельными юридической и инженерной практиками.",
     logo: `${siteUrl}/icon.svg`,
     image: `${siteUrl}/opengraph-image`,
     areaServed: {
@@ -78,10 +73,9 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       "автоматизация договоров",
       "автоматизация судебной работы",
       "комплаенс",
-      "CRM и ERP интеграции",
-      "Telegram-боты",
-      "Mini App",
-      "прикладная разработка",
+      "юридические услуги по российскому праву",
+      "разработка программного обеспечения",
+      "CRM, ERP и 1C интеграции",
     ],
     contactPoint: {
       "@type": "ContactPoint",
@@ -104,7 +98,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     name: LEGAL_BRAND,
     url: siteUrl,
     image: `${siteUrl}/opengraph-image`,
-    serviceType: "AI automation, legal operations automation and custom software development",
+    serviceType: "Legal operations automation and AI automation for legal teams",
     provider: {
       "@id": `${siteUrl}/#organization`,
     },
@@ -115,7 +109,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal AI services",
-      itemListElement: serviceOffers.map((offer) => ({
+      itemListElement: automationOffers.map((offer) => ({
         "@type": "Offer",
         url: offer.url,
         itemOffered: {
@@ -126,6 +120,52 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
           areaServed: "RU",
         },
       })),
+    },
+  };
+
+  const legalPracticeSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "@id": `${siteUrl}/legal-help#practice`,
+    name: "Юридическая практика AI Verdict",
+    description:
+      "Юридические услуги по российскому праву для бизнеса и частных клиентов: консультации, договоры, споры, корпоративные, имущественные и личные вопросы.",
+    url: `${siteUrl}/legal-help`,
+    serviceType: "Юридические услуги по праву Российской Федерации",
+    provider: {
+      "@id": `${siteUrl}/#organization`,
+    },
+    areaServed: {
+      "@type": "Country",
+      name: "Россия",
+    },
+    availableChannel: {
+      "@type": "ServiceChannel",
+      serviceUrl: `${siteUrl}/legal-help`,
+      availableLanguage: "ru-RU",
+    },
+  };
+
+  const engineeringPracticeSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "@id": `${siteUrl}/services/custom-ai#practice`,
+    name: "Инженерная практика AI Verdict",
+    description:
+      "Разработка программ, Telegram-ботов, сайтов, Mini App, внутренних сервисов, AI-модулей и интеграций с корпоративными системами.",
+    url: `${siteUrl}/services/custom-ai`,
+    serviceType: "Разработка программного обеспечения, AI-сервисов и интеграций",
+    provider: {
+      "@id": `${siteUrl}/#organization`,
+    },
+    areaServed: {
+      "@type": "Country",
+      name: "Россия",
+    },
+    availableChannel: {
+      "@type": "ServiceChannel",
+      serviceUrl: `${siteUrl}/services/custom-ai`,
+      availableLanguage: "ru-RU",
     },
   };
 
@@ -173,7 +213,15 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
 
   const structuredData = {
     "@context": "https://schema.org",
-    "@graph": [organizationSchema, serviceSchema, websiteSchema, navigationSchema, personSchema],
+    "@graph": [
+      organizationSchema,
+      serviceSchema,
+      legalPracticeSchema,
+      engineeringPracticeSchema,
+      websiteSchema,
+      navigationSchema,
+      personSchema,
+    ],
   };
 
   return (

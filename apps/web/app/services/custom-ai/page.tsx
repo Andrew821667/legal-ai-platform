@@ -10,6 +10,14 @@ export const metadata: Metadata = createPageMetadata({
   title: service.seoTitle,
   description: service.description,
   path: `/services/${service.slug}`,
+  keywords: [
+    "разработка программного обеспечения",
+    "разработка Telegram ботов",
+    "разработка Mini App",
+    "разработка AI сервисов",
+    "интеграция CRM ERP 1C",
+    "автоматизация бизнес процессов",
+  ],
 });
 
 export default function CustomAIPage() {

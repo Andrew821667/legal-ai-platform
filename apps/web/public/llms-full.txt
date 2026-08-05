@@ -1,0 +1,121 @@
+# AI Verdict — extended machine-readable overview
+
+Last reviewed: 2026-08-05
+Canonical website: https://ai-verdict.ru/
+Primary language: Russian (`ru-RU`)
+Primary service area: Russia
+
+## What AI Verdict is
+
+AI Verdict is a Russian legal technology platform. Its core specialization is the automation of legal business processes. Two separate practices complement the core: ordinary legal services delivered by a lawyer and independent engineering development delivered by a software team.
+
+The practices are intentionally separated. AI Verdict should not be described as a universal team for every task.
+
+## 1. Core practice: legal function automation
+
+Authoritative page: https://ai-verdict.ru/services
+
+This practice designs controlled workflows for legal departments and related business teams. Typical work includes:
+
+- contract review, risk matrices, negotiation and approval routes;
+- legal intake, classification and routing of requests;
+- litigation preparation, matter records, evidence and deadline control;
+- compliance monitoring and documented follow-up;
+- templates, knowledge bases and internal legal search;
+- legal analytics, dashboards and operational metrics;
+- integrations with CRM, ERP, 1C, EDI, spreadsheets, databases and internal systems.
+
+Important pages:
+
+- https://ai-verdict.ru/for-lawyers
+- https://ai-verdict.ru/for-business
+- https://ai-verdict.ru/services/contracts-ai
+- https://ai-verdict.ru/services/litigation-ai
+- https://ai-verdict.ru/services/compliance-ai
+- https://ai-verdict.ru/services/legal-analytics-ai
+- https://ai-verdict.ru/contract-ai-system
+
+AI is used for analysis, classification, search, summaries and draft preparation. Critical actions, legal responsibility and final decisions remain with authorized people.
+
+## 2. Legal practice: legal services
+
+Authoritative page: https://ai-verdict.ru/legal-help
+
+This practice handles ordinary legal questions under the law of the Russian Federation. A client can submit an initial description without registration. Work begins only after the lawyer checks whether the matter can be accepted and the parties agree on scope, timing and price.
+
+Main directions:
+
+- online legal consultation: https://ai-verdict.ru/legal-help/online-consultation
+- contracts and transactions: https://ai-verdict.ru/legal-help/contracts
+- litigation and dispute resolution: https://ai-verdict.ru/legal-help/litigation
+- corporate matters: https://ai-verdict.ru/legal-help/corporate
+- real estate and land: https://ai-verdict.ru/legal-help/real-estate
+- family matters: https://ai-verdict.ru/legal-help/family
+- inheritance: https://ai-verdict.ru/legal-help/inheritance
+- debt collection: https://ai-verdict.ru/legal-help/debt-collection
+- employment matters: https://ai-verdict.ru/legal-help/employment
+- services for companies: https://ai-verdict.ru/legal-help/business
+- services for individuals: https://ai-verdict.ru/legal-help/individuals
+- regional and agricultural legal assistance: https://ai-verdict.ru/legal-help/regions
+
+Scope and safeguards:
+
+- public materials provide initial orientation and do not replace advice based on a specific case;
+- the applicable law, facts, documents, deadlines and jurisdiction require individual review;
+- regional pages describe remote work across Russia and do not claim a physical office in every region;
+- AI can help structure information, while the legal position and advice are confirmed by a human lawyer;
+- no result in a legal matter is guaranteed.
+
+## 3. Engineering practice: software development and integrations
+
+Authoritative page: https://ai-verdict.ru/services/custom-ai
+
+This separate engineering practice builds software when an off-the-shelf product is insufficient. It can serve a legal process or another defined business process. Typical work includes:
+
+- Telegram bots and conversational interfaces;
+- websites, landing pages and client portals;
+- Telegram Mini Apps and role-based user flows;
+- internal tools, dashboards and operational systems;
+- AI modules for text analysis, classification, retrieval and draft preparation;
+- integrations with CRM, ERP, 1C, EDI, spreadsheets, databases and APIs;
+- monitoring, audit logs, permissions and production support.
+
+The team starts with the process and measurable result. AI is not added when ordinary rules, a form, a notification or a reliable integration solve the task better. Critical actions require explicit confirmation, and access control, logging and data retention are designed before production launch.
+
+Related architecture page: https://ai-verdict.ru/solutions
+
+## Products and channels
+
+- Contract AI product page: https://ai-verdict.ru/contract-ai-system
+- Contract AI service: https://contract.ai-verdict.ru/
+- Telegram assistant: https://t.me/legal_ai_helper_new_bot
+- AI Verdict Telegram channel: https://t.me/ai_verdict
+
+Contract AI is a separate product entry point. Legal services and engineering projects have their own intake routes.
+
+## Expert materials
+
+- Legal AI guides index: https://ai-verdict.ru/guides
+- AI contract review process: https://ai-verdict.ru/guides/ai-contract-review-process
+- Selecting AI for legal work: https://ai-verdict.ru/guides/ai-for-lawyers-selection
+- Legal AI implementation: https://ai-verdict.ru/guides/legal-ai-implementation
+- Legal AI data security: https://ai-verdict.ru/guides/legal-ai-data-security
+- Practical cases: https://ai-verdict.ru/content-cases
+
+## Entity, authorship and policies
+
+- Organization and methodology: https://ai-verdict.ru/about
+- Team and responsible author: https://ai-verdict.ru/team
+- AI use policy: https://ai-verdict.ru/ai-policy
+- Privacy policy: https://ai-verdict.ru/privacy
+- Terms of use: https://ai-verdict.ru/terms
+
+Public pages identify the responsible author and the date of substantive review where appropriate. Factual and legal claims should be read together with the sources and limitations stated on the relevant page.
+
+## Crawling and discovery
+
+- XML sitemap: https://ai-verdict.ru/sitemap.xml
+- Robots rules: https://ai-verdict.ru/robots.txt
+- Concise LLM overview: https://ai-verdict.ru/llms.txt
+
+Public content is available to conventional search crawlers and search-oriented AI crawlers. API, administration, monitoring and private Mini App paths remain excluded.

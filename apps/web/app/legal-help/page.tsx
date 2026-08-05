@@ -7,7 +7,6 @@ import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
-import { LEGAL_HELP_REVIEWED_AT } from "@/lib/legalHelpPages";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
@@ -62,11 +61,23 @@ export default function LegalHelpPage() {
       {
         "@type": "Service",
         "@id": `${canonicalUrl}#service`,
-        name: "Юридическая помощь AI Verdict",
-        serviceType: "Юридические услуги",
+        name: "Юридическая практика AI Verdict",
+        description:
+          "Юридические услуги по российскому праву для бизнеса и частных клиентов в дистанционном формате по России.",
+        serviceType: "Юридические услуги по праву Российской Федерации",
+        category: ["Консультации", "Договоры", "Судебные споры", "Корпоративные и частные правовые вопросы"],
         provider: { "@id": `${SEO_SITE_URL}/#organization` },
         areaServed: { "@type": "Country", name: "Россия" },
         url: canonicalUrl,
+        audience: {
+          "@type": "Audience",
+          audienceType: "Компании, предприниматели и частные клиенты",
+        },
+        availableChannel: {
+          "@type": "ServiceChannel",
+          serviceUrl: canonicalUrl,
+          availableLanguage: "ru-RU",
+        },
         hasOfferCatalog: {
           "@type": "OfferCatalog",
           name: "Направления юридической помощи",
@@ -84,7 +95,8 @@ export default function LegalHelpPage() {
         "@type": "WebPage",
         "@id": canonicalUrl,
         name: "Юридические услуги для бизнеса и частных клиентов",
-        dateModified: LEGAL_HELP_REVIEWED_AT,
+        dateModified: "2026-08-05",
+        url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
       },
@@ -125,6 +137,21 @@ export default function LegalHelpPage() {
             <Link href="/legal-help/individuals" className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300">
               Частным клиентам
             </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-slate-800 bg-slate-900">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="max-w-4xl rounded-xl border border-sky-200 bg-white p-7">
+            <p className="text-sm font-semibold uppercase tracking-wide text-sky-800">Короткий ответ</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-900">Что делает юридическая практика AI Verdict</h2>
+            <p className="mt-4 leading-7 text-slate-700">
+              Юридическая практика AI Verdict оказывает дистанционные юридические услуги по российскому праву
+              компаниям, предпринимателям и частным клиентам. Юрист разбирает обстоятельства и документы,
+              согласует формат, срок и стоимость работы, а AI используется только как вспомогательный инструмент
+              для структурирования информации и подготовки материалов.
+            </p>
           </div>
         </div>
       </section>

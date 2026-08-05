@@ -13,14 +13,15 @@ type SitemapPage = {
 };
 
 const marketingUpdatedAt = "2026-07-15";
+const practiceUpdatedAt = "2026-08-05";
 
 const pages: SitemapPage[] = [
-  { path: "", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 1 },
+  { path: "", lastModified: practiceUpdatedAt, changeFrequency: "weekly", priority: 1 },
   { path: "/for-lawyers", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
-  { path: "/services", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
-  { path: "/legal-help", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "weekly", priority: 0.9 },
+  { path: "/services", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/legal-help", lastModified: practiceUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
   { path: "/legal-help/business", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/individuals", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/regions", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.8 },
@@ -32,7 +33,7 @@ const pages: SitemapPage[] = [
   { path: "/services/tax-compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/land-law-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
-  { path: "/services/custom-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
+  { path: "/services/custom-ai", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.8 },
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
   { path: "/cases", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },

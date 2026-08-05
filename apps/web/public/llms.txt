@@ -1,23 +1,45 @@
 # AI Verdict
 
-AI Verdict helps companies automate legal business processes and connect them with existing operational systems. The core specialization is legal function automation: contracts, legal intake, litigation preparation, compliance, knowledge bases, templates, deadlines, approvals, and legal analytics.
+> AI Verdict is a Russian legal technology platform with three clearly separated practices: legal function automation, legal services, and engineering development. Legal automation is the core specialization.
 
-The platform also designs and launches related automation when it is needed for the result or for another business goal: Telegram bots, websites, Mini Apps, internal tools, AI modules, dashboards, integrations with CRM, ERP, 1C, EDI, spreadsheets, databases, and other business systems.
+## Practices
+
+- Core practice — legal function automation: https://ai-verdict.ru/services
+  Contracts, legal intake, litigation workflows, compliance, knowledge bases, deadlines, approvals, legal analytics, and integrations with company systems.
+- Legal practice — legal services under Russian law: https://ai-verdict.ru/legal-help
+  Online legal consultations, contracts, disputes, corporate matters, real estate, family, inheritance, debt collection, employment, and regional legal assistance.
+- Engineering practice — software development and integrations: https://ai-verdict.ru/services/custom-ai
+  Telegram bots, websites, Mini Apps, internal software, AI modules, dashboards, and integrations with CRM, ERP, 1C, EDI, databases, and APIs.
 
 ## Primary Pages
 
-- Website: https://ai-verdict.ru/
-- Services: https://ai-verdict.ru/services
+- Website and practice overview: https://ai-verdict.ru/
+- AI automation services: https://ai-verdict.ru/services
 - AI for lawyers: https://ai-verdict.ru/for-lawyers
-- Custom automation and development: https://ai-verdict.ru/services/custom-ai
+- AI for business: https://ai-verdict.ru/for-business
+- Legal services: https://ai-verdict.ru/legal-help
+- Legal services for business: https://ai-verdict.ru/legal-help/business
+- Legal services for individuals: https://ai-verdict.ru/legal-help/individuals
+- Online legal consultation: https://ai-verdict.ru/legal-help/online-consultation
+- Regional and agricultural legal assistance: https://ai-verdict.ru/legal-help/regions
+- Engineering development and integrations: https://ai-verdict.ru/services/custom-ai
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
-- Litigation automation: https://ai-verdict.ru/services/litigation-ai
-- Compliance automation: https://ai-verdict.ru/services/compliance-ai
+- Contract AI product: https://ai-verdict.ru/contract-ai-system
 - Legal AI guides: https://ai-verdict.ru/guides
-- Choosing AI for legal work: https://ai-verdict.ru/guides/ai-for-lawyers-selection
-- Mini App: https://ai-verdict.ru/miniapp
-- Sitemap: https://ai-verdict.ru/sitemap.xml
+- Team and responsible author: https://ai-verdict.ru/team
+- AI policy: https://ai-verdict.ru/ai-policy
 
-## Positioning
+## Authority and Scope
 
-AI Verdict starts with the legal process and measurable business result, then selects the right technical contour: AI module, workflow automation, integration, bot, website, Mini App, internal service, dashboard, or other software.
+- Canonical website: https://ai-verdict.ru/
+- Primary language: Russian (`ru-RU`).
+- Service area: Russia; regional pages describe remote assistance and do not claim local offices.
+- Legal materials are informational until a lawyer reviews a client's facts and documents.
+- AI may structure information and prepare drafts, but legal conclusions and client decisions are confirmed by a human specialist.
+- Legal services and independent engineering projects are separate practices and are not presented as one universal service.
+
+## Discovery
+
+- Extended machine-readable overview: https://ai-verdict.ru/llms-full.txt
+- XML sitemap: https://ai-verdict.ru/sitemap.xml
+- Robots rules: https://ai-verdict.ru/robots.txt
