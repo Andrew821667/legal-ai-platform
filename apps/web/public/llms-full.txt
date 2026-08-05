@@ -68,9 +68,9 @@ Scope and safeguards:
 
 ## 3. Engineering practice: software development and integrations
 
-Authoritative page: https://ai-verdict.ru/services/custom-ai
+Authoritative page: https://ai-verdict.ru/engineering
 
-This separate engineering practice builds software when an off-the-shelf product is insufficient. It can serve a legal process or another defined business process. Typical work includes:
+Engineering is one of AI Verdict's two foundational practices. Together with the legal practice it builds legal function automation; independently it builds software for other defined business processes when an off-the-shelf product is insufficient. Typical work includes:
 
 - Telegram bots and conversational interfaces;
 - websites, landing pages and client portals;

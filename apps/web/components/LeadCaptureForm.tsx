@@ -25,7 +25,7 @@ const offerLabels: Record<LeadOffer, string> = {
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчета по договору",
-  unknown: "Автоматизация / инженерная разработка",
+  unknown: "Автоматизация / разработка и AI",
 };
 
 export default function LeadCaptureForm() {
@@ -149,8 +149,8 @@ export default function LeadCaptureForm() {
           </h2>
           <p className="text-slate-600 mb-8">
             Запрос: <span className="font-semibold">{offerLabels[offer]}</span>. Ответим в Telegram
-            или по телефону. Запрос по автоматизации юридической функции получит основная практика,
-            а самостоятельную программную задачу — отдельная инженерная практика.
+            или по телефону. Автоматизацию юридической функции ведут юридическая и инженерная практики вместе,
+            а самостоятельную программную задачу — инженерная практика.
           </p>
 
           <LegalDisclaimer variant="panel" className="mb-6" />
@@ -223,7 +223,7 @@ export default function LeadCaptureForm() {
                   <option value="checklist">Гайд</option>
                   <option value="demo">Демонстрационный разбор договора</option>
                   <option value="sample_report">Пример отчета по договору</option>
-                  <option value="unknown">Автоматизация / инженерная разработка</option>
+                  <option value="unknown">Автоматизация / разработка и AI</option>
                 </select>
               </label>
             </div>
@@ -234,7 +234,7 @@ export default function LeadCaptureForm() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
-                placeholder="Кратко опишите задачу: legal-процесс, AI-сценарий, интеграция либо отдельная инженерная разработка"
+                placeholder="Кратко опишите задачу: legal-процесс, AI-сценарий, интеграция или инженерная разработка"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </label>

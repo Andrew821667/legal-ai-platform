@@ -1,14 +1,14 @@
 # AI Verdict
 
-> AI Verdict is a Russian legal technology platform with three clearly separated practices: legal function automation, legal services, and engineering development. Legal automation is the core specialization.
+> AI Verdict is a Russian platform built on two foundational practices: legal and engineering. Their key intersection is legal function automation; each practice also handles work within its own professional scope.
 
-## Practices
+## Practices and their intersection
 
-- Core practice — legal function automation: https://ai-verdict.ru/services
+- Key intersection — legal function automation: https://ai-verdict.ru/services
   Contracts, legal intake, litigation workflows, compliance, knowledge bases, deadlines, approvals, legal analytics, and integrations with company systems.
 - Legal practice — legal services under Russian law: https://ai-verdict.ru/legal-help
   Online legal consultations, contracts, disputes, corporate matters, real estate, family, inheritance, debt collection, employment, and regional legal assistance.
-- Engineering practice — software development and integrations: https://ai-verdict.ru/services/custom-ai
+- Engineering practice — software development and integrations: https://ai-verdict.ru/engineering
   Telegram bots, websites, Mini Apps, internal software, AI modules, dashboards, and integrations with CRM, ERP, 1C, EDI, databases, and APIs.
 
 ## Primary Pages
@@ -22,7 +22,7 @@
 - Legal services for individuals: https://ai-verdict.ru/legal-help/individuals
 - Online legal consultation: https://ai-verdict.ru/legal-help/online-consultation
 - Regional and agricultural legal assistance: https://ai-verdict.ru/legal-help/regions
-- Engineering development and integrations: https://ai-verdict.ru/services/custom-ai
+- Engineering development and integrations: https://ai-verdict.ru/engineering
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Contract AI product: https://ai-verdict.ru/contract-ai-system
 - Legal AI guides: https://ai-verdict.ru/guides
@@ -36,7 +36,8 @@
 - Service area: Russia; regional pages describe remote assistance and do not claim local offices.
 - Legal materials are informational until a lawyer reviews a client's facts and documents.
 - AI may structure information and prepare drafts, but legal conclusions and client decisions are confirmed by a human specialist.
-- Legal services and independent engineering projects are separate practices and are not presented as one universal service.
+- Legal and engineering are the two foundational practices; legal automation is their shared specialization, not a third practice.
+- Independent legal and engineering projects remain within their respective professional practices and are not presented as one universal service.
 
 ## Discovery
 

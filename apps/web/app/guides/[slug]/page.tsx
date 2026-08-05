@@ -49,7 +49,7 @@ export default async function GuidePage({ params }: GuidePageProps) {
     : guide.slug === "ai-for-lawyers-selection"
       ? { href: "/for-lawyers", label: "ИИ для юристов: практические сценарии" }
     : guide.slug === "legal-ai-data-security"
-      ? { href: "/services/custom-ai", label: "Безопасная архитектура и интеграции" }
+      ? { href: "/engineering", label: "Безопасная архитектура и интеграции" }
       : { href: "/solutions", label: "Решения для юридической автоматизации" };
   const structuredData = {
     "@context": "https://schema.org",

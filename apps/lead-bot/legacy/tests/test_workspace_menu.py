@@ -84,7 +84,7 @@ def test_workspace_first_touch_text_explains_platform_for_new_user() -> None:
         include_context_intro=True,
     )
     assert "AI Verdict" in first_touch
-    assert "это единая платформа для юридической AI-работы" in first_touch
+    assert "это единая платформа юридической и инженерной практик" in first_touch
     assert "а не отдельный бот" in first_touch
     assert "Contract AI" in first_touch
     assert "reader-бот" in first_touch
@@ -121,10 +121,11 @@ def test_offer_profile_menu_explicitly_allows_freeform_ai_chat() -> None:
 
 def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
     welcome = content.build_welcome_message("Андрей")
-    assert "это единая платформа для юридической AI-работы" in welcome
+    assert "это единая платформа юридической и инженерной практик" in welcome
     assert "а не отдельный бот" in welcome
-    assert "внедрять ИИ в <b>юридические бизнес-процессы</b>" in welcome
-    assert "три специализированных направления" in welcome
+    assert "внедряем ИИ в <b>юридические бизнес-процессы</b>" in welcome
+    assert "две базовые практики" in welcome
+    assert "На их стыке" in welcome
     assert "Contract AI" in welcome
     assert "reader-бот" in welcome
     assert "Mini App" in welcome
@@ -138,14 +139,14 @@ def test_welcome_message_is_result_oriented_and_contains_disclaimer() -> None:
 def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
-    assert "внедрять ИИ в <b>юридические бизнес-процессы</b>" in start_entry
+    assert "внедряем ИИ в <b>юридические бизнес-процессы</b>" in start_entry
     assert "Вам доступен весь контур платформы" in start_entry
     assert "Contract AI" in start_entry
     assert "reader-бот" in start_entry
     assert "Mini App" in start_entry
     assert "Сначала нажмите верхнюю кнопку" in start_entry
     assert "Юридическая практика" in start_entry
-    assert "три специализированных направления" in start_entry
+    assert "две базовые практики" in start_entry
     assert "Инженерная практика" in start_entry
     assert "🛠 Инженерная практика" in start_entry
     assert "Сейчас активен:" in start_entry
@@ -153,12 +154,12 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
 
 
 def test_help_message_keeps_platform_context() -> None:
-    assert "это единая платформа для юридической AI-работы" in content.HELP_MESSAGE
+    assert "это единая платформа юридической и инженерной практик" in content.HELP_MESSAGE
     assert "а не отдельный бот" in content.HELP_MESSAGE
     assert "Contract AI" in content.HELP_MESSAGE
     assert "reader-бот" in content.HELP_MESSAGE
     assert "Mini App" in content.HELP_MESSAGE
-    assert "юридическую практику" in content.HELP_MESSAGE
+    assert "юридическую помощь" in content.HELP_MESSAGE
     assert "инженерная разработка Telegram-бота" in content.HELP_MESSAGE
 
 
@@ -168,13 +169,15 @@ def test_services_cover_legal_help_and_development_for_other_goals() -> None:
 
     assert "юридическая практика для бизнеса, ИП и частных клиентов" in services
     assert "инженерная практика" in services
-    assert "Основное направление AI Verdict" in development
-    assert "Отдельная инженерная практика" in development
+    assert "одна из двух базовых практик AI Verdict" in development
+    assert "Самостоятельно инженерная практика" in development
     assert "CRM/ERP/1C/ЭДО" in development
 
 
 def test_system_prompt_forbids_denial_of_expanded_services() -> None:
-    assert "Отдельная юридическая практика" in prompts.SYSTEM_PROMPT
+    assert "две базовые практики" in prompts.SYSTEM_PROMPT
+    assert "Юридическая практика оказывает услуги" in prompts.SYSTEM_PROMPT
+    assert "ключевое пересечение двух практик" in prompts.SYSTEM_PROMPT.lower()
     assert "может быть не связана с юридической автоматизацией" in prompts.SYSTEM_PROMPT
     assert "Никогда не утверждай" in prompts.SYSTEM_PROMPT
     assert "для любых задач" in prompts.SYSTEM_PROMPT

@@ -117,7 +117,7 @@ export const PLATFORM_PARTS: PlatformPart[] = [
     id: "miniapp",
     name: "Mini App",
     description:
-      "Личный контур внутри Telegram: контент, инструменты, профиль и заявка на юридическую или смежную автоматизацию.",
+      "Личный контур внутри Telegram: контент, инструменты, профиль и маршрут в юридическую или инженерную практику.",
     url: ROUTES.miniApp,
     external: false,
     ctaLabel: "Открыть Mini App",

@@ -120,7 +120,7 @@ export default function Services() {
         "Внутренние панели",
         "On-premise / Cloud",
       ],
-      pageHref: "/services/custom-ai",
+      pageHref: "/engineering",
       gradient: "from-cyan-500 to-blue-600",
     },
     {
@@ -239,8 +239,8 @@ export default function Services() {
             Не нашли нужную услугу?
           </h3>
           <p className="text-xl text-slate-300 mb-6 max-w-2xl mx-auto">
-            Подберем формат под ваши задачи и бюджет: юридический процесс, смежную бизнес-автоматизацию
-            или отдельный программный инструмент.
+            Подберем профильную команду и формат: совместный проект по автоматизации юридической функции,
+            юридическую помощь или самостоятельный инженерный проект.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a

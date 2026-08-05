@@ -6,6 +6,7 @@ export const ROUTES = {
   solutions: "/solutions",
   contentCases: "/content-cases",
   legalHelp: "/legal-help",
+  engineering: "/engineering",
   legalHelpBusiness: "/legal-help/business",
   legalHelpIndividuals: "/legal-help/individuals",
   about: "/about",

@@ -45,10 +45,11 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     { name: "Для юристов", url: `${siteUrl}/for-lawyers` },
     { name: "Для бизнеса", url: `${siteUrl}/for-business` },
     { name: "Услуги", url: `${siteUrl}/services` },
+    { name: "Юридическая практика", url: `${siteUrl}/legal-help` },
+    { name: "Инженерная практика", url: `${siteUrl}/engineering` },
     { name: "Решения", url: `${siteUrl}/solutions` },
     { name: "Практические руководства", url: `${siteUrl}/guides` },
     { name: "Сценарии внедрения", url: `${siteUrl}/cases` },
-    { name: "Инженерная практика", url: `${siteUrl}/services/custom-ai` },
     { name: "Работа с регионами", url: `${siteUrl}/regions` },
   ];
 
@@ -59,7 +60,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     name: LEGAL_BRAND,
     url: siteUrl,
     description:
-      "Платформа с основной практикой автоматизации юридической функции и отдельными юридической и инженерной практиками.",
+      "Платформа двух базовых практик — юридической и инженерной. Их ключевое пересечение — автоматизация юридической функции.",
     logo: `${siteUrl}/icon.svg`,
     image: `${siteUrl}/opengraph-image`,
     areaServed: {
@@ -149,11 +150,11 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
   const engineeringPracticeSchema = {
     "@context": "https://schema.org",
     "@type": "Service",
-    "@id": `${siteUrl}/services/custom-ai#practice`,
+    "@id": `${siteUrl}/engineering#practice`,
     name: "Инженерная практика AI Verdict",
     description:
       "Разработка программ, Telegram-ботов, сайтов, Mini App, внутренних сервисов, AI-модулей и интеграций с корпоративными системами.",
-    url: `${siteUrl}/services/custom-ai`,
+    url: `${siteUrl}/engineering`,
     serviceType: "Разработка программного обеспечения, AI-сервисов и интеграций",
     provider: {
       "@id": `${siteUrl}/#organization`,
@@ -164,7 +165,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     },
     availableChannel: {
       "@type": "ServiceChannel",
-      serviceUrl: `${siteUrl}/services/custom-ai`,
+      serviceUrl: `${siteUrl}/engineering`,
       availableLanguage: "ru-RU",
     },
   };
@@ -175,7 +176,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     "@id": `${siteUrl}/#website`,
     url: siteUrl,
     name: LEGAL_BRAND,
-    description: "Сайт о внедрении AI в юридическую функцию и смежной бизнес-автоматизации.",
+    description: "Сайт юридической и инженерной практик AI Verdict и их совместных проектов по автоматизации юридической функции.",
     publisher: {
       "@id": `${siteUrl}/#organization`,
     },

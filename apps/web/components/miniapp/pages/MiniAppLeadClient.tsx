@@ -14,7 +14,7 @@ const offerLabels: Record<LeadOffer, string> = {
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчёта по договору",
-  unknown: "Автоматизация / инженерная разработка",
+  unknown: "Автоматизация / разработка и AI",
 };
 
 const audienceToSegment: Record<MiniAppAudience, LeadSegment> = {
@@ -55,7 +55,7 @@ const requestScenarios: Array<{
   {
     id: "bot",
     title: "Инженерная практика",
-    description: "Отдельная команда рассматривает разработку бота, сайта, Mini App, AI-модуля, программы или сервиса.",
+    description: "Инженерная практика рассматривает разработку бота, сайта, Mini App, AI-модуля, программы или сервиса.",
     offer: "unknown",
     prompt: "Запрос для инженерной практики: ",
   },
@@ -268,7 +268,7 @@ export default function MiniAppLeadPage() {
       <header className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
         <h2 className="text-base font-semibold text-amber-300">Оставить заявку</h2>
         <p className="mt-1 text-sm text-slate-300">
-          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Автоматизацию юридической функции ведёт основная практика; самостоятельную программную разработку принимает отдельная инженерная практика. Запрос:{" "}
+          Заявка уйдёт менеджеру напрямую — без переходов в браузер. Автоматизация юридической функции объединяет юридическую и инженерную практики; самостоятельную разработку ведёт инженерная практика. Запрос:{" "}
           <span className="font-semibold text-amber-200">{offerLabels[offer]}</span>.
         </p>
       </header>
@@ -362,7 +362,7 @@ export default function MiniAppLeadPage() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
-            placeholder="Кратко опишите задачу и ожидаемый результат: legal-процесс, AI-сценарий, интеграция либо отдельная инженерная разработка"
+            placeholder="Кратко опишите задачу и ожидаемый результат: legal-процесс, AI-сценарий, интеграция или инженерная разработка"
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
         </label>

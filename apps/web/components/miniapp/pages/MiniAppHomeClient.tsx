@@ -12,7 +12,7 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 const audienceHints = {
   lawyer: "Фокус на договорной и претензионной работе.",
   business: "Фокус на сроках согласования, рисках, SLA и связке с операционными системами.",
-  mixed: "Фокус на стыке юридической, бизнес- и технической автоматизации.",
+  mixed: "Фокус на стыке юридической и инженерной практик.",
 } as const;
 
 type HighlightCard = {
@@ -76,7 +76,7 @@ const quickActions = [
   },
   {
     title: "Инженерная практика",
-    description: "Обсудить отдельную разработку: бот, сайт, Mini App, сервис, AI-модуль или интеграцию.",
+    description: "Обсудить разработку: бот, сайт, Mini App, сервис, AI-модуль или интеграцию.",
     href: ROUTES.miniAppLead,
     action: MINIAPP_ACTIONS.openAssistant,
     variant: "secondary" as const,
@@ -169,8 +169,8 @@ export default function MiniAppHomePage() {
   return (
     <section className="space-y-4">
       <MiniAppGuideCard
-        title="Три профильных направления"
-        description="Основной фокус — автоматизация юридической функции. Правовые задачи принимает отдельная юридическая практика, а самостоятельную разработку — инженерная практика."
+        title="Две практики, одно ключевое пересечение"
+        description="Юридическая и инженерная практики вместе автоматизируют юридическую функцию. Каждая также ведет профильные проекты в своей области."
       />
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
@@ -235,7 +235,7 @@ export default function MiniAppHomePage() {
             Юридическая практика
           </MiniTrackedLink>
           <MiniTrackedLink
-            href="/services/custom-ai"
+            href={ROUTES.engineering}
             action={MINIAPP_ACTIONS.openSolutions}
             meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
             variant="secondary"

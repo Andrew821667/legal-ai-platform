@@ -48,16 +48,16 @@ export default function Header() {
   const mainNavigation = [
     { name: "Автоматизация", href: "/solutions" },
     { name: "Юридическая помощь", href: ROUTES.legalHelp },
+    { name: "Разработка и AI", href: ROUTES.engineering },
     { name: "Contract AI", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
     { name: "Материалы", href: "/guides" },
-    { name: "О платформе", href: "/about" },
   ];
 
   const secondaryNavigation = [
     { name: "Главная", href: "/" },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
-    { name: "Инженерная практика", href: "/services/custom-ai" },
+    { name: "О платформе", href: "/about" },
     { name: "Сценарии", href: "/cases" },
     { name: "Команда", href: "/team" },
   ];
