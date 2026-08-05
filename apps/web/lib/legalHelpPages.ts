@@ -31,7 +31,7 @@ export type LegalHelpPage = {
   area: LegalArea;
 };
 
-export const LEGAL_HELP_REVIEWED_AT = "2026-07-29";
+export const LEGAL_HELP_REVIEWED_AT = "2026-08-05";
 
 export const legalHelpPages: Record<string, LegalHelpPage> = {
   "online-consultation": {
