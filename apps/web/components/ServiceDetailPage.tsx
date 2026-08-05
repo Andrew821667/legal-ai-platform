@@ -7,6 +7,7 @@ import type { ServiceDetail } from "@/lib/serviceDetailData";
 
 export default function ServiceDetailPage({ service }: { service: ServiceDetail }) {
   const canonicalUrl = `${LEGAL_SITE_URL.replace(/\/$/, "")}/services/${service.slug}`;
+  const isEngineeringPractice = service.slug === "custom-ai";
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -18,7 +19,31 @@ export default function ServiceDetailPage({ service }: { service: ServiceDetail 
         url: canonicalUrl,
         provider: { "@id": `${LEGAL_SITE_URL.replace(/\/$/, "")}/#organization` },
         areaServed: { "@type": "Country", name: "Россия" },
-        serviceType: service.eyebrow,
+        serviceType: isEngineeringPractice
+          ? "Разработка программного обеспечения, AI-сервисов и интеграций"
+          : service.eyebrow,
+        category: isEngineeringPractice
+          ? ["Software development", "AI integration", "Business process automation"]
+          : "Legal operations automation",
+        audience: {
+          "@type": "BusinessAudience",
+          audienceType: "Компании, команды и предприниматели",
+        },
+        availableChannel: {
+          "@type": "ServiceChannel",
+          serviceUrl: canonicalUrl,
+          availableLanguage: "ru-RU",
+        },
+      },
+      {
+        "@type": "WebPage",
+        "@id": canonicalUrl,
+        name: service.title,
+        description: service.description,
+        url: canonicalUrl,
+        inLanguage: "ru-RU",
+        mainEntity: { "@id": `${canonicalUrl}#service` },
+        ...(isEngineeringPractice ? { dateModified: "2026-08-05" } : {}),
       },
       {
         "@type": "BreadcrumbList",
@@ -64,6 +89,18 @@ export default function ServiceDetailPage({ service }: { service: ServiceDetail 
           </div>
         </div>
       </section>
+
+      {service.shortAnswer && (
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+            <div className="max-w-4xl rounded-2xl border border-sky-200 bg-sky-50 p-7 md:p-8">
+              <p className="text-sm font-semibold uppercase tracking-wide text-sky-800">Короткий ответ</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">Что делает инженерная практика AI Verdict</h2>
+              <p className="mt-4 text-base leading-7 text-slate-700">{service.shortAnswer}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
