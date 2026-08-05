@@ -47,7 +47,7 @@ const scenarios = [
   {
     title: "Legal intake и внутренняя база знаний",
     description: "Классификация обращений, поиск по утвержденным материалам и передача задачи нужному специалисту с понятным контекстом.",
-    href: "/services/custom-ai",
+    href: "/engineering",
   },
 ];
 

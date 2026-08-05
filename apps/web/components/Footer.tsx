@@ -37,7 +37,7 @@ export default function Footer() {
     ],
     services: [
       { name: "Юридическая помощь", href: ROUTES.legalHelp },
-      { name: "Инженерная практика", href: "/services/custom-ai" },
+      { name: "Разработка и AI", href: ROUTES.engineering },
       { name: "Консультация юриста онлайн", href: "/legal-help/online-consultation" },
       { name: "Юридическая помощь по регионам", href: "/legal-help/regions" },
       { name: "Юрист для бизнеса", href: ROUTES.legalHelpBusiness },
@@ -96,8 +96,8 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h3 className="text-2xl font-bold text-white mb-4">{LEGAL_BRAND}</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
-              Платформа автоматизации юридической функции: intake заявок, договорная и судебная работа,
-              комплаенс, внутренний контроль и управляемые AI-процессы в legal ops.
+              Две базовые практики — юридическая и инженерная. На их стыке автоматизируем юридическую функцию,
+              а профильные юридические и инженерные задачи ведем в самостоятельных контурах.
             </p>
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2">

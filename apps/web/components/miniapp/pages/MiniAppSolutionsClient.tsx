@@ -8,24 +8,24 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 
 const blocks = [
   {
-    label: "Основное направление",
+    label: "Ключевое пересечение",
     title: "Автоматизация юридической функции",
     description: "Договорная работа, legal intake, претензионные процессы, комплаенс, базы знаний и интеграции с действующими системами компании.",
     href: ROUTES.solutions,
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
   {
-    label: "Отдельное направление",
+    label: "Базовая практика",
     title: "Юридическая практика",
     description: "Договорные, судебные, корпоративные и личные правовые вопросы принимает профильный юрист без смешения с проектом автоматизации.",
     href: ROUTES.miniAppLegalHelp,
     action: MINIAPP_ACTIONS.openLegalHelp,
   },
   {
-    label: "Отдельное направление",
+    label: "Базовая практика",
     title: "Инженерная практика",
     description: "Боты, сайты, Mini App, личные кабинеты, внутренние программы, AI-модули и интеграции рассматривает профильная команда разработки.",
-    href: "/services/custom-ai",
+    href: ROUTES.engineering,
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
 ];
@@ -34,8 +34,8 @@ export default function MiniAppSolutionsPage() {
   return (
     <section className="space-y-4">
       <MiniAppGuideCard
-        title="Выберите профильную практику"
-        description="AI Verdict не смешивает разные типы задач: каждый запрос получает свой маршрут и передается команде с соответствующей специализацией."
+        title="Выберите маршрут"
+        description="Юридическая и инженерная практики вместе автоматизируют юридическую функцию, а профильные задачи ведут самостоятельно."
       />
 
       {blocks.map((block) => (

@@ -21,12 +21,12 @@ const STORAGE_KEY = "ai-verdict-web-assistant-v1";
 const WELCOME: ChatMessage = {
   role: "assistant",
   message:
-    "Здравствуйте. Я помогу определить подходящее направление AI Verdict: автоматизацию юридической функции, юридическую практику или инженерную практику. Опишите задачу своими словами.",
+    "Здравствуйте. AI Verdict объединяет юридическую и инженерную практики, а на их стыке автоматизирует юридическую функцию. Опишите задачу — я помогу выбрать подходящий маршрут.",
 };
 const QUICK_PROMPTS = [
   "Автоматизировать юрфункцию",
   "Получить юридическую помощь",
-  "Обсудить разработку",
+  "Обсудить разработку и AI",
 ];
 
 function newSessionId(): string {
@@ -153,11 +153,12 @@ export default function WebAssistant() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 z-[60] inline-flex h-12 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white shadow-[0_12px_36px_rgba(15,23,42,0.28)] transition hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="fixed bottom-4 right-4 z-[60] inline-flex h-12 w-12 items-center justify-center rounded-lg bg-slate-950 p-0 text-sm font-semibold text-white shadow-[0_12px_36px_rgba(15,23,42,0.28)] transition hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 sm:w-auto sm:gap-2 sm:px-4"
         aria-label="Открыть ассистента AI Verdict"
+        title="Ассистент AI Verdict"
       >
         <MessageCircle className="h-5 w-5 text-amber-400" aria-hidden="true" />
-        Ассистент
+        <span className="hidden sm:inline">Ассистент</span>
       </button>
     );
   }

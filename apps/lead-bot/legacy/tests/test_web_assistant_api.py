@@ -31,7 +31,10 @@ def test_chat_uses_shared_brain(monkeypatch) -> None:
 
     async def fake_stream(history, funnel_context=None):
         assert history[-1] == {"role": "user", "message": "Какое направление основное?"}
-        assert "автоматизацию юридической функции" in (funnel_context or "")
+        ctx = (funnel_context or "").lower()
+        assert "автоматизацию юридической функции" in ctx
+        assert "две базовые практики" in ctx
+        assert "ключевое пересечение" in ctx
         yield "Основное направление — "
         yield "автоматизация юридической функции."
 

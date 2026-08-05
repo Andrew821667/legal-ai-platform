@@ -57,7 +57,7 @@ export default function Features() {
           </h2>
           <p className="text-xl text-slate-600 max-w-3xl mx-auto">
             Внедряем понятные Legal Tech решения для договоров, судебной работы и комплаенса,
-            а при необходимости разрабатываем смежные бизнес-сервисы, ботов и интеграции.
+            а инженерная практика разрабатывает бизнес-сервисы, ботов и интеграции.
             <a href="#services" className="text-amber-600 hover:text-amber-700 underline ml-1">Посмотреть услуги</a>.
           </p>
         </div>

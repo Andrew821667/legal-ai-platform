@@ -5,8 +5,14 @@ import HeroBackdrop from "@/components/HeroBackdrop";
 import { LEGAL_BRAND, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import type { ServiceDetail } from "@/lib/serviceDetailData";
 
-export default function ServiceDetailPage({ service }: { service: ServiceDetail }) {
-  const canonicalUrl = `${LEGAL_SITE_URL.replace(/\/$/, "")}/services/${service.slug}`;
+type ServiceDetailPageProps = {
+  service: ServiceDetail;
+  path?: string;
+};
+
+export default function ServiceDetailPage({ service, path }: ServiceDetailPageProps) {
+  const pagePath = path || `/services/${service.slug}`;
+  const canonicalUrl = `${LEGAL_SITE_URL.replace(/\/$/, "")}${pagePath}`;
   const isEngineeringPractice = service.slug === "custom-ai";
   const structuredData = {
     "@context": "https://schema.org",
@@ -81,10 +87,10 @@ export default function ServiceDetailPage({ service }: { service: ServiceDetail 
           <p className="mt-6 max-w-4xl text-xl leading-relaxed text-slate-600">{service.intro}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="#lead-form" className="rounded-lg bg-amber-700 px-6 py-3 text-center font-semibold text-white hover:bg-amber-800">
-              Обсудить процесс
+              {isEngineeringPractice ? "Обсудить инженерный проект" : "Обсудить процесс"}
             </a>
             <a href="#workflow" className="rounded-lg border border-slate-300 px-6 py-3 text-center font-semibold text-slate-700 hover:bg-slate-100">
-              Как проходит внедрение
+              {isEngineeringPractice ? "Как строим проект" : "Как проходит внедрение"}
             </a>
           </div>
         </div>
@@ -187,7 +193,11 @@ export default function ServiceDetailPage({ service }: { service: ServiceDetail 
             </Link>
           ))}
         </div>
-        <p className="mt-8 text-sm text-slate-500">{LEGAL_BRAND} начинает с диагностики процесса и не обещает автоматическое юридическое решение без проверки специалистом.</p>
+        <p className="mt-8 text-sm text-slate-500">
+          {isEngineeringPractice
+            ? `${LEGAL_BRAND} начинает с диагностики процесса и связывает архитектуру проекта с измеримым результатом.`
+            : `${LEGAL_BRAND} начинает с диагностики процесса и не обещает автоматическое юридическое решение без проверки специалистом.`}
+        </p>
       </section>
 
       <LeadCaptureForm />
