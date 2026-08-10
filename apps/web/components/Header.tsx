@@ -49,7 +49,7 @@ export default function Header() {
     { name: "Автоматизация", href: "/solutions" },
     { name: "Юридическая помощь", href: ROUTES.legalHelp },
     { name: "Разработка и AI", href: ROUTES.engineering },
-    { name: "Contract AI", href: contractAIEntryHref(), external: contractAIEntryIsExternal() },
+    { name: "Услуги", href: "/services" },
     { name: "Материалы", href: "/guides" },
   ];
 
@@ -86,25 +86,13 @@ export default function Header() {
           {/* Desktop Navigation */}
           <div className="hidden xl:flex items-center gap-6">
             {mainNavigation.map((item) => (
-              item.external ? (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
-                >
-                  {item.name}
-                </a>
-              ) : (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
-                >
-                  {item.name}
-                </Link>
-              )
+              <Link
+                key={item.name}
+                href={item.href}
+                className="text-slate-300 hover:text-amber-400 transition-colors font-medium whitespace-nowrap"
+              >
+                {item.name}
+              </Link>
             ))}
             <div className="relative" ref={moreMenuRef}>
               <button
@@ -202,27 +190,14 @@ export default function Header() {
           <div className="xl:hidden bg-slate-800 rounded-lg mt-2 mb-4 overflow-hidden">
             <div className="px-4 py-2 space-y-1">
               {mainNavigation.map((item) => (
-                item.external ? (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    {item.name}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    {item.name}
-                  </Link>
-                )
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="block px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
               ))}
               {contractAIActionExternal ? (
                 <a

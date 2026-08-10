@@ -49,7 +49,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
-        ...(isEngineeringPractice ? { dateModified: "2026-08-05" } : {}),
+        ...(isEngineeringPractice ? { dateModified: "2026-08-10" } : {}),
       },
       {
         "@type": "BreadcrumbList",
@@ -76,15 +76,15 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
 
-      <section className="relative overflow-hidden border-b border-slate-300 bg-slate-100">
-        <HeroBackdrop variant="services" tone="light" />
-        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8 lg:pb-20 lg:pt-32">
+      <section className={`relative flex items-start overflow-hidden border-b border-slate-300 bg-slate-100 ${isEngineeringPractice ? "min-h-[680px] sm:min-h-[570px] sm:items-center" : ""}`}>
+        <HeroBackdrop variant={isEngineeringPractice ? "engineering" : "services"} tone="light" priority={isEngineeringPractice} />
+        <div className="relative mx-auto w-full max-w-6xl px-4 pb-14 pt-24 sm:px-6 sm:py-28 lg:px-8">
           <nav aria-label="Хлебные крошки" className="text-sm text-slate-500">
             <Link href="/services" className="hover:text-amber-700">Услуги</Link> / {service.eyebrow}
           </nav>
-          <p className="mt-8 text-sm font-semibold uppercase tracking-wide text-amber-700">{service.eyebrow}</p>
-          <h1 className="mt-3 max-w-5xl text-4xl font-bold leading-tight md:text-5xl">{service.title}</h1>
-          <p className="mt-6 max-w-4xl text-xl leading-relaxed text-slate-600">{service.intro}</p>
+          <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-amber-700 sm:mt-8">{service.eyebrow}</p>
+          <h1 className="mt-3 max-w-5xl text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">{service.title}</h1>
+          <p className="mt-5 max-w-4xl text-base leading-7 text-slate-600 sm:mt-6 sm:text-xl sm:leading-relaxed">{service.intro}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="#lead-form" className="rounded-lg bg-amber-700 px-6 py-3 text-center font-semibold text-white hover:bg-amber-800">
               {isEngineeringPractice ? "Обсудить инженерный проект" : "Обсудить процесс"}
@@ -99,8 +99,8 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
       {service.shortAnswer && (
         <section className="border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-            <div className="max-w-4xl rounded-2xl border border-sky-200 bg-sky-50 p-7 md:p-8">
-              <p className="text-sm font-semibold uppercase tracking-wide text-sky-800">Короткий ответ</p>
+            <div className="max-w-4xl rounded-2xl border border-amber-200 bg-amber-50 p-7 md:p-8">
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">Короткий ответ</p>
               <h2 className="mt-2 text-2xl font-bold text-slate-900">Что делает инженерная практика AI Verdict</h2>
               <p className="mt-4 text-base leading-7 text-slate-700">{service.shortAnswer}</p>
             </div>
@@ -152,7 +152,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           <div className="rounded-2xl border border-slate-200 bg-white p-7 md:p-9">
             <h2 className="text-2xl font-bold">Как измеряем результат</h2>
             <ul className="mt-5 space-y-3 text-slate-700">
-              {service.metrics.map((item) => <li key={item} className="flex gap-3"><span aria-hidden="true" className="text-sky-700">→</span><span>{item}</span></li>)}
+              {service.metrics.map((item) => <li key={item} className="flex gap-3"><span aria-hidden="true" className="text-amber-700">→</span><span>{item}</span></li>)}
             </ul>
           </div>
         </div>

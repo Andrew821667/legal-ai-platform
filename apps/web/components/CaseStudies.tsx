@@ -1,10 +1,12 @@
 "use client";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import Link from "next/link";
 
 const cases = [
   {
     title: "Поток договоров и согласований",
+    href: "/services/contracts-ai",
     problem: [
       "Много однотипных договоров и повторяющихся комментариев.",
       "Юристы тратят время на первый проход и ручную сверку шаблонов.",
@@ -23,6 +25,7 @@ const cases = [
   },
   {
     title: "Судебный и претензионный контур",
+    href: "/services/litigation-ai",
     problem: [
       "Нужно постоянно отслеживать события, сроки и похожую практику.",
       "Повторяющиеся документы готовятся вручную и долго сверяются.",
@@ -41,6 +44,7 @@ const cases = [
   },
   {
     title: "Due diligence и внутренний обзор массивов документов",
+    href: "/services/corporate-ma-ai",
     problem: [
       "Большой массив документов долго разбирается вручную.",
       "Сложно быстро выделить критичные вопросы для следующего этапа проверки.",
@@ -62,16 +66,17 @@ const cases = [
 export default function CaseStudies() {
   return (
     <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700">
-      <div className="relative overflow-hidden border-b border-slate-700">
-        <HeroBackdrop variant="insights" tone="light" />
-        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+      <div className="relative flex min-h-[560px] items-center overflow-hidden border-b border-slate-700">
+        <HeroBackdrop variant="home" tone="light" priority />
+        <div className="relative mx-auto w-full max-w-6xl px-4 pb-14 pt-24 sm:px-6 sm:py-28 lg:px-8">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold text-amber-700">Практические модели проекта</p>
+            <h1 className="mt-3 text-4xl font-bold text-white md:text-5xl">
               Типовые сценарии внедрения
             </h1>
-            <p className="text-xl text-slate-200 max-w-3xl mx-auto">
-              Ниже не “маркетинговые кейсы с красивыми цифрами”, а типовые паттерны задач,
-              в которых AI обычно дает эффект для юридической функции.
+            <p className="mt-5 text-lg leading-8 text-slate-700">
+              Показываем не неподтвержденные проценты, а проверяемые модели: исходную проблему, состав рабочего
+              контура, ожидаемый эффект и маршрут к измерению результата на пилоте.
             </p>
           </div>
         </div>
@@ -88,7 +93,7 @@ export default function CaseStudies() {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div>
-                  <h3 className="text-lg font-semibold text-red-300 mb-4">Проблема</h3>
+                  <h3 className="text-lg font-semibold text-slate-200 mb-4">Проблема</h3>
                   <ul className="space-y-3 text-slate-300">
                     {item.problem.map((point) => (
                       <li key={point}>• {point}</li>
@@ -97,7 +102,7 @@ export default function CaseStudies() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-blue-300 mb-4">Что меняем</h3>
+                  <h3 className="text-lg font-semibold text-amber-300 mb-4">Что меняем</h3>
                   <ul className="space-y-3 text-slate-300">
                     {item.solution.map((point) => (
                       <li key={point}>• {point}</li>
@@ -106,13 +111,18 @@ export default function CaseStudies() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-emerald-300 mb-4">Какой эффект ожидаем</h3>
+                  <h3 className="text-lg font-semibold text-slate-200 mb-4">Какой эффект ожидаем</h3>
                   <ul className="space-y-3 text-slate-300">
                     {item.result.map((point) => (
                       <li key={point}>• {point}</li>
                     ))}
                   </ul>
                 </div>
+              </div>
+              <div className="mt-8 border-t border-white/15 pt-5">
+                <Link href={item.href} className="font-semibold text-amber-300 hover:text-amber-200">
+                  Посмотреть состав решения →
+                </Link>
               </div>
             </article>
           ))}

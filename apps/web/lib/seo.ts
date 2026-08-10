@@ -26,6 +26,7 @@ type PageMetadataOptions = {
   index?: boolean;
   follow?: boolean;
   keywords?: string[];
+  socialImage?: string;
 };
 
 export function createPageMetadata({
@@ -36,6 +37,7 @@ export function createPageMetadata({
   index = true,
   follow = true,
   keywords,
+  socialImage = "/opengraph-image",
 }: PageMetadataOptions): Metadata {
   const socialTitle = title.includes(BRAND) ? title : `${title} | ${BRAND}`;
   const canonicalUrl = new URL(path || "/", SEO_SITE_URL).toString();
@@ -56,7 +58,7 @@ export function createPageMetadata({
       description,
       images: [
         {
-          url: "/opengraph-image",
+          url: socialImage,
           width: 1200,
           height: 630,
           alt: socialTitle,
@@ -67,7 +69,7 @@ export function createPageMetadata({
       card: "summary_large_image",
       title: socialTitle,
       description,
-      images: ["/twitter-image"],
+      images: [socialImage],
     },
     robots: {
       index,
