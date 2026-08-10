@@ -1,49 +1,20 @@
 import { ImageResponse } from "next/og";
-import BrandMark from "@/components/BrandMark";
+
+import OgCard from "@/components/OgCard";
 
 export const runtime = "edge";
-export const alt = "AI Verdict";
-export const size = {
-  width: 1200,
-  height: 630,
-};
+export const alt = "AI Verdict — юридическая и инженерная практики";
+export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default function Image() {
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          background: "linear-gradient(135deg, #0f172a, #1e293b)",
-          color: "#fff",
-          padding: "56px",
-          fontFamily: "Arial",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: 30, fontWeight: 700 }}>
-          <BrandMark size={54} />
-          <div>AI Verdict</div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <div style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.1, maxWidth: 980 }}>
-            Автоматизация юридической работы
-          </div>
-          <div style={{ fontSize: 32, color: "#cbd5e1", maxWidth: 980 }}>
-            AI-решения для договоров, судебной работы и комплаенса
-          </div>
-        </div>
-
-        <div style={{ fontSize: 26, color: "#fbbf24" }}>ai-verdict.ru</div>
-      </div>
-    ),
-    {
-      ...size,
-    }
+    <OgCard
+      eyebrow="Юридическая + инженерная практики"
+      title="Автоматизация юридической функции"
+      description="Правовая логика, прикладная разработка, AI и интеграции в одном рабочем контуре"
+      variant="home"
+    />,
+    size,
   );
 }

@@ -11,6 +11,7 @@ export const metadata: Metadata = createPageMetadata({
   title: service.seoTitle,
   description: service.description,
   path: ROUTES.engineering,
+  socialImage: "/engineering/opengraph-image",
   keywords: [
     "разработка программного обеспечения",
     "разработка Telegram ботов",

@@ -15,6 +15,7 @@ export const metadata: Metadata = createPageMetadata({
   description:
     "Юридические услуги AI Verdict для бизнеса и частных лиц: консультации, договоры, судебные споры, недвижимость, семейные, наследственные и трудовые вопросы.",
   path: "/legal-help",
+  socialImage: "/legal-help/opengraph-image",
   keywords: ["юридическая помощь", "юридические услуги", "юрист для бизнеса", "консультация юриста"],
 });
 
@@ -115,9 +116,9 @@ export default function LegalHelpPage() {
     <main className={`${isLightOpsTheme ? "visual-light-ops" : ""} min-h-screen bg-slate-900 text-slate-100`}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-      <section className="relative overflow-hidden border-b border-slate-800">
-        <HeroBackdrop variant="services" tone="light" />
-        <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+      <section className="relative flex min-h-[660px] items-start overflow-hidden border-b border-slate-800 sm:min-h-[540px] sm:items-center">
+        <HeroBackdrop variant="legal" tone="light" priority />
+        <div className="relative mx-auto w-full max-w-7xl px-4 pb-12 pt-24 sm:px-6 sm:py-28 lg:px-8">
           <p className="text-sm font-semibold text-amber-300">Юридическое направление AI Verdict</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight text-white md:text-5xl">
             Юридические услуги для бизнеса и частных клиентов
@@ -127,16 +128,18 @@ export default function LegalHelpPage() {
             ближайший срок и оставьте контакт. Юрист изучит обращение и предложит консультацию или другой
             понятный следующий шаг в дистанционном формате по России.
           </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a href="#legal-help-form" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
+          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <a href="#legal-help-form" className="w-full rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400 sm:w-auto">
               Описать задачу
             </a>
-            <Link href="/legal-help/business" className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300">
-              Помощь бизнесу
-            </Link>
-            <Link href="/legal-help/individuals" className="rounded-lg border border-slate-700 px-6 py-3 text-center font-semibold text-slate-200 hover:border-amber-500 hover:text-amber-300">
-              Частным клиентам
-            </Link>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+              <Link href="/legal-help/business" className="text-slate-700 underline decoration-amber-500/60 underline-offset-4 hover:text-amber-700">
+                Помощь бизнесу →
+              </Link>
+              <Link href="/legal-help/individuals" className="text-slate-700 underline decoration-amber-500/60 underline-offset-4 hover:text-amber-700">
+                Частным клиентам →
+              </Link>
+            </div>
           </div>
         </div>
       </section>

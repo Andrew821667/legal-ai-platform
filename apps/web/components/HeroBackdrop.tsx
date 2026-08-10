@@ -1,57 +1,106 @@
-type HeroBackdropVariant = "home" | "services" | "solutions" | "insights" | "collaboration";
+type HeroBackdropVariant =
+  | "home"
+  | "legal"
+  | "engineering"
+  | "services"
+  | "solutions"
+  | "insights"
+  | "collaboration";
 
 type HeroBackdropProps = {
   variant: HeroBackdropVariant;
   tone?: "light" | "dark";
+  priority?: boolean;
 };
 
-const backgrounds: Record<HeroBackdropVariant, { image: string; position: string }> = {
+type Background = {
+  desktop: string;
+  mobile?: string;
+  position: string;
+};
+
+const backgrounds: Record<HeroBackdropVariant, Background> = {
   home: {
-    image: "/images/ai-verdict-hero-v1.jpg",
-    position: "68% center",
+    desktop: "/images/visual-v2/home-hero-v2-desktop",
+    mobile: "/images/visual-v2/home-hero-v2-mobile",
+    position: "center",
+  },
+  legal: {
+    desktop: "/images/visual-v2/legal-hero-v2-desktop",
+    mobile: "/images/visual-v2/legal-hero-v2-mobile",
+    position: "center",
+  },
+  engineering: {
+    desktop: "/images/visual-v2/engineering-hero-v2-desktop",
+    mobile: "/images/visual-v2/engineering-hero-v2-mobile",
+    position: "center",
   },
   services: {
-    image: "/images/ai-verdict-services-hero-v1.jpg",
+    desktop: "/images/ai-verdict-services-hero-v1.jpg",
     position: "70% center",
   },
   solutions: {
-    image: "/images/ai-verdict-solutions-hero-v1.jpg",
+    desktop: "/images/ai-verdict-solutions-hero-v1.jpg",
     position: "72% center",
   },
   insights: {
-    image: "/images/ai-verdict-insights-hero-v1.jpg",
+    desktop: "/images/ai-verdict-insights-hero-v1.jpg",
     position: "70% center",
   },
   collaboration: {
-    image: "/images/ai-verdict-collaboration-hero-v1.jpg",
+    desktop: "/images/ai-verdict-collaboration-hero-v1.jpg",
     position: "72% center",
   },
 };
 
-export default function HeroBackdrop({ variant, tone = "dark" }: HeroBackdropProps) {
+export default function HeroBackdrop({ variant, tone = "dark", priority = false }: HeroBackdropProps) {
   const background = backgrounds[variant];
+  const modern = Boolean(background.mobile);
 
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div
-        className="absolute inset-0 scale-[1.01] bg-cover"
-        style={{ backgroundImage: `url('${background.image}')`, backgroundPosition: background.position }}
-      />
+      {modern ? (
+        <picture>
+          <source media="(max-width: 639px)" srcSet={`${background.mobile}.avif`} type="image/avif" />
+          <source media="(max-width: 639px)" srcSet={`${background.mobile}.webp`} type="image/webp" />
+          <source srcSet={`${background.desktop}.avif`} type="image/avif" />
+          <source srcSet={`${background.desktop}.webp`} type="image/webp" />
+          <img
+            alt=""
+            className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
+            decoding="async"
+            fetchPriority={priority ? "high" : "auto"}
+            loading={priority ? "eager" : "lazy"}
+            src={`${background.desktop}.webp`}
+          />
+        </picture>
+      ) : (
+        <img
+          alt=""
+          className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
+          decoding="async"
+          loading={priority ? "eager" : "lazy"}
+          src={background.desktop}
+          style={{ objectPosition: background.position }}
+        />
+      )}
       <div
         className={
           tone === "light"
-            ? "absolute inset-0 bg-[linear-gradient(90deg,rgba(232,238,246,0.88)_0%,rgba(232,238,246,0.62)_50%,rgba(218,226,237,0.14)_100%)]"
+            ? modern
+              ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(232,238,246,0.82)_0%,rgba(232,238,246,0.58)_56%,rgba(226,232,240,0.08)_100%)] sm:bg-[linear-gradient(90deg,rgba(232,238,246,0.78)_0%,rgba(232,238,246,0.50)_48%,rgba(218,226,237,0.03)_100%)]"
+              : "absolute inset-0 bg-[linear-gradient(90deg,rgba(232,238,246,0.84)_0%,rgba(232,238,246,0.58)_50%,rgba(218,226,237,0.12)_100%)]"
             : "absolute inset-0 bg-[linear-gradient(90deg,rgba(2,6,23,0.88)_0%,rgba(15,23,42,0.62)_52%,rgba(15,23,42,0.16)_100%)]"
         }
       />
       <div
         className={
           tone === "light"
-            ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(226,232,240,0.34)_100%)]"
+            ? "absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(226,232,240,0.28)_100%)]"
             : "absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.04)_0%,rgba(2,6,23,0.62)_100%)]"
         }
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_22%,rgba(245,158,11,0.16),transparent_34%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_34%,rgba(245,158,11,0.12),transparent_32%)]" />
     </div>
   );
 }
