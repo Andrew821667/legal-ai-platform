@@ -31,6 +31,14 @@ Focused Legal AI knowledge pages:
 - AI in compliance monitoring and internal control: https://ai-verdict.ru/legal-ai/compliance
 - AI in corporate law, due diligence and M&A documents: https://ai-verdict.ru/legal-ai/corporate-law
 - Legal AI KPI, pilot evaluation and ROI: https://ai-verdict.ru/legal-ai/roi
+- Legal AI assistants, AI consultants, neuro-lawyers and virtual lawyer terminology: https://ai-verdict.ru/legal-ai/ai-legal-assistant
+- LegalTech, Legal Tech, Legal AI and LawTech terminology: https://ai-verdict.ru/legal-ai/legaltech
+- legal AI chatbots, legal intake and human escalation: https://ai-verdict.ru/legal-ai/legal-chatbot
+- RAG, internal legal search and AI knowledge bases: https://ai-verdict.ru/legal-ai/rag-knowledge-base
+- AI agents, tool use and controlled autonomy in legal processes: https://ai-verdict.ru/legal-ai/ai-agents
+- AI for law firms, advocates and private legal practice: https://ai-verdict.ru/legal-ai/law-firm
+- AI in civil, labor, tax, land, corporate, intellectual property and criminal law: https://ai-verdict.ru/legal-ai/branches-of-law
+- legal regulation of artificial intelligence in Russia: https://ai-verdict.ru/legal-ai/ai-regulation
 
 These pages cover distinct user intents. They do not replace process-specific service pages or legal advice about a concrete matter. Each page separates AI processing from human verification and links to the relevant service, guide or legal practice.
 

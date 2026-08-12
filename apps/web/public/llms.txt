@@ -23,6 +23,14 @@
 - AI in compliance: https://ai-verdict.ru/legal-ai/compliance
 - AI in corporate law and M&A: https://ai-verdict.ru/legal-ai/corporate-law
 - Legal AI KPI and ROI: https://ai-verdict.ru/legal-ai/roi
+- Legal AI assistant, AI consultant and neuro-lawyer terminology: https://ai-verdict.ru/legal-ai/ai-legal-assistant
+- LegalTech, Legal AI and LawTech: https://ai-verdict.ru/legal-ai/legaltech
+- Legal AI chatbot and legal intake: https://ai-verdict.ru/legal-ai/legal-chatbot
+- RAG and AI knowledge bases for lawyers: https://ai-verdict.ru/legal-ai/rag-knowledge-base
+- AI agents for legal work: https://ai-verdict.ru/legal-ai/ai-agents
+- AI for law firms, advocates and private lawyers: https://ai-verdict.ru/legal-ai/law-firm
+- AI across branches of law: https://ai-verdict.ru/legal-ai/branches-of-law
+- Legal regulation of artificial intelligence in Russia: https://ai-verdict.ru/legal-ai/ai-regulation
 - AI automation services: https://ai-verdict.ru/services
 - AI for lawyers: https://ai-verdict.ru/for-lawyers
 - AI for business: https://ai-verdict.ru/for-business

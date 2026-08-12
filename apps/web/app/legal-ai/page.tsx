@@ -7,19 +7,25 @@ import { LEGAL_OPERATOR_NAME } from "@/lib/legalProfile";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "ИИ в юридической сфере: применение Legal AI на практике",
+  title: "ИИ для юриспруденции: Legal AI в праве",
   description:
-    "Что такое ИИ в юридической сфере, где Legal AI помогает юристам, как работать с договорами и правовыми данными и безопасно внедрить ИИ в юридический отдел.",
+    "ИИ для юриспруденции и юридической сферы: Legal AI, нейросети и AI-инструменты для права, документов, поиска, юристов и юридических отделов.",
   path: "/legal-ai",
   type: "article",
   keywords: [
     "ИИ в юридической сфере",
+    "ИИ для юриспруденции",
+    "ИИ в юриспруденции",
     "искусственный интеллект в юридической сфере",
     "искусственный интеллект в юриспруденции",
     "применение ИИ в юриспруденции",
     "юридический ИИ",
+    "правовой ИИ",
+    "AI в юридической сфере",
     "Legal AI",
     "ИИ в праве",
+    "искусственный интеллект и право",
+    "ИИ в юридической деятельности",
   ],
   socialImage: "/solutions/opengraph-image",
 });
@@ -82,6 +88,39 @@ const terms = [
   },
 ];
 
+const queryGroups = [
+  {
+    title: "Общее название направления",
+    text: "ИИ для юриспруденции, ИИ в юриспруденции, искусственный интеллект в юридической сфере, ИИ в праве, искусственный интеллект и право, AI в юридической деятельности.",
+    href: "/legal-ai",
+  },
+  {
+    title: "Инструмент для специалиста",
+    text: "ИИ для юриста, AI для юристов, нейросеть для юриста, юридическая нейросеть, ИИ-помощник юриста, нейроюрист, юридический AI-ассистент.",
+    href: "/for-lawyers",
+  },
+  {
+    title: "Система и технология",
+    text: "Legal AI, LegalTech, Legal Tech, LawTech, правовой ИИ, юридический искусственный интеллект, RAG для юристов, юридические AI-агенты.",
+    href: "/legal-ai/legaltech",
+  },
+  {
+    title: "Задача и документ",
+    text: "ИИ для юридических документов, анализа договоров, составления исков, поиска законов, анализа судебной практики, комплаенса и корпоративной работы.",
+    href: "/guides/ai-legal-documents",
+  },
+  {
+    title: "Команда и рабочий процесс",
+    text: "ИИ для юридического отдела, автоматизация работы юриста, Legal AI для бизнеса, ИИ для юридической фирмы, AI для адвоката и цифровизация юридической функции.",
+    href: "/legal-ai/legal-department",
+  },
+  {
+    title: "Диалоговый формат",
+    text: "Юридический ИИ онлайн, юридический AI-консультант, виртуальный юрист, робот-юрист, юридический чат-бот и AI-чат для юридических вопросов.",
+    href: "/legal-ai/ai-legal-assistant",
+  },
+];
+
 const stages = [
   ["1", "Выбрать процесс", "Зафиксировать один повторяемый маршрут, его владельца, входные данные и проблемную точку."],
   ["2", "Подготовить контрольный набор", "Собрать реальные примеры и заранее определить правильные результаты и критичные ошибки."],
@@ -95,6 +134,16 @@ const faq = [
     question: "Что такое ИИ в юридической сфере?",
     answer:
       "Это применение технологий искусственного интеллекта к юридическим документам, данным и процессам: поиску, классификации, анализу, сравнению, подготовке черновиков и маршрутизации задач. ИИ помогает обработать материал, но не получает профессиональную ответственность юриста.",
+  },
+  {
+    question: "Что означает запрос «ИИ для юриспруденции»?",
+    answer:
+      "Обычно так ищут искусственный интеллект для юридической деятельности: правовой поиск, анализ и подготовку документов, судебные материалы, Legal AI для юристов и автоматизацию юридического отдела. Это широкий запрос, поэтому конкретные задачи раскрыты на отдельных связанных страницах.",
+  },
+  {
+    question: "ИИ в праве, Legal AI и юридическая нейросеть — это одно и то же?",
+    answer:
+      "Формулировки пересекаются, но не полностью совпадают. ИИ в праве — широкая область применения и регулирования; Legal AI — класс юридических AI-решений; нейросеть — технология, которая может быть только одним компонентом системы.",
   },
   {
     question: "Как искусственный интеллект используется в юриспруденции?",
@@ -132,7 +181,7 @@ export default function LegalAiPage() {
         "@type": ["WebPage", "TechArticle"],
         "@id": `${url}#article`,
         url,
-        headline: "ИИ в юридической сфере: применение Legal AI на практике",
+        headline: "ИИ для юриспруденции и юридической сферы: Legal AI",
         description: metadata.description,
         datePublished: "2026-08-12",
         dateModified: "2026-08-12",
@@ -177,7 +226,7 @@ export default function LegalAiPage() {
           </nav>
           <p className="text-sm font-semibold uppercase tracking-wide text-amber-800 sm:mt-6">Практический обзор Legal AI</p>
           <h1 className="mt-3 max-w-5xl text-[32px] font-semibold leading-[1.15] text-slate-950 sm:text-4xl md:text-5xl">
-            ИИ в юридической сфере: применение Legal AI на практике
+            ИИ для юриспруденции и юридической сферы: применение Legal AI
           </h1>
           <p className="mt-5 max-w-4xl text-base leading-7 text-slate-700 sm:mt-6 sm:text-lg sm:leading-relaxed">
             Разбираем, где искусственный интеллект помогает юристам, как контролировать ошибки и данные и как
@@ -190,6 +239,28 @@ export default function LegalAiPage() {
             <Link href="/services" className="rounded-lg border border-slate-500 px-5 py-3 font-semibold text-slate-800 hover:border-amber-600 hover:text-amber-800">
               Сценарии внедрения
             </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-slate-800 bg-slate-900/70">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-300">Семантическая карта</p>
+          <h2 className="mt-3 text-3xl font-semibold text-white">Как называют ИИ для юридической работы</h2>
+          <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+            Люди формулируют одну потребность разными словами. Мы объединяем синонимы на канонической странице,
+            а отдельный URL создаем только тогда, когда меняются задача, аудитория или ожидаемый результат.
+          </p>
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {queryGroups.map((group) => (
+              <article key={group.title} className="rounded-xl border border-slate-700 bg-slate-950/70 p-6">
+                <h3 className="text-lg font-semibold text-amber-300">{group.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{group.text}</p>
+                <Link href={group.href} className="mt-5 inline-flex text-sm font-semibold text-sky-300 hover:text-sky-200">
+                  Перейти к теме →
+                </Link>
+              </article>
+            ))}
           </div>
         </div>
       </section>

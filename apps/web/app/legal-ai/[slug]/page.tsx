@@ -141,6 +141,21 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+        <h2 className="text-2xl font-semibold text-white">Как формулируют этот запрос</h2>
+        <p className="mt-3 max-w-4xl leading-7 text-slate-300">
+          Эти формулировки описывают близкое поисковое намерение и ведут на одну каноническую страницу, чтобы не
+          создавать дублирующие материалы.
+        </p>
+        <ul className="mt-6 flex flex-wrap gap-3">
+          {topic.keywords.map((keyword) => (
+            <li key={keyword} className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-200">
+              {keyword}
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-semibold text-white">Рабочий порядок</h2>
         <ol className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -152,6 +167,23 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
           ))}
         </ol>
       </section>
+
+      {topic.sources && (
+        <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-7">
+            <h2 className="text-2xl font-semibold text-white">Официальные источники для проверки</h2>
+            <ul className="mt-5 grid gap-3 md:grid-cols-2">
+              {topic.sources.map((source) => (
+                <li key={source.href}>
+                  <a href={source.href} className="text-sky-300 underline underline-offset-4 hover:text-sky-200">
+                    {source.label} →
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       <section className="border-y border-slate-800 bg-slate-900/70">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
