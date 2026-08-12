@@ -59,6 +59,13 @@ const scenarios = [
   },
 ];
 
+const practicalTopics = [
+  { href: "/legal-ai/prompts-for-lawyers", title: "Промпты для юристов", text: "Шаблоны запросов с запретом на выдуманные факты и обязательной самопроверкой." },
+  { href: "/legal-ai/legal-research", title: "Правовой поиск", text: "Работа с источниками, редакциями норм и подтверждающими фрагментами." },
+  { href: "/legal-ai/court-practice-analysis", title: "Судебная практика", text: "Выборка актов, факторы дела и проверяемая матрица позиций." },
+  { href: "/legal-ai/court-documents", title: "Процессуальные документы", text: "Факты, доказательства, структура и безопасная подготовка черновика." },
+];
+
 const selectionCriteria = [
   "Есть ссылки на исходный документ, правило или другой проверяемый источник.",
   "Можно ограничить доступ, сроки хранения и передачу данных внешним провайдерам.",
@@ -171,6 +178,18 @@ export default function ForLawyersPage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-semibold text-white">Практические материалы для юриста</h2>
+        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {practicalTopics.map((item) => (
+            <Link key={item.href} href={item.href} className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 hover:border-amber-500">
+              <h3 className="font-semibold text-amber-300">{item.title} →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
+            </Link>
+          ))}
         </div>
       </section>
 

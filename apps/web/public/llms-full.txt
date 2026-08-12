@@ -21,6 +21,19 @@ Topical authority page for artificial intelligence in the legal field, Legal AI,
 
 This overview defines Legal AI, maps practical use cases, distinguishes an AI assistant from a controlled Legal AI system, explains human review, data risks and a staged implementation approach. It is the canonical target for broad informational queries about AI in the legal field. The professional query "AI for lawyers" is handled by https://ai-verdict.ru/for-lawyers, while individual services keep their own process-specific pages.
 
+Focused Legal AI knowledge pages:
+
+- AI for legal departments and legal operations: https://ai-verdict.ru/legal-ai/legal-department
+- AI-assisted legal research and legislation analysis: https://ai-verdict.ru/legal-ai/legal-research
+- AI analysis of court practice and case materials: https://ai-verdict.ru/legal-ai/court-practice-analysis
+- verifiable prompt templates for lawyers: https://ai-verdict.ru/legal-ai/prompts-for-lawyers
+- AI for claims, responses, motions and procedural documents: https://ai-verdict.ru/legal-ai/court-documents
+- AI in compliance monitoring and internal control: https://ai-verdict.ru/legal-ai/compliance
+- AI in corporate law, due diligence and M&A documents: https://ai-verdict.ru/legal-ai/corporate-law
+- Legal AI KPI, pilot evaluation and ROI: https://ai-verdict.ru/legal-ai/roi
+
+These pages cover distinct user intents. They do not replace process-specific service pages or legal advice about a concrete matter. Each page separates AI processing from human verification and links to the relevant service, guide or legal practice.
+
 This practice designs controlled workflows for legal departments and related business teams. Typical work includes:
 
 - contract review, risk matrices, negotiation and approval routes;
