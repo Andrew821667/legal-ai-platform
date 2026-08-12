@@ -6,11 +6,19 @@ import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata: Metadata = createPageMetadata({
-  title: "ИИ для юристов: сервисы и сценарии применения",
+  title: "ИИ для юристов: нейросети, сервисы и сценарии",
   description:
-    "ИИ для юристов и юридических отделов: проверка договоров, претензионная работа, legal intake, поиск по базе знаний и безопасный запуск пилота.",
+    "ИИ и нейросети для юристов и юридических отделов: договоры, документы, претензионная работа, правовой поиск, Legal AI и безопасный запуск пилота.",
   path: "/for-lawyers",
-  keywords: ["ИИ для юристов", "ИИ помощник для юриста", "AI для юристов", "автоматизация работы юриста"],
+  keywords: [
+    "ИИ для юристов",
+    "нейросеть для юриста",
+    "юридическая нейросеть",
+    "ИИ помощник для юриста",
+    "AI для юристов",
+    "Legal AI для юристов",
+    "автоматизация работы юриста",
+  ],
 });
 
 const tracks = [
@@ -75,6 +83,14 @@ const faq = [
     question: "С чего начать внедрение ИИ в юридическом отделе?",
     answer: "С одного повторяемого процесса, понятной исходной метрики и контрольного набора. Пилот должен иметь владельца, ручной резервный маршрут и заранее согласованные критерии качества.",
   },
+  {
+    question: "Чем юридическая нейросеть отличается от универсального ИИ-чата?",
+    answer: "Юридическая нейросеть должна работать с проверяемыми источниками, документами и правилами процесса. Универсальный чат удобен для идей и черновиков, но без источников, ролей и контроля не образует надежный Legal AI-контур.",
+  },
+  {
+    question: "Можно ли использовать ИИ для подготовки юридических документов?",
+    answer: "Да, как инструмент для структуры, извлечения фактов и черновой редакции. Неизвестные факты нельзя заполнять автоматически, а нормы, реквизиты, позицию и итоговый текст должен проверить ответственный юрист.",
+  },
 ];
 
 export default function ForLawyersPage() {
@@ -106,7 +122,35 @@ export default function ForLawyersPage() {
             legal intake и поиск по внутренней базе знаний. Система готовит проверяемый материал, а решение остается
             за юристом.
           </p>
+          <Link href="/legal-ai" className="mt-6 inline-flex font-semibold text-slate-700 underline decoration-amber-600 underline-offset-4 hover:text-amber-800">
+            Что такое ИИ в юридической сфере и как он применяется →
+          </Link>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-semibold text-white">ИИ-помощник, нейросеть и Legal AI для юриста</h2>
+        <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+          Эти названия часто используют как синонимы, но для выбора решения важен не ярлык, а рабочий контур:
+          источники, документы, правила проверки, права доступа и действие, которое следует после ответа системы.
+        </p>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">ИИ-помощник юриста</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Диалоговый интерфейс для поиска, анализа, резюме и подготовки рабочего черновика.</p>
+          </article>
+          <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Нейросеть для юриста</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Модель, которая обрабатывает текст и документы; сама по себе не гарантирует актуальность источников и юридическую точность.</p>
+          </article>
+          <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Legal AI-система</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Модель вместе с источниками, правилами, ролями, журналом, интеграциями и контролем человека.</p>
+          </article>
+        </div>
+        <Link href="/guides/ai-legal-documents" className="mt-7 inline-flex font-semibold text-sky-300 hover:text-sky-200">
+          ИИ для подготовки и проверки юридических документов →
+        </Link>
       </section>
 
       <section className="border-y border-slate-800 bg-slate-800/40">

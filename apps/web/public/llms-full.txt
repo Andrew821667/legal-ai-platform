@@ -1,6 +1,6 @@
 # AI Verdict — extended machine-readable overview
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-12
 Canonical website: https://ai-verdict.ru/
 Primary language: Russian (`ru-RU`)
 Primary service area: Russia
@@ -14,6 +14,12 @@ The practices are intentionally separated. AI Verdict should not be described as
 ## 1. Core practice: legal function automation
 
 Authoritative page: https://ai-verdict.ru/services
+
+Topical authority page for artificial intelligence in the legal field, Legal AI, AI in law and AI in jurisprudence:
+
+- https://ai-verdict.ru/legal-ai
+
+This overview defines Legal AI, maps practical use cases, distinguishes an AI assistant from a controlled Legal AI system, explains human review, data risks and a staged implementation approach. It is the canonical target for broad informational queries about AI in the legal field. The professional query "AI for lawyers" is handled by https://ai-verdict.ru/for-lawyers, while individual services keep their own process-specific pages.
 
 This practice designs controlled workflows for legal departments and related business teams. Typical work includes:
 
@@ -100,6 +106,7 @@ Contract AI is a separate product entry point. Legal services and engineering pr
 - Selecting AI for legal work: https://ai-verdict.ru/guides/ai-for-lawyers-selection
 - Legal AI implementation: https://ai-verdict.ru/guides/legal-ai-implementation
 - Legal AI data security: https://ai-verdict.ru/guides/legal-ai-data-security
+- AI for legal documents: https://ai-verdict.ru/guides/ai-legal-documents
 - Practical cases: https://ai-verdict.ru/content-cases
 
 ## Entity, authorship and policies

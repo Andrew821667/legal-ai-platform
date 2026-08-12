@@ -14,10 +14,12 @@ type SitemapPage = {
 
 const marketingUpdatedAt = "2026-07-15";
 const practiceUpdatedAt = "2026-08-05";
+const legalAiUpdatedAt = "2026-08-12";
 
 const pages: SitemapPage[] = [
-  { path: "", lastModified: practiceUpdatedAt, changeFrequency: "weekly", priority: 1 },
-  { path: "/for-lawyers", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
+  { path: "", lastModified: legalAiUpdatedAt, changeFrequency: "weekly", priority: 1 },
+  { path: "/legal-ai", lastModified: legalAiUpdatedAt, changeFrequency: "monthly", priority: 0.95 },
+  { path: "/for-lawyers", lastModified: legalAiUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
@@ -37,7 +39,7 @@ const pages: SitemapPage[] = [
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
   { path: "/cases", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/guides", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 0.85 },
+  { path: "/guides", lastModified: legalAiUpdatedAt, changeFrequency: "weekly", priority: 0.85 },
   { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/team", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },

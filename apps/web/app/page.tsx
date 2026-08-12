@@ -153,6 +153,9 @@ export default function Home() {
             выбираем технический контур: AI-модуль, интеграции, интерфейсы, внутренний сервис или простую автоматизацию
             без лишней сложности.
           </p>
+          <Link href={ROUTES.legalAi} className="mt-5 inline-flex font-semibold text-amber-300 hover:text-amber-200">
+            ИИ в юридической сфере: возможности, риски и применение →
+          </Link>
         </div>
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {launchPath.map((item) => (

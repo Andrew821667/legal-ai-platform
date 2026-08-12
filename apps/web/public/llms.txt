@@ -14,6 +14,7 @@
 ## Primary Pages
 
 - Website and practice overview: https://ai-verdict.ru/
+- AI in the legal field and Legal AI overview: https://ai-verdict.ru/legal-ai
 - AI automation services: https://ai-verdict.ru/services
 - AI for lawyers: https://ai-verdict.ru/for-lawyers
 - AI for business: https://ai-verdict.ru/for-business
@@ -26,6 +27,7 @@
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Contract AI product: https://ai-verdict.ru/contract-ai-system
 - Legal AI guides: https://ai-verdict.ru/guides
+- AI for legal documents: https://ai-verdict.ru/guides/ai-legal-documents
 - Team and responsible author: https://ai-verdict.ru/team
 - AI policy: https://ai-verdict.ru/ai-policy
 
