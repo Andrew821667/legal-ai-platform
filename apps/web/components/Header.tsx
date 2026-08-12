@@ -55,6 +55,7 @@ export default function Header() {
 
   const secondaryNavigation = [
     { name: "Главная", href: "/" },
+    { name: "ИИ в юридической сфере", href: ROUTES.legalAi },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
     { name: "О платформе", href: "/about" },

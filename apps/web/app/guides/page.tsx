@@ -5,10 +5,11 @@ import { createPageMetadata } from "@/lib/seo";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata = createPageMetadata({
-  title: "Практические руководства по Legal AI",
+  title: "Legal AI и ИИ для юристов: практические руководства",
   description:
-    "Практические материалы по выбору ИИ для юриста, проверке договоров, внедрению Legal AI в юридический отдел и безопасности данных.",
+    "Материалы об ИИ в юридической сфере: выбор нейросети для юриста, юридические документы, договоры, внедрение Legal AI и безопасность данных.",
   path: "/guides",
+  keywords: ["Legal AI", "ИИ для юристов", "нейросеть для юриста", "ИИ для юридических документов"],
 });
 
 export default function GuidesPage() {
@@ -24,6 +25,9 @@ export default function GuidesPage() {
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-slate-200">
             Без обещаний заменить юриста: разбираем выбор инструмента, процессы, метрики пилота, контроль качества и требования к данным.
           </p>
+          <Link href="/legal-ai" className="mt-6 inline-flex font-semibold text-slate-700 underline decoration-amber-600 underline-offset-4 hover:text-amber-800">
+            Начать с обзора ИИ в юридической сфере →
+          </Link>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 export const ROUTES = {
   home: "/",
   forLawyers: "/for-lawyers",
+  legalAi: "/legal-ai",
   forBusiness: "/for-business",
   contractAI: "/contract-ai-system",
   solutions: "/solutions",

@@ -46,6 +46,8 @@ export default async function GuidePage({ params }: GuidePageProps) {
   const relatedGuides = guides.filter((item) => item.slug !== guide.slug);
   const relatedService = guide.slug === "ai-contract-review-process"
     ? { href: "/services/contracts-ai", label: "Автоматизация договорной работы" }
+    : guide.slug === "ai-legal-documents"
+      ? { href: "/legal-ai", label: "ИИ в юридической сфере: полный обзор" }
     : guide.slug === "ai-for-lawyers-selection"
       ? { href: "/for-lawyers", label: "ИИ для юристов: практические сценарии" }
     : guide.slug === "legal-ai-data-security"

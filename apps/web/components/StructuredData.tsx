@@ -42,6 +42,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
 
   const navigationItems = [
     { name: "Главная", url: siteUrl },
+    { name: "ИИ в юридической сфере", url: `${siteUrl}/legal-ai` },
     { name: "Для юристов", url: `${siteUrl}/for-lawyers` },
     { name: "Для бизнеса", url: `${siteUrl}/for-business` },
     { name: "Услуги", url: `${siteUrl}/services` },
@@ -68,6 +69,10 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       name: "Россия",
     },
     knowsAbout: [
+      "искусственный интеллект в юридической сфере",
+      "искусственный интеллект в юриспруденции",
+      "юридический ИИ",
+      "Legal AI",
       "автоматизация юридической работы",
       "legal tech",
       "AI для юристов",
