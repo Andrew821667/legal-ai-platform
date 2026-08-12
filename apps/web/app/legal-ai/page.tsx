@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import { legalAiTopics } from "@/lib/legalAiTopics";
 import { LEGAL_OPERATOR_NAME } from "@/lib/legalProfile";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 
@@ -218,6 +219,28 @@ export default function LegalAiPage() {
               проверку фактов, правовую оценку и профессиональную ответственность человека.
             </p>
           </aside>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">Тематический каталог</p>
+        <h2 className="mt-3 text-3xl font-semibold text-white">ИИ в работе юриста: отдельные задачи</h2>
+        <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+          Выберите конкретный процесс. Каждый материал раскрывает самостоятельный поисковый вопрос и ведет к
+          подходящему сервису, руководству или юридической практике без дублирования страниц.
+        </p>
+        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {legalAiTopics.map((topic) => (
+            <Link
+              key={topic.slug}
+              href={`/legal-ai/${topic.slug}`}
+              className="rounded-xl border border-slate-800 bg-slate-900 p-6 hover:border-amber-500"
+            >
+              <h3 className="font-semibold text-amber-300">{topic.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{topic.description}</p>
+              <span className="mt-5 inline-flex text-sm font-semibold text-sky-300">Открыть материал →</span>
+            </Link>
+          ))}
         </div>
       </section>
 

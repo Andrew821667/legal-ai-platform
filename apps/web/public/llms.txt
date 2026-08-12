@@ -15,6 +15,14 @@
 
 - Website and practice overview: https://ai-verdict.ru/
 - AI in the legal field and Legal AI overview: https://ai-verdict.ru/legal-ai
+- AI for legal departments: https://ai-verdict.ru/legal-ai/legal-department
+- AI legal research and legislation analysis: https://ai-verdict.ru/legal-ai/legal-research
+- AI analysis of court practice: https://ai-verdict.ru/legal-ai/court-practice-analysis
+- Prompts for lawyers: https://ai-verdict.ru/legal-ai/prompts-for-lawyers
+- AI for court and procedural documents: https://ai-verdict.ru/legal-ai/court-documents
+- AI in compliance: https://ai-verdict.ru/legal-ai/compliance
+- AI in corporate law and M&A: https://ai-verdict.ru/legal-ai/corporate-law
+- Legal AI KPI and ROI: https://ai-verdict.ru/legal-ai/roi
 - AI automation services: https://ai-verdict.ru/services
 - AI for lawyers: https://ai-verdict.ru/for-lawyers
 - AI for business: https://ai-verdict.ru/for-business

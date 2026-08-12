@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 
 import { guides } from "@/lib/guidesData";
+import { LEGAL_AI_REVIEWED_AT, legalAiTopics } from "@/lib/legalAiTopics";
 import { LEGAL_HELP_REVIEWED_AT, legalHelpPageList } from "@/lib/legalHelpPages";
 import { legalHelpRegionList } from "@/lib/legalHelpRegions";
 import { SEO_SITE_URL } from "@/lib/seo";
@@ -69,8 +70,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "monthly",
     priority: 0.7,
   }));
+  const legalAiPages: SitemapPage[] = legalAiTopics.map((topic) => ({
+    path: `/legal-ai/${topic.slug}`,
+    lastModified: LEGAL_AI_REVIEWED_AT,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
 
-  return [...pages, ...legalPages, ...legalRegionPages, ...guidePages].map((page) => ({
+  return [...pages, ...legalAiPages, ...legalPages, ...legalRegionPages, ...guidePages].map((page) => ({
     url: `${baseUrl}${page.path}`,
     lastModified: new Date(`${page.lastModified}T00:00:00.000Z`),
     changeFrequency: page.changeFrequency,
