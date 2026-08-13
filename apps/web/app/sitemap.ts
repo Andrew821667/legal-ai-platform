@@ -41,7 +41,7 @@ const pages: SitemapPage[] = [
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
   { path: "/cases", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.8 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/guides", lastModified: legalAiUpdatedAt, changeFrequency: "weekly", priority: 0.85 },
+  { path: "/guides", lastModified: LEGAL_AI_REVIEWED_AT, changeFrequency: "weekly", priority: 0.85 },
   { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/team", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },
