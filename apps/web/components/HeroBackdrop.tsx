@@ -61,24 +61,30 @@ export default function HeroBackdrop({ variant, tone = "dark", priority = false 
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       {modern ? (
         <picture>
-          <source media="(max-width: 639px)" srcSet={`${background.mobile}.avif`} type="image/avif" />
+          <source
+            media="(max-width: 639px)"
+            srcSet={`${background.mobile}-480.avif`}
+            type="image/avif"
+          />
           <source media="(max-width: 639px)" srcSet={`${background.mobile}.webp`} type="image/webp" />
           <source srcSet={`${background.desktop}.avif`} type="image/avif" />
           <source srcSet={`${background.desktop}.webp`} type="image/webp" />
           <img
             alt=""
             className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
-            decoding="async"
+            decoding={priority ? "sync" : "async"}
             fetchPriority={priority ? "high" : "auto"}
             loading={priority ? "eager" : "lazy"}
             src={`${background.desktop}.webp`}
+            style={{ objectPosition: background.position }}
           />
         </picture>
       ) : (
         <img
           alt=""
           className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
-          decoding="async"
+          decoding={priority ? "sync" : "async"}
+          fetchPriority={priority ? "high" : "auto"}
           loading={priority ? "eager" : "lazy"}
           src={background.desktop}
           style={{ objectPosition: background.position }}

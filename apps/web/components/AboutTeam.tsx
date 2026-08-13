@@ -1,6 +1,5 @@
-"use client";
-
 import { Scale, Bot, Workflow, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import HeroBackdrop from "@/components/HeroBackdrop";
 import {
   LEGAL_CONTACT_EMAIL,
@@ -49,6 +48,13 @@ const stack = [
   "Next.js / TypeScript",
   "RAG и внутренняя база знаний",
   "Интеграции с CRM, ЭДО и внутренними системами",
+];
+
+const reviewPrinciples = [
+  "Отделяем возможности технологии от подтвержденного результата конкретного пилота.",
+  "Юридические утверждения проверяем по применимому праву РФ и указываем дату содержательного обновления.",
+  "Не публикуем проценты эффективности, отзывы и истории клиентов без проверяемого основания и разрешения.",
+  "Для AI-выводов требуем источник, ручную проверку и понятный маршрут действий при неопределенности.",
 ];
 
 export default function AboutTeam() {
@@ -143,6 +149,29 @@ export default function AboutTeam() {
             </p>
           </div>
         </div>
+
+        <section className="mt-10 rounded-2xl border border-sky-500/25 bg-sky-500/10 p-8">
+          <p className="text-sm font-semibold uppercase tracking-wider text-sky-300">Редакционная ответственность</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Как проверяются материалы AI Verdict</h2>
+          <ul className="mt-5 grid gap-4 md:grid-cols-2">
+            {reviewPrinciples.map((item) => (
+              <li key={item} className="rounded-xl border border-slate-700 bg-slate-950/50 p-5 text-sm leading-6 text-slate-300">
+                {item}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-6 flex flex-wrap gap-5">
+            <Link href="/cases" className="font-semibold text-amber-300 hover:text-amber-200">
+              Сценарии и методика измерения →
+            </Link>
+            <Link href="/guides" className="font-semibold text-sky-300 hover:text-sky-200">
+              Практические руководства →
+            </Link>
+            <Link href="/ai-policy" className="font-semibold text-slate-200 hover:text-white">
+              Политика использования AI →
+            </Link>
+          </div>
+        </section>
       </div>
     </section>
   );
