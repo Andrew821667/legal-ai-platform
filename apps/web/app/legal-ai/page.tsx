@@ -184,7 +184,7 @@ export default function LegalAiPage() {
         headline: "ИИ для юриспруденции и юридической сферы: Legal AI",
         description: metadata.description,
         datePublished: "2026-08-12",
-        dateModified: "2026-08-12",
+        dateModified: "2026-08-13",
         inLanguage: "ru-RU",
         author: { "@type": "Person", "@id": `${SEO_SITE_URL}/#founder`, name: LEGAL_OPERATOR_NAME, url: `${SEO_SITE_URL}/team` },
         publisher: { "@type": "Organization", "@id": `${SEO_SITE_URL}/#organization`, name: "AI Verdict", url: SEO_SITE_URL },
@@ -238,6 +238,31 @@ export default function LegalAiPage() {
             </Link>
             <Link href="/services" className="rounded-lg border border-slate-500 px-5 py-3 font-semibold text-slate-800 hover:border-amber-600 hover:text-amber-800">
               Сценарии внедрения
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-slate-800 bg-slate-900/70">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-300">Проверить на практике</p>
+          <h2 className="mt-3 text-3xl font-semibold text-white">Инструменты и доказательства вместо обещаний</h2>
+          <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+            Для решения о внедрении нужны работающий интерфейс, проверяемая методика и расчет на собственных данных.
+            Эти материалы можно использовать отдельно от консультации.
+          </p>
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            <Link href="/contract-ai-system" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
+              <h3 className="text-lg font-semibold text-amber-300">Contract AI →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Действующий интерфейс для анализа и первичной проверки договоров.</p>
+            </Link>
+            <Link href="/legal-ai/roi" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
+              <h3 className="text-lg font-semibold text-amber-300">Калькулятор ROI →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Расчет времени, расходов, срока окупаемости и эффекта пилота.</p>
+            </Link>
+            <Link href="/cases" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
+              <h3 className="text-lg font-semibold text-amber-300">Методика кейса →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Какие показатели фиксировать и когда результат можно считать подтвержденным.</p>
             </Link>
           </div>
         </div>
@@ -431,7 +456,7 @@ export default function LegalAiPage() {
         </div>
         <p className="mt-8 text-sm leading-6 text-slate-500">
           Автор и ответственный за материал — <Link href="/team" className="underline hover:text-slate-300">{LEGAL_OPERATOR_NAME}</Link>.
-          Материал проверен 12 августа 2026 года и не заменяет юридическую консультацию по конкретным обстоятельствам.
+          Материал проверен 13 августа 2026 года и не заменяет юридическую консультацию по конкретным обстоятельствам.
         </p>
       </section>
     </main>

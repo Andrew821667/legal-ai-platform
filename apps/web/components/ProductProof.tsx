@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
+import { ROUTES, contractAIEntryHref } from "@/lib/links";
 
 const products = [
   {
@@ -8,8 +8,9 @@ const products = [
     description: "Публичный интерфейс системы анализа и проверки договоров с маршрутом от демо к пилоту.",
     image: "contract-ai-interface-v1",
     alt: "Публичный интерфейс Contract AI для анализа и проверки договоров",
-    href: contractAIEntryHref(),
-    external: contractAIEntryIsExternal(),
+    href: ROUTES.contractAI,
+    cta: "Возможности Contract AI",
+    productHref: contractAIEntryHref("demo"),
   },
   {
     title: "Telegram Mini App",
@@ -17,7 +18,8 @@ const products = [
     image: "miniapp-interface-v1",
     alt: "Интерфейс Mini App AI Verdict с маршрутами юридической и инженерной практик",
     href: ROUTES.miniApp,
-    external: false,
+    cta: "Открыть интерфейс",
+    productHref: null,
   },
   {
     title: "Веб-ассистент",
@@ -25,7 +27,8 @@ const products = [
     image: "web-assistant-interface-v1",
     alt: "Веб-ассистент AI Verdict с выбором автоматизации, юридической помощи или разработки",
     href: null,
-    external: false,
+    cta: null,
+    productHref: null,
   },
 ];
 
@@ -63,24 +66,25 @@ export default function ProductProof() {
                 <figcaption className="p-6">
                   <h3 className="text-xl font-semibold text-slate-950">{product.title}</h3>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{product.description}</p>
-                  {product.external && product.href ? (
-                    <a
-                      href={product.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-5 inline-flex font-semibold text-amber-700 hover:text-amber-600"
-                    >
-                      Открыть продукт →
-                    </a>
-                  ) : product.href ? (
+                  {product.href ? (
                     <Link href={product.href} className="mt-5 inline-flex font-semibold text-amber-700 hover:text-amber-600">
-                      Открыть интерфейс →
+                      {product.cta} →
                     </Link>
                   ) : (
                     <span className="mt-5 inline-flex text-sm font-semibold text-slate-500">
                       Доступен на публичных страницах сайта
                     </span>
                   )}
+                  {product.productHref ? (
+                    <a
+                      href={product.productHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-0 mt-3 inline-flex text-sm font-semibold text-slate-600 hover:text-amber-700 sm:ml-4 sm:mt-5"
+                    >
+                      Перейти в сервис ↗
+                    </a>
+                  ) : null}
                 </figcaption>
               </figure>
             </article>

@@ -15,12 +15,13 @@ type SitemapPage = {
 
 const marketingUpdatedAt = "2026-07-15";
 const practiceUpdatedAt = "2026-08-05";
-const legalAiUpdatedAt = "2026-08-12";
+const legalAiUpdatedAt = "2026-08-13";
+const visibilityUpdatedAt = "2026-08-13";
 
 const pages: SitemapPage[] = [
-  { path: "", lastModified: legalAiUpdatedAt, changeFrequency: "weekly", priority: 1 },
+  { path: "", lastModified: visibilityUpdatedAt, changeFrequency: "weekly", priority: 1 },
   { path: "/legal-ai", lastModified: legalAiUpdatedAt, changeFrequency: "monthly", priority: 0.95 },
-  { path: "/for-lawyers", lastModified: legalAiUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
+  { path: "/for-lawyers", lastModified: LEGAL_AI_REVIEWED_AT, changeFrequency: "monthly", priority: 0.9 },
   { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
@@ -29,7 +30,7 @@ const pages: SitemapPage[] = [
   { path: "/legal-help/individuals", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/regions", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.8 },
   { path: "/services/contracts-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
-  { path: "/contract-ai-system", lastModified: marketingUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
+  { path: "/contract-ai-system", lastModified: visibilityUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
   { path: "/services/litigation-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/services/compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/services/corporate-ma-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
@@ -38,11 +39,11 @@ const pages: SitemapPage[] = [
   { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/engineering", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
-  { path: "/cases", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/cases", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.8 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },
   { path: "/guides", lastModified: legalAiUpdatedAt, changeFrequency: "weekly", priority: 0.85 },
   { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
-  { path: "/team", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
+  { path: "/team", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },
   { path: "/privacy", lastModified: "2026-07-14", changeFrequency: "yearly", priority: 0.3 },
   { path: "/terms", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
@@ -72,7 +73,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }));
   const legalAiPages: SitemapPage[] = legalAiTopics.map((topic) => ({
     path: `/legal-ai/${topic.slug}`,
-    lastModified: LEGAL_AI_REVIEWED_AT,
+    lastModified: topic.reviewedAt ?? LEGAL_AI_REVIEWED_AT,
     changeFrequency: "monthly",
     priority: 0.8,
   }));

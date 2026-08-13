@@ -13,6 +13,7 @@ export type LegalAiTopic = {
   seoTitle: string;
   title: string;
   description: string;
+  reviewedAt?: string;
   keywords: string[];
   eyebrow: string;
   intro: string;
@@ -339,11 +340,12 @@ export const legalAiTopics: LegalAiTopic[] = [
   },
   {
     slug: "roi",
-    seoTitle: "Legal AI: KPI, ROI и оценка пилота",
+    seoTitle: "Калькулятор ROI Legal AI и оценка пилота",
     title: "Эффективность Legal AI: KPI, ROI и оценка пилота",
     description:
-      "Как измерить эффект Legal AI: время цикла, качество, ручная доработка, стоимость задачи, adoption, расчет ROI и решение о масштабировании.",
-    keywords: ["эффективность Legal AI", "ROI юридической автоматизации", "KPI юридического отдела ИИ", "оценка внедрения Legal AI"],
+      "Бесплатный калькулятор ROI Legal AI: время цикла, стоимость задачи, расходы на внедрение, срок окупаемости, KPI пилота и решение о масштабировании.",
+    reviewedAt: "2026-08-13",
+    keywords: ["калькулятор ROI Legal AI", "эффективность Legal AI", "ROI юридической автоматизации", "KPI юридического отдела ИИ", "оценка внедрения Legal AI"],
     eyebrow: "Экономика юридической автоматизации",
     intro:
       "Система метрик, которая отделяет красивую демонстрацию от устойчивого результата на реальных документах и процессах.",

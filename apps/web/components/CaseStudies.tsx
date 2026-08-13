@@ -1,7 +1,24 @@
-"use client";
-
 import HeroBackdrop from "@/components/HeroBackdrop";
 import Link from "next/link";
+
+const evidenceSteps = [
+  {
+    title: "Исходная линия",
+    text: "До пилота фиксируем объем задач, медианное время полного цикла, возвраты и критичные ошибки.",
+  },
+  {
+    title: "Контрольный набор",
+    text: "Ответственный специалист заранее размечает примеры и определяет допустимые и критичные расхождения.",
+  },
+  {
+    title: "Проверка на новых данных",
+    text: "Результат оценивается не на демонстрации, а на документах и задачах, которых система раньше не видела.",
+  },
+  {
+    title: "Решение о масштабе",
+    text: "Процесс расширяется, только если эффект воспроизводится, а цена контроля и ошибок остается приемлемой.",
+  },
+];
 
 const cases = [
   {
@@ -22,6 +39,9 @@ const cases = [
       "Бизнес быстрее получает обратную связь по типовым формам.",
       "Команда концентрируется на сложных переговорах и нетиповых рисках.",
     ],
+    metrics: ["время полного цикла", "критичные пропуски", "ложные замечания", "число возвратов"],
+    proofHref: "/contract-ai-system",
+    proofLabel: "Посмотреть действующий Contract AI",
   },
   {
     title: "Судебный и претензионный контур",
@@ -41,6 +61,9 @@ const cases = [
       "Уходит часть рутинной подготовки к типовым процессуальным действиям.",
       "Появляется более прозрачная картина судебной нагрузки.",
     ],
+    metrics: ["актуальность статусов", "пропущенные сроки", "время подготовки", "ручная сверка"],
+    proofHref: null,
+    proofLabel: null,
   },
   {
     title: "Due diligence и внутренний обзор массивов документов",
@@ -60,6 +83,9 @@ const cases = [
       "Руководство получает более понятный обзор на раннем этапе.",
       "Юристы тратят больше времени на анализ, а не на механическую сортировку.",
     ],
+    metrics: ["скорость первичного обзора", "точность классификации", "критичные пропуски", "ручная доработка"],
+    proofHref: null,
+    proofLabel: null,
   },
 ];
 
@@ -119,14 +145,58 @@ export default function CaseStudies() {
                   </ul>
                 </div>
               </div>
+              <div className="mt-7 rounded-xl border border-slate-600 bg-slate-950/50 p-5">
+                <h3 className="font-semibold text-sky-300">Что измеряем на пилоте</h3>
+                <ul className="mt-4 flex flex-wrap gap-2">
+                  {item.metrics.map((metric) => (
+                    <li key={metric} className="rounded-full border border-slate-700 px-3 py-1.5 text-sm text-slate-300">
+                      {metric}
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <div className="mt-8 border-t border-white/15 pt-5">
                 <Link href={item.href} className="font-semibold text-amber-300 hover:text-amber-200">
                   Посмотреть состав решения →
                 </Link>
+                {item.proofHref ? (
+                  <Link href={item.proofHref} className="ml-0 mt-3 block font-semibold text-sky-300 hover:text-sky-200 sm:ml-6 sm:mt-0 sm:inline-flex">
+                    {item.proofLabel} →
+                  </Link>
+                ) : null}
               </div>
             </article>
           ))}
         </div>
+
+        <section className="mt-12 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-7 md:p-9">
+          <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">Методика доказательства результата</p>
+          <h2 className="mt-3 text-3xl font-semibold text-white">Как сценарий становится подтвержденным кейсом</h2>
+          <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+            Здесь опубликованы проектные модели, а не вымышленные истории клиентов. Именованный кейс, проценты и
+            экономический эффект появятся только после измерения на согласованном наборе и разрешения на публикацию.
+          </p>
+          <ol className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {evidenceSteps.map((step, index) => (
+              <li key={step.title} className="rounded-xl border border-slate-700 bg-slate-950/60 p-5">
+                <span className="text-sm font-bold text-amber-300">0{index + 1}</span>
+                <h3 className="mt-2 font-semibold text-white">{step.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-7 flex flex-wrap gap-4">
+            <Link href="/legal-ai/roi" className="font-semibold text-amber-300 hover:text-amber-200">
+              Рассчитать ROI пилота →
+            </Link>
+            <Link href="/guides/legal-ai-implementation" className="font-semibold text-sky-300 hover:text-sky-200">
+              Методика запуска Legal AI →
+            </Link>
+            <Link href="/team" className="font-semibold text-slate-200 hover:text-white">
+              Ответственный за материалы →
+            </Link>
+          </div>
+        </section>
       </div>
     </section>
   );

@@ -254,6 +254,20 @@ export default function ContractAISystemPage() {
             </li>
           ))}
         </ol>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <Link href="/guides/ai-contract-review-process" className="rounded-xl border border-slate-700 bg-slate-950/60 p-5 hover:border-amber-500">
+            <h3 className="font-semibold text-amber-300">Методика проверки договора →</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Матрица рисков, контрольный набор, роль юриста и критерии качества.</p>
+          </Link>
+          <Link href="/legal-ai/roi" className="rounded-xl border border-slate-700 bg-slate-950/60 p-5 hover:border-amber-500">
+            <h3 className="font-semibold text-amber-300">Рассчитать ROI пилота →</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Интерактивный расчет времени, расходов, эффекта и срока окупаемости.</p>
+          </Link>
+          <Link href="/cases" className="rounded-xl border border-slate-700 bg-slate-950/60 p-5 hover:border-amber-500">
+            <h3 className="font-semibold text-amber-300">Сценарии и метрики →</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Как проектная модель превращается в подтвержденный кейс.</p>
+          </Link>
+        </div>
       </section>
 
       <section className="border-y border-slate-800 bg-slate-800/40">

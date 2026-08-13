@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
+import LegalAiRoiCalculator from "@/components/LegalAiRoiCalculator";
 import { LEGAL_OPERATOR_NAME } from "@/lib/legalProfile";
 import { getLegalAiTopic, LEGAL_AI_REVIEWED_AT, legalAiTopics } from "@/lib/legalAiTopics";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
@@ -36,6 +37,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
   if (!topic) notFound();
 
   const url = `${SEO_SITE_URL}/legal-ai/${topic.slug}`;
+  const reviewedAt = topic.reviewedAt ?? LEGAL_AI_REVIEWED_AT;
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -46,7 +48,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         headline: topic.title,
         description: topic.description,
         datePublished: LEGAL_AI_REVIEWED_AT,
-        dateModified: LEGAL_AI_REVIEWED_AT,
+        dateModified: reviewedAt,
         inLanguage: "ru-RU",
         mainEntityOfPage: { "@type": "WebPage", "@id": url },
         author: {
@@ -81,6 +83,17 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
           { "@type": "ListItem", position: 3, name: topic.title, item: url },
         ],
       },
+      ...(topic.slug === "roi" ? [{
+        "@type": "WebApplication",
+        "@id": `${url}#calculator`,
+        name: "Калькулятор ROI юридической автоматизации",
+        description: "Бесплатный расчет ROI, срока окупаемости и потенциального эффекта пилота Legal AI.",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        inLanguage: "ru-RU",
+        isPartOf: { "@id": url },
+        offers: { "@type": "Offer", price: "0", priceCurrency: "RUB" },
+      }] : []),
     ],
   };
 
@@ -168,6 +181,8 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         </ol>
       </section>
 
+      {topic.slug === "roi" ? <LegalAiRoiCalculator /> : null}
+
       {topic.sources && (
         <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-7">
@@ -239,7 +254,12 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         </div>
         <p className="mt-8 text-sm leading-6 text-slate-500">
           Автор и ответственный за материал — <Link href="/team" className="underline hover:text-slate-300">{LEGAL_OPERATOR_NAME}</Link>.
-          Материал проверен 12 августа 2026 года и не заменяет юридическую консультацию по конкретным обстоятельствам.
+          Материал проверен {new Intl.DateTimeFormat("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC",
+          }).format(new Date(`${reviewedAt}T00:00:00.000Z`))} и не заменяет юридическую консультацию по конкретным обстоятельствам.
         </p>
       </section>
     </main>
