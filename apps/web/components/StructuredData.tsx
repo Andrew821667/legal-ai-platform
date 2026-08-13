@@ -106,7 +106,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
       availableLanguage: ["Russian", "English"],
       areaServed: "RU",
     },
-    sameAs: [EXTERNAL_LINKS.channel],
+    sameAs: [EXTERNAL_LINKS.channel, EXTERNAL_LINKS.githubPlatform],
     founder: {
       "@id": `${siteUrl}/#founder`,
     },
@@ -221,10 +221,18 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     "@type": "Person",
     "@id": `${siteUrl}/#founder`,
     name: LEGAL_OPERATOR_NAME,
-    jobTitle: `Основатель и ответственный за продукт ${LEGAL_BRAND}`,
+    jobTitle: `Юрист, разработчик AI-систем и основатель ${LEGAL_BRAND}`,
     description:
-      "Специалист по автоматизации юридической функции, AI-сценариям и прикладной разработке рабочих контуров.",
+      "Юрист с более чем 20-летней практикой, специалист по автоматизации юридической функции, Legal AI и прикладной разработке рабочих контуров.",
     url: `${siteUrl}/team`,
+    sameAs: [EXTERNAL_LINKS.githubProfile],
+    knowsAbout: [
+      "юридическая практика",
+      "автоматизация юридической функции",
+      "Legal AI",
+      "анализ договоров с помощью ИИ",
+      "разработка прикладных AI-систем",
+    ],
     worksFor: {
       "@id": `${siteUrl}/#organization`,
     },

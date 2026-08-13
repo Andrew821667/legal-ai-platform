@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal, contractAISsoUrl } from "@/lib/links";
+import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, contractAISsoUrl } from "@/lib/links";
 import { SEO_SITE_URL } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 import PageFAQ from "@/components/PageFAQ";
@@ -77,6 +77,7 @@ const softwareSchema = {
   operatingSystem: "Web",
   inLanguage: "ru-RU",
   description: "Сервис анализа, проверки, подготовки и согласования договоров с помощью ИИ.",
+  sameAs: [EXTERNAL_LINKS.githubContractAI],
   featureList: [
     "Анализ условий и юридических рисков",
     "Рекомендации по правкам",
@@ -293,6 +294,18 @@ export default function ContractAISystemPage() {
               </article>
             ))}
           </div>
+          <p className="mt-6 text-sm leading-6 text-slate-400">
+            Архитектура и история разработки представлены в{" "}
+            <a
+              href={EXTERNAL_LINKS.githubContractAI}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-sky-300 hover:text-sky-200"
+            >
+              публичном репозитории Contract AI ↗
+            </a>
+            .
+          </p>
         </div>
       </section>
 

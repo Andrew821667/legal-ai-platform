@@ -34,6 +34,9 @@ export const EXTERNAL_LINKS = {
   readerBot: `https://t.me/${READER_BOT_USERNAME}`,
   channel: `https://t.me/${CHANNEL_USERNAME}`,
   contractAI: CONTRACT_AI_SYSTEM_URL,
+  githubProfile: "https://github.com/Andrew821667",
+  githubPlatform: "https://github.com/Andrew821667/legal-ai-platform",
+  githubContractAI: "https://github.com/Andrew821667/Contract-AI-System-",
 } as const;
 
 function appendHash(href: string, hash?: string): string {
