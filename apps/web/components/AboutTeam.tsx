@@ -1,6 +1,7 @@
 import { Scale, Bot, Workflow, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import HeroBackdrop from "@/components/HeroBackdrop";
+import { EXTERNAL_LINKS } from "@/lib/links";
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_OPERATOR_NAME,
@@ -82,8 +83,9 @@ export default function AboutTeam() {
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-white">{LEGAL_OPERATOR_NAME}</h2>
           <p className="mt-2 text-slate-300">
-            Основатель AI Verdict, {LEGAL_OPERATOR_STATUS}. Отвечает за продуктовую концепцию,
-            методологию внедрения и редакционную проверку практических материалов.
+            Основатель AI Verdict, {LEGAL_OPERATOR_STATUS}, юрист с более чем 20-летней практикой и разработчик
+            прикладных AI-систем. Отвечает за продуктовую концепцию, методологию внедрения и редакционную проверку
+            практических материалов.
           </p>
           <p className="mt-4 text-sm text-slate-400">
             Связаться по вопросам продукта и содержания: {" "}
@@ -95,6 +97,24 @@ export default function AboutTeam() {
             AI Verdict не заменяет индивидуальную юридическую консультацию. Материалы сайта описывают
             процессы автоматизации и требуют проверки применительно к фактам конкретной задачи.
           </p>
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <a
+              className="font-semibold text-sky-300 hover:text-sky-200"
+              href={EXTERNAL_LINKS.githubProfile}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Профиль разработчика на GitHub ↗
+            </a>
+            <a
+              className="font-semibold text-sky-300 hover:text-sky-200"
+              href={EXTERNAL_LINKS.githubPlatform}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Публичный репозиторий AI Verdict ↗
+            </a>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">

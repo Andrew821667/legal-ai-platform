@@ -2,6 +2,8 @@
 
 **AI-платформа для юридического бизнеса** — лидогенерация, анализ договоров, новостная аналитика и автоматизация коммуникаций через единый контур Telegram-ботов, веб-сайта и API.
 
+**Сайт:** [ai-verdict.ru](https://ai-verdict.ru) · **Contract AI:** [contract.ai-verdict.ru](https://contract.ai-verdict.ru)
+
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green.svg)](https://fastapi.tiangolo.com/)
