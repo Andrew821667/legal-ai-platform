@@ -17,6 +17,7 @@ type Background = {
   desktop: string;
   mobile?: string;
   position: string;
+  alt: string;
 };
 
 const backgrounds: Record<HeroBackdropVariant, Background> = {
@@ -24,32 +25,39 @@ const backgrounds: Record<HeroBackdropVariant, Background> = {
     desktop: "/images/visual-v2/home-hero-v2-desktop",
     mobile: "/images/visual-v2/home-hero-v2-mobile",
     position: "center",
+    alt: "AI Verdict — автоматизация юридических процессов с помощью искусственного интеллекта",
   },
   legal: {
     desktop: "/images/visual-v2/legal-hero-v2-desktop",
     mobile: "/images/visual-v2/legal-hero-v2-mobile",
     position: "center",
+    alt: "Legal AI — искусственный интеллект для юридической работы",
   },
   engineering: {
     desktop: "/images/visual-v2/engineering-hero-v2-desktop",
     mobile: "/images/visual-v2/engineering-hero-v2-mobile",
     position: "center",
+    alt: "Инженерная практика AI Verdict — прикладные AI-системы и интеграции",
   },
   services: {
     desktop: "/images/ai-verdict-services-hero-v1.jpg",
     position: "70% center",
+    alt: "Услуги AI Verdict по автоматизации юридической работы",
   },
   solutions: {
     desktop: "/images/ai-verdict-solutions-hero-v1.jpg",
     position: "72% center",
+    alt: "Решения AI Verdict для юридических команд и бизнеса",
   },
   insights: {
     desktop: "/images/ai-verdict-insights-hero-v1.jpg",
     position: "70% center",
+    alt: "Экспертные материалы AI Verdict о Legal AI",
   },
   collaboration: {
     desktop: "/images/ai-verdict-collaboration-hero-v1.jpg",
     position: "72% center",
+    alt: "Совместная работа юридической и инженерной практик AI Verdict",
   },
 };
 
@@ -70,7 +78,7 @@ export default function HeroBackdrop({ variant, tone = "dark", priority = false 
           <source srcSet={`${background.desktop}.avif`} type="image/avif" />
           <source srcSet={`${background.desktop}.webp`} type="image/webp" />
           <img
-            alt=""
+            alt={background.alt}
             className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
             decoding={priority ? "sync" : "async"}
             fetchPriority={priority ? "high" : "auto"}
@@ -81,7 +89,7 @@ export default function HeroBackdrop({ variant, tone = "dark", priority = false 
         </picture>
       ) : (
         <img
-          alt=""
+          alt={background.alt}
           className="absolute inset-0 h-full w-full scale-[1.01] object-cover"
           decoding={priority ? "sync" : "async"}
           fetchPriority={priority ? "high" : "auto"}
