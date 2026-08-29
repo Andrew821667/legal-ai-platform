@@ -56,6 +56,7 @@ export default function Header() {
   const secondaryNavigation = [
     { name: "Главная", href: "/" },
     { name: "ИИ в юридической сфере", href: ROUTES.legalAi },
+    { name: "Комментарии законодательства об ИИ", href: ROUTES.aiLaw },
     { name: "Для юристов", href: "/for-lawyers" },
     { name: "Для бизнеса", href: "/for-business" },
     { name: "О платформе", href: "/about" },
@@ -106,7 +107,7 @@ export default function Header() {
                 Еще
               </button>
               {isMoreOpen && (
-              <div className="more-menu-surface absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-xl" role="menu">
+              <div className="more-menu-surface absolute right-0 mt-2 w-72 rounded-lg border border-slate-700 bg-slate-800 shadow-xl" role="menu">
                 <div className="p-2">
                   {secondaryNavigation.map((item) => (
                     <Link

@@ -53,6 +53,7 @@ export default function Footer() {
     ],
     resources: [
       { name: "ИИ в юридической сфере", href: ROUTES.legalAi },
+      { name: "Комментарии законодательства об ИИ", href: ROUTES.aiLaw },
       { name: "Сценарии внедрения", href: "/cases" },
       { name: "Практические руководства", href: "/guides" },
       { name: "Работа с регионами", href: "/regions" },

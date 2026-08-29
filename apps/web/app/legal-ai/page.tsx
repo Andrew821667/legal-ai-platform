@@ -400,9 +400,15 @@ export default function LegalAiPage() {
             </a>{" "}
             и {" "}
             <a href="https://www.consultant.ru/document/cons_doc_LAW_61798/" className="text-sky-300 underline hover:text-sky-200">
-              Федеральный закон № 149-ФЗ
+            Федеральный закон № 149-ФЗ
             </a>. Конкретные обязанности зависят от данных, участников и архитектуры проекта.
           </p>
+          <Link
+            href="/ai-law"
+            className="mt-5 inline-flex font-semibold text-amber-300 hover:text-amber-200"
+          >
+            Комментарии новых норм об искусственном интеллекте →
+          </Link>
         </div>
       </section>
 

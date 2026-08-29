@@ -6,6 +6,7 @@ import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
+import { aiLawComments } from "@/lib/aiLawComments";
 import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 import { ROUTES } from "@/lib/links";
 
@@ -42,10 +43,10 @@ const fallbackFeed: FeedItem[] = [
   },
   {
     id: "regulation_ai_law",
-    title: "Регуляторные тренды AI law и их влияние на договорные оговорки",
-    summary: "Какие изменения учитывать в формулировках ответственности, privacy и governance.",
+    title: "Закон № 243-ФЗ об ИИ: два этапа вступления в силу",
+    summary: "Что действует с 1 сентября 2026 года, а что отложено до 1 марта 2027 года.",
     topic: "AI law",
-    href: ROUTES.contentCases,
+    href: `${ROUTES.aiLaw}/243-fz-ai-support-2026`,
   },
   {
     id: "legal_ops_overload",
@@ -152,6 +153,38 @@ export default function MiniAppContentPage() {
         title="Как использовать экран"
         description="Здесь — живой поток материалов под ваш профиль. Используйте фильтр тем и поиск, чтобы быстро выйти на нужный материал."
       />
+
+      <article className="rounded-lg border border-sky-700 bg-slate-800/70 p-4">
+        <p className="text-xs font-semibold uppercase text-sky-300">Комментарии законодательства</p>
+        <h2 className="mt-2 text-base font-semibold text-white">Новые нормы об искусственном интеллекте</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Проверенные даты, адресаты требований и действия бизнеса по официальным источникам.
+        </p>
+        <div className="mt-3 space-y-2">
+          {aiLawComments.map((comment) => (
+            <MiniTrackedLink
+              key={comment.slug}
+              href={`${ROUTES.aiLaw}/${comment.slug}`}
+              action={MINIAPP_ACTIONS.openContentItem}
+              meta={{
+                eventType: MINIAPP_EVENT_TYPES.contentOpen,
+                source: MINIAPP_EVENT_SOURCES.content,
+                screen: MINIAPP_SCREENS.content,
+                payload: { topic: "AI law", item_id: comment.slug },
+              }}
+              className="block rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-3 hover:border-sky-500"
+            >
+              <span className="block text-sm font-medium leading-5 text-slate-100">{comment.title}</span>
+              <span className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+                {comment.effectiveStages.map((stage) => (
+                  <time key={stage.date} dateTime={stage.date}>{stage.date.split("-").reverse().join(".")}</time>
+                ))}
+                <span>· проверено</span>
+              </span>
+            </MiniTrackedLink>
+          ))}
+        </div>
+      </article>
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Фильтры</h2>
