@@ -6,6 +6,7 @@ export const ROUTES = {
   contractAI: "/contract-ai-system",
   solutions: "/solutions",
   contentCases: "/content-cases",
+  aiLaw: "/ai-law",
   legalHelp: "/legal-help",
   engineering: "/engineering",
   legalHelpBusiness: "/legal-help/business",

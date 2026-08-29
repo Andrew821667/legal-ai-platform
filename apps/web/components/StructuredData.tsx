@@ -49,6 +49,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     { name: "Юридическая практика", url: `${siteUrl}/legal-help` },
     { name: "Инженерная практика", url: `${siteUrl}/engineering` },
     { name: "Решения", url: `${siteUrl}/solutions` },
+    { name: "Комментарии законодательства об ИИ", url: `${siteUrl}/ai-law` },
     { name: "Практические руководства", url: `${siteUrl}/guides` },
     { name: "Сценарии внедрения", url: `${siteUrl}/cases` },
     { name: "Работа с регионами", url: `${siteUrl}/regions` },

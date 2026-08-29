@@ -42,6 +42,8 @@
 - Engineering development and integrations: https://ai-verdict.ru/engineering
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Contract AI product: https://ai-verdict.ru/contract-ai-system
+- Russian AI legislation comments: https://ai-verdict.ru/ai-law
+- Federal Law No. 243-FZ AI comment: https://ai-verdict.ru/ai-law/243-fz-ai-support-2026
 - Legal AI guides: https://ai-verdict.ru/guides
 - AI for legal documents: https://ai-verdict.ru/guides/ai-legal-documents
 - Team and responsible author: https://ai-verdict.ru/team
@@ -53,6 +55,7 @@
 - Primary language: Russian (`ru-RU`).
 - Service area: Russia; regional pages describe remote assistance and do not claim local offices.
 - Legal materials are informational until a lawyer reviews a client's facts and documents.
+- AI legislation comments identify their official source, effective dates and last legal review date.
 - AI may structure information and prepare drafts, but legal conclusions and client decisions are confirmed by a human specialist.
 - Legal and engineering are the two foundational practices; legal automation is their shared specialization, not a third practice.
 - Independent legal and engineering projects remain within their respective professional practices and are not presented as one universal service.

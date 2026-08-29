@@ -122,6 +122,8 @@ Contract AI is a separate product entry point. Legal services and engineering pr
 
 ## Expert materials
 
+- Russian AI legislation comments: https://ai-verdict.ru/ai-law
+- Federal Law No. 243-FZ: effective dates and business actions: https://ai-verdict.ru/ai-law/243-fz-ai-support-2026
 - Legal AI guides index: https://ai-verdict.ru/guides
 - AI contract review process: https://ai-verdict.ru/guides/ai-contract-review-process
 - Selecting AI for legal work: https://ai-verdict.ru/guides/ai-for-lawyers-selection
@@ -139,6 +141,8 @@ Contract AI is a separate product entry point. Legal services and engineering pr
 - Terms of use: https://ai-verdict.ru/terms
 
 Public pages identify the responsible author and the date of substantive review where appropriate. Factual and legal claims should be read together with the sources and limitations stated on the relevant page.
+
+AI legislation comments use official legal publications as primary sources. They distinguish publication, general commencement and delayed provisions, and do not infer a universal obligation from a future delegated power.
 
 ## Crawling and discovery
 

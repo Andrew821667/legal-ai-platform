@@ -31,6 +31,27 @@ export default function GuidesPage() {
         </div>
       </section>
 
+      <section className="border-b border-slate-700 bg-slate-900/70">
+        <div className="mx-auto grid max-w-6xl gap-5 px-4 py-9 sm:px-6 md:grid-cols-[1fr_auto] md:items-center lg:px-8">
+          <div>
+            <p className="text-sm font-semibold uppercase text-sky-300">Новое в AI law</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Комментарии новых норм об искусственном интеллекте
+            </h2>
+            <p className="mt-3 max-w-3xl leading-7 text-slate-300">
+              Отдельный раздел с датами вступления в силу, официальными источниками и
+              практическими действиями для бизнеса.
+            </p>
+          </div>
+          <Link
+            href="/ai-law"
+            className="inline-flex items-center justify-center rounded-lg border border-sky-400 px-5 py-3 font-semibold text-sky-200 hover:bg-sky-400/10"
+          >
+            Открыть комментарии →
+          </Link>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {guides.map((guide) => (
