@@ -2,7 +2,7 @@ import { ArrowRight, CalendarDays, CheckCircle2, FileCheck2, Scale } from "lucid
 import Link from "next/link";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
-import { AI_LAW_REVIEWED_AT, aiLawComments } from "@/lib/aiLawComments";
+import { getAiLawReviewedAt, listPublishedAiLawComments } from "@/lib/aiLawEditorialStore";
 import { LEGAL_OPERATOR_NAME, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import { ROUTES } from "@/lib/links";
 import { createPageMetadata } from "@/lib/seo";
@@ -21,6 +21,8 @@ export const metadata = createPageMetadata({
   ],
 });
 
+export const dynamic = "force-dynamic";
+
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
@@ -31,6 +33,8 @@ function formatDate(date: string): string {
 }
 
 export default function AiLawPage() {
+  const aiLawComments = listPublishedAiLawComments();
+  const reviewedAt = getAiLawReviewedAt(aiLawComments);
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const pageUrl = `${baseUrl}/ai-law`;
   const structuredData = {
@@ -43,7 +47,7 @@ export default function AiLawPage() {
         name: "Комментарии законодательства об искусственном интеллекте",
         description:
           "Проверяемые комментарии российских правовых новелл об искусственном интеллекте.",
-        dateModified: AI_LAW_REVIEWED_AT,
+        dateModified: reviewedAt,
         inLanguage: "ru-RU",
         publisher: { "@id": `${baseUrl}/#organization` },
       },
@@ -96,7 +100,7 @@ export default function AiLawPage() {
             </span>
             <span className="inline-flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-sky-300" aria-hidden="true" />
-              Проверено {formatDate(AI_LAW_REVIEWED_AT)}
+              Проверено {formatDate(reviewedAt)}
             </span>
           </div>
         </div>

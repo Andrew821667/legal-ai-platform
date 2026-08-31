@@ -1780,7 +1780,12 @@ class LLMNewsWriter:
         return None
 
     @staticmethod
-    def _quality_gate_failure_reason(text: str, format_type: str) -> str | None:
+    def _quality_gate_failure_reason(
+        text: str,
+        format_type: str,
+        *,
+        manual_editorial: bool = False,
+    ) -> str | None:
         normalized = (text or "").strip()
         plain_lower = html.unescape(re.sub(r"<[^>]+>", "", normalized)).lower()
         competitor_failure = competitor_policy_failure_reason(
@@ -1801,39 +1806,40 @@ class LLMNewsWriter:
             return "unbalanced_parentheses"
         if plain_lower.count("«") != plain_lower.count("»"):
             return "unbalanced_quotes"
-        format_markers = {
-            "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
-            "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
-            "daily": ("Что произошло", "Почему это важно", "Источник"),
-            "practice": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
-            "humor": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
-        }
-        required_markers = format_markers.get(
-            format_type,
-            ("Что произошло", "Бизнес-эффект", "Юридические риски", "Что делать", "Источник"),
-        )
         min_chars = _FORMAT_MIN_CHARS.get(format_type, _FORMAT_MIN_CHARS["standard"])
         if len(normalized) < min_chars:
             return f"too_short:{len(normalized)}<{min_chars}"
-        for marker in required_markers:
-            if marker not in normalized:
-                return f"missing_marker:{marker}"
-        if format_type == "daily" and not any(marker in normalized for marker in _DAILY_THIRD_BLOCK_HEADINGS):
-            return "missing_daily_third_block"
-        if format_type == "daily":
-            third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
-            if len(third_block) < 120:
-                return f"weak_daily_third_block:{len(third_block)}"
-            third_heading_pattern = "|".join(re.escape(item) for item in _DAILY_THIRD_BLOCK_HEADINGS)
-            third_section_match = re.search(
-                rf"<b>(?:{third_heading_pattern})</b>\s*(.*?)(?=\n\s*\n?<b>|\Z)",
-                normalized,
-                flags=re.DOTALL,
+        if not manual_editorial:
+            format_markers = {
+                "weekly_review": ("Ключевые сигналы недели", "Что это значит для юрфункции", "На что смотреть юристам", "Что проверить у себя", "Источник"),
+                "longread": ("Контекст", "Практический смысл", "Риски и ограничения", "Что делать", "Источник"),
+                "daily": ("Что произошло", "Почему это важно", "Источник"),
+                "practice": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
+                "humor": ("Ситуация недели", "Где узкое место", "Что взять в работу", "Источник"),
+            }
+            required_markers = format_markers.get(
+                format_type,
+                ("Что произошло", "Бизнес-эффект", "Юридические риски", "Что делать", "Источник"),
             )
-            if third_section_match is not None:
-                list_items = re.findall(r"(?m)^\s*•\s+", third_section_match.group(1))
-                if list_items and len(list_items) < 2:
-                    return f"weak_daily_list_items:{len(list_items)}"
+            for marker in required_markers:
+                if marker not in normalized:
+                    return f"missing_marker:{marker}"
+            if format_type == "daily" and not any(marker in normalized for marker in _DAILY_THIRD_BLOCK_HEADINGS):
+                return "missing_daily_third_block"
+            if format_type == "daily":
+                third_block = LLMNewsWriter._extract_daily_third_block_body(normalized)
+                if len(third_block) < 120:
+                    return f"weak_daily_third_block:{len(third_block)}"
+                third_heading_pattern = "|".join(re.escape(item) for item in _DAILY_THIRD_BLOCK_HEADINGS)
+                third_section_match = re.search(
+                    rf"<b>(?:{third_heading_pattern})</b>\s*(.*?)(?=\n\s*\n?<b>|\Z)",
+                    normalized,
+                    flags=re.DOTALL,
+                )
+                if third_section_match is not None:
+                    list_items = re.findall(r"(?m)^\s*•\s+", third_section_match.group(1))
+                    if list_items and len(list_items) < 2:
+                        return f"weak_daily_list_items:{len(list_items)}"
         if format_type == "weekly_review":
             raw_points = re.findall(r"(?m)^\s*\d+\.\s*(.+)$", normalized)
             points_count = len(raw_points)
@@ -1856,7 +1862,7 @@ class LLMNewsWriter:
             return f"too_long:{len(normalized)}"
         if not LLMNewsWriter._looks_complete_prose(normalized):
             return "incomplete_tail"
-        if not LLMNewsWriter._blocks_look_complete(normalized):
+        if not manual_editorial and not LLMNewsWriter._blocks_look_complete(normalized):
             return "incomplete_block"
         return None
 

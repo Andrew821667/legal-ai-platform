@@ -1,4 +1,4 @@
-export type AiLawCommentStatus = "draft" | "verified" | "archived";
+export type AiLawCommentStatus = "draft" | "verified" | "published" | "archived";
 
 export type AiLawEffectiveStage = {
   date: string;
@@ -51,7 +51,7 @@ export type AiLawComment = {
 const comments: AiLawComment[] = [
   {
     slug: "243-fz-ai-support-2026",
-    status: "verified",
+    status: "published",
     lawNumber: "243-ФЗ",
     lawDate: "2026-07-26",
     lawTitle:
@@ -208,8 +208,10 @@ const comments: AiLawComment[] = [
 ];
 
 export const aiLawComments = comments.filter(
-  (comment) => comment.status === "verified",
+  (comment) => comment.status === "published",
 );
+
+export const aiLawCommentSeeds = comments;
 
 export const AI_LAW_REVIEWED_AT = aiLawComments.reduce(
   (latest, comment) => comment.reviewedAt > latest ? comment.reviewedAt : latest,

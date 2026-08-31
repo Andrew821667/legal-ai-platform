@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 
 import MiniAppContentClient from "@/components/miniapp/pages/MiniAppContentClient";
+import { listPublishedAiLawComments } from "@/lib/aiLawEditorialStore";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Контент Mini App | AI Verdict",
@@ -11,5 +14,10 @@ export const metadata: Metadata = {
 };
 
 export default function MiniAppContentPage() {
-  return <MiniAppContentClient />;
+  const aiLawItems = listPublishedAiLawComments().map((comment) => ({
+    slug: comment.slug,
+    title: comment.title,
+    effectiveDates: comment.effectiveStages.map((stage) => stage.date),
+  }));
+  return <MiniAppContentClient aiLawItems={aiLawItems} />;
 }

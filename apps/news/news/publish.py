@@ -632,8 +632,13 @@ def _ensure_practical_output_before_publish(text: str, post: dict[str, Any] | No
 def _ensure_writer_quality_before_publish(text: str, post: dict[str, Any] | None) -> str:
     if post is None:
         return text
-    format_type = _normalize_format_type(post.get("format_type"))
-    reason = LLMNewsWriter._quality_gate_failure_reason(text, format_type)
+    raw_format_type = str(post.get("format_type") or "").strip().lower()
+    format_type = _normalize_format_type(raw_format_type)
+    reason = LLMNewsWriter._quality_gate_failure_reason(
+        text,
+        format_type,
+        manual_editorial=raw_format_type.startswith("manual_"),
+    )
     if reason is not None:
         raise PublishQualityError(f"writer_quality_gate:{reason}")
     return text

@@ -8,7 +8,7 @@ test("published AI law comments are traceable to official sources", () => {
 
   const slugs = new Set();
   for (const comment of aiLawComments) {
-    assert.equal(comment.status, "verified");
+    assert.equal(comment.status, "published");
     assert.ok(!slugs.has(comment.slug), `duplicate slug: ${comment.slug}`);
     slugs.add(comment.slug);
 

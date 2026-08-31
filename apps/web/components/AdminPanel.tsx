@@ -24,7 +24,10 @@ import {
   ExternalLink,
   Settings2,
   Brain,
-  Scale
+  Scale,
+  BookOpenText,
+  LogOut,
+  ShieldX
 } from 'lucide-react';
 import SEOChart from './admin/SEOChart';
 import ExportButton from './admin/ExportButton';
@@ -34,8 +37,9 @@ import AutomationControlsPanel from './admin/AutomationControlsPanel';
 import SystemMonitorPanel from './admin/SystemMonitorPanel';
 import AnalyticsPanel from './admin/AnalyticsPanel';
 import LegalIntakesPanel from './admin/LegalIntakesPanel';
+import AiLawEditorialPanel from './admin/AiLawEditorialPanel';
 
-type AdminTab = 'seo' | 'analytics' | 'legal' | 'system' | 'technical' | 'github' | 'automation';
+type AdminTab = 'seo' | 'analytics' | 'legal' | 'editorial' | 'system' | 'technical' | 'github' | 'automation';
 
 interface AdminPanelProps {
   initialOpen?: boolean;
@@ -121,6 +125,12 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
       loadAnalyticsData();
     }
   }, [isAuthenticated, activeTab]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    document.querySelector<HTMLElement>(`[data-admin-tab="${activeTab}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [activeTab, isAuthenticated]);
 
   const loadGithubData = async () => {
     setIsLoadingGithub(true);
@@ -321,22 +331,22 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-4 md:inset-8 lg:inset-16 bg-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden border border-amber-500/20"
+              className="fixed inset-2 md:inset-8 lg:inset-16 bg-slate-800 rounded-lg shadow-2xl z-50 overflow-hidden border border-amber-500/20"
             >
               {/* Header */}
-              <div className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-amber-500/20 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-amber-500/20 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <h2 className="text-xl font-bold text-white">
+                  <h2 className="whitespace-nowrap text-lg font-bold text-white sm:text-xl">
                     Admin Panel
                   </h2>
                   {isAuthenticated && (
-                    <span className="text-xs text-amber-400 bg-amber-500/10 px-2 py-1 rounded">
+                    <span className="hidden text-xs text-amber-400 bg-amber-500/10 px-2 py-1 rounded sm:inline">
                       Авторизован
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                   {isAuthenticated && githubData && (
                     <>
                       <NotificationBadge githubData={githubData} />
@@ -348,20 +358,28 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                       <button
                         onClick={handleLogoutAll}
                         disabled={isRevokingAll}
-                        className="text-sm text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Выйти на всех устройствах"
+                        aria-label="Выйти на всех устройствах"
+                        className="inline-flex items-center gap-2 rounded-lg p-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 lg:px-3 lg:py-1"
                       >
-                        {isRevokingAll ? 'Завершаю...' : 'Выйти везде'}
+                        <ShieldX className="h-4 w-4" />
+                        <span className="hidden lg:inline">{isRevokingAll ? 'Завершаю...' : 'Выйти везде'}</span>
                       </button>
                       <button
                         onClick={handleLogout}
-                        className="text-sm text-slate-400 hover:text-white px-3 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                        title="Выйти"
+                        aria-label="Выйти"
+                        className="inline-flex items-center gap-2 rounded-lg p-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white lg:px-3 lg:py-1"
                       >
-                        Выйти
+                        <LogOut className="h-4 w-4" />
+                        <span className="hidden lg:inline">Выйти</span>
                       </button>
                     </>
                   )}
                   <button
                     onClick={handleClose}
+                    title="Закрыть админ-панель"
+                    aria-label="Закрыть админ-панель"
                     className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -468,11 +486,12 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                   /* Dashboard */
                   <div className="p-6">
                     {/* Tabs */}
-                    <div className="flex gap-2 mb-6 overflow-x-auto border-b border-slate-800">
+                    <div className="mb-6 flex scroll-smooth gap-2 overflow-x-auto border-b border-slate-800">
                       {[
                         { id: 'seo' as const, label: 'SEO & Аналитика', icon: BarChart3 },
                         { id: 'analytics' as const, label: 'Аналитика', icon: Brain },
                         { id: 'legal' as const, label: 'Юридические обращения', icon: Scale },
+                        { id: 'editorial' as const, label: 'Комментарии законов', icon: BookOpenText },
                         { id: 'system' as const, label: 'System Monitor', icon: Server },
                         { id: 'technical' as const, label: 'Технические данные', icon: Zap },
                         { id: 'github' as const, label: 'GitHub & SEO Reports', icon: Github },
@@ -480,8 +499,9 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                       ].map((tab) => (
                         <button
                           key={tab.id}
+                          data-admin-tab={tab.id}
                           onClick={() => setActiveTab(tab.id)}
-                          className={`flex items-center gap-2 px-4 py-3 rounded-t-lg transition-all ${
+                          className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 rounded-t-lg transition-all ${
                             activeTab === tab.id
                               ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500'
                               : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -633,6 +653,12 @@ export default function AdminPanel({ initialOpen = false, initialTab = 'seo' }: 
                     {activeTab === 'legal' && (
                       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <LegalIntakesPanel />
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'editorial' && (
+                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                        <AiLawEditorialPanel />
                       </motion.div>
                     )}
 
