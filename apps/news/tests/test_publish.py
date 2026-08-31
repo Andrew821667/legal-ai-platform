@@ -575,6 +575,32 @@ def test_normalize_text_before_publish_allows_actionable_practical_conclusion() 
     assert "Перед пилотом нужно зафиксировать" in normalized
 
 
+def test_manual_editorial_post_keeps_human_structure_under_strict_gate() -> None:
+    original = (
+        "<b>С 1 сентября начинает действовать закон об ИИ</b>\n\n"
+        "1 сентября 2026 года вступает в силу основная часть закона. Она формирует общую "
+        "рамку регулирования, но не вводит на этом этапе все специальные обязанности.\n\n"
+        "<b>Первый этап регулирования</b>\n\n"
+        "Бизнесу не нужно экстренно отключать иностранные модели или маркировать каждый текст. При этом "
+        "стоит зафиксировать модели, поставщиков, виды данных и точки человеческого контроля.\n\n"
+        "<b>Отложенные положения</b>\n\n"
+        "Основные специальные требования отложены до 1 марта 2027 года. До этой даты нужно следить за подзаконными "
+        "актами и обновлять внутреннюю дорожную карту по мере появления конкретных правил.\n\n"
+        "Для подготовки компании стоит отдельно проверить договоры с поставщиками, места обработки данных, права на результаты и "
+        "порядок проверки юридически значимых решений человеком. Эти действия нужны для контроля рисков уже сейчас.\n\n"
+        "Источник: https://publication.pravo.gov.ru/document/example"
+    )
+
+    normalized = _normalize_text_before_publish(
+        original,
+        {"title": "Закон об ИИ", "format_type": "manual_daily", "source_url": "https://publication.pravo.gov.ru/document/example"},
+        intelligent_footer=False,
+        strict_quality=True,
+    )
+
+    assert "<b>Первый этап регулирования</b>" in normalized
+
+
 def test_normalize_text_before_publish_adds_missing_footer_for_applicable_ready_post() -> None:
     original = (
         "<b>Заголовок</b>\n\n"

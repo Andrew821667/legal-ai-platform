@@ -1,6 +1,6 @@
 import { MetadataRoute } from "next";
 
-import { AI_LAW_REVIEWED_AT, aiLawComments } from "@/lib/aiLawComments";
+import { getAiLawReviewedAt, listPublishedAiLawComments } from "@/lib/aiLawEditorialStore";
 import { guides } from "@/lib/guidesData";
 import { LEGAL_AI_REVIEWED_AT, legalAiTopics } from "@/lib/legalAiTopics";
 import { LEGAL_HELP_REVIEWED_AT, legalHelpPageList } from "@/lib/legalHelpPages";
@@ -13,6 +13,8 @@ type SitemapPage = {
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
   priority: number;
 };
+
+export const dynamic = "force-dynamic";
 
 const marketingUpdatedAt = "2026-07-15";
 const practiceUpdatedAt = "2026-08-05";
@@ -42,7 +44,6 @@ const pages: SitemapPage[] = [
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
   { path: "/cases", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.8 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/ai-law", lastModified: AI_LAW_REVIEWED_AT, changeFrequency: "weekly", priority: 0.9 },
   { path: "/guides", lastModified: LEGAL_AI_REVIEWED_AT, changeFrequency: "weekly", priority: 0.85 },
   { path: "/about", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/team", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
@@ -55,6 +56,13 @@ const pages: SitemapPage[] = [
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = SEO_SITE_URL;
+  const aiLawComments = listPublishedAiLawComments();
+  const aiLawHub: SitemapPage = {
+    path: "/ai-law",
+    lastModified: getAiLawReviewedAt(aiLawComments),
+    changeFrequency: "weekly",
+    priority: 0.9,
+  };
   const guidePages: SitemapPage[] = guides.map((guide) => ({
     path: `/guides/${guide.slug}`,
     lastModified: guide.updatedAt,
@@ -86,7 +94,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...pages, ...aiLawPages, ...legalAiPages, ...legalPages, ...legalRegionPages, ...guidePages].map((page) => ({
+  return [...pages, aiLawHub, ...aiLawPages, ...legalAiPages, ...legalPages, ...legalRegionPages, ...guidePages].map((page) => ({
     url: `${baseUrl}${page.path}`,
     lastModified: new Date(`${page.lastModified}T00:00:00.000Z`),
     changeFrequency: page.changeFrequency,

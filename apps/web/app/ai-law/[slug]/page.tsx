@@ -12,7 +12,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
-import { aiLawComments, getAiLawComment } from "@/lib/aiLawComments";
+import { getPublishedAiLawComment } from "@/lib/aiLawEditorialStore";
 import { LEGAL_OPERATOR_NAME, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import { ROUTES } from "@/lib/links";
 import { createPageMetadata } from "@/lib/seo";
@@ -20,6 +20,8 @@ import { createPageMetadata } from "@/lib/seo";
 type AiLawCommentPageProps = {
   params: Promise<{ slug: string }>;
 };
+
+export const dynamic = "force-dynamic";
 
 function formatDate(date: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -30,13 +32,9 @@ function formatDate(date: string): string {
   }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
-export function generateStaticParams() {
-  return aiLawComments.map((comment) => ({ slug: comment.slug }));
-}
-
 export async function generateMetadata({ params }: AiLawCommentPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const comment = getAiLawComment(slug);
+  const comment = getPublishedAiLawComment(slug);
   if (!comment) {
     return { title: "Комментарий не найден", robots: { index: false, follow: false } };
   }
@@ -52,7 +50,7 @@ export async function generateMetadata({ params }: AiLawCommentPageProps): Promi
 
 export default async function AiLawCommentPage({ params }: AiLawCommentPageProps) {
   const { slug } = await params;
-  const comment = getAiLawComment(slug);
+  const comment = getPublishedAiLawComment(slug);
   if (!comment) notFound();
 
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
@@ -161,7 +159,7 @@ export default async function AiLawCommentPage({ params }: AiLawCommentPageProps
         <section className="py-12">
           <div className="flex items-center gap-3">
             <CalendarClock className="h-6 w-6 text-amber-700" aria-hidden="true" />
-            <h2 className="text-3xl font-semibold text-slate-950">Два этапа вступления в силу</h2>
+            <h2 className="text-3xl font-semibold text-slate-950">Этапы вступления в силу</h2>
           </div>
           <div className="mt-7 grid gap-5 md:grid-cols-2">
             {comment.effectiveStages.map((stage) => (
@@ -216,20 +214,22 @@ export default async function AiLawCommentPage({ params }: AiLawCommentPageProps
           ))}
         </div>
 
-        <section className="border-y border-rose-200 bg-rose-50 px-5 py-10 md:px-8">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="h-6 w-6 text-rose-700" aria-hidden="true" />
-            <h2 className="text-2xl font-semibold text-slate-950">Что закон не означает</h2>
-          </div>
-          <div className="mt-7 divide-y divide-rose-200">
-            {comment.misconceptions.map((item) => (
-              <div key={item.claim} className="grid gap-3 py-5 md:grid-cols-[0.9fr_1.1fr] md:gap-8">
-                <p className="font-semibold text-rose-950">Миф: {item.claim}</p>
-                <p className="leading-7 text-slate-700">{item.reality}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {comment.misconceptions.length ? (
+          <section className="border-y border-rose-200 bg-rose-50 px-5 py-10 md:px-8">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-6 w-6 text-rose-700" aria-hidden="true" />
+              <h2 className="text-2xl font-semibold text-slate-950">Что норма не означает</h2>
+            </div>
+            <div className="mt-7 divide-y divide-rose-200">
+              {comment.misconceptions.map((item) => (
+                <div key={item.claim} className="grid gap-3 py-5 md:grid-cols-[0.9fr_1.1fr] md:gap-8">
+                  <p className="font-semibold text-rose-950">Миф: {item.claim}</p>
+                  <p className="leading-7 text-slate-700">{item.reality}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="py-12">
           <p className="text-sm font-semibold uppercase text-amber-800">Практический маршрут</p>
@@ -245,17 +245,19 @@ export default async function AiLawCommentPage({ params }: AiLawCommentPageProps
           </div>
         </section>
 
-        <section className="rounded-lg border border-sky-200 bg-sky-50 p-6 md:p-8">
-          <h2 className="text-2xl font-semibold text-slate-950">Какие акты еще нужно отслеживать</h2>
-          <ul className="mt-5 space-y-3 leading-7 text-slate-700">
-            {comment.watchItems.map((item) => (
-              <li key={item} className="flex gap-3">
-                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-sky-700" aria-hidden="true" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {comment.watchItems.length ? (
+          <section className="rounded-lg border border-sky-200 bg-sky-50 p-6 md:p-8">
+            <h2 className="text-2xl font-semibold text-slate-950">Какие акты еще нужно отслеживать</h2>
+            <ul className="mt-5 space-y-3 leading-7 text-slate-700">
+              {comment.watchItems.map((item) => (
+                <li key={item} className="flex gap-3">
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-sky-700" aria-hidden="true" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section className="mt-10 border-t border-slate-300 pt-8 text-sm leading-6 text-slate-600">
           <p>

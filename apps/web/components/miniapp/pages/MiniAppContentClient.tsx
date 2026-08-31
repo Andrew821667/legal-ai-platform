@@ -6,7 +6,6 @@ import MiniAppCtaFlowCard from "@/components/miniapp/MiniAppCtaFlowCard";
 import MiniAppGuideCard from "@/components/miniapp/MiniAppGuideCard";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 import MiniTrackedLink from "@/components/miniapp/MiniTrackedLink";
-import { aiLawComments } from "@/lib/aiLawComments";
 import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SCREENS } from "@/lib/reader-events";
 import { ROUTES } from "@/lib/links";
 
@@ -16,6 +15,12 @@ type FeedItem = {
   summary: string;
   topic: string;
   href: string;
+};
+
+export type MiniAppAiLawItem = {
+  slug: string;
+  title: string;
+  effectiveDates: string[];
 };
 
 const topics = [
@@ -82,7 +87,7 @@ function classifyTopic(title: string, rubric: string): (typeof topics)[number] {
   return "Общий AI";
 }
 
-export default function MiniAppContentPage() {
+export default function MiniAppContentPage({ aiLawItems }: { aiLawItems: MiniAppAiLawItem[] }) {
   const { ready, state } = useMiniAppState();
   const [activeTopic, setActiveTopic] = useState<(typeof topics)[number]>("Все");
   const [query, setQuery] = useState("");
@@ -161,7 +166,7 @@ export default function MiniAppContentPage() {
           Проверенные даты, адресаты требований и действия бизнеса по официальным источникам.
         </p>
         <div className="mt-3 space-y-2">
-          {aiLawComments.map((comment) => (
+          {aiLawItems.map((comment) => (
             <MiniTrackedLink
               key={comment.slug}
               href={`${ROUTES.aiLaw}/${comment.slug}`}
@@ -176,8 +181,8 @@ export default function MiniAppContentPage() {
             >
               <span className="block text-sm font-medium leading-5 text-slate-100">{comment.title}</span>
               <span className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
-                {comment.effectiveStages.map((stage) => (
-                  <time key={stage.date} dateTime={stage.date}>{stage.date.split("-").reverse().join(".")}</time>
+                {comment.effectiveDates.map((date) => (
+                  <time key={date} dateTime={date}>{date.split("-").reverse().join(".")}</time>
                 ))}
                 <span>· проверено</span>
               </span>

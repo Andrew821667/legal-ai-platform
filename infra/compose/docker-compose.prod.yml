@@ -54,6 +54,7 @@ services:
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://${DOMAIN}}
       NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL: ${NEXT_PUBLIC_CONTRACT_AI_SYSTEM_URL:-https://contract.ai-verdict.ru}
       ADMIN_SECURITY_STORE_PATH: ${ADMIN_SECURITY_STORE_PATH:-/app/data/web-admin-security.json}
+      AI_LAW_EDITORIAL_STORE_PATH: ${AI_LAW_EDITORIAL_STORE_PATH:-/app/data/ai-law-comments.json}
       TZ: ${TZ:-Europe/Moscow}
     depends_on:
       core-api:
