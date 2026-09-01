@@ -499,14 +499,32 @@ def test_temporal_guard_rejects_elapsed_weekly_calendar_window() -> None:
     assert reason == "needs_temporal_recheck:elapsed_calendar_window"
 
 
-def test_completion_kwargs_reserve_space_for_deepseek_reasoning() -> None:
+def test_completion_kwargs_disable_deepseek_reasoning_for_routine_generation() -> None:
     writer = LLMNewsWriter.__new__(LLMNewsWriter)
     writer._use_max_tokens_param = True
+    writer._thinking_enabled = False
+    writer._reasoning_token_reserve = 0
+
+    assert writer._completion_kwargs("daily") == {
+        "max_tokens": 1800,
+        "extra_body": {"thinking": {"type": "disabled"}},
+    }
+    assert writer._completion_kwargs("weekly_review") == {
+        "max_tokens": 3400,
+        "extra_body": {"thinking": {"type": "disabled"}},
+    }
+
+
+def test_completion_kwargs_reserve_space_when_deepseek_reasoning_is_enabled() -> None:
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer._use_max_tokens_param = True
+    writer._thinking_enabled = True
     writer._reasoning_token_reserve = 3000
 
-    assert writer._completion_kwargs("daily") == {"max_tokens": 4800}
-    assert writer._completion_kwargs("weekly_review") == {"max_tokens": 6400}
-    assert writer._token_limit_kwargs(260) == {"max_tokens": 3260}
+    assert writer._token_limit_kwargs(260) == {
+        "max_tokens": 3260,
+        "extra_body": {"thinking": {"type": "enabled"}},
+    }
 
 
 def test_completion_kwargs_keep_plain_provider_budget() -> None:
