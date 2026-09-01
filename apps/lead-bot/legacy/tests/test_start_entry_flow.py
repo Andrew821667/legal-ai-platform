@@ -41,7 +41,7 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     await user_commands.start_command(update, context)
 
     assert len(messages) == 1
-    assert "это единая платформа" in messages[0][0]
+    assert "можно проверить договор, получить юридическую помощь" in messages[0][0]
     assert "С чего удобно начать" in messages[0][0]
     assert "Проверить договор" in messages[0][0]
     assert "Юридическая практика" in messages[0][0]

@@ -76,7 +76,7 @@ const terms = [
   },
   {
     title: "ИИ-помощник юриста",
-    text: "Интерфейс для поиска, анализа и подготовки материалов. Полезность зависит от источников, правил проверки и места в процессе, а не только от модели.",
+    text: "Интерфейс для поиска, анализа и подготовки материалов. Его качество определяют источники, правила проверки и место в рабочем процессе.",
   },
   {
     title: "Нейросеть для юридических документов",
@@ -184,7 +184,7 @@ export default function LegalAiPage() {
         headline: "ИИ для юриспруденции и юридической сферы: Legal AI",
         description: metadata.description,
         datePublished: "2026-08-12",
-        dateModified: "2026-08-13",
+        dateModified: "2026-09-01",
         inLanguage: "ru-RU",
         author: { "@type": "Person", "@id": `${SEO_SITE_URL}/#founder`, name: LEGAL_OPERATOR_NAME, url: `${SEO_SITE_URL}/team` },
         publisher: { "@type": "Organization", "@id": `${SEO_SITE_URL}/#organization`, name: "AI Verdict", url: SEO_SITE_URL },

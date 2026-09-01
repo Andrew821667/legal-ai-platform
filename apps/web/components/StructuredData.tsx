@@ -62,7 +62,7 @@ export default function StructuredData({ siteUrl = LEGAL_SITE_URL }: StructuredD
     name: LEGAL_BRAND,
     url: siteUrl,
     description:
-      "Платформа двух базовых практик — юридической и инженерной. Их ключевое пересечение — автоматизация юридической функции.",
+      "AI Verdict автоматизирует юридическую функцию, оказывает юридическую помощь и разрабатывает прикладные программные системы.",
     logo: `${siteUrl}/icon.svg`,
     image: `${siteUrl}/opengraph-image`,
     areaServed: {

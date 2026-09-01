@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
+    "test:copy": "node --test lib/editorialCopy.test.mjs",
     "admin:generate-security": "node --no-warnings --experimental-strip-types scripts/generate-admin-security.mjs",
     "test:security": "node --no-warnings --test --experimental-strip-types lib/*.test.mjs"
   },

@@ -65,8 +65,8 @@ export default function SolutionsPage() {
             Автоматизация юридических процессов: решения для компании
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-relaxed">
-            Выстраиваем дорожную карту от одного пилота к рабочему legal-контуру: договоры, юридические заявки,
-            комплаенс, база знаний и контроль сроков связываются с процессными правилами, интеграциями и ролями команды.
+            Берем один процесс, фиксируем исходные показатели и проверяем решение на реальной работе команды. После
+            пилота подключаем соседние процессы, роли и системы, если результат подтвержден цифрами.
           </p>
           <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <Link href="/#lead-form" className="w-full rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400 sm:w-auto">

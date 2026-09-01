@@ -8,13 +8,13 @@ export default function PracticeIntersection() {
     <section className="border-y border-slate-800 bg-slate-800/40" aria-labelledby="practice-intersection-title">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold text-amber-300">Архитектура AI Verdict</p>
+          <p className="text-sm font-semibold text-amber-300">Как устроена работа</p>
           <h2 id="practice-intersection-title" className="mt-2 pr-14 text-2xl font-semibold text-white sm:pr-0 md:text-3xl">
-            Две практики. Одна ключевая специализация
+            Юристы задают правила. Инженеры собирают систему
           </h2>
           <p className="mt-3 text-slate-300">
-            Юридическая и инженерная экспертиза работают самостоятельно, а для автоматизации юридической функции
-            объединяются в одну проектную команду.
+            В проекте автоматизации обе практики отвечают за общий результат. За отдельной юридической помощью или
+            разработкой можно обратиться напрямую в профильное направление.
           </p>
         </div>
 
@@ -45,10 +45,10 @@ export default function PracticeIntersection() {
 
           <article className="relative rounded-2xl border border-amber-500/55 bg-slate-950 p-6 text-white shadow-[0_20px_50px_rgba(15,23,42,0.16)] lg:-my-3 lg:p-8">
             <Workflow aria-hidden="true" className="h-8 w-8 text-amber-400" />
-            <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-amber-300">Ключевое пересечение</p>
+            <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-amber-300">Совместный проект</p>
             <h3 className="mt-2 text-2xl font-semibold">Автоматизация юридической функции</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Диагностика процесса, юридическая модель, интерфейсы, AI, интеграции и эксплуатация в одном контуре.
+              Разбираем процесс, фиксируем юридические правила, делаем интерфейсы и интеграции, затем отвечаем за запуск.
             </p>
             <Link href={ROUTES.solutions} className="mt-5 inline-flex font-semibold text-amber-300 hover:text-amber-200">
               Посмотреть решения →

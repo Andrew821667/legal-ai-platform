@@ -12,7 +12,7 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 const audienceHints = {
   lawyer: "Фокус на договорной и претензионной работе.",
   business: "Фокус на сроках согласования, рисках, SLA и связке с операционными системами.",
-  mixed: "Фокус на стыке юридической и инженерной практик.",
+  mixed: "Фокус на процессе целиком: юридические правила, данные и интеграции.",
 } as const;
 
 type HighlightCard = {
@@ -169,8 +169,8 @@ export default function MiniAppHomePage() {
   return (
     <section className="space-y-4">
       <MiniAppGuideCard
-        title="Две практики, одно ключевое пересечение"
-        description="Юридическая и инженерная практики вместе автоматизируют юридическую функцию. Каждая также ведет профильные проекты в своей области."
+        title="С чего хотите начать?"
+        description="Можно проверить договор, описать юридическую задачу или обсудить автоматизацию и разработку."
       />
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
@@ -295,7 +295,7 @@ export default function MiniAppHomePage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_home"
         sourceScreen="/miniapp"
-        title="Единый маршрут в mini-app: Узнать -> Проверить -> Обсудить пилот"
+        title="Выберите материал, проверьте идею и переходите к обсуждению, когда будете готовы"
       />
 
       <PlatformMap variant="compact" highlightId="miniapp" />
