@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import httpx
 from telegram import (
     BotCommand,
     InputMediaPhoto,
@@ -37,8 +38,20 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.request import HTTPXRequest
 
 from news.core_client import CoreClient
+from news.control_plane import enabled_telegram_channels
+from news.daily_report import (
+    DailyReportSnapshot,
+    build_daily_report_text,
+    count_recent_posts,
+    daily_report_due,
+    event_datetime,
+    latest_worker_event,
+    persisted_report_date,
+    summarize_sources,
+)
 from news.callbacks import (
     auto_queue_context as _auto_queue_context,
     auto_queue_filter_from_context as _auto_queue_filter_from_context,
@@ -121,6 +134,7 @@ from news.publication_monitor import (
     acknowledged_alert_keys,
     build_publication_alerts,
 )
+from news.rss_fetcher import probe_rss_sources
 from news.publish_actions import (
     build_batch_result_lines,
     build_draft_batch_publish_state,
@@ -136,7 +150,7 @@ from news.publish_actions import (
 from news.queue_keyboard_ui import build_auto_queue_keyboard_rows, build_manual_queue_keyboard_rows
 from news.queue_ui import build_auto_queue_text, build_manual_queue_text
 from news.settings import settings
-from news.source_catalog import resolve_source_urls, source_catalog
+from news.source_catalog import active_source_specs, resolve_source_urls, source_catalog
 from news.sources_ui import (
     build_source_detail_text,
     build_source_posts_text,
@@ -196,10 +210,29 @@ _CALLBACK_HELPER_EXPORTS = (
 )
 
 
+def _telegram_request(proxy_url: str) -> HTTPXRequest:
+    return HTTPXRequest(
+        connection_pool_size=16,
+        connect_timeout=10.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+        pool_timeout=10.0,
+        proxy=proxy_url,
+        httpx_kwargs={
+            "limits": httpx.Limits(
+                max_connections=16,
+                max_keepalive_connections=0,
+            )
+        },
+    )
+
+
 def _application_builder(bot_token: str) -> Any:
     builder = Application.builder().token(bot_token)
     if proxy_url := settings.telegram_api_proxy_url.strip():
-        builder = builder.proxy(proxy_url).get_updates_proxy(proxy_url)
+        builder = builder.request(_telegram_request(proxy_url)).get_updates_request(
+            _telegram_request(proxy_url)
+        )
     return builder
 
 
@@ -1388,6 +1421,7 @@ class NewsAdminBot:
         self._publication_monitor_keys: set[str] = set()
         self._publication_monitor_state_loaded = False
         self._publication_monitor_started = False
+        self._daily_report_last_date = ""
 
     def _is_admin(self, update: Update) -> bool:
         user = update.effective_user
@@ -5297,6 +5331,7 @@ class NewsAdminBot:
                 BotCommand("start", "Открыть рабочий стол"),
                 BotCommand("newpost", "Создать пост"),
                 BotCommand("calendar", "Календарь публикаций"),
+                BotCommand("daily_report", "Отчет о состоянии системы"),
                 BotCommand("channel_pin", "Черновик закрепа"),
                 BotCommand("generate_now", "Принудительная генерация"),
                 BotCommand("help", "Помощь"),
@@ -5316,7 +5351,7 @@ class NewsAdminBot:
             controls_response.raise_for_status()
             controls = list(controls_response.json() or [])
             posts_by_status: dict[str, list[dict[str, Any]]] = {}
-            for status in ("posted", "review", "ready", "scheduled", "publishing"):
+            for status in ("posted", "review", "ready", "scheduled", "publishing", "failed"):
                 response = client.list_posts(limit=100, status=status, newest_first=True)
                 response.raise_for_status()
                 posts_by_status[status] = list(response.json() or [])
@@ -5324,6 +5359,122 @@ class NewsAdminBot:
             worker_response.raise_for_status()
             workers = list((worker_response.json() or {}).get("workers") or [])
         return controls, posts_by_status, workers
+
+    @staticmethod
+    def _daily_report_snapshot(
+        controls: list[dict[str, Any]],
+        posts_by_status: dict[str, list[dict[str, Any]]],
+        workers: list[dict[str, Any]],
+        *,
+        now_utc: datetime,
+    ) -> DailyReportSnapshot:
+        control_map = {
+            str(row.get("key") or ""): bool(row.get("enabled", True))
+            for row in controls
+        }
+        source_enabled = {
+            key: control_map.get(_source_control_key(key), True)
+            for key in source_catalog(settings)
+        }
+        specs = [
+            spec
+            for spec in active_source_specs(settings, enabled_overrides=source_enabled)
+            if spec.integrated and spec.url
+        ]
+        names_by_url = {str(spec.url): spec.name for spec in specs if spec.url}
+        source_rows = probe_rss_sources(list(names_by_url))
+        source_health = summarize_sources(source_rows, names_by_url=names_by_url)
+
+        activities: dict[str, dict[str, Any]] = {}
+        admin_key = (settings.api_key_admin or "").strip() or settings.api_key_news
+        with CoreClient(settings.core_api_url, admin_key) as client:
+            for worker_id in ("news-telegram-ingest", "news-generate"):
+                try:
+                    response = client.workers_activity(worker_id, hours=24, limit=50)
+                    response.raise_for_status()
+                    payload = response.json() or {}
+                    activities[worker_id] = payload if isinstance(payload, dict) else {}
+                except Exception as exc:
+                    logger.warning(
+                        "daily_report_worker_activity_failed",
+                        extra={"worker_id": worker_id, "error": str(exc)},
+                    )
+                    activities[worker_id] = {}
+
+        telegram_event = latest_worker_event(
+            activities["news-telegram-ingest"],
+            actions={"telegram_fetch_slot_done"},
+        )
+        telegram_at = event_datetime(telegram_event)
+        telegram_details = (telegram_event or {}).get("details") or {}
+        telegram_items = telegram_details.get("count")
+        if not isinstance(telegram_items, int):
+            telegram_items = None
+        channels = enabled_telegram_channels(controls)
+        telegram_stale = (
+            telegram_at is None
+            or now_utc - telegram_at > timedelta(hours=24)
+            or not telegram_items
+        )
+
+        generation_event = latest_worker_event(
+            activities["news-generate"],
+            actions={"generate_slot_done", "generate_slot_failed"},
+        )
+        if generation_event is None:
+            generation_state = "нет завершенного цикла за 24 часа"
+        else:
+            action = str(generation_event.get("action") or "")
+            occurred = event_datetime(generation_event)
+            occurred_local = occurred.astimezone(ZoneInfo(settings.tz_name)) if occurred else None
+            stamp = occurred_local.strftime("%d.%m %H:%M") if occurred_local else "время неизвестно"
+            generation_state = f"{'успешно' if action == 'generate_slot_done' else 'ошибка'} ({stamp})"
+
+        worker_map = {str(row.get("worker_id") or ""): row for row in workers}
+        inactive_workers = tuple(
+            _WORKER_LABELS.get(worker_id, worker_id)
+            for worker_id in _CRITICAL_WORKER_IDS
+            if not bool((worker_map.get(worker_id) or {}).get("active"))
+        )
+
+        scheduled_rows = posts_by_status.get("scheduled") or []
+        future_rows = [
+            (stamp, row)
+            for row in scheduled_rows
+            if (stamp := NewsAdminBot._parse_iso_datetime(row.get("publish_at"))) is not None
+            and stamp >= now_utc
+        ]
+        if future_rows:
+            next_at = min(future_rows, key=lambda item: item[0])[0]
+            next_publish = next_at.astimezone(ZoneInfo(settings.tz_name)).strftime("%d.%m %H:%M")
+        else:
+            next_publish = "не запланирована"
+
+        return DailyReportSnapshot(
+            now_local=now_utc.astimezone(ZoneInfo(settings.tz_name)),
+            source_health=source_health,
+            telegram_channels=len(channels),
+            telegram_items=telegram_items,
+            telegram_checked_at=telegram_at,
+            telegram_stale=telegram_stale,
+            worker_active=len(_CRITICAL_WORKER_IDS) - len(inactive_workers),
+            worker_total=len(_CRITICAL_WORKER_IDS),
+            inactive_workers=inactive_workers,
+            published_24h=count_recent_posts(
+                posts_by_status.get("posted") or [],
+                now_utc=now_utc,
+            ),
+            failed_24h=count_recent_posts(
+                posts_by_status.get("failed") or [],
+                now_utc=now_utc,
+            ),
+            review_count=len(posts_by_status.get("review") or []),
+            ready_count=len(posts_by_status.get("ready") or []),
+            scheduled_count=len(scheduled_rows),
+            publishing_count=len(posts_by_status.get("publishing") or []),
+            next_publish=next_publish,
+            generation_state=generation_state,
+        )
 
     @staticmethod
     def _publication_monitor_heartbeat(info: dict[str, Any]) -> None:
@@ -5334,6 +5485,10 @@ class NewsAdminBot:
         controls, posts_by_status, workers = await asyncio.to_thread(self._publication_monitor_data)
         if not self._publication_monitor_state_loaded:
             self._publication_monitor_keys = acknowledged_alert_keys(workers)
+            self._daily_report_last_date = persisted_report_date(
+                workers,
+                worker_id=MONITOR_WORKER_ID,
+            )
             self._publication_monitor_state_loaded = True
 
         now_utc = datetime.now(timezone.utc)
@@ -5366,9 +5521,50 @@ class NewsAdminBot:
 
         self._publication_monitor_keys.update(sent_keys)
         retained_keys = sorted(self._publication_monitor_keys)[-80:]
+        report_snapshot: DailyReportSnapshot | None = None
+        report_sent = False
+        if settings.news_daily_report_enabled and daily_report_due(
+            now_utc,
+            last_report_date=self._daily_report_last_date,
+            tz_name=settings.tz_name,
+            hour=settings.news_daily_report_hour,
+            minute=settings.news_daily_report_minute,
+        ):
+            try:
+                report_snapshot = await asyncio.to_thread(
+                    self._daily_report_snapshot,
+                    controls,
+                    posts_by_status,
+                    workers,
+                    now_utc=now_utc,
+                )
+                report_text = build_daily_report_text(report_snapshot)
+                for chat_id in sorted(self.admin_ids):
+                    try:
+                        await app.bot.send_message(chat_id=chat_id, text=report_text)
+                        report_sent = True
+                    except TelegramError as exc:
+                        logger.warning(
+                            "daily_report_send_failed",
+                            extra={"chat_id": chat_id, "error": str(exc)},
+                        )
+                if report_sent:
+                    self._daily_report_last_date = report_snapshot.now_local.date().isoformat()
+                    logger.info(
+                        "daily_report_sent",
+                        extra={
+                            "date": self._daily_report_last_date,
+                            "rss_working": report_snapshot.source_health.working,
+                            "rss_total": report_snapshot.source_health.total,
+                        },
+                    )
+            except Exception as exc:
+                logger.exception("daily_report_failed", extra={"error": str(exc)})
+
         info: dict[str, Any] = {
             "component": "admin_bot",
             "alerted_keys": retained_keys,
+            "last_daily_report_date": self._daily_report_last_date,
             "queue_counts": {
                 status: len(posts_by_status.get(status) or [])
                 for status in ("review", "ready", "scheduled", "publishing")
@@ -5376,7 +5572,19 @@ class NewsAdminBot:
             "last_check": now_utc.isoformat(),
             "busy": False,
         }
-        if sent_keys:
+        if report_snapshot is not None:
+            info["daily_report_sources"] = {
+                "working": report_snapshot.source_health.working,
+                "total": report_snapshot.source_health.total,
+                "failed": report_snapshot.source_health.failed,
+                "empty": report_snapshot.source_health.empty,
+            }
+        if sent_keys and report_sent:
+            info["action"] = "publication_alert_and_daily_report_sent"
+            info["new_alert_keys"] = sorted(sent_keys)
+        elif report_sent:
+            info["action"] = "daily_report_sent"
+        elif sent_keys:
             info["action"] = "publication_alert_sent"
             info["new_alert_keys"] = sorted(sent_keys)
         elif not self._publication_monitor_started:
@@ -5394,6 +5602,24 @@ class NewsAdminBot:
             except Exception as exc:
                 logger.exception("publication_monitor_iteration_failed", extra={"error": str(exc)})
             await asyncio.sleep(max(60, settings.news_publication_monitor_interval_seconds))
+
+    async def cmd_daily_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        _ = context
+        if not await self._ensure_admin(update):
+            return
+        try:
+            controls, posts_by_status, workers = await asyncio.to_thread(self._publication_monitor_data)
+            snapshot = await asyncio.to_thread(
+                self._daily_report_snapshot,
+                controls,
+                posts_by_status,
+                workers,
+                now_utc=datetime.now(timezone.utc),
+            )
+            await update.effective_message.reply_text(build_daily_report_text(snapshot))
+        except Exception as exc:
+            logger.exception("daily_report_command_failed", extra={"error": str(exc)})
+            await update.effective_message.reply_text("Не удалось сформировать отчет. Ошибка записана в журнал.")
 
     async def cmd_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         _ = context
@@ -8128,6 +8354,7 @@ class NewsAdminBot:
         app.add_handler(CommandHandler("generate_now", self.cmd_generate_now))
         app.add_handler(CommandHandler("autoqueue", self.cmd_autoqueue))
         app.add_handler(CommandHandler("calendar", self.cmd_calendar))
+        app.add_handler(CommandHandler("daily_report", self.cmd_daily_report))
         app.add_handler(CommandHandler("controls", self.cmd_panel))
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("posts", self.cmd_posts))
