@@ -843,3 +843,30 @@ def test_compose_manual_post_html_skips_footer_when_explicitly_empty() -> None:
 def test_normalize_title_for_longread_strips_prefix() -> None:
     normalized = LLMNewsWriter._normalize_title_for_format("Лонгрид: AI для intake", "longread", "Fallback")
     assert normalized == "AI для intake"
+
+
+def test_human_style_gate_rejects_canned_phrase() -> None:
+    reason = LLMNewsWriter._human_style_failure_reason(
+        "Важно отметить: это не просто новая функция, а ключевой сдвиг для рынка."
+    )
+
+    assert reason == "robot_style_phrase:важно отметить"
+
+
+def test_human_style_gate_rejects_marker_cluster() -> None:
+    reason = LLMNewsWriter._human_style_failure_reason(
+        "Ключевой фактор влияет на эффективность процесса. "
+        "Это комплексная трансформация. Это решение меняет рынок. Это новый этап."
+    )
+
+    assert reason is not None
+    assert reason.startswith("robot_style_cluster:")
+
+
+def test_human_style_gate_allows_specific_editorial_prose() -> None:
+    reason = LLMNewsWriter._human_style_failure_reason(
+        "Поставщик изменил тариф: теперь цена зависит от числа обработанных документов. "
+        "Перед пилотом юротделу стоит посчитать стоимость проверки одного договора и закрепить лимит в SLA."
+    )
+
+    assert reason is None

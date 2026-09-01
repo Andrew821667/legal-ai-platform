@@ -93,7 +93,7 @@ async def test_forced_business_welcome_does_not_duplicate_greeting_welcome(monke
 
     assert len(sent) == 1
     assert "AI Verdict" in sent[0]["text"]
-    assert "единая платформа" in sent[0]["text"]
+    assert "можно проверить договор, получить юридическую помощь" in sent[0]["text"]
     assert "Contract AI" in sent[0]["text"]
 
 

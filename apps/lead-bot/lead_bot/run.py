@@ -25,11 +25,10 @@ buffer = LeadBuffer(settings.buffer_db_path)
 # The web file is the canonical source for the site-facing UI; this list is
 # what /start shows inside Telegram, so the bot reads the same five parts.
 _PLATFORM_INTRO = (
-    "👋 Это ассистент платформы <b>AI Verdict</b>.\n\n"
-    "<b>AI Verdict</b> — это не отдельный бот, а полноценная платформа для "
-    "юридической AI-работы. Можно начинать с любого элемента: проверить договор, "
-    "прочитать разбор, открыть Mini App или сразу описать задачу здесь.\n\n"
-    "Все части связаны между собой — данные, заявки и контекст не теряются:"
+    "👋 Я ассистент <b>AI Verdict</b>. Здесь можно описать задачу своими словами, "
+    "проверить договор или перейти в нужный раздел. Если вопрос требует юриста или "
+    "инженера, передам его профильной команде.\n\n"
+    "Точки входа:"
 )
 _PLATFORM_PART_LINES = [
     "🌐 <b>Сайт</b> — продукты, услуги, методология и заявка на консультацию",
@@ -139,22 +138,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if update.message is None:
         return
 
-    # Platform map first — sets the context "this bot is part of a bigger
-    # thing", inline buttons let the user jump anywhere immediately.
     await update.message.reply_text(
         _platform_map_text(),
         parse_mode=ParseMode.HTML,
         reply_markup=_platform_map_keyboard(),
         disable_web_page_preview=True,
     )
-
-    # Original acknowledgement — same wording, kept so existing scripts and
-    # dialog flows don't break.
-    await update.message.reply_text(
-        "Если хотите, напишите задачу одним сообщением — я передам её менеджеру "
-        "и мы вернёмся с предложением."
-    )
-
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _ = context
@@ -170,7 +159,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.exception("Core unavailable, buffering lead message")
         buffer.add(payload, idempotency_key=idem_key)
 
-    await update.message.reply_text("Сообщение принято. Спасибо!")
+    await update.message.reply_text("Принял задачу и передал ее команде на разбор.")
 
 
 def main() -> None:

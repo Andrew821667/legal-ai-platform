@@ -98,13 +98,13 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h3 className="text-2xl font-bold text-white mb-4">{LEGAL_BRAND}</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
-              Две базовые практики — юридическая и инженерная. На их стыке автоматизируем юридическую функцию,
-              а профильные юридические и инженерные задачи ведем в самостоятельных контурах.
+              Автоматизируем юридическую функцию силами юристов и инженеров. Отдельные правовые и программные задачи
+              передаем профильной команде.
             </p>
             <div className="space-y-2 mb-6">
               <div className="flex items-center gap-2">
                 <span className="text-amber-500">✓</span>
-                <span className="text-sm">Фокус на прикладном результате, а не на "витринном" AI</span>
+                <span className="text-sm">Прикладной результат с понятной метрикой</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-amber-500">✓</span>

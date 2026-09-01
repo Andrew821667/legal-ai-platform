@@ -44,18 +44,17 @@ export default function ForBusinessPage() {
             Для бизнеса и руководителей
           </span>
           <h1 className="mt-5 text-4xl md:text-5xl font-semibold text-white leading-tight">
-            Юридическая функция как управляемая часть бизнеса, а не узкое место
+            Сроки, риски и загрузка юридической команды под контролем
           </h1>
           <p className="mt-5 max-w-3xl text-slate-300 text-lg leading-relaxed">
-            Строим контур, в котором юридические задачи решаются быстрее, прозрачнее и с контролем качества, а команда
-            концентрируется на сложных вопросах вместо потока типовой рутины. Если процесс упирается в CRM, ERP,
-            сайт, Telegram, таблицы, внутренние базы или отдельную программу — автоматизируем и этот слой.
+            Сокращаем ручную работу, настраиваем понятные статусы и показываем, где застревают договоры и заявки.
+            При необходимости связываем процесс с CRM, ERP, сайтом, Telegram, таблицами или внутренней программой.
           </p>
         </div>
       </section>
 
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-        <h2 className="text-3xl font-semibold text-white">Ключевой эффект</h2>
+        <h2 className="text-3xl font-semibold text-white">Что меняется после запуска</h2>
         <ul className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {outcomes.map((outcome) => (
             <li key={outcome} className="rounded-xl border border-slate-800 bg-slate-800/60 p-5 text-slate-200">

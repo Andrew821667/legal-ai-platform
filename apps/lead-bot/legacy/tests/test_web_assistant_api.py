@@ -33,8 +33,8 @@ def test_chat_uses_shared_brain(monkeypatch) -> None:
         assert history[-1] == {"role": "user", "message": "Какое направление основное?"}
         ctx = (funnel_context or "").lower()
         assert "автоматизацию юридической функции" in ctx
-        assert "две базовые практики" in ctx
-        assert "ключевое пересечение" in ctx
+        assert "юридическая и инженерная практики" in ctx
+        assert "основное совместное направление" in ctx
         yield "Основное направление — "
         yield "автоматизация юридической функции."
 

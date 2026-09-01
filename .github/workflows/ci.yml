@@ -90,6 +90,7 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci --prefix apps/web
       - run: npm run lint --prefix apps/web
+      - run: npm run test:copy --prefix apps/web
 
   contract-ai-entrypoint-smoke:
     if: ${{ vars.CONTRACT_AI_SYSTEM_SMOKE_URL != '' }}

@@ -96,7 +96,7 @@ export default function LegalHelpPage() {
         "@type": "WebPage",
         "@id": canonicalUrl,
         name: "Юридические услуги для бизнеса и частных клиентов",
-        dateModified: "2026-08-05",
+        dateModified: "2026-09-01",
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
@@ -124,9 +124,8 @@ export default function LegalHelpPage() {
             Юридические услуги для бизнеса и частных клиентов
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-slate-300">
-            Мы не только разрабатываем юридические технологии, но и работаем с правом на практике. Опишите задачу,
-            ближайший срок и оставьте контакт. Юрист изучит обращение и предложит консультацию или другой
-            понятный следующий шаг в дистанционном формате по России.
+            Опишите ситуацию своими словами, укажите ближайший срок и оставьте контакт. Юрист изучит обращение и
+            предложит консультацию или другой понятный следующий шаг. Работаем дистанционно по России.
           </p>
           <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <a href="#legal-help-form" className="w-full rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400 sm:w-auto">

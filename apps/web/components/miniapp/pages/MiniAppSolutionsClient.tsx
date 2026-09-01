@@ -8,21 +8,21 @@ import { MINIAPP_ACTIONS, MINIAPP_EVENT_SOURCES, MINIAPP_EVENT_TYPES, MINIAPP_SC
 
 const blocks = [
   {
-    label: "Ключевое пересечение",
+    label: "Основное направление",
     title: "Автоматизация юридической функции",
     description: "Договорная работа, legal intake, претензионные процессы, комплаенс, базы знаний и интеграции с действующими системами компании.",
     href: ROUTES.solutions,
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
   {
-    label: "Базовая практика",
+    label: "Отдельное направление",
     title: "Юридическая практика",
     description: "Договорные, судебные, корпоративные и личные правовые вопросы принимает профильный юрист без смешения с проектом автоматизации.",
     href: ROUTES.miniAppLegalHelp,
     action: MINIAPP_ACTIONS.openLegalHelp,
   },
   {
-    label: "Базовая практика",
+    label: "Отдельное направление",
     title: "Инженерная практика",
     description: "Боты, сайты, Mini App, личные кабинеты, внутренние программы, AI-модули и интеграции рассматривает профильная команда разработки.",
     href: ROUTES.engineering,
@@ -35,7 +35,7 @@ export default function MiniAppSolutionsPage() {
     <section className="space-y-4">
       <MiniAppGuideCard
         title="Выберите маршрут"
-        description="Юридическая и инженерная практики вместе автоматизируют юридическую функцию, а профильные задачи ведут самостоятельно."
+        description="Автоматизацию юридического процесса ведут юристы и инженеры вместе. Отдельную правовую или программную задачу передадим профильной команде."
       />
 
       {blocks.map((block) => (
@@ -62,7 +62,7 @@ export default function MiniAppSolutionsPage() {
       <MiniAppCtaFlowCard
         leadStart="web_miniapp_solutions"
         sourceScreen="/miniapp/solutions"
-        title="Маршрут решений: Узнать -> Проверить -> Обсудить пилот"
+        title="Посмотрите сценарии, проверьте идею и обсудите подходящий формат"
       />
     </section>
   );

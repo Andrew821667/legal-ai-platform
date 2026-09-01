@@ -6,7 +6,7 @@ import HeroBackdrop from "@/components/HeroBackdrop";
 export const metadata: Metadata = createPageMetadata({
   title: "Юридическая помощь, разработка и услуги Legal AI",
   description:
-    "Услуги AI Verdict на стыке юридической и инженерной практик: Legal AI, автоматизация юрфункции, юридическая помощь, разработка программ и интеграций.",
+    "Услуги AI Verdict: автоматизация юридической функции, Legal AI, юридическая помощь, разработка программ и интеграций.",
   path: "/services",
 });
 
@@ -89,7 +89,7 @@ const engineeringServices = [
 const serviceGroups = [
   {
     id: "automation",
-    label: "Ключевое пересечение практик",
+    label: "Основное направление",
     title: "Автоматизация юридической функции",
     description:
       "Юристы определяют логику, риски и контрольные точки, а инженеры превращают процесс в рабочую систему с AI, интерфейсами и интеграциями.",
@@ -108,7 +108,7 @@ const serviceGroups = [
     label: "Самостоятельное направление",
     title: "Инженерная практика",
     description:
-      "End-to-end разработка прикладных систем для задач бизнеса — от диагностики и архитектуры до запуска и поддержки.",
+      "Разрабатываем прикладные системы для бизнеса: проводим диагностику, проектируем архитектуру, запускаем и поддерживаем.",
     items: engineeringServices,
   },
 ];
@@ -136,14 +136,14 @@ export default function ServicesPage() {
         <HeroBackdrop variant="home" tone="light" priority />
         <div className="relative mx-auto flex min-h-[560px] max-w-7xl items-center px-4 pb-14 pt-24 sm:min-h-[500px] sm:px-6 sm:py-28 lg:px-8">
           <div>
-            <p className="text-sm font-semibold text-amber-700">Две практики и их ключевое пересечение</p>
+            <p className="text-sm font-semibold text-amber-700">Автоматизация, право и разработка</p>
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
             Услуги AI Verdict
           </h1>
           <p className="max-w-3xl text-lg text-slate-700">
-            AI Verdict объединяет юридическую и инженерную практики. На их стыке команда автоматизирует юридическую
-            функцию и внедряет Legal AI. Вне совместного контура юридическая практика решает правовые задачи,
-            а инженерная создает прикладные программные системы и интеграции.
+            Основное направление AI Verdict — автоматизация юридической функции. Для отдельных правовых вопросов есть
+            юридическая практика, для программных продуктов и интеграций — инженерная. Выберите задачу, и мы подключим
+            нужную команду.
           </p>
           </div>
         </div>
