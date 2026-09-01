@@ -4,6 +4,10 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/Users/legalai/projects/legal-ai-platform}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
+NEWS_PROXY_LABEL="ru.legalai.news-source-proxy"
+NEWS_PROXY_SCRIPT="/Users/andrej/app-vpn/restricted_connect_proxy.py"
+NEWS_PROXY_PLIST="/Users/andrej/Library/LaunchAgents/${NEWS_PROXY_LABEL}.plist"
+NEWS_RSS_PROXY_URL="http://192.168.64.1:18081"
 
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
@@ -28,6 +32,50 @@ images=(
 )
 
 cd "$APP_DIR"
+
+msk_time="$(TZ=Europe/Moscow date '+%H:%M')"
+case "$msk_time" in
+  07:5[0-9]|08:[0-3][0-9]|08:40|16:5[0-9]|17:[0-3][0-9]|17:40)
+    echo "ERROR: editorial deploy is blocked near a scheduled news-generation slot ($msk_time MSK)"
+    exit 1
+    ;;
+esac
+
+install -m 0755 -o andrej -g staff \
+  infra/scripts/restricted_connect_proxy.py "$NEWS_PROXY_SCRIPT"
+install -m 0644 -o andrej -g staff \
+  "infra/launchd/${NEWS_PROXY_LABEL}.plist" "$NEWS_PROXY_PLIST"
+
+launchctl bootout "gui/501/${NEWS_PROXY_LABEL}" 2>/dev/null || true
+launchctl bootstrap gui/501 "$NEWS_PROXY_PLIST"
+launchctl kickstart -k "gui/501/${NEWS_PROXY_LABEL}"
+
+if ! grep -qxF "NEWS_RSS_PROXY_URL=$NEWS_RSS_PROXY_URL" "$ENV_FILE"; then
+  cp -p "$ENV_FILE" "${ENV_FILE}.bak.$(date '+%Y%m%d%H%M%S')"
+  env_tmp="$(mktemp)"
+  awk -v value="$NEWS_RSS_PROXY_URL" '
+    BEGIN { replaced = 0 }
+    /^NEWS_RSS_PROXY_URL=/ {
+      if (!replaced) print "NEWS_RSS_PROXY_URL=" value
+      replaced = 1
+      next
+    }
+    { print }
+    END { if (!replaced) print "NEWS_RSS_PROXY_URL=" value }
+  ' "$ENV_FILE" > "$env_tmp"
+  install -m 0600 -o legalai -g staff "$env_tmp" "$ENV_FILE"
+  rm -f "$env_tmp"
+fi
+
+for _ in $(seq 1 20); do
+  if curl -fsSI --max-time 15 --proxy "$NEWS_RSS_PROXY_URL" \
+    'https://news.google.com/rss?hl=ru&gl=RU&ceid=RU:ru' >/dev/null; then
+    break
+  fi
+  sleep 1
+done
+curl -fsSI --max-time 15 --proxy "$NEWS_RSS_PROXY_URL" \
+  'https://news.google.com/rss?hl=ru&gl=RU&ceid=RU:ru' >/dev/null
 
 docker_config="$(mktemp -d)"
 before="$(mktemp)"
@@ -61,14 +109,6 @@ fi
 export DOCKER_CONFIG="$docker_config"
 
 compose=(docker compose -p compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
-
-msk_time="$(TZ=Europe/Moscow date '+%H:%M')"
-case "$msk_time" in
-  07:5[0-9]|08:0[0-9]|08:1[0-5]|16:5[0-9]|17:0[0-9]|17:1[0-5])
-    echo "ERROR: editorial deploy is blocked near a scheduled news-generation slot ($msk_time MSK)"
-    exit 1
-    ;;
-esac
 
 docker ps -a --format '{{.Names}} {{.ID}} {{.State}}' | sort > "$before"
 deploy_started="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
