@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     news_publication_monitor_grace_minutes: int = 45
     news_publication_monitor_warning_minutes: int = 30
     news_publication_monitor_lookback_hours: int = 36
+    news_daily_report_enabled: bool = True
+    news_daily_report_hour: int = 8
+    news_daily_report_minute: int = 30
     news_generate_interval_options: str = "900,1800,2700,3600,7200"
     news_publish_interval_options: str = "60,120,300,600,900"
     news_generate_limit_options: str = "3,5,7,10"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from news.rss_fetcher import fetch_rss_articles
+from news.rss_fetcher import fetch_rss_articles, probe_rss_sources
 from news.settings import settings
 
 
@@ -77,3 +77,22 @@ def test_fetch_rss_articles_keeps_other_sources_when_one_fails(monkeypatch) -> N
 
     assert len(articles) == 1
     assert articles[0].article_url == "https://example.com/item"
+
+
+def test_probe_rss_sources_reports_each_source(monkeypatch) -> None:
+    def fake_get(url: str, *, timeout: int, headers: dict[str, str], proxies: dict[str, str] | None):
+        _ = timeout, headers, proxies
+        if url.endswith("broken.xml"):
+            raise TimeoutError("source timed out")
+        return _Response()
+
+    monkeypatch.setattr(settings, "news_rss_fetch_workers", 2)
+    monkeypatch.setattr(settings, "news_rss_proxy_url", "")
+    monkeypatch.setattr("news.rss_fetcher.requests.get", fake_get)
+
+    rows = probe_rss_sources(
+        ["https://example.com/working.xml", "https://example.com/broken.xml"]
+    )
+
+    assert [(row.available, row.entry_count) for row in rows] == [(True, 1), (False, 0)]
+    assert rows[1].error.startswith("TimeoutError:")
