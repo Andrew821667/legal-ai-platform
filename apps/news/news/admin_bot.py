@@ -196,6 +196,13 @@ _CALLBACK_HELPER_EXPORTS = (
 )
 
 
+def _application_builder(bot_token: str) -> Any:
+    builder = Application.builder().token(bot_token)
+    if proxy_url := settings.telegram_api_proxy_url.strip():
+        builder = builder.proxy(proxy_url).get_updates_proxy(proxy_url)
+    return builder
+
+
 _POSTS_PAGE_SIZE = 8
 _STATE_PENDING_EDIT = "pending_edit"
 _STATE_DRAFT_EDIT = "draft_edit"
@@ -8111,7 +8118,7 @@ class NewsAdminBot:
             logger.error("NEWS_ADMIN_IDS is empty; admin bot won't start")
             return 1
 
-        app = Application.builder().token(bot_token).post_init(self._post_init).build()
+        app = _application_builder(bot_token).post_init(self._post_init).build()
         app.add_handler(CommandHandler("start", self.cmd_start))
         app.add_handler(CommandHandler("admin", self.cmd_panel))
         app.add_handler(CommandHandler("sections", self.cmd_sections))

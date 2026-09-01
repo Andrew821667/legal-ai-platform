@@ -8,6 +8,7 @@ NEWS_PROXY_LABEL="ru.legalai.news-source-proxy"
 NEWS_PROXY_SCRIPT="/Users/andrej/app-vpn/restricted_connect_proxy.py"
 NEWS_PROXY_PLIST="/Users/andrej/Library/LaunchAgents/${NEWS_PROXY_LABEL}.plist"
 NEWS_RSS_PROXY_URL="http://192.168.64.1:18081"
+TELEGRAM_API_PROXY_URL="http://192.168.64.1:10811"
 
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
@@ -50,22 +51,35 @@ launchctl bootout "gui/501/${NEWS_PROXY_LABEL}" 2>/dev/null || true
 launchctl bootstrap gui/501 "$NEWS_PROXY_PLIST"
 launchctl kickstart -k "gui/501/${NEWS_PROXY_LABEL}"
 
-if ! grep -qxF "NEWS_RSS_PROXY_URL=$NEWS_RSS_PROXY_URL" "$ENV_FILE"; then
-  cp -p "$ENV_FILE" "${ENV_FILE}.bak.$(date '+%Y%m%d%H%M%S')"
+env_backup=""
+
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  if grep -qxF "$key=$value" "$ENV_FILE"; then
+    return 0
+  fi
+  if [ -z "$env_backup" ]; then
+    env_backup="${ENV_FILE}.bak.$(date '+%Y%m%d%H%M%S')"
+    cp -p "$ENV_FILE" "$env_backup"
+  fi
   env_tmp="$(mktemp)"
-  awk -v value="$NEWS_RSS_PROXY_URL" '
+  awk -v key="$key" -v value="$value" '
     BEGIN { replaced = 0 }
-    /^NEWS_RSS_PROXY_URL=/ {
-      if (!replaced) print "NEWS_RSS_PROXY_URL=" value
+    index($0, key "=") == 1 {
+      if (!replaced) print key "=" value
       replaced = 1
       next
     }
     { print }
-    END { if (!replaced) print "NEWS_RSS_PROXY_URL=" value }
+    END { if (!replaced) print key "=" value }
   ' "$ENV_FILE" > "$env_tmp"
   install -m 0600 -o legalai -g staff "$env_tmp" "$ENV_FILE"
   rm -f "$env_tmp"
-fi
+}
+
+set_env_value NEWS_RSS_PROXY_URL "$NEWS_RSS_PROXY_URL"
+set_env_value TELEGRAM_API_PROXY_URL "$TELEGRAM_API_PROXY_URL"
 
 for _ in $(seq 1 20); do
   if curl -fsSI --max-time 15 --proxy "$NEWS_RSS_PROXY_URL" \
@@ -76,6 +90,8 @@ for _ in $(seq 1 20); do
 done
 curl -fsSI --max-time 15 --proxy "$NEWS_RSS_PROXY_URL" \
   'https://news.google.com/rss?hl=ru&gl=RU&ceid=RU:ru' >/dev/null
+curl -fsSI --max-time 15 --proxy "$TELEGRAM_API_PROXY_URL" \
+  'https://api.telegram.org' >/dev/null
 
 docker_config="$(mktemp -d)"
 before="$(mktemp)"
@@ -173,14 +189,16 @@ curl -fsS https://ai-verdict.ru/services >/dev/null
 curl -fsS https://ai-verdict.ru/miniapp >/dev/null
 docker exec legal-ai-assistant-api python -c \
   "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=8).status == 200"
-docker exec legal-ai-lead-bot python -c '
-import urllib.error
-import urllib.request
+docker exec legal-ai-news-admin-bot /app/.venv/bin/python -c '
+import httpx
 
-try:
-    urllib.request.urlopen("https://api.telegram.org", timeout=8)
-except urllib.error.HTTPError:
-    pass
+from news.settings import settings
+
+proxy_url = settings.telegram_api_proxy_url.strip()
+assert proxy_url
+with httpx.Client(proxy=proxy_url, timeout=8, follow_redirects=False) as client:
+    response = client.get("https://api.telegram.org")
+assert response.status_code in {200, 302}
 '
 
 for name in "${containers[@]}"; do
