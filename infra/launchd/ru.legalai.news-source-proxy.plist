@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ru.legalai.news-source-proxy</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/andrej/app-vpn/restricted_connect_proxy.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CONNECT_PROXY_LISTEN_HOST</key>
+        <string>192.168.64.1</string>
+        <key>CONNECT_PROXY_LISTEN_PORT</key>
+        <string>18081</string>
+        <key>CONNECT_PROXY_UPSTREAM_HOST</key>
+        <string>127.0.0.1</string>
+        <key>CONNECT_PROXY_UPSTREAM_PORT</key>
+        <string>14809</string>
+        <key>CONNECT_PROXY_ALLOWED_TARGETS</key>
+        <string>news.google.com:443,www.artificialintelligence-news.com:443,www.artificiallawyer.com:443,www.marktechpost.com:443,t.me:443</string>
+    </dict>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/andrej/Library/Logs/legal-ai-news-source-proxy.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/andrej/Library/Logs/legal-ai-news-source-proxy.log</string>
+</dict>
+</plist>

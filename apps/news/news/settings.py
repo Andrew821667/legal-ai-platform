@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     news_source_keys: str = ""
     news_source_urls: str = ""
     news_rss_fetch_timeout_seconds: int = 12
+    news_rss_fetch_workers: int = 6
     news_rss_proxy_url: str = ""
     news_max_source_age_days: int = 3
     telegram_api_id: int = 0
@@ -83,6 +84,11 @@ class Settings(BaseSettings):
     news_publish_max_overdue_minutes: int = 360
     news_publish_editorial_fallback_grace_minutes: int = 45
     news_publish_fallback_startup_grace_seconds: int = 600
+    news_publication_monitor_enabled: bool = True
+    news_publication_monitor_interval_seconds: int = 300
+    news_publication_monitor_grace_minutes: int = 45
+    news_publication_monitor_warning_minutes: int = 30
+    news_publication_monitor_lookback_hours: int = 36
     news_generate_interval_options: str = "900,1800,2700,3600,7200"
     news_publish_interval_options: str = "60,120,300,600,900"
     news_generate_limit_options: str = "3,5,7,10"

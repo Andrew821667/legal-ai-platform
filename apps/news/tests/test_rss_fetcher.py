@@ -58,3 +58,22 @@ def test_fetch_rss_articles_uses_dedicated_proxy(monkeypatch) -> None:
         "http": "http://host.docker.internal:14809",
         "https": "http://host.docker.internal:14809",
     }
+
+
+def test_fetch_rss_articles_keeps_other_sources_when_one_fails(monkeypatch) -> None:
+    def fake_get(url: str, *, timeout: int, headers: dict[str, str], proxies: dict[str, str] | None):
+        _ = timeout, headers, proxies
+        if url.endswith("broken.xml"):
+            raise TimeoutError("source timed out")
+        return _Response()
+
+    monkeypatch.setattr(settings, "news_rss_fetch_workers", 2)
+    monkeypatch.setattr(settings, "news_rss_proxy_url", "")
+    monkeypatch.setattr("news.rss_fetcher.requests.get", fake_get)
+
+    articles = fetch_rss_articles(
+        ["https://example.com/broken.xml", "https://example.com/working.xml"]
+    )
+
+    assert len(articles) == 1
+    assert articles[0].article_url == "https://example.com/item"

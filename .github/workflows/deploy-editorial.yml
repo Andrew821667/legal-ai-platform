@@ -1,0 +1,75 @@
+name: Deploy editorial surfaces
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: Existing CI image commit SHA
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-macmini-editorial
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure SSH
+        env:
+          MACMINI_SSH_KEY: ${{ secrets.MACMINI_SSH_KEY }}
+          MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
+        run: |
+          set -euo pipefail
+          : "${MACMINI_SSH_KEY:?Set MACMINI_SSH_KEY}"
+          : "${MACMINI_HOST:?Set MACMINI_SSH_HOST}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$MACMINI_SSH_KEY" > ~/.ssh/macmini_deploy_key
+          chmod 600 ~/.ssh/macmini_deploy_key
+          ssh-keyscan -H "$MACMINI_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync production checkout
+        env:
+          MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/macmini_deploy_key -o IdentitiesOnly=yes -o ConnectTimeout=20 \
+            legalai@"$MACMINI_HOST" \
+            'cd /Users/legalai/projects/legal-ai-platform && test -z "$(git status --porcelain)" && git pull --ff-only origin main'
+
+      - id: image_owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy editorial services
+        env:
+          MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+          IMAGE_OWNER: ${{ steps.image_owner.outputs.value }}
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid image SHA"; exit 1; }
+          web_image="ghcr.io/$IMAGE_OWNER/legal-ai-web:$IMAGE_SHA"
+          lead_image="ghcr.io/$IMAGE_OWNER/legal-ai-lead-bot:$IMAGE_SHA"
+          news_image="ghcr.io/$IMAGE_OWNER/legal-ai-news:$IMAGE_SHA"
+          {
+            printf 'export PATH=%q\n' '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+            printf 'export DOCKER_HOST=%q\n' 'unix:///Users/andrej/.colima/default/docker.sock'
+            printf 'export GHCR_USERNAME=%q\n' "$GHCR_USERNAME"
+            printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN"
+            printf 'export WEB_IMAGE=%q\n' "$web_image"
+            printf 'export LEAD_BOT_IMAGE=%q\n' "$lead_image"
+            printf 'export NEWS_IMAGE=%q\n' "$news_image"
+            printf 'export APP_DIR=%q\n' '/Users/legalai/projects/legal-ai-platform'
+            printf 'exec bash %q\n' '/Users/legalai/projects/legal-ai-platform/infra/scripts/deploy_macmini_editorial.sh'
+          } | ssh -i ~/.ssh/macmini_deploy_key -o IdentitiesOnly=yes -o ConnectTimeout=20 \
+            andrej@"$MACMINI_HOST" 'sudo -n /bin/bash -s'

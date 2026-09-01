@@ -116,6 +116,11 @@ from news.create_payloads import (
     compose_create_post_text,
 )
 from news.create_ui import build_create_preview_text, build_create_start_text
+from news.publication_monitor import (
+    MONITOR_WORKER_ID,
+    acknowledged_alert_keys,
+    build_publication_alerts,
+)
 from news.publish_actions import (
     build_batch_result_lines,
     build_draft_batch_publish_state,
@@ -1373,6 +1378,9 @@ class NewsAdminBot:
         self._queue_snapshot_cache: tuple[datetime, tuple[dict[str, int], str]] | None = None
         self._posts_cache: dict[tuple[str, bool, int], tuple[datetime, list[dict[str, Any]]]] = {}
         self._derived_cache: dict[str, tuple[datetime, Any]] = {}
+        self._publication_monitor_keys: set[str] = set()
+        self._publication_monitor_state_loaded = False
+        self._publication_monitor_started = False
 
     def _is_admin(self, update: Update) -> bool:
         user = update.effective_user
@@ -5287,6 +5295,98 @@ class NewsAdminBot:
                 BotCommand("help", "Помощь"),
             ]
         )
+        if settings.news_publication_monitor_enabled:
+            app.create_task(
+                self._publication_monitor_loop(app),
+                name="news-publication-monitor",
+            )
+
+    def _publication_monitor_data(
+        self,
+    ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+        with CoreClient(settings.core_api_url, settings.api_key_news) as client:
+            controls_response = client.list_automation_controls(scope="news")
+            controls_response.raise_for_status()
+            controls = list(controls_response.json() or [])
+            posts_by_status: dict[str, list[dict[str, Any]]] = {}
+            for status in ("posted", "review", "ready", "scheduled", "publishing"):
+                response = client.list_posts(limit=100, status=status, newest_first=True)
+                response.raise_for_status()
+                posts_by_status[status] = list(response.json() or [])
+            worker_response = client.workers_status()
+            worker_response.raise_for_status()
+            workers = list((worker_response.json() or {}).get("workers") or [])
+        return controls, posts_by_status, workers
+
+    @staticmethod
+    def _publication_monitor_heartbeat(info: dict[str, Any]) -> None:
+        with CoreClient(settings.core_api_url, settings.api_key_news) as client:
+            client.worker_heartbeat(MONITOR_WORKER_ID, info).raise_for_status()
+
+    async def _publication_monitor_once(self, app: Application) -> None:
+        controls, posts_by_status, workers = await asyncio.to_thread(self._publication_monitor_data)
+        if not self._publication_monitor_state_loaded:
+            self._publication_monitor_keys = acknowledged_alert_keys(workers)
+            self._publication_monitor_state_loaded = True
+
+        now_utc = datetime.now(timezone.utc)
+        alerts = build_publication_alerts(
+            now_utc=now_utc,
+            control_rows=controls,
+            posts_by_status=posts_by_status,
+            workers=workers,
+            acknowledged_keys=self._publication_monitor_keys,
+            tz_name=settings.tz_name,
+            grace_minutes=settings.news_publication_monitor_grace_minutes,
+            warning_minutes=settings.news_publication_monitor_warning_minutes,
+            lookback_hours=settings.news_publication_monitor_lookback_hours,
+        )
+
+        sent_keys: set[str] = set()
+        for alert in alerts:
+            delivered = False
+            for chat_id in sorted(self.admin_ids):
+                try:
+                    await app.bot.send_message(chat_id=chat_id, text=alert.text)
+                    delivered = True
+                except TelegramError as exc:
+                    logger.warning(
+                        "publication_monitor_alert_failed",
+                        extra={"chat_id": chat_id, "error": str(exc)},
+                    )
+            if delivered:
+                sent_keys.update(alert.keys)
+
+        self._publication_monitor_keys.update(sent_keys)
+        retained_keys = sorted(self._publication_monitor_keys)[-80:]
+        info: dict[str, Any] = {
+            "component": "admin_bot",
+            "alerted_keys": retained_keys,
+            "queue_counts": {
+                status: len(posts_by_status.get(status) or [])
+                for status in ("review", "ready", "scheduled", "publishing")
+            },
+            "last_check": now_utc.isoformat(),
+            "busy": False,
+        }
+        if sent_keys:
+            info["action"] = "publication_alert_sent"
+            info["new_alert_keys"] = sorted(sent_keys)
+        elif not self._publication_monitor_started:
+            info["action"] = "startup"
+        await asyncio.to_thread(self._publication_monitor_heartbeat, info)
+        self._publication_monitor_started = True
+
+    async def _publication_monitor_loop(self, app: Application) -> None:
+        await asyncio.sleep(15)
+        while True:
+            try:
+                await self._publication_monitor_once(app)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("publication_monitor_iteration_failed", extra={"error": str(exc)})
+            await asyncio.sleep(max(60, settings.news_publication_monitor_interval_seconds))
 
     async def cmd_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         _ = context
