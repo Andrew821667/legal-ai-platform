@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.telegram_session import build_bot
 from app.models import reader_models as _reader_models  # noqa: F401
 from app.models import reader_publications as _reader_publications  # noqa: F401
 from app.models.database import AsyncSessionLocal, engine
@@ -453,7 +454,7 @@ async def main() -> int:
         return 1
 
     await _init_reader_tables()
-    bot = Bot(token=token)
+    bot = build_bot(token)
     logger.info("reader_digest_worker_started")
     await _send_worker_heartbeat(
         {

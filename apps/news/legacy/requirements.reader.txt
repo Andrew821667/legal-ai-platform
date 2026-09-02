@@ -1,4 +1,8 @@
 aiogram==3.3.0
+# Нужен aiogram для запросов через прокси: без него сборка сессии с
+# proxy падает с RuntimeError. Прямой доступ к api.telegram.org с
+# production-хоста закрыт, поэтому прокси обязателен.
+aiohttp-socks==0.8.4
 asyncpg==0.29.0
 python-dotenv==1.2.2
 pydantic==2.5.3

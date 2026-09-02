@@ -13,6 +13,7 @@ from aiogram.types import BotCommand
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.telegram_session import build_bot
 from app.bot.reader_handlers import router
 from app.models.database import AsyncSessionLocal, engine
 from app.models import reader_models as _reader_models  # noqa: F401
@@ -74,7 +75,7 @@ async def main():
     logger.info("Reader bot tables initialized")
 
     # Create bot and dispatcher
-    bot = Bot(token=token)
+    bot = build_bot(token)
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
     try:
