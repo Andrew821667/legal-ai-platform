@@ -502,8 +502,9 @@ class LLMNewsWriter:
         self.model = settings.news_model
         provider_fingerprint = f"{settings.openai_base_url} {self.model}".lower()
         self._use_max_tokens_param = "deepseek" in provider_fingerprint
+        self._thinking_enabled = self._use_max_tokens_param and settings.news_thinking_enabled
         self._reasoning_token_reserve = (
-            max(settings.news_reasoning_token_reserve, 0) if "deepseek" in provider_fingerprint else 0
+            max(settings.news_reasoning_token_reserve, 0) if self._thinking_enabled else 0
         )
 
     @staticmethod
@@ -542,7 +543,11 @@ class LLMNewsWriter:
     def _token_limit_kwargs(self, token_limit: int) -> dict[str, Any]:
         token_limit += max(int(getattr(self, "_reasoning_token_reserve", 0)), 0)
         if self._use_max_tokens_param:
-            return {"max_tokens": token_limit}
+            thinking_type = "enabled" if getattr(self, "_thinking_enabled", False) else "disabled"
+            return {
+                "max_tokens": token_limit,
+                "extra_body": {"thinking": {"type": thinking_type}},
+            }
         return {"max_completion_tokens": token_limit}
 
     def _completion_kwargs(self, format_type: str) -> dict[str, Any]:
@@ -622,6 +627,7 @@ class LLMNewsWriter:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
+            response_format={"type": "json_object"},
             **self._completion_kwargs(format_type),
         )
         payload = self._extract_json(response.choices[0].message.content or "")
@@ -990,6 +996,7 @@ class LLMNewsWriter:
                     },
                 ],
                 temperature=0.25,
+                response_format={"type": "json_object"},
                 **completion_kwargs,
             )
             payload = self._extract_json(response.choices[0].message.content or "")
@@ -2187,6 +2194,7 @@ class LLMNewsWriter:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.35,
+                response_format={"type": "json_object"},
                 **self._completion_kwargs(format_type),
             )
             raw = response.choices[0].message.content or ""

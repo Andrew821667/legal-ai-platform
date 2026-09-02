@@ -40,15 +40,13 @@ class Settings(BaseSettings):
     #     risk in 2026 — Telegram aggressively detects automated user
     #     sessions and Telethon itself is archived (Feb 2026).
     #   - "html": fetch via the public t.me/s/<channel> preview. Zero ban
-    #     risk because there is no user session. From the Mac Mini behind
-    #     RKN, t.me is reachable through the host's Happ Plus HTTP proxy
-    #     (default: http://host.docker.internal:10808); override via
-    #     news_telegram_html_proxy_url or NEWS_TELEGRAM_HTML_PROXY env.
+    #     risk because there is no user session. Production uses the
+    #     restricted source bridge, separately from the Bot API route.
     #   - "html_then_telethon": try HTML first, fall back to Telethon on
     #     empty result. Best of both — keep new posts flowing if the proxy
     #     hiccups, without paying the user-session risk in the steady state.
     news_telegram_fetch_mode: str = "html_then_telethon"
-    news_telegram_html_proxy_url: str = "http://host.docker.internal:10808"
+    news_telegram_html_proxy_url: str = "http://192.168.64.1:18081"
     # Telethon hardening (only used when Telethon is active):
     # cap the per-channel batch and add a randomised pause between channels
     # so the polling pattern doesn't look mechanical to Telegram's
@@ -71,6 +69,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = ""
     news_model: str = "deepseek-v4-flash"
+    news_thinking_enabled: bool = False
     news_reasoning_token_reserve: int = 3000
     news_top_k: int = 5
     news_schedule_slots: str = "10:00,13:00,17:00"

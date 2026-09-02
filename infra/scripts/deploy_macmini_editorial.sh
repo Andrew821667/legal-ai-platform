@@ -8,6 +8,7 @@ NEWS_PROXY_LABEL="ru.legalai.news-source-proxy"
 NEWS_PROXY_SCRIPT="/Users/andrej/app-vpn/restricted_connect_proxy.py"
 NEWS_PROXY_PLIST="/Users/andrej/Library/LaunchAgents/${NEWS_PROXY_LABEL}.plist"
 NEWS_RSS_PROXY_URL="http://192.168.64.1:18081"
+NEWS_TELEGRAM_HTML_PROXY_URL="http://192.168.64.1:18081"
 TELEGRAM_API_PROXY_URL="http://192.168.64.1:10811"
 
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
@@ -79,6 +80,7 @@ set_env_value() {
 }
 
 set_env_value NEWS_RSS_PROXY_URL "$NEWS_RSS_PROXY_URL"
+set_env_value NEWS_TELEGRAM_HTML_PROXY_URL "$NEWS_TELEGRAM_HTML_PROXY_URL"
 set_env_value TELEGRAM_API_PROXY_URL "$TELEGRAM_API_PROXY_URL"
 
 for _ in $(seq 1 20); do
@@ -90,6 +92,8 @@ for _ in $(seq 1 20); do
 done
 curl -fsSI --max-time 15 --proxy "$NEWS_RSS_PROXY_URL" \
   'https://news.google.com/rss?hl=ru&gl=RU&ceid=RU:ru' >/dev/null
+curl -fsSI --max-time 15 --proxy "$NEWS_TELEGRAM_HTML_PROXY_URL" \
+  'https://t.me/s/durov' >/dev/null
 curl -fsSI --max-time 15 --proxy "$TELEGRAM_API_PROXY_URL" \
   'https://api.telegram.org' >/dev/null
 

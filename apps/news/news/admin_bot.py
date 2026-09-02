@@ -28,7 +28,7 @@ from telegram import (
     ReplyKeyboardRemove,
     Update,
 )
-from telegram.error import TelegramError
+from telegram.error import BadRequest, TelegramError, TimedOut
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -234,6 +234,21 @@ def _application_builder(bot_token: str) -> Any:
             _telegram_request(proxy_url)
         )
     return builder
+
+
+async def _safe_callback_answer(query, *args, **kwargs) -> bool:
+    try:
+        await query.answer(*args, **kwargs)
+        return True
+    except TimedOut:
+        logger.warning("admin_callback_answer_timed_out", extra={"callback_data": query.data})
+        return False
+    except BadRequest as exc:
+        error_text = str(exc).lower()
+        if "query is too old" in error_text or "query id is invalid" in error_text:
+            logger.info("admin_callback_answer_expired", extra={"callback_data": query.data})
+            return False
+        raise
 
 
 _POSTS_PAGE_SIZE = 8
@@ -1521,20 +1536,34 @@ class NewsAdminBot:
         *,
         reply_markup: InlineKeyboardMarkup | None = None,
     ) -> bool:
-        try:
-            await query.edit_message_text(text, reply_markup=reply_markup)
-            return True
-        except TelegramError as exc:
-            error_text = str(exc).lower()
-            if "message is not modified" in error_text:
-                logger.info("admin_message_not_modified", extra={"callback_data": query.data})
+        for attempt in range(2):
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup)
+                return True
+            except TimedOut:
+                if attempt == 0:
+                    await asyncio.sleep(0.4)
+                    continue
+                logger.warning(
+                    "admin_message_edit_timed_out",
+                    extra={"callback_data": query.data},
+                )
                 return False
-            if "can't be edited" in error_text or "message to edit not found" in error_text:
-                logger.info("admin_message_edit_fallback", extra={"callback_data": query.data, "error": str(exc)})
-                if query.message is not None:
-                    await query.message.reply_text(text, reply_markup=reply_markup)
+            except TelegramError as exc:
+                error_text = str(exc).lower()
+                if "message is not modified" in error_text:
+                    logger.info("admin_message_not_modified", extra={"callback_data": query.data})
                     return True
-            raise
+                if "can't be edited" in error_text or "message to edit not found" in error_text:
+                    logger.info(
+                        "admin_message_edit_fallback",
+                        extra={"callback_data": query.data, "error": str(exc)},
+                    )
+                    if query.message is not None:
+                        await query.message.reply_text(text, reply_markup=reply_markup)
+                        return True
+                raise
+        return False
 
     def _clear_text_flow_states(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         clear_context_states(context.user_data, _TEXT_FLOW_STATES)
@@ -5637,6 +5666,8 @@ class NewsAdminBot:
             return
         try:
             await self._show_panel_message(update, intro=True)
+        except TimedOut:
+            logger.warning("admin_start_delivery_timed_out")
         except Exception as exc:
             logger.exception("admin_start_failed", extra={"error": str(exc)})
             await update.effective_message.reply_text(f"Ошибка запуска рабочего стола: {exc}", reply_markup=_main_menu_markup())
@@ -5794,7 +5825,7 @@ class NewsAdminBot:
         self._sync_ui_hints_state()
 
         query = update.callback_query
-        await query.answer()
+        await _safe_callback_answer(query)
         data = query.data or ""
 
         try:
@@ -5964,7 +5995,7 @@ class NewsAdminBot:
             return
 
         query = update.callback_query
-        await query.answer()
+        await _safe_callback_answer(query)
         data = query.data or ""
 
         try:
@@ -6308,7 +6339,11 @@ class NewsAdminBot:
                 draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
                 media_urls = list(draft.get("media_urls") or [])
                 if len(media_urls) < 2:
-                    await query.answer("Недостаточно медиа для перестановки", show_alert=False)
+                    await _safe_callback_answer(
+                        query,
+                        "Недостаточно медиа для перестановки",
+                        show_alert=False,
+                    )
                     return
                 media_urls.insert(0, media_urls.pop())
                 draft["media_urls"] = media_urls
@@ -6324,7 +6359,11 @@ class NewsAdminBot:
                 draft = dict(context.user_data.get(_STATE_DRAFT_CREATE) or {})
                 media_urls = list(draft.get("media_urls") or [])
                 if len(media_urls) < 2:
-                    await query.answer("Недостаточно медиа для перестановки", show_alert=False)
+                    await _safe_callback_answer(
+                        query,
+                        "Недостаточно медиа для перестановки",
+                        show_alert=False,
+                    )
                     return
                 draft["media_urls"] = list(reversed(media_urls))
                 context.user_data[_STATE_DRAFT_CREATE] = draft
@@ -6399,7 +6438,7 @@ class NewsAdminBot:
             return
         self._sync_ui_hints_state()
         query = update.callback_query
-        await query.answer()
+        await _safe_callback_answer(query)
         data = query.data or ""
 
         try:
@@ -6526,7 +6565,7 @@ class NewsAdminBot:
             if data.startswith("rca:"):
                 parts = data.split(":")
                 if len(parts) < 2:
-                    await query.answer("Некорректная команда CTA A/B.", show_alert=True)
+                    await _safe_callback_answer(query, "Некорректная команда CTA A/B.", show_alert=True)
                     return
                 action = parts[1]
                 state = self._reader_cta_ab_state(force_refresh=True)
@@ -6536,15 +6575,19 @@ class NewsAdminBot:
 
                 if action == "var":
                     if len(parts) < 3:
-                        await query.answer("Не указан вариант CTA.", show_alert=True)
+                        await _safe_callback_answer(query, "Не указан вариант CTA.", show_alert=True)
                         return
                     variant = _normalize_reader_cta_variant(parts[2])
                     if not variant:
-                        await query.answer("Неизвестный вариант CTA.", show_alert=True)
+                        await _safe_callback_answer(query, "Неизвестный вариант CTA.", show_alert=True)
                         return
                     if variant in variants:
                         if len(variants) == 1:
-                            await query.answer("Нужен хотя бы один активный вариант.", show_alert=True)
+                            await _safe_callback_answer(
+                                query,
+                                "Нужен хотя бы один активный вариант.",
+                                show_alert=True,
+                            )
                             return
                         variants = [item for item in variants if item != variant]
                     else:
@@ -6553,12 +6596,12 @@ class NewsAdminBot:
                     config["split"] = _normalize_reader_cta_split(config["enabled_variants"], config.get("split"))
                 elif action == "split":
                     if len(parts) < 3:
-                        await query.answer("Не указан split-профиль.", show_alert=True)
+                        await _safe_callback_answer(query, "Не указан split-профиль.", show_alert=True)
                         return
                     preset_key = parts[2]
                     preset = _READER_CTA_AB_SPLIT_PRESETS.get(preset_key)
                     if preset is None:
-                        await query.answer("Неизвестный split-профиль.", show_alert=True)
+                        await _safe_callback_answer(query, "Неизвестный split-профиль.", show_alert=True)
                         return
                     config["enabled_variants"] = [item for item in _READER_CTA_AB_VARIANTS if item in variants]
                     config["split"] = _normalize_reader_cta_split(config["enabled_variants"], preset)
@@ -6568,7 +6611,7 @@ class NewsAdminBot:
                     config["enabled_variants"] = [item for item in _READER_CTA_AB_VARIANTS if item in variants]
                     config["split"] = _normalize_reader_cta_split(config["enabled_variants"], config.get("split"))
                 else:
-                    await query.answer("Неизвестная команда CTA A/B.", show_alert=True)
+                    await _safe_callback_answer(query, "Неизвестная команда CTA A/B.", show_alert=True)
                     return
 
                 payload = {
@@ -6652,7 +6695,7 @@ class NewsAdminBot:
             if data.startswith("lt:toggle:"):
                 index = int(data.split(":")[-1]) - 1
                 if index < 0 or index >= len(_LONGREAD_TOPIC_LIBRARY):
-                    await query.answer("Неизвестная тема лонгрида.", show_alert=True)
+                    await _safe_callback_answer(query, "Неизвестная тема лонгрида.", show_alert=True)
                     return
                 topic = _LONGREAD_TOPIC_LIBRARY[index]
                 row = self._controls_lookup(force_refresh=True).get("news.schedule.longread", {})
@@ -6661,7 +6704,11 @@ class NewsAdminBot:
                 if not current_topics:
                     current_topics = list(self._longread_topics_active(force_refresh=True))
                 if topic in current_topics and len(current_topics) == 1:
-                    await query.answer("Нужна хотя бы одна активная тема лонгрида.", show_alert=True)
+                    await _safe_callback_answer(
+                        query,
+                        "Нужна хотя бы одна активная тема лонгрида.",
+                        show_alert=True,
+                    )
                     return
                 if topic in current_topics:
                     current_topics = [item for item in current_topics if item != topic]
@@ -6771,7 +6818,7 @@ class NewsAdminBot:
             if data.startswith("int:view:"):
                 _, _, kind = data.split(":", maxsplit=2)
                 if kind not in _INTERVAL_SETTING_KINDS:
-                    await query.answer("Неизвестная настройка интервала.", show_alert=True)
+                    await _safe_callback_answer(query, "Неизвестная настройка интервала.", show_alert=True)
                     return
                 await self._safe_edit_message_text(
                     query,
@@ -6783,7 +6830,7 @@ class NewsAdminBot:
             if data.startswith("int:set:"):
                 _, _, kind, raw_value = data.split(":", maxsplit=3)
                 if kind not in _INTERVAL_SETTING_KINDS:
-                    await query.answer("Неизвестная настройка интервала.", show_alert=True)
+                    await _safe_callback_answer(query, "Неизвестная настройка интервала.", show_alert=True)
                     return
                 if kind == "publish":
                     value = int(raw_value)
@@ -7013,10 +7060,14 @@ class NewsAdminBot:
                     enabled_themes = set(profile or generation_theme_keys()[:1])
                 else:
                     if theme_key not in GENERATION_THEME_DEFS:
-                        await query.answer("Неизвестная контент-тема.", show_alert=True)
+                        await _safe_callback_answer(query, "Неизвестная контент-тема.", show_alert=True)
                         return
                     if theme_key in enabled_themes and len(enabled_themes) == 1:
-                        await query.answer("Нужна хотя бы одна активная тема генерации.", show_alert=True)
+                        await _safe_callback_answer(
+                            query,
+                            "Нужна хотя бы одна активная тема генерации.",
+                            show_alert=True,
+                        )
                         return
                     if theme_key in enabled_themes:
                         enabled_themes.remove(theme_key)
@@ -7336,13 +7387,13 @@ class NewsAdminBot:
             if data.startswith("wrk:"):
                 parts = data.split(":", maxsplit=2)
                 if len(parts) < 2:
-                    await query.answer("Некорректный worker_id", show_alert=True)
+                    await _safe_callback_answer(query, "Некорректный worker_id", show_alert=True)
                     return
                 token = parts[1]
                 force_refresh = len(parts) == 3 and parts[2] == "refresh"
                 worker_id = _worker_id_from_callback_token(token)
                 if not worker_id:
-                    await query.answer("Некорректный worker_id", show_alert=True)
+                    await _safe_callback_answer(query, "Некорректный worker_id", show_alert=True)
                     return
                 payload = self._worker_activity_payload(
                     worker_id,
@@ -7411,7 +7462,7 @@ class NewsAdminBot:
         self._sync_ui_hints_state()
 
         query = update.callback_query
-        await query.answer()
+        await _safe_callback_answer(query)
         data = query.data or ""
 
         try:
