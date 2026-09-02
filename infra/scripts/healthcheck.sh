@@ -29,6 +29,14 @@ CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD="${CONTRACT_FAILED_RETRYABLE_ALERT_THR
 TELEGRAM_RECOVERY_ENABLED="${TELEGRAM_RECOVERY_ENABLED:-0}"
 TELEGRAM_TLS_CHECK_CONTAINER="${TELEGRAM_TLS_CHECK_CONTAINER:-legal-ai-lead-bot}"
 TELEGRAM_TLS_CHECK_HOST="${TELEGRAM_TLS_CHECK_HOST:-api.telegram.org}"
+# С хоста api.telegram.org по DNS не разрешается: запрос висит до таймаута,
+# и оповещение о проблеме не уходит. Контейнеры обходят это через extra_hosts,
+# здесь используем --resolve с тем же адресом, что и в compose.
+TELEGRAM_API_HOST_IP="${TELEGRAM_API_HOST_IP:-149.154.167.220}"
+# Docker работает через Colima, его сокет лежит не по системному пути.
+if [ -z "${DOCKER_HOST:-}" ] && [ -S "/Users/andrej/.colima/default/docker.sock" ]; then
+  export DOCKER_HOST="unix:///Users/andrej/.colima/default/docker.sock"
+fi
 TELEGRAM_TLS_CHECK_TIMEOUT_SECONDS="${TELEGRAM_TLS_CHECK_TIMEOUT_SECONDS:-8}"
 TELEGRAM_RECOVERY_COOLDOWN_SECONDS="${TELEGRAM_RECOVERY_COOLDOWN_SECONDS:-300}"
 TELEGRAM_RECOVERY_SERVICES="${TELEGRAM_RECOVERY_SERVICES:-lead-bot news-admin-bot news-reader-bot news-publish news-reader-digest}"
@@ -93,7 +101,9 @@ send_alert_once() {
   if [ $((now_ts - last_ts)) -lt "${ALERT_COOLDOWN_SECONDS}" ]; then
     return 0
   fi
-  curl -fsS "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
+  curl -fsS --max-time 20 \
+    --resolve "api.telegram.org:443:${TELEGRAM_API_HOST_IP}" \
+    "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
     -d "chat_id=${ALERT_CHAT_ID}" \
     --data-urlencode "text=${text}" >/dev/null || return 0
   _state_set_ts "$key" "$now_ts"
