@@ -210,11 +210,18 @@ _CALLBACK_HELPER_EXPORTS = (
 )
 
 
-def _telegram_request(proxy_url: str) -> HTTPXRequest:
+# Длительность long polling. getUpdates держит соединение открытым всё это
+# время, поэтому read_timeout для него должен быть заметно больше, иначе
+# клиент рвёт исправное соединение сам и порождает ложные TimedOut.
+POLL_TIMEOUT_SECONDS = 10.0
+POLL_READ_TIMEOUT_SECONDS = POLL_TIMEOUT_SECONDS + 20.0
+
+
+def _telegram_request(proxy_url: str, *, read_timeout: float = 20.0) -> HTTPXRequest:
     return HTTPXRequest(
         connection_pool_size=16,
         connect_timeout=10.0,
-        read_timeout=20.0,
+        read_timeout=read_timeout,
         write_timeout=20.0,
         pool_timeout=10.0,
         proxy=proxy_url,
@@ -230,8 +237,10 @@ def _telegram_request(proxy_url: str) -> HTTPXRequest:
 def _application_builder(bot_token: str) -> Any:
     builder = Application.builder().token(bot_token)
     if proxy_url := settings.telegram_api_proxy_url.strip():
+        # Обычные вызовы и getUpdates разведены намеренно: у опроса свой
+        # запас по чтению под длительность long polling.
         builder = builder.request(_telegram_request(proxy_url)).get_updates_request(
-            _telegram_request(proxy_url)
+            _telegram_request(proxy_url, read_timeout=POLL_READ_TIMEOUT_SECONDS)
         )
     return builder
 
@@ -5355,17 +5364,27 @@ class NewsAdminBot:
         )
 
     async def _post_init(self, app: Application) -> None:
-        await app.bot.set_my_commands(
-            [
-                BotCommand("start", "Открыть рабочий стол"),
-                BotCommand("newpost", "Создать пост"),
-                BotCommand("calendar", "Календарь публикаций"),
-                BotCommand("daily_report", "Отчет о состоянии системы"),
-                BotCommand("channel_pin", "Черновик закрепа"),
-                BotCommand("generate_now", "Принудительная генерация"),
-                BotCommand("help", "Помощь"),
-            ]
-        )
+        # Меню команд — украшение интерфейса, а не условие работы бота.
+        # Раньше сетевая ошибка здесь прерывала запуск: модератор падал и
+        # уходил в перезапуск, хотя опрос обновлений был вполне возможен.
+        try:
+            await app.bot.set_my_commands(
+                [
+                    BotCommand("start", "Открыть рабочий стол"),
+                    BotCommand("newpost", "Создать пост"),
+                    BotCommand("calendar", "Календарь публикаций"),
+                    BotCommand("daily_report", "Отчет о состоянии системы"),
+                    BotCommand("channel_pin", "Черновик закрепа"),
+                    BotCommand("generate_now", "Принудительная генерация"),
+                    BotCommand("help", "Помощь"),
+                ]
+            )
+        except TelegramError as exc:
+            # TelegramError покрывает NetworkError и TimedOut.
+            logger.warning(
+                "admin_set_my_commands_failed",
+                extra={"error": type(exc).__name__},
+            )
         if settings.news_publication_monitor_enabled:
             app.create_task(
                 self._publication_monitor_loop(app),
