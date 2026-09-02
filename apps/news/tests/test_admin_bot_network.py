@@ -60,3 +60,55 @@ def test_message_edit_accepts_first_delivery_after_uncertain_timeout() -> None:
 
     assert result is True
     assert query.edit_calls == 2
+
+
+class _Bot:
+    """Бот, у которого установка меню команд всегда завершается ошибкой."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+        self.calls = 0
+
+    async def set_my_commands(self, commands) -> None:
+        _ = commands
+        self.calls += 1
+        raise self.error
+
+
+class _App:
+    def __init__(self, bot: _Bot) -> None:
+        self.bot = bot
+        self.tasks: list[str] = []
+
+    def create_task(self, coro, name: str | None = None):
+        coro.close()
+        self.tasks.append(name or "")
+        return None
+
+
+def _run_post_init(error: Exception) -> _Bot:
+    bot = _Bot(error)
+    app = _App(bot)
+    admin = NewsAdminBot.__new__(NewsAdminBot)
+    asyncio.run(NewsAdminBot._post_init(admin, app))
+    return bot
+
+
+def test_set_my_commands_timeout_does_not_stop_startup() -> None:
+    """Таймаут при установке меню не должен прерывать запуск модератора.
+
+    Меню команд — украшение интерфейса. Раньше исключение здесь роняло бот
+    в перезапуск, хотя опрос обновлений был возможен.
+    """
+    bot = _run_post_init(TimedOut())
+
+    assert bot.calls == 1
+
+
+def test_set_my_commands_network_error_does_not_stop_startup() -> None:
+    """То же самое для обрыва сети, а не только таймаута."""
+    from telegram.error import NetworkError
+
+    bot = _run_post_init(NetworkError("connection failed"))
+
+    assert bot.calls == 1
