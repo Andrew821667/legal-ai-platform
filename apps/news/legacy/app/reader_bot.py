@@ -67,7 +67,9 @@ async def main():
             "Добавьте его в apps/news/legacy/.env"
         )
 
-    logger.info(f"Reader bot starting with token: {token[:10]}...")
+    # Токен в журнал не пишем: даже первые символы содержат идентификатор
+    # бота и начало секрета, а журналы читаются шире, чем секреты.
+    logger.info("Reader bot starting")
 
     # Initialize reader-specific tables
     await init_reader_tables()
