@@ -25,8 +25,20 @@ SOCKS_PORT, HTTP_PORT = 10810, 10811
 # эксплуатации остаётся выключенным, а его кэш перестал пополняться с 22.06,
 # из-за чего пул устарел и балансировщик остался с мёртвыми узлами.
 SUB_URL_FILE = "/usr/local/etc/xray-balancer-sub-url"
+# Узлы, сохранённые вручную. Провайдер периодически перестаёт отдавать рабочие
+# серверы и присылает вместо них только LTE и служебные заглушки, хотя ранее
+# выданные узлы продолжают работать. Такие узлы держим отдельно и подмешиваем
+# в пул: они не зависят от текущей выдачи подписки.
+EXTRA_NODES_FILE = "/usr/local/etc/xray-balancer-extra-nodes.json"
+# Второй путь — в домашнем каталоге: туда узел обновляется автоматически с
+# рабочего ноутбука по ssh, без пароля root. Системный файл остаётся ручным
+# резервом на случай, если автообновление недоступно.
+EXTRA_NODES_USER_FILE = "/Users/andrej/.xray-balancer-extra-nodes.json"
 # Сервер подписки отдаёт HTML браузерным агентам и рабочий пул — клиентским.
-SUB_UA = "Happ/1.0"
+# Провайдер отдаёт разный ответ в зависимости от клиента: на Happ/1.0 и curl
+# приходит 500, на браузерный UA — HTML-страница вместо подписки. Рабочим
+# оказался клиентский UA v2rayNG.
+SUB_UA = os.environ.get("XRAY_BALANCER_SUB_UA", "v2rayNG/1.8.0")
 # Узлы, названия которых складываются в сервисное сообщение провайдера
 # (например, о лимите устройств), рабочими не являются.
 STUB_MARKERS = ("лимит", "limit", "подписк", "устройств", "поддержк", "бот", "bot",
@@ -209,17 +221,56 @@ def main():
         o2["tag"] = "proxy-%d" % (len(pool) + 1)
         pool.append(o2)
         ips.append(v["address"])
+
     if not pool:
         log("WARN pool empty after filter; leaving balancer as-is")
         return
 
-    if len(pool) > MAX_POOL:
-        log("pool trimmed %d -> %d to stay within subscription device limit"
-            % (len(pool), MAX_POOL))
-        pool = pool[:MAX_POOL]
-        ips = ips[:MAX_POOL]
-        for idx, ob in enumerate(pool, start=1):
-            ob["tag"] = "proxy-%d" % idx
+    # Сохранённые узлы ставим в начало и учитываем до обрезки. Провайдер сейчас
+    # отдаёт в подписке только LTE и служебные заглушки, поэтому вручную
+    # сохранённый рабочий узел — единственный полноценный канал. Если добавлять
+    # его в конец, обрезка под лимит устройств срезала бы именно его.
+    extra = []
+    for path in (EXTRA_NODES_USER_FILE, EXTRA_NODES_FILE):
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as fh:
+                loaded = json.load(fh)
+        except Exception as exc:
+            log("WARN cannot read extra nodes from %s: %s" % (path, type(exc).__name__))
+            continue
+        if loaded:
+            extra = loaded
+            break
+
+    saved_pool, saved_ips = [], []
+    for ob in extra:
+        v = (ob.get("settings", {}).get("vnext") or ob.get("settings", {}).get("servers") or [{}])[0]
+        addr, port = v.get("address"), v.get("port")
+        if not addr or (addr, port) in seen:
+            continue
+        seen.add((addr, port))
+        o2 = copy.deepcopy(ob)
+        o2.pop("remarks", None)
+        saved_pool.append(o2)
+        saved_ips.append(addr)
+
+    room = max(0, MAX_POOL - len(saved_pool))
+    if len(pool) > room:
+        log("subscription nodes trimmed %d -> %d (saved nodes take priority)"
+            % (len(pool), room))
+        pool = pool[:room]
+        ips = ips[:room]
+
+    pool = saved_pool + pool
+    ips = saved_ips + ips
+    if saved_pool:
+        log("pool: %d saved + %d from subscription" % (len(saved_pool), len(pool) - len(saved_pool)))
+
+    for idx, ob in enumerate(pool, start=1):
+        ob["tag"] = "proxy-%d" % idx
+
 
     cfg = {
         "log": {"loglevel": "warning"},
