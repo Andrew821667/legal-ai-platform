@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from core_api.auth_guard import client_fingerprint, guard
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ApiKey, Scope
@@ -87,6 +88,19 @@ def get_api_key_identity(request: Request, db: Session = Depends(get_db)) -> Api
     if not raw_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-API-Key")
 
+    # Дешёвые барьеры перед дорогим сравнением bcrypt: перебор ключей иначе
+    # насыщает процессор, поскольку неизвестный ключ сверяется со всеми
+    # активными записями.
+    client = client_fingerprint(request.headers)
+    if guard.is_known_bad(raw_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+    if guard.too_many_failures(client):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many invalid API key attempts",
+            headers={"Retry-After": "60"},
+        )
+
     cached_identity = cache.get_verified(raw_key)
     if cached_identity is not None:
         db.execute(
@@ -110,6 +124,8 @@ def get_api_key_identity(request: Request, db: Session = Depends(get_db)) -> Api
             db.commit()
             return identity
 
+    guard.remember_bad(raw_key)
+    guard.register_failure(client)
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 
