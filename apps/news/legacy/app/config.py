@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     # Telegram Bot (для модерации и публикации)
     telegram_bot_token: str = Field(default="")
     telegram_admin_id: int = Field(default=0)
+    # Прямой доступ к api.telegram.org с production-хоста закрыт, поэтому
+    # запросы идут через локальный прокси. Без него бот падает на каждом
+    # обращении с ClientConnectorError.
+    telegram_api_proxy_url: str = Field(default="")
     telegram_channel_id: str = Field(default="")
     telegram_channel_id_numeric: int = Field(default=0)
 
