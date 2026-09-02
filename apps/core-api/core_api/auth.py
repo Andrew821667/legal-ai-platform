@@ -5,13 +5,13 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import sha256
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from core_api.auth_guard import client_fingerprint, guard
+from core_api.key_fingerprint import fingerprint
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ApiKey, Scope
@@ -73,7 +73,7 @@ class ActiveApiKeyCache:
 
     @staticmethod
     def _fingerprint(raw_key: str) -> str:
-        return sha256(raw_key.encode("utf-8")).hexdigest()
+        return fingerprint(raw_key)
 
 
 cache = ActiveApiKeyCache()

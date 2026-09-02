@@ -21,7 +21,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from hashlib import sha256
+
+from core_api.key_fingerprint import fingerprint
 
 
 class AuthGuard:
@@ -43,7 +44,7 @@ class AuthGuard:
 
     @staticmethod
     def _fingerprint(raw_key: str) -> str:
-        return sha256(raw_key.encode("utf-8")).hexdigest()
+        return fingerprint(raw_key)
 
     def is_known_bad(self, raw_key: str, *, now: float | None = None) -> bool:
         """Проверяет, отвергался ли этот ключ недавно."""

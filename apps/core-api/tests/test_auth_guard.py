@@ -84,3 +84,28 @@ def test_client_is_taken_from_proxy_not_from_sender() -> None:
 def test_client_falls_back_to_real_ip() -> None:
     assert client_fingerprint({"x-real-ip": "198.51.100.9"}) == "198.51.100.9"
     assert client_fingerprint({}) == "unknown"
+
+
+def test_fingerprint_is_not_a_plain_fast_hash() -> None:
+    """Отпечаток не должен совпадать с голым SHA256 от того же значения.
+
+    Быстрый хеш позволяет сопоставить отпечаток с исходным ключом перебором,
+    если содержимое памяти утечёт. Отпечаток берётся на ключе процесса, поэтому
+    воспроизвести его снаружи нельзя.
+    """
+    from hashlib import sha256
+
+    from core_api.key_fingerprint import fingerprint
+
+    secret = "ak_example_secret_value"
+
+    assert fingerprint(secret) != sha256(secret.encode()).hexdigest()
+    assert secret not in fingerprint(secret)
+
+
+def test_fingerprint_is_stable_within_process() -> None:
+    """Внутри процесса отпечаток постоянен — иначе кэш не работал бы."""
+    from core_api.key_fingerprint import fingerprint
+
+    assert fingerprint("ak_same") == fingerprint("ak_same")
+    assert fingerprint("ak_one") != fingerprint("ak_two")
