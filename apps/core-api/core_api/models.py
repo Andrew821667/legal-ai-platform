@@ -293,6 +293,44 @@ class Lead(Base):
     )
 
 
+class NdaSignature(Base):
+    """Подписание соглашения о конфиденциальности простой электронной подписью.
+
+    Подпись — это нажатие кнопки в боте. Чтобы она чего-то стоила при споре,
+    фиксируется не сам факт, а обстоятельства: кто, когда, какой именно текст
+    видел. Хеш текста здесь ключевой — без него нельзя доказать, что документ
+    не менялся после подписания.
+
+    Запись одна на клиента: подписанное соглашение действует на все дальнейшие
+    обращения, повторно подписывать не нужно.
+    """
+
+    __tablename__ = "nda_signatures"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("leads.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Кем подписано: аккаунт Telegram подтверждает канал, но не личность.
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Что подписано: версия и хеш текста, который клиент видел на экране.
+    document_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Откуда пришло подписание — на случай появления других каналов.
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, default="telegram_bot")
+
+    __table_args__ = (
+        Index("ix_nda_signatures_lead", "lead_id"),
+        Index("ix_nda_signatures_signed_at", "signed_at"),
+    )
+
+
 class LegalIntake(Base):
     __tablename__ = "legal_intakes"
 
