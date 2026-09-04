@@ -62,6 +62,10 @@ from .user_routing import (
     maybe_handle_static_reply_action,
 )
 from .start_payloads import process_pending_start_payload
+from .intake_dialog import (
+    handle_intake_dialog_document,
+    handle_intake_dialog_message,
+)
 from .legal_help import maybe_handle_legal_help_message
 
 logger = logging.getLogger(__name__)
@@ -159,6 +163,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     action="non_text_requires_pdn",
                 )
                 return
+            # Материалы по юридическому обращению принимаем раньше разбора
+            # договора: человек в уточняющем диалоге присылает документы по
+            # своему делу, а не файл на анализ.
+            if await handle_intake_dialog_document(update, context):
+                return
             # Перехватываем документ если пользователь в режиме анализа договора
             if context.user_data.get(CONTRACT_ANALYSIS_WAITING_KEY):
                 handled = await handle_contract_document(update, context, user_data)
@@ -190,6 +199,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user=user,
             user_data=user_data,
         ):
+            return
+
+        if await handle_intake_dialog_message(update, context, message_text):
             return
 
         if await maybe_handle_legal_help_message(

@@ -76,6 +76,10 @@ from handlers.contract_analysis import (
     handle_contract_analysis_start,
     handle_contract_result_open,
 )
+from handlers.intake_dialog import (
+    handle_intake_nda_callback,
+    start_dialog as start_intake_dialog,
+)
 from handlers.legal_help import handle_legal_help_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
@@ -800,6 +804,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_cleanup_callback(update, context)
         elif data.startswith("admin_"):
             await handle_admin_panel_callback(update, context)
+        elif data.startswith("intake_nda:"):
+            await handle_intake_nda_callback(update, context)
         elif data == "contract_upload":
             await handle_contract_analysis_start(update, context)
         elif data == "contract_cancel":
@@ -919,6 +925,17 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 text=intake_outreach.build_outreach_message(intake),
             )
             core_api_bridge.bridge.mark_intake_outreach(intake_id)
+            # Сразу открываем уточняющий диалог: клиент ответит на это
+            # сообщение, и ответ должен попасть в разбор обращения, а не в
+            # общую воронку. У фоновой задачи нет контекста пользователя,
+            # поэтому пишем прямо в хранилище приложения.
+            start_intake_dialog(
+                context.application.user_data[int(telegram_user_id)],
+                intake_id=intake_id,
+                lead_id=intake.get("lead_id"),
+                legal_area=intake.get("legal_area"),
+                telegram_user_id=int(telegram_user_id),
+            )
             logger.info("Intake outreach sent for %s", intake_id)
         except Forbidden:
             # Клиент не начинал диалог с ботом или заблокировал его.

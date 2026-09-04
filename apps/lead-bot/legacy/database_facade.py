@@ -13,6 +13,7 @@ import database_knowledge
 import database_leads
 import database_reporting
 import database_security
+import intake_dialog_store
 import database_user_state
 import database_users
 from config import get_config
@@ -509,6 +510,28 @@ class DatabaseFacadeMixin:
             _USERS_COLUMNS,
             user_id=user_id,
             fields=fields,
+        )
+
+    def save_intake_dialog_state(self, telegram_user_id: int, user_data: dict) -> None:
+        """Сохраняет ход уточняющего диалога, чтобы он пережил перезапуск бота."""
+        intake_dialog_store.save_state(
+            self.get_connection,
+            telegram_user_id=telegram_user_id,
+            user_data=user_data,
+        )
+
+    def load_intake_dialog_state(self, telegram_user_id: int) -> Dict:
+        """Возвращает сохранённый ход диалога или пустой словарь."""
+        return intake_dialog_store.load_state(
+            self.get_connection,
+            telegram_user_id=telegram_user_id,
+        )
+
+    def clear_intake_dialog_state(self, telegram_user_id: int) -> None:
+        """Удаляет состояние: диалог завершён или передан юристу."""
+        intake_dialog_store.clear_state(
+            self.get_connection,
+            telegram_user_id=telegram_user_id,
         )
 
     def get_user_funnel_state(self, user_id: int) -> Dict:

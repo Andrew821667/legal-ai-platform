@@ -260,6 +260,25 @@ def init_database(get_connection: Callable[[], sqlite3.Connection], logger: logg
             """
         )
 
+        # Состояние уточняющего диалога по юридическому обращению.
+        #
+        # Хранится в базе, а не в памяти процесса: диалог идёт минутами, а
+        # деплой может случиться в любой момент. Потеря состояния означала бы,
+        # что клиент отвечает на вопрос, а бот отвечает ему из общей воронки —
+        # для человека это выглядит так, будто его перестали слушать.
+        #
+        # Здесь только ход разговора. Содержательное — ответы, документы,
+        # подпись — уходит в core-api сразу и от этой таблицы не зависит.
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS intake_dialog_state (
+                telegram_user_id INTEGER PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
         cursor.execute("PRAGMA table_info(leads)")
         columns = [column[1] for column in cursor.fetchall()]
 

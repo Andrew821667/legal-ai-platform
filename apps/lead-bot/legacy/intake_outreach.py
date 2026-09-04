@@ -11,17 +11,12 @@
 
 from __future__ import annotations
 
-_AREA_WORDS = {
-    "contracts": "договорной работы",
-    "corporate": "корпоративных вопросов",
-    "labor": "трудовых отношений",
-    "realty": "недвижимости",
-    "family": "семейных отношений",
-    "debt": "взыскания задолженности",
-    "court": "судебного спора",
-    "tax": "налоговых вопросов",
-    "other": "вашей ситуации",
-}
+from intake_dialog import AREA_GENITIVE, normalize_area
+
+# Названия областей права берём из модуля уточняющего диалога, а не заводим
+# свои. Здесь уже была ошибка: собственные ключи («labor», «court») не совпали
+# с перечислением в core-api, и шесть областей из десяти теряли уточнение —
+# клиент получал безличное «по вашей ситуации» вместо названия своей темы.
 
 _CLIENT_GREETING = {
     "business": "Здравствуйте!",
@@ -37,7 +32,7 @@ def build_outreach_message(intake: dict) -> str:
     и так знает, что написал, а дословный повтор выглядит машинным.
     """
     name = str(intake.get("name") or "").strip()
-    area = _AREA_WORDS.get(str(intake.get("legal_area") or "other"), "вашей ситуации")
+    area = AREA_GENITIVE[normalize_area(intake.get("legal_area"))]
     client_type = str(intake.get("client_type") or "unknown")
     urgent = str(intake.get("urgency") or "") == "urgent"
 

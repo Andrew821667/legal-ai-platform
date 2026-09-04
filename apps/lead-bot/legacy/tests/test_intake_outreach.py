@@ -41,8 +41,15 @@ def test_message_uses_client_name_when_known() -> None:
 
 
 def test_message_mentions_the_legal_area() -> None:
-    """Упоминание темы показывает, что заявку прочитали, а не отписались."""
-    text = build_outreach_message({**BASE, "legal_area": "labor"})
+    """Упоминание темы показывает, что заявку прочитали, а не отписались.
+
+    Здесь стоит реальное значение из перечисления LegalArea. В прежней
+    редакции теста был выдуманный ключ «labor», совпадавший с такой же
+    выдумкой в самом модуле, — тест проходил и не проверял ничего.
+    Совпадение всего набора ключей с перечислением закреплено отдельно
+    в tests/test_intake_dialog.py.
+    """
+    text = build_outreach_message({**BASE, "legal_area": "employment"})
 
     assert "трудов" in text
 

@@ -81,3 +81,14 @@ def test_version_is_embedded_in_the_text() -> None:
 def test_document_covers_deletion_on_request() -> None:
     """Клиент должен видеть, что может потребовать удаления материалов."""
     assert "удалить материалы" in render_nda_text("ИП Иванов")
+
+
+def test_version_is_not_marked_as_draft() -> None:
+    """Версия записывается в каждую подпись.
+
+    Подпись под документом с пометкой «черновик» при споре выглядела бы слабо,
+    поэтому такое обозначение в утверждённой редакции недопустимо.
+    """
+    lowered = NDA_VERSION.lower()
+    for marker in ("draft", "черновик", "wip", "tmp"):
+        assert marker not in lowered

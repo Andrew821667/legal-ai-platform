@@ -14,6 +14,8 @@ from core_api.idempotency import cached_response, store_response
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
+    IntakeClarification,
+    IntakeDocument,
     Lead,
     LeadSegment,
     LeadStatus,
@@ -259,6 +261,9 @@ def list_intakes_pending_outreach(
     return [
         {
             "intake_id": str(item.id),
+            # Нужен боту, чтобы проверить и зафиксировать подписание NDA:
+            # соглашение подписывается один раз на клиента, а не на обращение.
+            "lead_id": str(item.lead_id),
             "telegram_user_id": lead.telegram_user_id,
             "name": lead.name,
             "client_type": item.client_type.value,
@@ -307,3 +312,161 @@ def mark_intake_outreach(
     )
     db.commit()
     return MessageResponse(message="recorded")
+
+
+@router.post("/{intake_id}/clarifications", response_model=MessageResponse)
+def record_clarification(
+    intake_id: uuid.UUID,
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Сохраняет ответ клиента на уточняющий вопрос.
+
+    Ответ уходит сюда сразу, а не копится в состоянии бота: перезапуск бота не
+    должен стоить клиенту повторного разговора.
+
+    Повторный ответ на тот же вопрос заменяет прежний — человек мог поправить
+    себя, и в карточке должен остаться последний вариант, а не оба сразу.
+    """
+    item = db.get(LegalIntake, intake_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
+    question_key = str(payload.get("question_key") or "").strip()[:64]
+    question_text = str(payload.get("question_text") or "").strip()
+    answer_text = str(payload.get("answer_text") or "").strip()
+    if not question_key or not question_text or not answer_text:
+        raise HTTPException(
+            status_code=422,
+            detail="question_key, question_text and answer_text are required",
+        )
+
+    row = db.execute(
+        select(IntakeClarification).where(
+            IntakeClarification.intake_id == intake_id,
+            IntakeClarification.question_key == question_key,
+        )
+    ).scalar_one_or_none()
+
+    if row is None:
+        row = IntakeClarification(
+            intake_id=intake_id,
+            question_key=question_key,
+            question_text=question_text,
+            answer_text=answer_text,
+        )
+    else:
+        row.question_text = question_text
+        row.answer_text = answer_text
+
+    db.add(row)
+
+    # Обращение, по которому клиент начал отвечать, больше не «просто принято».
+    if item.status == LegalIntakeStatus.received:
+        item.status = LegalIntakeStatus.needs_clarification
+        db.add(item)
+
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="legal_intake.clarification",
+        target_type="legal_intake",
+        target_id=item.id,
+        details={"question_key": question_key},
+    )
+    db.commit()
+    return MessageResponse(message="recorded")
+
+
+@router.post("/{intake_id}/documents", response_model=MessageResponse)
+def record_document(
+    intake_id: uuid.UUID,
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Регистрирует документ, присланный клиентом.
+
+    Сам файл остаётся в Telegram — здесь сохраняется ссылка на него и
+    обстоятельства передачи, включая отметку о том, было ли на тот момент
+    подписано соглашение о конфиденциальности.
+    """
+    item = db.get(LegalIntake, intake_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
+    file_id = str(payload.get("telegram_file_id") or "").strip()[:255]
+    if not file_id:
+        raise HTTPException(status_code=422, detail="telegram_file_id is required")
+
+    file_size = payload.get("file_size")
+    row = IntakeDocument(
+        intake_id=intake_id,
+        telegram_file_id=file_id,
+        file_name=(str(payload.get("file_name") or "").strip() or None),
+        file_size=int(file_size) if isinstance(file_size, int) else None,
+        mime_type=(str(payload.get("mime_type") or "").strip() or None),
+        nda_signed_at_upload=bool(payload.get("nda_signed_at_upload")),
+    )
+    db.add(row)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="legal_intake.document",
+        target_type="legal_intake",
+        target_id=item.id,
+        details={"nda_signed": row.nda_signed_at_upload},
+    )
+    db.commit()
+    return MessageResponse(message="recorded")
+
+
+@router.get("/{intake_id}/dialog", response_model=dict)
+def get_intake_dialog(
+    intake_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin, Scope.worker)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Собранные ответы и документы по обращению — для карточки у юриста."""
+    _ = identity
+    item = db.get(LegalIntake, intake_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
+    clarifications = db.execute(
+        select(IntakeClarification)
+        .where(IntakeClarification.intake_id == intake_id)
+        .order_by(IntakeClarification.created_at)
+    ).scalars().all()
+    documents = db.execute(
+        select(IntakeDocument)
+        .where(IntakeDocument.intake_id == intake_id)
+        .order_by(IntakeDocument.created_at)
+    ).scalars().all()
+
+    return {
+        "intake_id": str(intake_id),
+        "clarifications": [
+            {
+                "question_key": row.question_key,
+                "question_text": row.question_text,
+                "answer_text": row.answer_text,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in clarifications
+        ],
+        "documents": [
+            {
+                "telegram_file_id": row.telegram_file_id,
+                "file_name": row.file_name,
+                "file_size": row.file_size,
+                "mime_type": row.mime_type,
+                "nda_signed_at_upload": row.nda_signed_at_upload,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in documents
+        ],
+    }
