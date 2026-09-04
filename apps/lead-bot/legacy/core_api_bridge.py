@@ -100,6 +100,25 @@ class CoreApiBridge:
             oldest_key = min(self._recent_post_successes.items(), key=lambda item: item[1])[0]
             self._recent_post_successes.pop(oldest_key, None)
 
+    def _get(self, path: str) -> Any:
+        """Чтение из core-api. В отличие от _post не требует ключа идемпотентности."""
+        if not self.enabled:
+            return None
+        request = urllib.request.Request(
+            url=f"{self.base_url}{path}",
+            method="GET",
+            headers={"X-API-Key": self.api_key},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as error:
+            logger.warning("Core API read failed [%s %s]", path, error.code)
+        except Exception as error:
+            logger.warning("Core API read error [%s]: %s", path, error)
+        return None
+
     def _post(self, path: str, payload: dict[str, Any], idempotency_key: str) -> dict[str, Any] | None:
         if not self.enabled:
             return None
@@ -186,6 +205,39 @@ class CoreApiBridge:
             payload,
             idempotency_key=idempotency_key,
         )
+
+    def list_intakes_pending_outreach(
+        self,
+        *,
+        delay_minutes: int,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Обращения, которым пора написать от лица команды."""
+        if not self.enabled:
+            return []
+        result = self._get(
+            f"/api/v1/legal-intakes/outreach/pending?delay_minutes={delay_minutes}&limit={limit}"
+        )
+        return result if isinstance(result, list) else []
+
+    def mark_intake_outreach(
+        self,
+        intake_id: str,
+        *,
+        blocked_reason: str | None = None,
+    ) -> bool:
+        """Фиксирует результат первого обращения к клиенту.
+
+        Отметка обязательна и при отказе: иначе фоновая задача вернётся к
+        обращению на следующем круге и напишет человеку повторно.
+        """
+        if not self.enabled:
+            return False
+        payload = {"blocked_reason": blocked_reason} if blocked_reason else {}
+        key = f"outreach:{intake_id}:{blocked_reason or 'sent'}"
+        return self._post(
+            f"/api/v1/legal-intakes/{intake_id}/outreach", payload, idempotency_key=key
+        ) is not None
 
     def sync_user(self, user_data: dict) -> str | None:
         if not self.enabled:
