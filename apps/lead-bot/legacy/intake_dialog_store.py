@@ -29,6 +29,7 @@ _PERSISTED_KEYS = (
     "intake_dialog_lead_id",
     "intake_dialog_area",
     "intake_dialog_answered",
+    "intake_dialog_answers",
     "intake_dialog_pending_question",
     "intake_dialog_documents",
     "intake_dialog_nda_signed",

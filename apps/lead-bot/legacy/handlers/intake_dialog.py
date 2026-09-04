@@ -33,6 +33,11 @@ INTAKE_ID_KEY = "intake_dialog_intake_id"
 LEAD_ID_KEY = "intake_dialog_lead_id"
 AREA_KEY = "intake_dialog_area"
 ANSWERED_KEY = "intake_dialog_answered"
+# Сами ответы, а не только ключи вопросов: по ним ориентация выбирает
+# ветку внутри составных областей вроде «семья и наследство».
+# Отдельным ключом, а не заменой ANSWERED_KEY: в продакшене уже есть
+# сохранённые диалоги, и менять их формат на ходу нельзя.
+ANSWERS_KEY = "intake_dialog_answers"
 PENDING_KEY = "intake_dialog_pending_question"
 DOCS_COUNT_KEY = "intake_dialog_documents"
 NDA_SIGNED_KEY = "intake_dialog_nda_signed"
@@ -68,6 +73,7 @@ def start_dialog(
     user_data[LEAD_ID_KEY] = lead_id
     user_data[AREA_KEY] = intake_dialog.normalize_area(legal_area)
     user_data[ANSWERED_KEY] = []
+    user_data[ANSWERS_KEY] = {}
     user_data[DOCS_COUNT_KEY] = 0
     for key in (PENDING_KEY, NDA_SIGNED_KEY, NDA_HASH_KEY):
         user_data.pop(key, None)
@@ -112,6 +118,7 @@ def _finish(context: ContextTypes.DEFAULT_TYPE, user_id: int | None = None) -> N
         PENDING_KEY,
         AREA_KEY,
         ANSWERED_KEY,
+        ANSWERS_KEY,
         NDA_HASH_KEY,
     ):
         context.user_data.pop(key, None)
@@ -145,7 +152,9 @@ async def _ask_next_question(message, context: ContextTypes.DEFAULT_TYPE) -> Non
     # предлагаем соглашение — до того, как человек начнёт присылать материалы.
     context.user_data.pop(PENDING_KEY, None)
     await utils.safe_reply_text(
-        message, intake_dialog.build_orientation(area), action="intake_dialog_orientation"
+        message,
+        intake_dialog.build_orientation(area, context.user_data.get(ANSWERS_KEY)),
+        action="intake_dialog_orientation",
     )
     await _offer_nda(message, context)
 
@@ -263,6 +272,9 @@ async def handle_intake_dialog_message(
             if question.key not in answered:
                 answered.append(question.key)
             context.user_data[ANSWERED_KEY] = answered
+            answers = dict(context.user_data.get(ANSWERS_KEY) or {})
+            answers[question.key] = text
+            context.user_data[ANSWERS_KEY] = answers
 
         await _ask_next_question(message, context)
         _persist(context, user_id)

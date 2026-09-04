@@ -123,9 +123,24 @@ def test_deadline_orientation_always_defers_to_lawyer() -> None:
     """
     for area, note in intake_dialog.DEADLINE_NOTE.items():
         text = intake_dialog.build_orientation(area)
+        if area in intake_dialog._AREA_BRANCHES:
+            # У составных областей своя справка на каждую ветку — она
+            # проверяется отдельно. Здесь важно только, что оговорка на месте.
+            assert "определит юрист" in text, area
+            continue
         if note:
             assert note in text
             assert "определит юрист" in text, area
+
+
+def test_every_branch_keeps_the_lawyer_caveat() -> None:
+    """Оговорка про расчёт срока обязательна и в ветках составных областей."""
+    for area, branches in intake_dialog._AREA_BRANCHES.items():
+        for branch in branches:
+            answers = {"matter": branch.markers[0]} if branch.markers else None
+            text = intake_dialog.build_orientation(area, answers)
+            assert branch.deadline in text, f"{area}/{branch.label}"
+            assert "определит юрист" in text, f"{area}/{branch.label}"
 
 
 def test_wants_lawyer_recognises_request() -> None:
@@ -201,3 +216,74 @@ def test_handoff_without_materials_stays_correct() -> None:
     text = intake_dialog.build_handoff(documents_count=0, answered_count=0)
     assert "передал юристу" in text.lower()
     assert "(0)" not in text
+
+
+def test_family_case_is_not_told_about_inheritance() -> None:
+    """Раздел имущества после развода — не наследственное дело.
+
+    Перечисление склеивает «семью и наследство» в одно значение. Пока
+    ориентация смотрела на название области, человеку с ипотечной квартирой
+    после развода бот рассказывал про шестимесячный срок принятия наследства
+    и просил свидетельство о смерти и завещание.
+    """
+    text = intake_dialog.build_orientation(
+        "family_inheritance",
+        {"matter": "раздел совместно нажитого имущества, квартира в ипотеке"},
+    )
+
+    for phrase in ("наслед", "завещан", "свидетельство о смерти", "шесть месяцев"):
+        assert phrase not in text.lower(), phrase
+    assert "расторжении брака" in text
+    assert "ипотек" in text.lower()
+
+
+def test_inheritance_case_still_gets_its_deadline() -> None:
+    text = intake_dialog.build_orientation(
+        "family_inheritance", {"matter": "вступление в наследство после смерти отца"}
+    )
+
+    assert "шесть месяцев" in text
+    assert "свидетельство о смерти" in text
+
+
+def test_plain_debt_is_not_told_about_bankruptcy() -> None:
+    """Взыскание долга по расписке — не банкротство."""
+    text = intake_dialog.build_orientation(
+        "debt_bankruptcy", {"side": "кредитор", "amount": "300 тысяч по расписке"}
+    )
+
+    assert "банкрот" not in text.lower()
+    assert "реестр" not in text.lower()
+    assert "расписку" in text
+
+
+def test_bankruptcy_case_gets_its_own_orientation() -> None:
+    text = intake_dialog.build_orientation(
+        "debt_bankruptcy", {"status": "должник подал заявление о банкротстве"}
+    )
+
+    assert "банкротстве" in text.lower()
+    assert "реестр" in text.lower()
+
+
+def test_composite_area_without_answers_uses_the_safer_branch() -> None:
+    """Ответов ещё нет — берём вариант, который не додумывает за человека.
+
+    Ошибиться в сторону наследства или банкротства хуже: это более узкие
+    предметы, и попасть в них случайно значит говорить человеку заведомо не
+    о том.
+    """
+    for area, forbidden in (
+        ("family_inheritance", "шесть месяцев"),
+        ("debt_bankruptcy", "реестр"),
+    ):
+        text = intake_dialog.build_orientation(area, None)
+        assert forbidden not in text.lower(), area
+
+
+def test_simple_areas_are_unaffected_by_answers() -> None:
+    """Ветвление касается только составных областей."""
+    for area in ("contracts", "employment", "real_estate", "disputes"):
+        assert intake_dialog.build_orientation(area) == intake_dialog.build_orientation(
+            area, {"whatever": "наследство банкротство"}
+        )
