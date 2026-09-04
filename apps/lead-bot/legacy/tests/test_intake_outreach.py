@@ -20,15 +20,22 @@ BASE = {"legal_area": "contracts", "client_type": "business", "urgency": "normal
 
 
 def test_message_does_not_impersonate_a_human() -> None:
-    """Бот не должен представляться сотрудником.
+    """Помощник может назваться по имени, но не выдавать себя за сотрудника.
 
-    Клиент, уверенный что пишет юристу, раскроет больше, чем следует, —
-    а адвокатской тайны в переписке с ботом нет.
+    Клиент, уверенный что пишет юристу, раскроет больше, чем следует, — а
+    адвокатской тайны в переписке с ИИ нет.
+
+    Прежняя редакция этой проверки запрещала само «меня зовут»: тогда имени не
+    было вовсе, и безымянность была единственным способом не ввести человека в
+    заблуждение. Теперь имя есть, и ту же задачу решает прямое указание, что
+    собеседник — ИИ. Проверяем суть, а не формулировку.
     """
     text = build_outreach_message(BASE)
+    lowered = text.lower()
 
-    assert "ассистент" in text.lower()
-    assert "меня зовут" not in text.lower()
+    assert "ии-помощник" in lowered
+    for claim in ("я юрист", "я адвокат", "ваш юрист", "сотрудник практики"):
+        assert claim not in lowered
 
 
 def test_message_uses_client_name_when_known() -> None:
@@ -90,3 +97,31 @@ def test_no_contact_note_explains_the_reason() -> None:
     assert "abc-123" in note
     assert "Telegram" in note
     assert "вручную" in note
+
+
+def test_assistant_introduces_itself_by_name() -> None:
+    """У клиента должен быть собеседник, а не служба.
+
+    Обращение приходит в тяжёлый момент, и разница между «ассистент команды» и
+    «Никита, помощник юриста» решает, расскажет ли человек обстоятельства.
+    """
+    text = build_outreach_message(BASE)
+    assert "Никита" in text
+    assert "помощник юриста" in text
+
+
+def test_assistant_says_it_is_ai() -> None:
+    """Клиент раскрывает обстоятельства своей жизни — он должен знать кому.
+
+    Скрыть это значит выиграть немного доверия сейчас и потерять всё, когда
+    человек узнает. Заодно снимается риск, что он сочтёт разговор защищённым
+    адвокатской тайной.
+    """
+    assert "ИИ-помощник" in build_outreach_message(BASE)
+
+
+def test_message_does_not_promise_legal_help_itself() -> None:
+    """Помощник собирает сведения, а не консультирует."""
+    text = build_outreach_message(BASE).lower()
+    for phrase in ("проконсультирую", "дам оценку", "решу ваш вопрос", "помогу выиграть"):
+        assert phrase not in text

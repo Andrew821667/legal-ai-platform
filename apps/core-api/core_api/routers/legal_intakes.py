@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.config import get_settings
 from core_api.db import get_db
+from core_api.intake_assistant import next_turn
 from core_api.idempotency import cached_response, store_response
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
@@ -471,4 +473,60 @@ def get_intake_dialog(
             }
             for row in documents
         ],
+    }
+
+
+@router.post("/{intake_id}/assistant/turn", response_model=dict)
+def assistant_turn(
+    intake_id: uuid.UUID,
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Следующая реплика помощника в разговоре с клиентом.
+
+    Модель живёт здесь, а не в боте: ключ, прокси и учёт стоимости уже
+    настроены на этой стороне, и держать их в двух местах значило бы чинить
+    доступ к вендору дважды.
+
+    Сбой не возвращается ошибкой HTTP: бот в этом случае продолжает разговор
+    заданными в коде вопросами, и для клиента ничего не ломается. Ответ
+    сообщает, что случилось, чтобы это было видно в логах, а не только по
+    молчанию помощника.
+    """
+    _ = identity
+    item = db.get(LegalIntake, intake_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
+    settings = get_settings()
+    if not settings.intake_assistant_enabled:
+        return {"ok": False, "error": "disabled"}
+
+    history = payload.get("history")
+    base_questions = payload.get("base_questions")
+    turn = next_turn(
+        intake={"description": item.description},
+        history=history if isinstance(history, list) else [],
+        base_questions=[str(q) for q in base_questions] if isinstance(base_questions, list) else [],
+        area_label=str(payload.get("area_label") or "требует уточнения"),
+        asked_count=int(payload.get("asked_count") or 0),
+        api_key=settings.intake_analysis_api_key,
+        assistant_name=settings.intake_assistant_name,
+        base_url=settings.intake_analysis_base_url,
+        model=settings.intake_assistant_model,
+        proxy_url=settings.intake_analysis_proxy_url or None,
+        timeout=settings.intake_assistant_timeout_seconds,
+    )
+
+    return {
+        "ok": turn.ok,
+        "reply": turn.text,
+        "done": turn.finished,
+        "error": turn.error,
+        "blocked_reason": turn.blocked_reason,
+        "cost_usd": turn.cost_usd,
+        "model": turn.model,
+        "prompt_tokens": turn.prompt_tokens,
+        "completion_tokens": turn.completion_tokens,
     }

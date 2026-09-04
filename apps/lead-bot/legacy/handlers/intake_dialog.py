@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 
 import database
+import human_pace
 import intake_dialog
 import utils
 from core_api_bridge import core_api_bridge
@@ -38,6 +40,10 @@ ANSWERED_KEY = "intake_dialog_answered"
 # Отдельным ключом, а не заменой ANSWERED_KEY: в продакшене уже есть
 # сохранённые диалоги, и менять их формат на ходу нельзя.
 ANSWERS_KEY = "intake_dialog_answers"
+# Ход разговора для помощника: он отвечает на сказанное, а не идёт по анкете.
+HISTORY_KEY = "intake_dialog_history"
+# Что именно спросили последним и под каким ключом это записывать.
+PENDING_TEXT_KEY = "intake_dialog_pending_text"
 PENDING_KEY = "intake_dialog_pending_question"
 DOCS_COUNT_KEY = "intake_dialog_documents"
 NDA_SIGNED_KEY = "intake_dialog_nda_signed"
@@ -74,6 +80,7 @@ def start_dialog(
     user_data[AREA_KEY] = intake_dialog.normalize_area(legal_area)
     user_data[ANSWERED_KEY] = []
     user_data[ANSWERS_KEY] = {}
+    user_data[HISTORY_KEY] = []
     user_data[DOCS_COUNT_KEY] = 0
     for key in (PENDING_KEY, NDA_SIGNED_KEY, NDA_HASH_KEY):
         user_data.pop(key, None)
@@ -119,6 +126,8 @@ def _finish(context: ContextTypes.DEFAULT_TYPE, user_id: int | None = None) -> N
         AREA_KEY,
         ANSWERED_KEY,
         ANSWERS_KEY,
+        HISTORY_KEY,
+        PENDING_TEXT_KEY,
         NDA_HASH_KEY,
     ):
         context.user_data.pop(key, None)
@@ -137,22 +146,130 @@ def nda_markup() -> InlineKeyboardMarkup:
     )
 
 
-async def _ask_next_question(message, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Задаёт следующий вопрос либо переходит к ориентации и документам."""
-    area = context.user_data.get(AREA_KEY)
-    answered = context.user_data.get(ANSWERED_KEY) or []
-    question = intake_dialog.next_question(area, answered)
+async def _say(
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    *,
+    action: str,
+    already_waited: float = 0.0,
+) -> None:
+    """Отправляет реплику так, как её отправил бы человек.
 
-    if question is not None:
-        context.user_data[PENDING_KEY] = question.key
-        await utils.safe_reply_text(message, question.text, action="intake_dialog_question")
-        return
+    Индикатор «печатает» и пауза по длине текста. Мгновенный ответ выдаёт
+    машину вернее любой формулировки и читается как отписка.
+
+    Время, которое ушло на обращение к модели, засчитывается в паузу, а не
+    добавляется к ней: клиент ждёт ответа целиком, и ему всё равно, что
+    происходило внутри. Иначе к паузе на «печатает» прибавлялись бы секунды
+    работы модели, и разговор становился бы вязким.
+    """
+    chat = getattr(message, "chat", None)
+    chat_id = getattr(chat, "id", None)
+    remaining = max(0.0, human_pace.typing_delay(text) - max(0.0, already_waited))
+    for chunk in human_pace.typing_chunks(remaining):
+        if chat_id is not None:
+            try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception:  # noqa: BLE001 — индикатор не стоит разговора
+                pass
+        await asyncio.sleep(chunk)
+    await utils.safe_reply_text(message, text, action=action)
+
+
+async def _assistant_question(
+    context: ContextTypes.DEFAULT_TYPE,
+) -> tuple[str, bool] | None:
+    """Просит помощника сформулировать следующую реплику.
+
+    Возвращает None при любом сбое: разговор в этом случае продолжается
+    заданными в коде вопросами. Суше, но в рамках и без паузы для клиента.
+    """
+    intake_id = context.user_data.get(INTAKE_ID_KEY)
+    if not intake_id:
+        return None
+
+    area = intake_dialog.normalize_area(context.user_data.get(AREA_KEY))
+    history = list(context.user_data.get(HISTORY_KEY) or [])
+    asked = len([item for item in history if item.get("role") == "assistant"])
+
+    try:
+        result = await asyncio.to_thread(
+            core_api_bridge.assistant_turn,
+            str(intake_id),
+            history=history,
+            base_questions=[q.text for q in intake_dialog.questions_for(area)],
+            area_label=intake_dialog.AREA_LABEL[area],
+            asked_count=asked,
+        )
+    except Exception as error:
+        logger.warning("Помощник недоступен по обращению %s: %s", intake_id, error)
+        return None
+
+    if not isinstance(result, dict) or not result.get("ok") or not result.get("reply"):
+        if isinstance(result, dict) and result.get("error"):
+            logger.info(
+                "Помощник не дал реплику по обращению %s: %s %s",
+                intake_id,
+                result.get("error"),
+                result.get("blocked_reason") or "",
+            )
+        return None
+
+    return str(result["reply"]), bool(result.get("done"))
+
+
+async def _ask_next_question(message, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Задаёт следующий вопрос либо переходит к ориентации и документам.
+
+    Спрашивает помощник: он откликается на сказанное и решает, нужны ли
+    уточнения сверх базовых. Если он недоступен или вышел за границу, работает
+    заданный в коде набор — разговор станет суше, но не прервётся.
+    """
+    area = context.user_data.get(AREA_KEY)
+
+    started = time.monotonic()
+    reply = await _assistant_question(context)
+    spent = time.monotonic() - started
+    if reply is not None:
+        text, done = reply
+        history = list(context.user_data.get(HISTORY_KEY) or [])
+        history.append({"role": "assistant", "text": text})
+        context.user_data[HISTORY_KEY] = history
+        if not done:
+            asked = len([item for item in history if item.get("role") == "assistant"])
+            context.user_data[PENDING_KEY] = f"q{asked}"
+            context.user_data[PENDING_TEXT_KEY] = text
+            await _say(
+                message, context, text, action="intake_dialog_question", already_waited=spent
+            )
+            return
+        # Помощник считает, что сведений достаточно: реплику всё равно
+        # показываем — она подводит итог разговора, — и переходим дальше.
+        await _say(
+            message,
+            context,
+            text,
+            action="intake_dialog_question_last",
+            already_waited=spent,
+        )
+
+    else:
+        answered = context.user_data.get(ANSWERED_KEY) or []
+        question = intake_dialog.next_question(area, answered)
+        if question is not None:
+            context.user_data[PENDING_KEY] = question.key
+            context.user_data[PENDING_TEXT_KEY] = question.text
+            await _say(message, context, question.text, action="intake_dialog_question")
+            return
 
     # Вопросы закончились: называем область права и нужные документы, затем
     # предлагаем соглашение — до того, как человек начнёт присылать материалы.
     context.user_data.pop(PENDING_KEY, None)
-    await utils.safe_reply_text(
+    context.user_data.pop(PENDING_TEXT_KEY, None)
+    await _say(
         message,
+        context,
         intake_dialog.build_orientation(area, context.user_data.get(ANSWERS_KEY)),
         action="intake_dialog_orientation",
     )
@@ -258,23 +375,28 @@ async def handle_intake_dialog_message(
             _persist(context, user_id)
             return True
 
-        question = next(
-            (
-                item
-                for item in intake_dialog.questions_for(context.user_data.get(AREA_KEY))
-                if item.key == pending
-            ),
-            None,
+        # Текст вопроса берём из состояния: спрашивать мог помощник, и тогда
+        # формулировки нет в заданном наборе. В карточку вопрос уходит
+        # целиком — через полгода по одному ключу не восстановить, на что
+        # человек отвечал.
+        question_text = context.user_data.get(PENDING_TEXT_KEY) or _base_question_text(
+            context, pending
         )
-        if question is not None:
-            await _record_answer(context, question=question, answer=text)
+        if question_text:
+            await _record_answer(
+                context, question_key=pending, question_text=question_text, answer=text
+            )
             answered = list(context.user_data.get(ANSWERED_KEY) or [])
-            if question.key not in answered:
-                answered.append(question.key)
+            if pending not in answered:
+                answered.append(pending)
             context.user_data[ANSWERED_KEY] = answered
             answers = dict(context.user_data.get(ANSWERS_KEY) or {})
-            answers[question.key] = text
+            answers[pending] = text
             context.user_data[ANSWERS_KEY] = answers
+
+        history = list(context.user_data.get(HISTORY_KEY) or [])
+        history.append({"role": "client", "text": text})
+        context.user_data[HISTORY_KEY] = history
 
         await _ask_next_question(message, context)
         _persist(context, user_id)
@@ -302,10 +424,19 @@ async def handle_intake_dialog_message(
     return False
 
 
+def _base_question_text(context: ContextTypes.DEFAULT_TYPE, key: str) -> str:
+    """Формулировка заданного в коде вопроса по его ключу."""
+    for item in intake_dialog.questions_for(context.user_data.get(AREA_KEY)):
+        if item.key == key:
+            return item.text
+    return ""
+
+
 async def _record_answer(
     context: ContextTypes.DEFAULT_TYPE,
     *,
-    question: intake_dialog.Question,
+    question_key: str,
+    question_text: str,
     answer: str,
 ) -> None:
     """Отправляет ответ в core-api. Сбой не прерывает разговор."""
@@ -316,8 +447,8 @@ async def _record_answer(
         await asyncio.to_thread(
             core_api_bridge.record_clarification,
             str(intake_id),
-            question_key=question.key,
-            question_text=question.text,
+            question_key=question_key,
+            question_text=question_text,
             answer_text=answer[:4000],
         )
     except Exception as error:

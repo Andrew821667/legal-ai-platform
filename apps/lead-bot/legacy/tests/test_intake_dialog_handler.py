@@ -73,6 +73,22 @@ def replies(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return sent
 
 
+@pytest.fixture(autouse=True)
+def instant_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Убирает человеческие паузы из тестов.
+
+    В жизни пауза перед репликой обязательна, здесь она превращает набор в
+    полминуты ожидания и ничего не проверяет — темп закреплён отдельно, в
+    tests/test_human_pace.py.
+    """
+
+    async def _no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(handler.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(handler.human_pace, "typing_delay", lambda text, **kwargs: 0.0)
+
+
 def _silence_bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
     """Отключает сеть: по умолчанию всё сохраняется, NDA не подписан."""
     calls: dict = {"clarifications": [], "documents": []}
@@ -86,6 +102,13 @@ def _silence_bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
         return overrides.get("document_result", True)
 
     monkeypatch.setattr(handler.core_api_bridge, "record_clarification", _clarify)
+    # По умолчанию помощник недоступен: эти проверки о заданном в коде наборе.
+    # Работа помощника закреплена отдельными тестами ниже.
+    monkeypatch.setattr(
+        handler.core_api_bridge,
+        "assistant_turn",
+        lambda *args, **kwargs: overrides.get("assistant"),
+    )
     monkeypatch.setattr(handler.core_api_bridge, "record_intake_document", _document)
     monkeypatch.setattr(
         handler.core_api_bridge,
@@ -382,3 +405,165 @@ async def test_database_is_consulted_once_per_process(update, replies, monkeypat
         await handler.handle_intake_dialog_message(update, context, "здравствуйте")
 
     assert reads == [42]
+
+
+@pytest.mark.anyio
+async def test_assistant_voices_the_questions(context, update, replies, monkeypatch) -> None:
+    """Спрашивает помощник, а не заданный в коде набор."""
+    _silence_bridge(
+        monkeypatch,
+        assistant={"ok": True, "reply": "Понял вас. Какого числа вручили приказ?", "done": False},
+    )
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+
+    assert replies[-1] == "Понял вас. Какого числа вручили приказ?"
+    # Реплика попала в историю: следующий вопрос строится на разговоре.
+    history = context.user_data[handler.HISTORY_KEY]
+    assert history[-1] == {"role": "assistant", "text": "Понял вас. Какого числа вручили приказ?"}
+
+
+@pytest.mark.anyio
+async def test_client_answers_land_in_the_case_file(context, update, replies, monkeypatch) -> None:
+    """Вопрос помощника сохраняется вместе с ответом.
+
+    Формулировки нет в заданном наборе, поэтому в карточку уходит текст
+    целиком — иначе через полгода по ключу не восстановить, на что человек
+    отвечал.
+    """
+    calls = _silence_bridge(
+        monkeypatch,
+        assistant={"ok": True, "reply": "Какого числа вручили приказ?", "done": False},
+    )
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+    await handler.handle_intake_dialog_message(update, context, "третьего сентября")
+
+    intake_id, key, answer = calls["clarifications"][0]
+    assert answer == "третьего сентября"
+    assert key.startswith("q")
+
+
+@pytest.mark.anyio
+async def test_falls_back_to_scripted_questions(context, update, replies, monkeypatch) -> None:
+    """Помощник недоступен — разговор продолжается заданным набором.
+
+    Суше, но не прерывается: для клиента ничего не ломается.
+    """
+    _silence_bridge(monkeypatch, assistant=None)
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+
+    assert replies[-1] == handler.intake_dialog.QUESTIONS["employment"][0].text
+
+
+@pytest.mark.anyio
+async def test_blocked_reply_falls_back_too(context, update, replies, monkeypatch) -> None:
+    """Реплика за границей не доходит до клиента.
+
+    core-api вернул отказ — бот не пытается его обойти, а берёт свой вопрос.
+    """
+    _silence_bridge(
+        monkeypatch,
+        assistant={"ok": False, "error": "blocked", "blocked_reason": "прогноз", "reply": ""},
+    )
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+
+    assert replies[-1] == handler.intake_dialog.QUESTIONS["employment"][0].text
+    for phrase in ("шанс", "выигр", "рекоменд"):
+        assert phrase not in replies[-1].lower()
+
+
+@pytest.mark.anyio
+async def test_assistant_can_end_the_questions(context, update, replies, monkeypatch) -> None:
+    """Помощник решил, что сведений достаточно — переходим к соглашению."""
+    _silence_bridge(
+        monkeypatch,
+        assistant={"ok": True, "reply": "Спасибо, картина понятна.", "done": True},
+    )
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+
+    assert "Спасибо, картина понятна." in replies
+    assert context.user_data[handler.STAGE_KEY] == handler.STAGE_NDA
+
+
+@pytest.mark.anyio
+async def test_typing_pause_precedes_every_reply(context, update, monkeypatch) -> None:
+    """Мгновенный ответ выдаёт машину и читается как отписка."""
+    _silence_bridge(
+        monkeypatch, assistant={"ok": True, "reply": "Какого числа?", "done": False}
+    )
+    actions: list[str] = []
+    slept: list[float] = []
+
+    async def _action(chat_id, action):
+        actions.append(action)
+
+    async def _sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(handler.human_pace, "typing_delay", lambda text, **kwargs: 2.5)
+    monkeypatch.setattr(handler.asyncio, "sleep", _sleep)
+    monkeypatch.setattr(handler.utils, "safe_reply_text", lambda *a, **k: _noop())
+    update.effective_message.chat = SimpleNamespace(id=42)
+    context.bot = SimpleNamespace(send_chat_action=_action)
+
+    async def _noop():
+        return None
+
+    await handler.handle_intake_dialog_message(update, context, "начнём")
+
+    assert actions == ["typing"]
+    assert slept and abs(sum(slept) - 2.5) < 0.01
+
+
+@pytest.mark.anyio
+async def test_model_latency_counts_toward_the_pause(context, update, monkeypatch) -> None:
+    """Секунды работы модели не прибавляются к паузе, а входят в неё.
+
+    Иначе клиент ждал бы ответ модели плюс имитацию набора, и разговор
+    становился бы вязким.
+    """
+    slept: list[float] = []
+
+    async def _sleep(seconds):
+        slept.append(seconds)
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(handler.asyncio, "sleep", _sleep)
+    monkeypatch.setattr(handler.utils, "safe_reply_text", _noop)
+    monkeypatch.setattr(handler.human_pace, "typing_delay", lambda text, **kwargs: 3.0)
+
+    await handler._say(
+        SimpleNamespace(chat=None), SimpleNamespace(bot=None), "текст",
+        action="test", already_waited=2.0,
+    )
+
+    assert abs(sum(slept) - 1.0) < 0.01
+
+
+@pytest.mark.anyio
+async def test_slow_model_leaves_no_extra_pause(context, update, monkeypatch) -> None:
+    """Модель думала дольше, чем длилась бы пауза — отправляем сразу."""
+    slept: list[float] = []
+
+    async def _sleep(seconds):
+        slept.append(seconds)
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(handler.asyncio, "sleep", _sleep)
+    monkeypatch.setattr(handler.utils, "safe_reply_text", _noop)
+    monkeypatch.setattr(handler.human_pace, "typing_delay", lambda text, **kwargs: 2.0)
+
+    await handler._say(
+        SimpleNamespace(chat=None), SimpleNamespace(bot=None), "текст",
+        action="test", already_waited=9.0,
+    )
+
+    assert slept == []
