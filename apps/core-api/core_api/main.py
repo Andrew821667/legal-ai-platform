@@ -19,6 +19,7 @@ from core_api.routers import (
     health,
     legal_intakes,
     leads,
+    nda,
     reader,
     scheduled_posts,
     special_consultations,
@@ -44,6 +45,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(leads.router)
+app.include_router(nda.router)
 app.include_router(legal_intakes.router)
 app.include_router(events.router)
 app.include_router(automation_controls.router)
