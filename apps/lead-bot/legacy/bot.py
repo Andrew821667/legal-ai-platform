@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 from telegram import Update
+from telegram.error import Forbidden
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
@@ -32,8 +33,10 @@ from telegram.ext import (
     filters,
 )
 
+import core_api_bridge
 import database
 import content
+import intake_outreach
 import security
 import utils
 from lead_perf import log_update_timing, perf_start
@@ -870,6 +873,79 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Error in pending leads job: %s", error, exc_info=True)
 
 
+async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Пишет клиенту от лица команды через несколько минут после обращения.
+
+    Пауза намеренная: ответ через секунду после отправки формы читается как
+    автоответчик. Несколько минут создают ощущение, что заявку посмотрел живой
+    человек, — и при этом клиент не успевает решить, что о нём забыли.
+
+    Написать можно не всем: Telegram запрещает боту обращаться первым к тем,
+    кто ему не писал. Для заявок с сайта такой возможности нет, и вместо
+    отправки юристу уходит уведомление, что связаться нужно вручную.
+    """
+    if not core_api_bridge.bridge.enabled:
+        return
+
+    try:
+        pending = core_api_bridge.bridge.list_intakes_pending_outreach(
+            delay_minutes=config.INTAKE_OUTREACH_DELAY_MINUTES,
+            limit=config.INTAKE_OUTREACH_BATCH_SIZE,
+        )
+    except Exception as error:
+        logger.warning("Intake outreach fetch failed: %s", error)
+        return
+
+    if not pending:
+        return
+
+    logger.info("Intake outreach: %s обращений готовы к первому контакту", len(pending))
+
+    for intake in pending:
+        intake_id = intake.get("intake_id")
+        telegram_user_id = intake.get("telegram_user_id")
+        if not intake_id:
+            continue
+
+        if not telegram_user_id:
+            # Заявка пришла не из Telegram — бот не может написать первым.
+            await _notify_lawyer_about_unreachable_client(context, intake)
+            core_api_bridge.bridge.mark_intake_outreach(intake_id, blocked_reason="no_telegram")
+            continue
+
+        try:
+            await context.bot.send_message(
+                chat_id=telegram_user_id,
+                text=intake_outreach.build_outreach_message(intake),
+            )
+            core_api_bridge.bridge.mark_intake_outreach(intake_id)
+            logger.info("Intake outreach sent for %s", intake_id)
+        except Forbidden:
+            # Клиент не начинал диалог с ботом или заблокировал его.
+            await _notify_lawyer_about_unreachable_client(context, intake)
+            core_api_bridge.bridge.mark_intake_outreach(intake_id, blocked_reason="forbidden")
+        except Exception as error:
+            # Отметку не ставим: попробуем ещё раз на следующем круге.
+            logger.warning("Intake outreach failed for %s: %s", intake_id, error)
+
+
+async def _notify_lawyer_about_unreachable_client(
+    context: ContextTypes.DEFAULT_TYPE,
+    intake: dict,
+) -> None:
+    """Сообщает юристу, что с клиентом нужно связаться вручную."""
+    admin_id = getattr(config, "ADMIN_TELEGRAM_ID", None)
+    if not admin_id:
+        return
+    try:
+        await context.bot.send_message(
+            chat_id=admin_id,
+            text=intake_outreach.build_no_contact_note(intake),
+        )
+    except Exception as error:
+        logger.warning("Failed to notify lawyer about unreachable client: %s", error)
+
+
 async def cleanup_conversations_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Фоновая очистка истории диалогов по retention policy."""
     _ = context
@@ -984,6 +1060,25 @@ def build_application() -> Application:
             config.PENDING_LEADS_JOB_MAX_BATCH,
             config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS,
         )
+        if config.INTAKE_OUTREACH_ENABLED:
+            application.job_queue.run_repeating(
+                intake_outreach_job,
+                interval=config.INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS,
+                first=60,
+                name="intake_outreach",
+                job_kwargs={
+                    "coalesce": True,
+                    "max_instances": 1,
+                    "misfire_grace_time": 300,
+                },
+            )
+            logger.info(
+                "Intake outreach enabled: delay=%sm interval=%ss batch=%s",
+                config.INTAKE_OUTREACH_DELAY_MINUTES,
+                config.INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS,
+                config.INTAKE_OUTREACH_BATCH_SIZE,
+            )
+
         application.job_queue.run_repeating(
             cleanup_conversations_job,
             interval=config.CONVERSATION_CLEANUP_INTERVAL_HOURS * 3600,

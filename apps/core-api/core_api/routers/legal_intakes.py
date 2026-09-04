@@ -22,7 +22,12 @@ from core_api.models import (
     LegalIntakeStatus,
     Scope,
 )
-from core_api.schemas import LegalIntakeCreate, LegalIntakeOut, LegalIntakePatch
+from core_api.schemas import (
+    LegalIntakeCreate,
+    LegalIntakeOut,
+    LegalIntakePatch,
+    MessageResponse,
+)
 
 router = APIRouter(prefix="/api/v1/legal-intakes", tags=["legal-intakes"])
 
@@ -217,3 +222,88 @@ def update_legal_intake(
     db.refresh(item)
     db.refresh(lead)
     return _payload(item, lead)
+
+
+@router.get("/outreach/pending", response_model=list[dict])
+def list_intakes_pending_outreach(
+    delay_minutes: int = 5,
+    limit: int = 20,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Обращения, которым пора написать от лица команды.
+
+    Пауза перед первым сообщением нужна, чтобы человек не получил ответ через
+    секунду после отправки формы: мгновенная реакция читается как автоответчик
+    и обесценивает само обращение.
+
+    Возвращаются только те, кому ещё не писали и по кому не зафиксирована
+    причина отказа.
+    """
+    _ = identity
+    from datetime import datetime, timedelta, timezone
+
+    ready_before = datetime.now(timezone.utc) - timedelta(minutes=max(delay_minutes, 0))
+    rows = db.execute(
+        select(LegalIntake, Lead)
+        .join(Lead, Lead.id == LegalIntake.lead_id)
+        .where(
+            LegalIntake.outreach_sent_at.is_(None),
+            LegalIntake.outreach_blocked_reason.is_(None),
+            LegalIntake.created_at <= ready_before,
+        )
+        .order_by(LegalIntake.created_at)
+        .limit(max(1, min(limit, 50)))
+    ).all()
+
+    return [
+        {
+            "intake_id": str(item.id),
+            "telegram_user_id": lead.telegram_user_id,
+            "name": lead.name,
+            "client_type": item.client_type.value,
+            "legal_area": item.legal_area.value,
+            "urgency": item.urgency.value,
+            "description": item.description,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
+        for item, lead in rows
+    ]
+
+
+@router.post("/{intake_id}/outreach", response_model=MessageResponse)
+def mark_intake_outreach(
+    intake_id: uuid.UUID,
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Отмечает результат первого обращения к клиенту.
+
+    Отметка ставится и при успехе, и при отказе: без неё фоновая задача
+    вернётся к тому же обращению на следующем круге и напишет повторно.
+    """
+    from datetime import datetime, timezone
+
+    item = db.get(LegalIntake, intake_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
+    reason = str(payload.get("blocked_reason") or "").strip()[:64]
+    if reason:
+        item.outreach_blocked_reason = reason
+    else:
+        item.outreach_sent_at = datetime.now(timezone.utc)
+
+    db.add(item)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="legal_intake.outreach",
+        target_type="legal_intake",
+        target_id=item.id,
+        details={"blocked_reason": reason or None},
+    )
+    db.commit()
+    return MessageResponse(message="recorded")

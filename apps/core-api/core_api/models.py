@@ -338,6 +338,15 @@ class LegalIntake(Base):
     )
     assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
     internal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Первое обращение к клиенту от лица команды. Отметка о времени нужна,
+    # чтобы фоновая задача не написала одному человеку дважды: она разбирает
+    # обращения пачками и может перезапуститься на середине.
+    outreach_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Причина, по которой связаться не удалось: у обращений с сайта нет
+    # Telegram, а бот не может написать первым тому, кто ему не писал.
+    outreach_blocked_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("ix_legal_intakes_status_created", "status", "created_at"),

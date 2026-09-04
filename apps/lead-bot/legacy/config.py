@@ -93,6 +93,13 @@ class Config:
         self.BUSINESS_NEW_SESSION_TIMEOUT_MINUTES: int = int(
             os.getenv('BUSINESS_NEW_SESSION_TIMEOUT_MINUTES', '180')
         )
+        # Первое обращение к клиенту после юридической заявки.
+        # Пауза намеренная: ответ через секунду читается как автоответчик,
+        # а несколько минут создают ощущение, что заявку посмотрел человек.
+        self.INTAKE_OUTREACH_ENABLED: bool = os.getenv('INTAKE_OUTREACH_ENABLED', '1') not in ('0', 'false', 'False')
+        self.INTAKE_OUTREACH_DELAY_MINUTES: int = int(os.getenv('INTAKE_OUTREACH_DELAY_MINUTES', '5'))
+        self.INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS: int = int(os.getenv('INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS', '120'))
+        self.INTAKE_OUTREACH_BATCH_SIZE: int = int(os.getenv('INTAKE_OUTREACH_BATCH_SIZE', '10'))
         self.PENDING_LEADS_CHECK_INTERVAL_SECONDS: int = max(
             15,
             int(os.getenv('PENDING_LEADS_CHECK_INTERVAL_SECONDS', '60')),
