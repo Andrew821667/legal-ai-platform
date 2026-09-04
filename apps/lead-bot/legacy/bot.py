@@ -890,11 +890,11 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     кто ему не писал. Для заявок с сайта такой возможности нет, и вместо
     отправки юристу уходит уведомление, что связаться нужно вручную.
     """
-    if not core_api_bridge.bridge.enabled:
+    if not core_api_bridge.core_api_bridge.enabled:
         return
 
     try:
-        pending = core_api_bridge.bridge.list_intakes_pending_outreach(
+        pending = core_api_bridge.core_api_bridge.list_intakes_pending_outreach(
             delay_minutes=config.INTAKE_OUTREACH_DELAY_MINUTES,
             limit=config.INTAKE_OUTREACH_BATCH_SIZE,
         )
@@ -916,7 +916,7 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         if not telegram_user_id:
             # Заявка пришла не из Telegram — бот не может написать первым.
             await _notify_lawyer_about_unreachable_client(context, intake)
-            core_api_bridge.bridge.mark_intake_outreach(intake_id, blocked_reason="no_telegram")
+            core_api_bridge.core_api_bridge.mark_intake_outreach(intake_id, blocked_reason="no_telegram")
             continue
 
         try:
@@ -924,7 +924,7 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 chat_id=telegram_user_id,
                 text=intake_outreach.build_outreach_message(intake),
             )
-            core_api_bridge.bridge.mark_intake_outreach(intake_id)
+            core_api_bridge.core_api_bridge.mark_intake_outreach(intake_id)
             # Сразу открываем уточняющий диалог: клиент ответит на это
             # сообщение, и ответ должен попасть в разбор обращения, а не в
             # общую воронку. У фоновой задачи нет контекста пользователя,
@@ -940,7 +940,7 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         except Forbidden:
             # Клиент не начинал диалог с ботом или заблокировал его.
             await _notify_lawyer_about_unreachable_client(context, intake)
-            core_api_bridge.bridge.mark_intake_outreach(intake_id, blocked_reason="forbidden")
+            core_api_bridge.core_api_bridge.mark_intake_outreach(intake_id, blocked_reason="forbidden")
         except Exception as error:
             # Отметку не ставим: попробуем ещё раз на следующем круге.
             logger.warning("Intake outreach failed for %s: %s", intake_id, error)
