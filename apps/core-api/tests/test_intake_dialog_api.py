@@ -248,3 +248,68 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         assert fresh.json()["version"] == NDA_VERSION
     finally:
         _cleanup(names, intake_ids)
+
+
+def test_outreach_state_is_visible_in_the_card() -> None:
+    """Состояние первого обращения видно снаружи.
+
+    Без этих полей сбой оказался невидимым: задача первого контакта полтора
+    месяца падала на старте, а обращение выглядело обычным «принято».
+    Отличить «клиенту написали» от «до клиента не дошли» было нельзя.
+    """
+    client = TestClient(app)
+    names = ["pytest.outreach-view.bot", "pytest.outreach-view.admin"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    admin_key = _create_api_key(Scope.admin, names[1])
+    intake_ids: list[str] = []
+
+    try:
+        intake_id = _create_intake(client, bot_key)
+        intake_ids.append(intake_id)
+
+        fresh = client.get(
+            f"/api/v1/legal-intakes/{intake_id}", headers={"X-API-Key": admin_key}
+        ).json()
+        assert fresh["outreach_sent_at"] is None
+        assert fresh["outreach_blocked_reason"] is None
+
+        marked = client.post(
+            f"/api/v1/legal-intakes/{intake_id}/outreach",
+            headers={"X-API-Key": bot_key},
+            json={},
+        )
+        assert marked.status_code == 200
+
+        after = client.get(
+            f"/api/v1/legal-intakes/{intake_id}", headers={"X-API-Key": admin_key}
+        ).json()
+        assert after["outreach_sent_at"] is not None
+        assert after["outreach_blocked_reason"] is None
+    finally:
+        _cleanup(names, intake_ids)
+
+
+def test_blocked_outreach_names_the_reason() -> None:
+    """«До клиента не дошли» должно отличаться от «клиенту написали»."""
+    client = TestClient(app)
+    names = ["pytest.outreach-blocked.bot", "pytest.outreach-blocked.admin"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    admin_key = _create_api_key(Scope.admin, names[1])
+    intake_ids: list[str] = []
+
+    try:
+        intake_id = _create_intake(client, bot_key)
+        intake_ids.append(intake_id)
+        client.post(
+            f"/api/v1/legal-intakes/{intake_id}/outreach",
+            headers={"X-API-Key": bot_key},
+            json={"blocked_reason": "no_telegram"},
+        )
+
+        card = client.get(
+            f"/api/v1/legal-intakes/{intake_id}", headers={"X-API-Key": admin_key}
+        ).json()
+        assert card["outreach_blocked_reason"] == "no_telegram"
+        assert card["outreach_sent_at"] is None
+    finally:
+        _cleanup(names, intake_ids)

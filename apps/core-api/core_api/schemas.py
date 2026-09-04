@@ -248,6 +248,14 @@ class LegalIntakeOut(BaseModel):
     lead_contact: str | None
     lead_company: str | None
     lead_source: LeadSource
+    # Состояние первого обращения к клиенту.
+    #
+    # Эти поля здесь потому, что без них сбой оказался невидимым: задача
+    # первого контакта полтора месяца падала на старте, а обращение снаружи
+    # выглядело обычным «принято». Отличить «клиенту написали» от «до клиента
+    # не дошли» было нельзя, не заглядывая в базу.
+    outreach_sent_at: datetime | None = None
+    outreach_blocked_reason: str | None = None
 
 
 class LeadStatsOut(BaseModel):
