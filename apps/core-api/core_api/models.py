@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy import text as sa_text
@@ -390,6 +391,75 @@ class LegalIntake(Base):
         Index("ix_legal_intakes_status_created", "status", "created_at"),
         Index("ix_legal_intakes_urgency_created", "urgency", "created_at"),
         Index("ix_legal_intakes_area", "legal_area"),
+    )
+
+
+class IntakeClarification(Base):
+    """Ответ клиента на уточняющий вопрос ассистента.
+
+    Хранится в основной базе, а не в состоянии бота: это материалы обращения,
+    и они должны пережить перезапуск бота, смену устройства и передачу дела
+    другому юристу.
+
+    Вопрос сохраняется текстом целиком, а не только ключом. Формулировки со
+    временем меняются, и через полгода по одному ключу будет не восстановить,
+    на что именно отвечал человек.
+    """
+
+    __tablename__ = "intake_clarifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("legal_intakes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    question_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        Index("ix_intake_clarifications_intake", "intake_id", "created_at"),
+        # Повторный ответ на тот же вопрос заменяет прежний, а не добавляет
+        # вторую строку: иначе в карточке обращения будут противоречащие
+        # ответы без признака, какой из них актуален.
+        UniqueConstraint("intake_id", "question_key", name="uq_intake_clarification_question"),
+    )
+
+
+class IntakeDocument(Base):
+    """Документ, присланный клиентом по обращению.
+
+    Сам файл остаётся в Telegram — здесь только ссылка на него и
+    обстоятельства передачи. Выкачивать и хранить материалы дела у себя без
+    отдельного решения о том, где и сколько они лежат, было бы хуже: это
+    персональные данные, и срок их хранения нужно определять осознанно.
+
+    Отметка о соглашении фиксируется на момент передачи. Клиент может
+    подписать NDA позже, но документ он передавал в других условиях, и в
+    карточке это должно быть видно.
+    """
+
+    __tablename__ = "intake_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("legal_intakes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    telegram_file_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    nda_signed_at_upload: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+
+    __table_args__ = (
+        Index("ix_intake_documents_intake", "intake_id", "created_at"),
     )
 
 

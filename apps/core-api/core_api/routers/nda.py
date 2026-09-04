@@ -94,6 +94,21 @@ def sign_nda(
 
     settings = get_settings()
     text = render_nda_text(getattr(settings, "operator_name", "") or "Исполнитель")
+    current_hash = document_hash(text)
+
+    # Клиент присылает контрольную сумму текста, который был у него на экране.
+    # Если она разошлась с текущей — между показом и нажатием кнопки успела
+    # выйти новая редакция, и человек подписывает не то, что читал.
+    #
+    # Записать здесь текущий хеш было бы хуже, чем отказать: в базе осталась бы
+    # достоверная на вид запись о подписании документа, которого подписант не
+    # видел. Поэтому отказываем и просим показать текст заново.
+    seen_hash = str(payload.get("document_hash") or "").strip().lower()
+    if seen_hash and seen_hash != current_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="document changed since it was shown to the signer",
+        )
 
     row = NdaSignature(
         lead_id=lead_id,
@@ -101,7 +116,7 @@ def sign_nda(
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_name=str(payload.get("signer_name") or lead.name or "")[:255] or None,
         document_version=NDA_VERSION,
-        document_hash=document_hash(text),
+        document_hash=current_hash,
         channel=str(payload.get("channel") or "telegram_bot")[:32],
     )
     db.add(row)

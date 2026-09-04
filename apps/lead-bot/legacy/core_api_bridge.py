@@ -239,6 +239,102 @@ class CoreApiBridge:
             f"/api/v1/legal-intakes/{intake_id}/outreach", payload, idempotency_key=key
         ) is not None
 
+    def record_clarification(
+        self,
+        intake_id: str,
+        *,
+        question_key: str,
+        question_text: str,
+        answer_text: str,
+    ) -> bool:
+        """Сохраняет ответ клиента на уточняющий вопрос.
+
+        Ключ идемпотентности включает вопрос, но не ответ: если человек
+        поправил себя, повтор должен пройти и заменить прежний ответ, а не
+        отсеяться как дубликат.
+        """
+        if not self.enabled:
+            return False
+        return self._post(
+            f"/api/v1/legal-intakes/{intake_id}/clarifications",
+            {
+                "question_key": question_key,
+                "question_text": question_text,
+                "answer_text": answer_text,
+            },
+            idempotency_key=_stable_sync_key(
+                f"clarification:{intake_id}:{question_key}",
+                {"answer": answer_text},
+            ),
+        ) is not None
+
+    def record_intake_document(
+        self,
+        intake_id: str,
+        *,
+        telegram_file_id: str,
+        file_name: str | None = None,
+        file_size: int | None = None,
+        mime_type: str | None = None,
+        nda_signed_at_upload: bool = False,
+    ) -> bool:
+        """Регистрирует документ, присланный клиентом по обращению."""
+        if not self.enabled:
+            return False
+        return self._post(
+            f"/api/v1/legal-intakes/{intake_id}/documents",
+            {
+                "telegram_file_id": telegram_file_id,
+                "file_name": file_name,
+                "file_size": file_size,
+                "mime_type": mime_type,
+                "nda_signed_at_upload": nda_signed_at_upload,
+            },
+            idempotency_key=f"intake-doc:{intake_id}:{telegram_file_id}",
+        ) is not None
+
+    def get_nda_document(self) -> dict[str, Any] | None:
+        """Текст соглашения с версией и контрольной суммой."""
+        if not self.enabled:
+            return None
+        result = self._get("/api/v1/nda/document")
+        return result if isinstance(result, dict) else None
+
+    def get_nda_status(self, lead_id: str) -> dict[str, Any] | None:
+        """Подписано ли соглашение этим клиентом."""
+        if not self.enabled:
+            return None
+        result = self._get(f"/api/v1/nda/status/{lead_id}")
+        return result if isinstance(result, dict) else None
+
+    def sign_nda(
+        self,
+        *,
+        lead_id: str,
+        telegram_user_id: int | None,
+        telegram_username: str | None,
+        signer_name: str | None,
+        document_hash: str,
+    ) -> dict[str, Any] | None:
+        """Фиксирует подписание соглашения простой электронной подписью.
+
+        Версию документа проставляет сервер: он же отрисовывает текст, и только
+        он знает, какая редакция действует в момент подписания.
+        """
+        if not self.enabled:
+            return None
+        return self._post(
+            "/api/v1/nda/sign",
+            {
+                "lead_id": lead_id,
+                "telegram_user_id": telegram_user_id,
+                "telegram_username": telegram_username,
+                "signer_name": signer_name,
+                "document_hash": document_hash,
+            },
+            idempotency_key=f"nda-sign:{lead_id}",
+        )
+
     def sync_user(self, user_data: dict) -> str | None:
         if not self.enabled:
             return None
