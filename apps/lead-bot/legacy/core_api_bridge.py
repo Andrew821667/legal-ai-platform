@@ -293,6 +293,37 @@ class CoreApiBridge:
             idempotency_key=f"intake-doc:{intake_id}:{telegram_file_id}",
         ) is not None
 
+    def assistant_turn(
+        self,
+        intake_id: str,
+        *,
+        history: list[dict[str, str]],
+        base_questions: list[str],
+        area_label: str,
+        asked_count: int,
+    ) -> dict[str, Any] | None:
+        """Следующая реплика помощника в разговоре с клиентом.
+
+        Модель вызывается на стороне core-api: ключ, прокси и учёт стоимости
+        настроены там, и держать их в двух местах значило бы чинить доступ к
+        вендору дважды.
+
+        Ключ идемпотентности включает длину разговора: каждая реплика — это
+        новый шаг, и отсеивать его как повтор нельзя.
+        """
+        if not self.enabled:
+            return None
+        return self._post(
+            f"/api/v1/legal-intakes/{intake_id}/assistant/turn",
+            {
+                "history": history,
+                "base_questions": base_questions,
+                "area_label": area_label,
+                "asked_count": asked_count,
+            },
+            idempotency_key=f"assistant-turn:{intake_id}:{len(history)}",
+        )
+
     def get_nda_document(self) -> dict[str, Any] | None:
         """Текст соглашения с версией и контрольной суммой."""
         if not self.enabled:

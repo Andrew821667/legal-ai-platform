@@ -56,6 +56,17 @@ class Settings(BaseSettings):
     intake_analysis_proxy_url: str = ""
     intake_analysis_timeout_seconds: float = 90.0
 
+    # Помощник, ведущий первичный разговор с клиентом.
+    #
+    # Ключ и прокси берутся из разбора обращений: это тот же вендор и тот же
+    # канал. Отдельно вынесены имя, модель и таймаут — помощник отвечает
+    # человеку, который ждёт в переписке, поэтому ждать он может заметно
+    # меньше, чем фоновой разбор.
+    intake_assistant_enabled: bool = True
+    intake_assistant_name: str = "Никита"
+    intake_assistant_model: str = "gpt-5.6-sol"
+    intake_assistant_timeout_seconds: float = 45.0
+
 
 @lru_cache
 def get_settings() -> Settings:
