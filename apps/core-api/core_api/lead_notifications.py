@@ -250,6 +250,46 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         logger.exception("Failed to send new-lead Telegram notification", extra={"lead_id": str(lead_id)})
 
 
+
+def _legal_intake_analysis_block(intake: dict[str, object]) -> str:
+    """Готовит блок с разбором обращения для сообщения юристу.
+
+    Возвращает пустую строку, если разбор выключен, не настроен или не удался:
+    уведомление в этом случае уходит без аналитики.
+    """
+    from core_api.intake_analysis import analyze_intake, format_cost
+
+    settings = get_settings()
+    if not settings.intake_analysis_enabled or not settings.intake_analysis_api_key:
+        return ""
+
+    result = analyze_intake(
+        intake,
+        api_key=settings.intake_analysis_api_key,
+        base_url=settings.intake_analysis_base_url,
+        model=settings.intake_analysis_model,
+        proxy_url=settings.intake_analysis_proxy_url or None,
+        timeout=settings.intake_analysis_timeout_seconds,
+    )
+
+    if not result.ok:
+        logger.warning("legal_intake_analysis_skipped", extra={"error": result.error})
+        return ""
+
+    return "\n".join(
+        [
+            "",
+            "— — —",
+            "РАЗБОР",
+            "",
+            result.text,
+            "",
+            f"Модель: {result.model}",
+            f"Стоимость: {format_cost(result.cost_usd)} "
+            f"(вход {result.prompt_tokens} · выход {result.completion_tokens})",
+        ]
+    )
+
 def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
     """Notify the manager about a legal-help intake without attaching documents."""
     from sqlalchemy import select
@@ -291,10 +331,25 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
             lines.append(f"Регион: {item.region}")
         if item.deadline:
             lines.append(f"Ближайший срок: {item.deadline}")
-        lines.extend(["", "Краткое описание:", item.description[:600], "", f"ID: {item.id}"])
+        lines.extend(["", "Краткое описание:", item.description[:600]])
+        intake_payload = {
+            "description": item.description,
+            "client_type": _LEGAL_CLIENT_LABELS[item.client_type.value],
+            "legal_area": _LEGAL_AREA_LABELS[item.legal_area.value],
+            "urgency": _LEGAL_URGENCY_LABELS[item.urgency.value],
+            "deadline": item.deadline,
+            "region": item.region,
+        }
+        lines.append(f"\nID: {item.id}")
         text = "\n".join(lines)
     finally:
         db.close()
+
+    # Разбор — дополнение к уведомлению, а не условие его отправки: сбой модели
+    # или недоступность вендора не должны задерживать сообщение о клиенте.
+    analysis_block = _legal_intake_analysis_block(intake_payload)
+    if analysis_block:
+        text = f"{text}\n{analysis_block}"
 
     try:
         _post_telegram_message(token, chat_id, text)

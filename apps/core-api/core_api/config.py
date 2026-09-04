@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     contract_ai_bridge_sso_url: str = ""
     contract_ai_bridge_demo_link_url: str = ""
 
+    # Разбор юридических обращений моделью.
+    # Отдельные переменные, а не OPENAI_*: те исторически указывают на другого
+    # провайдера (OPENAI_BASE_URL ведёт на api.deepseek.com), и переиспользовать
+    # их значило бы сломать генерацию новостей.
+    intake_analysis_enabled: bool = True
+    intake_analysis_api_key: str = ""
+    intake_analysis_base_url: str = "https://api.openai.com/v1"
+    intake_analysis_model: str = "gpt-5.6-sol"
+    # Прямой доступ к вендору с production-хоста закрыт по региону.
+    intake_analysis_proxy_url: str = ""
+    intake_analysis_timeout_seconds: float = 90.0
+
 
 @lru_cache
 def get_settings() -> Settings:
