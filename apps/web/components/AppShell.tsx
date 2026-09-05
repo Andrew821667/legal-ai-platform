@@ -1,16 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import WebAssistant from "@/components/WebAssistant";
+import { captureLeadAttribution } from "@/lib/lead-attribution";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMiniAppRoute = pathname.startsWith("/miniapp");
   const isInternalRoute = pathname.startsWith("/admin") || pathname.startsWith("/monitor");
+
+  useEffect(() => {
+    if (!isMiniAppRoute && !isInternalRoute) captureLeadAttribution();
+  }, [isInternalRoute, isMiniAppRoute]);
 
   if (isMiniAppRoute) {
     return <>{children}</>;

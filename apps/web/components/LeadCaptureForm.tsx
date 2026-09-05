@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import { getLeadAttribution, trackLeadConversion } from "@/lib/lead-attribution";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -54,25 +55,7 @@ export default function LeadCaptureForm() {
   }, []);
 
   const utm = useMemo(() => {
-    if (typeof window === "undefined") {
-      return {
-        utm_source: undefined,
-        utm_medium: undefined,
-        utm_campaign: undefined,
-        utm_content: undefined,
-        utm_term: undefined,
-        landing_page: undefined,
-      };
-    }
-    const params = new URLSearchParams(window.location.search);
-    return {
-      utm_source: params.get("utm_source") || undefined,
-      utm_medium: params.get("utm_medium") || undefined,
-      utm_campaign: params.get("utm_campaign") || undefined,
-      utm_content: params.get("utm_content") || undefined,
-      utm_term: params.get("utm_term") || undefined,
-      landing_page: `${window.location.pathname}${window.location.search}`,
-    };
+    return getLeadAttribution();
   }, []);
 
   const onSubmit = async (event: FormEvent) => {
@@ -119,6 +102,7 @@ export default function LeadCaptureForm() {
         detail?: string;
         message?: string;
         challenge_required?: boolean;
+        lead_id?: string;
       };
       if (!response.ok) {
         if (data.challenge_required) {
@@ -126,6 +110,7 @@ export default function LeadCaptureForm() {
         }
         throw new Error(data.detail || "Не удалось отправить заявку");
       }
+      if (data.lead_id) trackLeadConversion("general", utm);
       setSuccess(data.message || "Заявка отправлена.");
       setMessage("");
       setChallengeToken("");
