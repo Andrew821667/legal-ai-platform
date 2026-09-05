@@ -556,10 +556,87 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 ./infra/scripts/restore_postgres.sh /path/to/legal_ai_YYYYMMDD_HHMMSS.dump
 ```
 
-## Ротация API-ключей
+## Ротация API-ключей платформы
+Ключи, которые платформа выдаёт сама (`API_KEY_BOT`, `API_KEY_ADMIN` и прочие
+скоупы):
 - Создать ключ: `POST /api/v1/admin/api-keys`
 - Отозвать ключ: `DELETE /api/v1/admin/api-keys/{id}`
 - Все операции логируются в `audit_log`.
+
+## Смена секретов вендоров в production .env
+Ключи внешних сервисов (`INTAKE_ANALYSIS_API_KEY`, `OPENAI_API_KEY`, токены
+ботов) живут в `/Users/legalai/projects/legal-ai-platform/.env` и меняются
+иначе. Здесь три ловушки, на каждую из которых уже наступали.
+
+### Шаг 1. Заменить значение
+```bash
+ssh -t legalai-prod '~/rotate-env-key.sh'                    # INTAKE_ANALYSIS_API_KEY
+ssh -t legalai-prod '~/rotate-env-key.sh OPENAI_API_KEY'     # любая другая переменная
+```
+Скрипт спрашивает значение скрытым вводом, делает копию с меткой времени и
+показывает права с ACL после записи.
+
+Источник скрипта — `infra/scripts/rotate_env_key.sh`. Копия на хосте лежит в
+`~/rotate-env-key.sh`; если её там нет, положить заново:
+```bash
+scp infra/scripts/rotate_env_key.sh legalai-prod:~/rotate-env-key.sh
+ssh legalai-prod 'chmod 700 ~/rotate-env-key.sh'
+```
+
+**Ловушка 1: пересоздание файла сбрасывает ACL.** На `.env` стоит
+`user:andrej allow read` — без него деплой (он идёт от `andrej`) не может
+прочитать файл и падает с `permission denied`. `sed -i` и любая запись во
+временный файл с последующим `mv` создают новый inode и теряют ACL. Писать
+нужно усечением существующего файла — так делает скрипт. Восстановление ACL
+раз в 15 минут выполняет `infra/scripts/ensure_env_acl.sh`, но между заменой и
+его запуском деплой успевает сломаться.
+
+**Ловушка 2: удалённая оболочка — zsh.** `read -rsp` это синтаксис bash; в zsh
+`-p` означает чтение из сопроцесса и команда падает с `no coprocess`. Скрипт
+объявлен как `#!/bin/bash`, поэтому вопрос снят — но одноразовые команды в
+кавычках писать не стоит.
+
+### Шаг 2. Пересоздать контейнер
+```bash
+ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
+  && cd /Users/legalai/projects/legal-ai-platform \
+  && IMG=$(docker inspect -f "{{.Config.Image}}" legal-ai-core-api) \
+  && CORE_API_IMAGE="$IMG" docker compose -p compose --env-file .env \
+     -f infra/compose/docker-compose.prod.yml up -d --force-recreate core-api \
+  && sleep 12 && curl -s --max-time 10 http://127.0.0.1:8100/health'
+```
+
+**Ловушка 3: `docker compose restart` не перечитывает `.env`.** Сервисы
+получают переменные через `env_file`, а он читается в момент **создания**
+контейнера. `restart` перезапускает процесс внутри существующего контейнера со
+старым окружением: health-check зелёный, а ключ прежний. Нужен
+`up -d --force-recreate`.
+
+**Почему в команде задан образ.** В compose образы заданы как
+`${CORE_API_IMAGE:-legal-ai-core-api:local}`. Без переменной берётся резервное
+значение, которого нет ни локально, ни в реестре, — compose уходит в сборку и
+падает на чтении xattr у `.env`. Чтение образа у работающего контейнера даёт
+тот же код, что и был, и сборка не запускается.
+
+Docker работает под аккаунтом `andrej`, не `legalai`: под `legalai` сокета нет
+и `docker ps` не работает.
+
+### Шаг 3. Проверить
+```bash
+ssh legalai-prod 'cd ~/projects/legal-ai-platform && K=$(grep "^API_KEY_BOT=" .env | cut -d= -f2-) \
+  && curl -s -X POST -H "X-API-Key: $K" -H "Content-Type: application/json" \
+     -d "{\"history\":[],\"base_questions\":[],\"area_label\":\"проверка\",\"asked_count\":0}" \
+     "http://127.0.0.1:8100/api/v1/legal-intakes/<ID>/assistant/turn"'
+```
+`"ok": true` — ключ доехал до контейнера. `http_401` — контейнер держит старый
+ключ, вернуться к шагу 2.
+
+Отдельно: замена значения в `.env` **не отзывает старый ключ**. Утёкший
+продолжает работать, пока его не удалить в консоли вендора. Проверить, что он
+действительно мёртв, можно прямым запросом с хоста — вендор должен ответить
+`Incorrect API key provided`.
+
+Копию `.env.bak-*` удалить после проверки: в ней лежит прежний секрет.
 
 ## MacBook Protocol (contract-worker)
 Граница контура:
