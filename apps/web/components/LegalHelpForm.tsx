@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Send } from "lucide-react";
 
 import TurnstileWidget from "@/components/TurnstileWidget";
+import { getLeadAttribution, trackLeadConversion } from "@/lib/lead-attribution";
 import {
   LEGAL_AREAS,
   LEGAL_CLIENT_TYPES,
@@ -49,16 +50,7 @@ export default function LegalHelpForm({
   const [success, setSuccess] = useState("");
 
   const utm = useMemo(() => {
-    if (typeof window === "undefined") return {};
-    const params = new URLSearchParams(window.location.search);
-    return {
-      utm_source: params.get("utm_source") || undefined,
-      utm_medium: params.get("utm_medium") || undefined,
-      utm_campaign: params.get("utm_campaign") || undefined,
-      utm_content: params.get("utm_content") || undefined,
-      utm_term: params.get("utm_term") || undefined,
-      landing_page: `${window.location.pathname}${window.location.search}`,
-    };
+    return getLeadAttribution();
   }, []);
 
   const onSubmit = async (event: FormEvent) => {
@@ -110,12 +102,14 @@ export default function LegalHelpForm({
         detail?: string;
         message?: string;
         challenge_required?: boolean;
+        intake_id?: string;
       };
       if (!response.ok) {
         if (data.challenge_required) setChallengeRequired(true);
         throw new Error(data.detail || "Не удалось отправить обращение.");
       }
 
+      if (data.intake_id) trackLeadConversion("legal_help", utm);
       setSuccess(data.message || "Обращение принято.");
       setDescription("");
       setDeadline("");

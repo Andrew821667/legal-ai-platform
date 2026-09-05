@@ -153,6 +153,15 @@ function countBy(rows: any[], field: string): Array<{ name: string; count: numbe
     .slice(0, 12);
 }
 
+function countLeadSources(rows: any[]): Array<{ name: string; count: number }> {
+  const normalized = rows.map((row) => {
+    const source = String(row?.utm_source || row?.source || "не указано").trim();
+    const medium = String(row?.utm_medium || "").trim();
+    return { attribution: medium ? `${source} / ${medium}` : source };
+  });
+  return countBy(normalized, "attribution");
+}
+
 function buildFunnel(input: {
   siteVisits: number;
   miniappUsers: number;
@@ -460,7 +469,7 @@ async function buildAnalyticsForDays(days: number) {
         propose: numberValue(leadsStatsData.stage_propose),
         handoff: numberValue(leadsStatsData.stage_handoff),
       },
-      by_source: countBy(leadRows, "source"),
+      by_source: countLeadSources(leadRows),
       recent_leads: leadRows.slice(0, 12),
     },
     contracts: {
@@ -490,7 +499,7 @@ async function buildAnalyticsForDays(days: number) {
       miniapp_sources: readerConversionData.top_miniapp_sources || readerEvents.data?.top_sources || [],
       cta_sources: readerConversionData.top_cta_sources || [],
       intent_sources: readerConversionData.top_intent_sources || [],
-      lead_sources: countBy(leadRows, "source"),
+      lead_sources: countLeadSources(leadRows),
     },
     retention: {
       unique_users_total: numberValue(readerConversionData.unique_users_total),
