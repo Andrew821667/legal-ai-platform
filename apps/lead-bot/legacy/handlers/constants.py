@@ -26,6 +26,10 @@ def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LAB
     return [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
         [InlineKeyboardButton("⚖️ Юридическая практика", callback_data="legal_help_start")],
+        # Рядом с юридической практикой: соглашение подписывают в связи с
+        # делом, и искать его будут здесь. На стартовом экране кнопки нет —
+        # там человеку ещё нечего подписывать.
+        [InlineKeyboardButton("🔒 Подписать NDA", callback_data="nda:open")],
         [InlineKeyboardButton("🛠 Инженерная практика", callback_data="menu_custom_development")],
         [
             InlineKeyboardButton("📋 Услуги", callback_data="menu_services"),
@@ -147,6 +151,7 @@ DOCUMENTS_MENU = [
         InlineKeyboardButton("🤖 Политика ИИ", callback_data="doc_ai_policy"),
     ],
     [InlineKeyboardButton("📣 Согласие на рассылки", callback_data="doc_marketing_consent")],
+    [InlineKeyboardButton("🔒 Соглашение о конфиденциальности", callback_data="nda:open")],
     [
         InlineKeyboardButton("📑 Статус согласий", callback_data="doc_consent_status"),
         InlineKeyboardButton("📊 Экспорт данных", callback_data="doc_export_data"),

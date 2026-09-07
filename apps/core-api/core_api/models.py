@@ -320,6 +320,18 @@ class NdaSignature(Base):
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Данные, которые подписант ввёл сам.
+    #
+    # Аккаунт Telegram подтверждает канал, но не личность: при споре по одному
+    # telegram_user_id пришлось бы доказывать, кто за ним стоял. Введённые
+    # своей рукой ФИО и контакт эту дыру закрывают — не полностью, но
+    # соразмерно этапу первичной консультации.
+    #
+    # Организация заполняется, когда подписывают от лица компании: тогда
+    # обязательства принимает она, а не человек за клавиатурой.
+    signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Что подписано: версия и хеш текста, который клиент видел на экране.
     document_version: Mapped[str] = mapped_column(String(32), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(64), nullable=False)

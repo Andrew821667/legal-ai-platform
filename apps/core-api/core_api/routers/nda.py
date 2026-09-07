@@ -55,6 +55,9 @@ def get_nda_status(
         "signed_at": row.signed_at.isoformat() if row.signed_at else None,
         "version": row.document_version,
         "current_version": NDA_VERSION,
+        "signer_full_name": row.signer_full_name,
+        "signer_contact": row.signer_contact,
+        "signer_org": row.signer_org,
     }
 
 
@@ -110,11 +113,24 @@ def sign_nda(
             detail="document changed since it was shown to the signer",
         )
 
+    # Данные подписанта обязательны: подпись, за которой стоит только
+    # идентификатор аккаунта, при споре почти ничего не доказывает.
+    full_name = str(payload.get("signer_full_name") or "").strip()
+    contact = str(payload.get("signer_contact") or "").strip()
+    if not full_name or not contact:
+        raise HTTPException(
+            status_code=422,
+            detail="signer_full_name and signer_contact are required",
+        )
+
     row = NdaSignature(
         lead_id=lead_id,
         telegram_user_id=payload.get("telegram_user_id") or lead.telegram_user_id,
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_name=str(payload.get("signer_name") or lead.name or "")[:255] or None,
+        signer_full_name=full_name[:255],
+        signer_contact=contact[:255],
+        signer_org=(str(payload.get("signer_org") or "").strip()[:500] or None),
         document_version=NDA_VERSION,
         document_hash=current_hash,
         channel=str(payload.get("channel") or "telegram_bot")[:32],

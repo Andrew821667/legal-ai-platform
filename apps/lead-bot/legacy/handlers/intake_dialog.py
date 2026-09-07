@@ -17,9 +17,8 @@ import asyncio
 import logging
 import time
 
-from telegram import InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
-from telegram_ui import inline_button as InlineKeyboardButton
 
 import database
 import human_pace
@@ -136,15 +135,6 @@ def _finish(context: ContextTypes.DEFAULT_TYPE, user_id: int | None = None) -> N
         database.db.clear_intake_dialog_state(int(user_id))
 
 
-def nda_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Подписать соглашение", callback_data="intake_nda:sign")],
-            [InlineKeyboardButton("Показать текст", callback_data="intake_nda:text")],
-            [InlineKeyboardButton("Без соглашения", callback_data="intake_nda:skip")],
-        ]
-    )
-
 
 async def _say(
     message,
@@ -219,7 +209,9 @@ async def _assistant_question(
     return str(result["reply"]), bool(result.get("done"))
 
 
-async def _ask_next_question(message, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _ask_next_question(
+    message, context: ContextTypes.DEFAULT_TYPE, update: Update
+) -> None:
     """Задаёт следующий вопрос либо переходит к ориентации и документам.
 
     Спрашивает помощник: он откликается на сказанное и решает, нужны ли
@@ -273,10 +265,10 @@ async def _ask_next_question(message, context: ContextTypes.DEFAULT_TYPE) -> Non
         intake_dialog.build_orientation(area, context.user_data.get(ANSWERS_KEY)),
         action="intake_dialog_orientation",
     )
-    await _offer_nda(message, context)
+    await _offer_nda(message, context, update)
 
 
-async def _offer_nda(message, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _offer_nda(message, context: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
     """Предлагает подписать соглашение перед передачей документов."""
     lead_id = context.user_data.get(LEAD_ID_KEY)
 
@@ -298,11 +290,13 @@ async def _offer_nda(message, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     context.user_data[STAGE_KEY] = STAGE_NDA
     await utils.safe_reply_text(
-        message,
-        intake_dialog.build_nda_offer(),
-        reply_markup=nda_markup(),
-        action="intake_dialog_nda_offer",
+        message, intake_dialog.build_nda_offer(), action="intake_dialog_nda_offer"
     )
+    # Дальше ведёт общий сценарий подписания: он же собирает данные клиента.
+    # Своя копия здесь означала бы, что правки в одной тихо не доезжают в другую.
+    from .nda_signing import RETURN_DIALOG, open_signing
+
+    await open_signing(update, context, return_to=RETURN_DIALOG)
 
 
 async def _go_to_documents(message, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -371,7 +365,7 @@ async def handle_intake_dialog_message(
         if not pending:
             # Диалог только начался: первое сообщение — согласие продолжать,
             # а не ответ на вопрос.
-            await _ask_next_question(message, context)
+            await _ask_next_question(message, context, update)
             _persist(context, user_id)
             return True
 
@@ -398,7 +392,7 @@ async def handle_intake_dialog_message(
         history.append({"role": "client", "text": text})
         context.user_data[HISTORY_KEY] = history
 
-        await _ask_next_question(message, context)
+        await _ask_next_question(message, context, update)
         _persist(context, user_id)
         return True
 
@@ -526,94 +520,3 @@ async def handle_intake_dialog_document(
         action="intake_dialog_document_accepted",
     )
     return True
-
-
-async def handle_intake_nda_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-) -> None:
-    """Кнопки под предложением подписать соглашение."""
-    query = update.callback_query
-    if not query:
-        return
-    await utils.safe_answer_callback(query, action="intake_nda_callback")
-
-    action = (query.data or "").partition(":")[2]
-    message = query.message
-    user = update.effective_user
-    restore_if_needed(context, getattr(user, "id", None))
-
-    if action == "text":
-        document = await asyncio.to_thread(core_api_bridge.get_nda_document)
-        if not isinstance(document, dict) or not document.get("text"):
-            await utils.safe_reply_text(
-                message,
-                "Не удалось загрузить текст соглашения. Можно продолжить без него — "
-                "документы примем и так.",
-                reply_markup=nda_markup(),
-                action="intake_nda_text_failed",
-            )
-            return
-        # Запоминаем контрольную сумму показанного текста: подпись должна
-        # относиться именно к той редакции, которую человек прочитал.
-        context.user_data[NDA_HASH_KEY] = document.get("hash")
-        await utils.safe_reply_text(
-            message, str(document["text"])[:4000], action="intake_nda_text"
-        )
-        await utils.safe_reply_text(
-            message,
-            "Подписать?",
-            reply_markup=nda_markup(),
-            action="intake_nda_text_confirm",
-        )
-        return
-
-    if action == "skip":
-        context.user_data[NDA_SIGNED_KEY] = False
-        await _go_to_documents(message, context)
-        _persist(context, getattr(user, "id", None))
-        return
-
-    if action != "sign":
-        return
-
-    lead_id = context.user_data.get(LEAD_ID_KEY)
-    if not lead_id:
-        logger.warning("Подписание NDA без известного lead_id")
-        context.user_data[NDA_SIGNED_KEY] = False
-        await _go_to_documents(message, context)
-        _persist(context, getattr(user, "id", None))
-        return
-
-    document_hash = context.user_data.get(NDA_HASH_KEY)
-    if not document_hash:
-        # Клиент подписывает, не открыв текст. Хеш всё равно нужен: подпись
-        # должна относиться к конкретной редакции, а не к «документу вообще».
-        document = await asyncio.to_thread(core_api_bridge.get_nda_document)
-        if isinstance(document, dict):
-            document_hash = document.get("hash")
-
-    result = await asyncio.to_thread(
-        core_api_bridge.sign_nda,
-        lead_id=str(lead_id),
-        telegram_user_id=getattr(user, "id", None),
-        telegram_username=getattr(user, "username", None),
-        signer_name=getattr(user, "full_name", None),
-        document_hash=str(document_hash or ""),
-    )
-
-    if not isinstance(result, dict) or not result.get("signed"):
-        await utils.safe_reply_text(
-            message,
-            "Не удалось зафиксировать подписание. Продолжим без соглашения — "
-            "документы примем, а отметку об этом юрист увидит в карточке.",
-            action="intake_nda_sign_failed",
-        )
-        context.user_data[NDA_SIGNED_KEY] = False
-        await _go_to_documents(message, context)
-        _persist(context, getattr(user, "id", None))
-        return
-
-    context.user_data[NDA_SIGNED_KEY] = True
-    await _go_to_documents(message, context)
-    _persist(context, getattr(user, "id", None))

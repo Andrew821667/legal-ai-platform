@@ -346,6 +346,9 @@ class CoreApiBridge:
         telegram_username: str | None,
         signer_name: str | None,
         document_hash: str,
+        signer_full_name: str,
+        signer_contact: str,
+        signer_org: str | None = None,
     ) -> dict[str, Any] | None:
         """Фиксирует подписание соглашения простой электронной подписью.
 
@@ -362,6 +365,9 @@ class CoreApiBridge:
                 "telegram_username": telegram_username,
                 "signer_name": signer_name,
                 "document_hash": document_hash,
+                "signer_full_name": signer_full_name,
+                "signer_contact": signer_contact,
+                "signer_org": signer_org,
             },
             idempotency_key=f"nda-sign:{lead_id}",
         )
