@@ -76,11 +76,9 @@ from handlers.contract_analysis import (
     handle_contract_analysis_start,
     handle_contract_result_open,
 )
-from handlers.intake_dialog import (
-    handle_intake_nda_callback,
-    start_dialog as start_intake_dialog,
-)
+from handlers.intake_dialog import start_dialog as start_intake_dialog
 from handlers.legal_help import handle_legal_help_callback
+from handlers.nda_signing import handle_callback as handle_nda_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from handlers.user import (
@@ -804,8 +802,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_cleanup_callback(update, context)
         elif data.startswith("admin_"):
             await handle_admin_panel_callback(update, context)
-        elif data.startswith("intake_nda:"):
-            await handle_intake_nda_callback(update, context)
+        elif data.startswith("nda:"):
+            await handle_nda_callback(update, context)
         elif data == "contract_upload":
             await handle_contract_analysis_start(update, context)
         elif data == "contract_cancel":

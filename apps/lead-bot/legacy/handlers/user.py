@@ -67,6 +67,7 @@ from .intake_dialog import (
     handle_intake_dialog_message,
 )
 from .legal_help import maybe_handle_legal_help_message
+from .nda_signing import handle_message as handle_nda_message
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user=user,
             user_data=user_data,
         ):
+            return
+
+        # Подписание идёт раньше диалога: человек, вводящий ФИО, не должен
+        # получить в ответ следующий уточняющий вопрос.
+        if await handle_nda_message(update, context, message_text):
             return
 
         if await handle_intake_dialog_message(update, context, message_text):

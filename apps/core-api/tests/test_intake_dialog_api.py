@@ -233,7 +233,12 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         stale = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
-            json={"lead_id": str(lead_uuid), "document_hash": "0" * 64},
+            json={
+                "lead_id": str(lead_uuid),
+                "document_hash": "0" * 64,
+                "signer_full_name": "Иванов Иван Иванович",
+                "signer_contact": "+7 900 123-45-67",
+            },
         )
         assert stale.status_code == 409
 
@@ -241,7 +246,12 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         fresh = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
-            json={"lead_id": str(lead_uuid), "document_hash": document["hash"]},
+            json={
+                "lead_id": str(lead_uuid),
+                "document_hash": document["hash"],
+                "signer_full_name": "Иванов Иван Иванович",
+                "signer_contact": "+7 900 123-45-67",
+            },
         )
         assert fresh.status_code == 201, fresh.text
         assert fresh.json()["signed"] is True
@@ -311,5 +321,82 @@ def test_blocked_outreach_names_the_reason() -> None:
         ).json()
         assert card["outreach_blocked_reason"] == "no_telegram"
         assert card["outreach_sent_at"] is None
+    finally:
+        _cleanup(names, intake_ids)
+
+
+def test_signature_without_signer_details_is_refused() -> None:
+    """Подпись, за которой стоит только идентификатор аккаунта, почти ничего
+    не доказывает: при споре пришлось бы устанавливать, кто за ним стоял.
+
+    Поэтому ФИО и контакт обязательны, и проверка на стороне сервера — не
+    только в боте: обойти её через API не должно быть возможно.
+    """
+    client = TestClient(app)
+    names = ["pytest.nda-details.bot"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    intake_ids: list[str] = []
+
+    try:
+        intake_id = _create_intake(client, bot_key)
+        intake_ids.append(intake_id)
+        db = SessionLocal()
+        try:
+            lead_uuid = db.execute(
+                select(LegalIntake.lead_id).where(LegalIntake.id == intake_id)
+            ).scalar_one()
+        finally:
+            db.close()
+
+        for payload in (
+            {"lead_id": str(lead_uuid)},
+            {"lead_id": str(lead_uuid), "signer_full_name": "Иванов Иван"},
+            {"lead_id": str(lead_uuid), "signer_contact": "a@b.ru"},
+            {"lead_id": str(lead_uuid), "signer_full_name": "  ", "signer_contact": "  "},
+        ):
+            response = client.post(
+                "/api/v1/nda/sign", headers={"X-API-Key": bot_key}, json=payload
+            )
+            assert response.status_code == 422, payload
+    finally:
+        _cleanup(names, intake_ids)
+
+
+def test_signer_details_are_returned_in_status() -> None:
+    """Юрист должен видеть, кто именно подписал."""
+    client = TestClient(app)
+    names = ["pytest.nda-status.bot"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    intake_ids: list[str] = []
+
+    try:
+        intake_id = _create_intake(client, bot_key)
+        intake_ids.append(intake_id)
+        db = SessionLocal()
+        try:
+            lead_uuid = db.execute(
+                select(LegalIntake.lead_id).where(LegalIntake.id == intake_id)
+            ).scalar_one()
+        finally:
+            db.close()
+
+        client.post(
+            "/api/v1/nda/sign",
+            headers={"X-API-Key": bot_key},
+            json={
+                "lead_id": str(lead_uuid),
+                "signer_full_name": "Петров Пётр Петрович",
+                "signer_contact": "petr@example.ru",
+                "signer_org": 'ООО "Ромашка", ИНН 7701234567',
+            },
+        )
+        status = client.get(
+            f"/api/v1/nda/status/{lead_uuid}", headers={"X-API-Key": bot_key}
+        ).json()
+
+        assert status["signed"] is True
+        assert status["signer_full_name"] == "Петров Пётр Петрович"
+        assert status["signer_contact"] == "petr@example.ru"
+        assert "Ромашка" in status["signer_org"]
     finally:
         _cleanup(names, intake_ids)
