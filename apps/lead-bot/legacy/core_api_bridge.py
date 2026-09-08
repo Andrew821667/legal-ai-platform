@@ -331,11 +331,24 @@ class CoreApiBridge:
         result = self._get("/api/v1/nda/document")
         return result if isinstance(result, dict) else None
 
-    def get_nda_status(self, lead_id: str) -> dict[str, Any] | None:
+    def get_nda_status(
+        self,
+        lead_id: str,
+        *,
+        telegram_user_id: int | None = None,
+    ) -> dict[str, Any] | None:
         """Подписано ли соглашение этим клиентом."""
         if not self.enabled:
             return None
-        result = self._get(f"/api/v1/nda/status/{lead_id}")
+        suffix = f"?telegram_user_id={telegram_user_id}" if telegram_user_id else ""
+        result = self._get(f"/api/v1/nda/status/{lead_id}{suffix}")
+        return result if isinstance(result, dict) else None
+
+    def get_nda_context_by_telegram(self, telegram_user_id: int) -> dict[str, Any] | None:
+        """Находит актуальное обращение, если локальная копия бота устарела."""
+        if not self.enabled:
+            return None
+        result = self._get(f"/api/v1/nda/by-telegram/{telegram_user_id}")
         return result if isinstance(result, dict) else None
 
     def sign_nda(

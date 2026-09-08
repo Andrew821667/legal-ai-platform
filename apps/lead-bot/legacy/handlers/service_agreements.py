@@ -487,7 +487,14 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
             chat_id=target,
             text="Перед согласованием условий юридической помощи подпишите, пожалуйста, NDA.",
             reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Открыть NDA", callback_data="nda:open")]]
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Открыть NDA",
+                            callback_data=f"nda:open:{intake['lead_id']}",
+                        )
+                    ]
+                ]
             ),
         )
         await utils.safe_reply_text(

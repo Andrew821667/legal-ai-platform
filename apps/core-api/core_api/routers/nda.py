@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,27 @@ def _signature_for_lead(db: Session, lead: Lead) -> NdaSignature | None:
     ).scalar_one_or_none()
 
 
+def _assert_telegram_owner(lead: Lead, telegram_user_id: int | None) -> None:
+    if telegram_user_id is None:
+        return
+    if lead.telegram_user_id != telegram_user_id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+
+def _status_payload(row: NdaSignature | None) -> dict:
+    if row is None:
+        return {"signed": False}
+    return {
+        "signed": True,
+        "signed_at": row.signed_at.isoformat() if row.signed_at else None,
+        "version": row.document_version,
+        "current_version": NDA_VERSION,
+        "signer_full_name": row.signer_full_name,
+        "signer_contact": row.signer_contact,
+        "signer_org": row.signer_org,
+    }
+
+
 @router.get("/document")
 def get_nda_document(
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
@@ -52,6 +73,7 @@ def get_nda_document(
 @router.get("/status/{lead_id}")
 def get_nda_status(
     lead_id: uuid.UUID,
+    telegram_user_id: int | None = Query(default=None, gt=0),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -60,18 +82,27 @@ def get_nda_status(
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
-    row = _signature_for_lead(db, lead)
-    if row is None:
-        return {"signed": False}
-    return {
-        "signed": True,
-        "signed_at": row.signed_at.isoformat() if row.signed_at else None,
-        "version": row.document_version,
-        "current_version": NDA_VERSION,
-        "signer_full_name": row.signer_full_name,
-        "signer_contact": row.signer_contact,
-        "signer_org": row.signer_org,
-    }
+    _assert_telegram_owner(lead, telegram_user_id)
+    return _status_payload(_signature_for_lead(db, lead))
+
+
+@router.get("/by-telegram/{telegram_user_id}")
+def get_nda_context_by_telegram(
+    telegram_user_id: int,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Возвращает актуальное обращение клиента без зависимости от SQLite бота."""
+    _ = identity
+    lead = db.execute(
+        select(Lead)
+        .where(Lead.telegram_user_id == telegram_user_id)
+        .order_by(Lead.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"lead_id": str(lead.id), **_status_payload(_signature_for_lead(db, lead))}
 
 
 @router.post("/sign", status_code=status.HTTP_201_CREATED)
@@ -96,6 +127,15 @@ def sign_nda(
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    telegram_user_id = payload.get("telegram_user_id")
+    if telegram_user_id is not None:
+        try:
+            telegram_user_id = int(telegram_user_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="telegram_user_id must be an integer") from exc
+        if lead.telegram_user_id != telegram_user_id:
+            raise HTTPException(status_code=403, detail="Telegram user does not own this lead")
 
     existing = _signature_for_lead(db, lead)
     if existing is not None:
@@ -138,7 +178,7 @@ def sign_nda(
 
     row = NdaSignature(
         lead_id=lead_id,
-        telegram_user_id=payload.get("telegram_user_id") or lead.telegram_user_id,
+        telegram_user_id=telegram_user_id or lead.telegram_user_id,
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_name=str(payload.get("signer_name") or lead.name or "")[:255] or None,
         signer_full_name=full_name[:255],
