@@ -483,7 +483,9 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 action="agreement_nda_no_target",
             )
             return
-        await context.bot.send_message(
+        await utils.safe_send_message(
+            context.bot,
+            action="agreement_nda_invite",
             chat_id=target,
             text="Перед согласованием условий юридической помощи подпишите, пожалуйста, NDA.",
             reply_markup=InlineKeyboardMarkup(
