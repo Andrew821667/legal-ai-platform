@@ -376,6 +376,10 @@ async def revoke_user_consent_command(update: Update, context: ContextTypes.DEFA
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показ админ-панели"""
     try:
+        user = update.effective_user
+        if not user or user.id != config.ADMIN_TELEGRAM_ID:
+            await update.message.reply_text("У вас нет доступа к этой команде")
+            return
         admin_panel_message = (
             "⚙️ АДМИН-ПАНЕЛЬ\n\n"
             "Выберите действие:"

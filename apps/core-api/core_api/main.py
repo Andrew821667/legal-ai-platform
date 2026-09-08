@@ -22,6 +22,7 @@ from core_api.routers import (
     nda,
     reader,
     scheduled_posts,
+    service_agreements,
     special_consultations,
     users,
     workers,
@@ -54,6 +55,7 @@ app.include_router(reader.router)
 app.include_router(contract_jobs.router)
 app.include_router(contract_ai_bridge.router)
 app.include_router(special_consultations.router)
+app.include_router(service_agreements.router)
 app.include_router(workers.router)
 app.include_router(admin.router)
 

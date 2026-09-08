@@ -152,6 +152,7 @@ DOCUMENTS_MENU = [
     ],
     [InlineKeyboardButton("📣 Согласие на рассылки", callback_data="doc_marketing_consent")],
     [InlineKeyboardButton("🔒 Соглашение о конфиденциальности", callback_data="nda:open")],
+    [InlineKeyboardButton("📄 Договоры с юридической практикой", callback_data="sa_c:list")],
     [
         InlineKeyboardButton("📑 Статус согласий", callback_data="doc_consent_status"),
         InlineKeyboardButton("📊 Экспорт данных", callback_data="doc_export_data"),
@@ -167,6 +168,7 @@ DOCUMENTS_MENU = [
 
 # Админ-панель inline кнопки
 ADMIN_PANEL_MENU = [
+    [InlineKeyboardButton("⚖️ Юридические обращения и договоры", callback_data="sa_a:menu")],
     [InlineKeyboardButton("📊 Лиды и воронка", callback_data="admin_section_leads")],
     [InlineKeyboardButton("👥 Пользователи", callback_data="admin_section_users")],
     [InlineKeyboardButton("📥 Экспорт и логи", callback_data="admin_section_export")],

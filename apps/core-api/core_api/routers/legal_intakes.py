@@ -65,6 +65,7 @@ def _payload(item: LegalIntake, lead: Lead) -> LegalIntakeOut:
         lead_contact=lead.contact,
         lead_company=lead.company,
         lead_source=lead.source,
+        telegram_user_id=lead.telegram_user_id,
         outreach_sent_at=item.outreach_sent_at,
         outreach_blocked_reason=item.outreach_blocked_reason,
     )

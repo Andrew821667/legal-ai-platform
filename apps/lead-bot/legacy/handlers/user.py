@@ -68,6 +68,7 @@ from .intake_dialog import (
 )
 from .legal_help import maybe_handle_legal_help_message
 from .nda_signing import handle_message as handle_nda_message
+from .service_agreements import handle_message as handle_service_agreement_message
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_allowed:
             logger.warning(f"Security check failed for user {user.id}: {block_reason}")
             await original_message.reply_text(block_reason)
+            return
+
+        if await handle_service_agreement_message(update, context, message_text):
             return
 
         if await handle_profile_edit_input(
