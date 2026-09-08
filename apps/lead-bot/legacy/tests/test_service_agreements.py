@@ -89,7 +89,10 @@ async def test_admin_wizard_creates_preview_in_admin_bot(monkeypatch, replies) -
 
     assert len(created) == 1
     assert created[0]["payload"]["intake_id"] == intake["id"]
-    assert created[0]["payload"]["prepared_by_telegram_user_id"] == 42
+    assert (
+        created[0]["payload"]["prepared_by_telegram_user_id"]
+        == flow.config.ADMIN_TELEGRAM_ID
+    )
     assert bot.documents
     assert flow.STATE_KEY not in ctx.user_data
 
