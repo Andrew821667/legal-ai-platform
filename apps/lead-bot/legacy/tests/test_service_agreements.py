@@ -98,6 +98,36 @@ async def test_admin_wizard_creates_preview_in_admin_bot(monkeypatch, replies) -
 
 
 @pytest.mark.anyio
+async def test_admin_nda_request_is_bound_to_the_core_lead(monkeypatch, replies) -> None:
+    bot = Bot()
+    ctx = SimpleNamespace(user_data={}, bot=bot)
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    lead_id = "33333333-3333-3333-3333-333333333333"
+    query = SimpleNamespace(
+        data=f"sa_a:nda:{intake_id}",
+        from_user=SimpleNamespace(id=flow.config.ADMIN_TELEGRAM_ID),
+        message=SimpleNamespace(chat_id=flow.config.ADMIN_TELEGRAM_ID),
+    )
+    update = SimpleNamespace(callback_query=query)
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {
+            "id": value,
+            "lead_id": lead_id,
+            "telegram_user_id": 77,
+        },
+    )
+
+    await flow.handle_admin_callback(update, ctx)
+
+    assert bot.messages[0]["chat_id"] == 77
+    button = bot.messages[0]["reply_markup"].inline_keyboard[0][0]
+    assert button.callback_data == f"nda:open:{lead_id}"
+    assert replies[-1] == "Запрос на подписание NDA отправлен клиенту."
+
+
+@pytest.mark.anyio
 async def test_client_must_open_document_before_signing(monkeypatch, replies) -> None:
     bot = Bot()
     ctx = SimpleNamespace(user_data={}, bot=bot)

@@ -46,12 +46,19 @@ def update() -> SimpleNamespace:
 def _bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
     calls: dict = {}
 
+    def _status(lead_id, **kwargs):
+        calls["status"] = {"lead_id": lead_id, **kwargs}
+        return overrides.get("status")
+
     def _sign(**kwargs):
         calls["sign"] = kwargs
         return overrides.get("sign_result", {"signed": True, "already_signed": False})
 
+    monkeypatch.setattr(nda.core_api_bridge, "get_nda_status", _status)
     monkeypatch.setattr(
-        nda.core_api_bridge, "get_nda_status", lambda lead_id: overrides.get("status")
+        nda.core_api_bridge,
+        "get_nda_context_by_telegram",
+        lambda telegram_user_id: overrides.get("telegram_context"),
     )
     monkeypatch.setattr(
         nda.core_api_bridge,
@@ -161,6 +168,36 @@ async def test_without_a_case_signing_is_explained_not_hidden(update, replies, m
     await nda.open_signing(update, context)
 
     assert "оставить обращение" in replies[-1]
+
+
+@pytest.mark.anyio
+async def test_bound_case_opens_without_local_lead(update, replies, monkeypatch) -> None:
+    lead_id = "33333333-3333-3333-3333-333333333333"
+    calls = _bridge(monkeypatch, status={"signed": False})
+    monkeypatch.setattr(nda.database.db, "get_user_by_telegram_id", lambda tid: None)
+    context = SimpleNamespace(user_data={})
+
+    await _press(update, context, f"open:{lead_id}")
+
+    assert context.user_data[nda.LEAD_KEY] == lead_id
+    assert calls["status"] == {"lead_id": lead_id, "telegram_user_id": 42}
+    assert "Соглашение о конфиденциальности" in replies[-1]
+
+
+@pytest.mark.anyio
+async def test_menu_recovers_case_from_core_api(update, replies, monkeypatch) -> None:
+    lead_id = "33333333-3333-3333-3333-333333333333"
+    _bridge(
+        monkeypatch,
+        telegram_context={"lead_id": lead_id, "signed": False},
+    )
+    monkeypatch.setattr(nda.database.db, "get_user_by_telegram_id", lambda tid: None)
+    context = SimpleNamespace(user_data={})
+
+    await nda.open_signing(update, context)
+
+    assert context.user_data[nda.LEAD_KEY] == lead_id
+    assert "Соглашение о конфиденциальности" in replies[-1]
 
 
 @pytest.mark.anyio

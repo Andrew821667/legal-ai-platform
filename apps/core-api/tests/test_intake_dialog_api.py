@@ -260,6 +260,60 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         _cleanup(names, intake_ids)
 
 
+def test_nda_context_uses_core_lead_and_checks_telegram_owner() -> None:
+    client = TestClient(app)
+    names = ["pytest.nda-owner.bot"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    intake_ids: list[str] = []
+
+    try:
+        intake_id = _create_intake(client, bot_key)
+        intake_ids.append(intake_id)
+        db = SessionLocal()
+        try:
+            lead_uuid = db.execute(
+                select(LegalIntake.lead_id).where(LegalIntake.id == intake_id)
+            ).scalar_one()
+        finally:
+            db.close()
+
+        context = client.get(
+            "/api/v1/nda/by-telegram/5150",
+            headers={"X-API-Key": bot_key},
+        )
+        assert context.status_code == 200
+        assert context.json()["lead_id"] == str(lead_uuid)
+        assert context.json()["signed"] is False
+
+        own = client.get(
+            f"/api/v1/nda/status/{lead_uuid}?telegram_user_id=5150",
+            headers={"X-API-Key": bot_key},
+        )
+        assert own.status_code == 200
+
+        foreign = client.get(
+            f"/api/v1/nda/status/{lead_uuid}?telegram_user_id=5151",
+            headers={"X-API-Key": bot_key},
+        )
+        assert foreign.status_code == 404
+
+        document = client.get("/api/v1/nda/document", headers={"X-API-Key": bot_key}).json()
+        wrong_signer = client.post(
+            "/api/v1/nda/sign",
+            headers={"X-API-Key": bot_key},
+            json={
+                "lead_id": str(lead_uuid),
+                "telegram_user_id": 5151,
+                "document_hash": document["hash"],
+                "signer_full_name": "Иванов Иван Иванович",
+                "signer_contact": "+7 900 123-45-67",
+            },
+        )
+        assert wrong_signer.status_code == 403
+    finally:
+        _cleanup(names, intake_ids)
+
+
 def test_outreach_state_is_visible_in_the_card() -> None:
     """Состояние первого обращения видно снаружи.
 

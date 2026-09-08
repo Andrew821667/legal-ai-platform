@@ -187,6 +187,7 @@ async def open_signing(
     *,
     user_data: dict | None = None,
     return_to: str = RETURN_MENU,
+    lead_id: str | None = None,
 ) -> None:
     """Показывает состояние соглашения и предлагает подписать."""
     message = update.effective_message or (
@@ -198,13 +199,38 @@ async def open_signing(
     user = update.effective_user
     if user is not None:
         context.user_data["_nda_telegram_id"] = user.id
-    lead_id = _resolve_lead_id(context, user_data)
-    context.user_data[LEAD_KEY] = lead_id
     context.user_data[RETURN_KEY] = return_to
 
     status = None
-    if lead_id:
-        status = await asyncio.to_thread(core_api_bridge.get_nda_status, lead_id)
+    resolved_lead_id = lead_id
+    if not resolved_lead_id and user is not None:
+        core_ctx = await asyncio.to_thread(
+            core_api_bridge.get_nda_context_by_telegram,
+            user.id,
+        )
+        if isinstance(core_ctx, dict) and core_ctx.get("lead_id"):
+            resolved_lead_id = str(core_ctx["lead_id"])
+            status = core_ctx
+
+    if not resolved_lead_id:
+        resolved_lead_id = _resolve_lead_id(context, user_data)
+    if resolved_lead_id and status is None:
+        status = await asyncio.to_thread(
+            core_api_bridge.get_nda_status,
+            resolved_lead_id,
+            telegram_user_id=getattr(user, "id", None),
+        )
+
+    if lead_id and status is None:
+        await utils.safe_reply_text(
+            message,
+            "Не удалось открыть соглашение по этому обращению. "
+            "Попробуйте ещё раз или напишите юристу в этом диалоге.",
+            action="nda_bound_lead_unavailable",
+        )
+        return
+
+    context.user_data[LEAD_KEY] = resolved_lead_id
 
     signed = bool(isinstance(status, dict) and status.get("signed"))
     if signed:
@@ -214,7 +240,7 @@ async def open_signing(
         )
         return
 
-    if not lead_id:
+    if not resolved_lead_id:
         # Подписывать нечего: клиент ещё не завёл обращение, и соглашение не
         # к чему привязать. Молча показывать кнопку подписания было бы обманом.
         await utils.safe_reply_text(
@@ -241,11 +267,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     await utils.safe_answer_callback(query, action="nda_callback")
 
-    action = (query.data or "").partition(":")[2]
+    payload = (query.data or "").partition(":")[2]
+    action, _, lead_id = payload.partition(":")
     message = query.message
 
     if action == "open":
-        await open_signing(update, context)
+        await open_signing(update, context, lead_id=lead_id or None)
         return
 
     if action == "cancel":

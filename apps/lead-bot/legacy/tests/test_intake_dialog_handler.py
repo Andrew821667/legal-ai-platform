@@ -113,7 +113,12 @@ def _silence_bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
     monkeypatch.setattr(
         handler.core_api_bridge,
         "get_nda_status",
-        lambda lead_id: overrides.get("nda_status", {"signed": False}),
+        lambda lead_id, **kwargs: overrides.get("nda_status", {"signed": False}),
+    )
+    monkeypatch.setattr(
+        handler.core_api_bridge,
+        "get_nda_context_by_telegram",
+        lambda telegram_user_id: overrides.get("nda_context"),
     )
     monkeypatch.setattr(
         handler.core_api_bridge,
