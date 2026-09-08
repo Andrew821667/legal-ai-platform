@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     contract_ai_bridge_sso_url: str = ""
     contract_ai_bridge_demo_link_url: str = ""
 
+    # Эти значения копируются в неизменяемый экземпляр договора.
+    operator_name: str = "AI Verdict"
+    operator_status: str = ""
+    operator_inn: str = ""
+    operator_details: str = ""
+    privacy_contact_email: str = "privacy@ai-verdict.ru"
+
     # Разбор юридических обращений моделью.
     # Отдельные переменные, а не OPENAI_*: те исторически указывают на другого
     # провайдера (OPENAI_BASE_URL ведёт на api.deepseek.com), и переиспользовать

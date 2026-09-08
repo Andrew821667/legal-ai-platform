@@ -372,6 +372,96 @@ class CoreApiBridge:
             idempotency_key=f"nda-sign:{lead_id}",
         )
 
+    def list_service_agreements(self, telegram_user_id: int) -> list[dict[str, Any]]:
+        result = self._get(f"/api/v1/service-agreements/by-telegram/{telegram_user_id}")
+        return result if isinstance(result, list) else []
+
+    def get_service_agreement(
+        self, agreement_id: str, telegram_user_id: int
+    ) -> dict[str, Any] | None:
+        result = self._get(
+            f"/api/v1/service-agreements/{agreement_id}?telegram_user_id={telegram_user_id}"
+        )
+        return result if isinstance(result, dict) else None
+
+    def mark_service_agreement_viewed(
+        self,
+        agreement_id: str,
+        *,
+        telegram_user_id: int,
+        document_hash: str,
+        message_id: int | None,
+        callback_id: str,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            f"/api/v1/service-agreements/{agreement_id}/viewed",
+            {
+                "telegram_user_id": telegram_user_id,
+                "document_hash": document_hash,
+                "message_id": message_id,
+                "callback_id": callback_id,
+            },
+            idempotency_key=f"agreement-view:{agreement_id}:{message_id or telegram_user_id}",
+        )
+
+    def sign_service_agreement(
+        self,
+        agreement_id: str,
+        *,
+        telegram_user_id: int,
+        telegram_username: str | None,
+        document_hash: str,
+        signer_position: str | None,
+        authority_basis: str | None,
+        callback_id: str,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            f"/api/v1/service-agreements/{agreement_id}/sign",
+            {
+                "telegram_user_id": telegram_user_id,
+                "telegram_username": telegram_username,
+                "document_hash": document_hash,
+                "signer_position": signer_position,
+                "authority_basis": authority_basis,
+                "callback_id": callback_id,
+            },
+            idempotency_key=f"agreement-sign:{agreement_id}:{callback_id}",
+        )
+
+    def decline_service_agreement(
+        self,
+        agreement_id: str,
+        *,
+        telegram_user_id: int,
+        reason: str | None,
+        action_id: str,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            f"/api/v1/service-agreements/{agreement_id}/decline",
+            {
+                "telegram_user_id": telegram_user_id,
+                "reason": reason,
+                "callback_id": action_id,
+            },
+            idempotency_key=f"agreement-decline:{agreement_id}:{action_id}",
+        )
+
+    def add_service_agreement_question(
+        self,
+        agreement_id: str,
+        *,
+        telegram_user_id: int,
+        text: str,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            f"/api/v1/service-agreements/{agreement_id}/questions",
+            {"telegram_user_id": telegram_user_id, "text": text},
+            idempotency_key=_stable_sync_key(
+                f"agreement-question:{agreement_id}:{telegram_user_id}",
+                {"text": text},
+            ),
+        )
+
     def sync_user(self, user_data: dict) -> str | None:
         if not self.enabled:
             return None

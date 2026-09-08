@@ -36,9 +36,12 @@ def test_document_declares_simple_electronic_signature() -> None:
     заранее договориться считать такой способ подписанием.
     """
     text = render_nda_text("ИП Иванов")
+    flat = " ".join(text.split())
 
     assert "простой электронной подписью" in text
     assert "63-ФЗ" in text
+    assert "уникального числового" in text
+    assert "сохранять конфиденциальность средств доступа" in flat
 
 
 def test_document_records_what_is_fixed_on_signing() -> None:

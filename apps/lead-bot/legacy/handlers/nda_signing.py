@@ -278,6 +278,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if action == "begin":
+        if not context.user_data.get(HASH_KEY):
+            document = await asyncio.to_thread(core_api_bridge.get_nda_document)
+            if not isinstance(document, dict) or not document.get("text") or not document.get("hash"):
+                await utils.safe_reply_text(
+                    message,
+                    "Не удалось загрузить текст соглашения. Попробуйте позже.",
+                    reply_markup=intro_markup(),
+                    action="nda_begin_text_failed",
+                )
+                return
+            context.user_data[HASH_KEY] = document["hash"]
+            await utils.safe_reply_text(
+                message,
+                str(document["text"])[:4000],
+                action="nda_text_before_sign",
+            )
         context.user_data[STAGE_KEY] = STAGE_NAME
         context.user_data[DATA_KEY] = {}
         await utils.safe_reply_text(

@@ -38,6 +38,7 @@ class AdminInterface:
         params: dict | None = None,
         payload: dict | None = None,
         admin_scope: bool = False,
+        idempotency_key: str | None = None,
     ):
         if not self.core_api_enabled:
             return None
@@ -53,10 +54,13 @@ class AdminInterface:
         if payload is not None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
+        headers = self._core_admin_headers() if admin_scope else self._core_headers()
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
         request = urllib.request.Request(
             url=f"{self.core_api_url}{path}{query}",
             data=body,
-            headers=self._core_admin_headers() if admin_scope else self._core_headers(),
+            headers=headers,
             method=method.upper(),
         )
         try:
@@ -107,6 +111,98 @@ class AdminInterface:
 
     def _core_get_json(self, path: str, params: dict | None = None):
         return self._core_request_json("GET", path, params=params, admin_scope=False)
+
+    def list_legal_intakes(self, limit: int = 20) -> list[dict]:
+        rows = self._core_request_json(
+            "GET", "/api/v1/legal-intakes", params={"limit": limit}, admin_scope=True
+        )
+        return rows if isinstance(rows, list) else []
+
+    def get_legal_intake(self, intake_id: str) -> dict | None:
+        row = self._core_request_json(
+            "GET", f"/api/v1/legal-intakes/{intake_id}", admin_scope=True
+        )
+        return row if isinstance(row, dict) else None
+
+    def update_legal_intake(self, intake_id: str, payload: dict) -> dict | None:
+        row = self._core_request_json(
+            "PATCH",
+            f"/api/v1/legal-intakes/{intake_id}",
+            payload=payload,
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
+    def get_nda_status(self, lead_id: str) -> dict | None:
+        row = self._core_request_json(
+            "GET", f"/api/v1/nda/status/{lead_id}", admin_scope=True
+        )
+        return row if isinstance(row, dict) else None
+
+    def create_service_agreement(self, payload: dict, idempotency_key: str) -> dict | None:
+        row = self._core_request_json(
+            "POST",
+            "/api/v1/service-agreements",
+            payload=payload,
+            admin_scope=True,
+            idempotency_key=idempotency_key,
+        )
+        return row if isinstance(row, dict) else None
+
+    def get_service_agreement(self, agreement_id: str) -> dict | None:
+        row = self._core_request_json(
+            "GET", f"/api/v1/service-agreements/{agreement_id}", admin_scope=True
+        )
+        return row if isinstance(row, dict) else None
+
+    def list_service_agreements_for_intake(self, intake_id: str) -> list[dict]:
+        rows = self._core_request_json(
+            "GET", f"/api/v1/service-agreements/by-intake/{intake_id}", admin_scope=True
+        )
+        return rows if isinstance(rows, list) else []
+
+    def list_service_agreement_messages(self, agreement_id: str) -> list[dict]:
+        rows = self._core_request_json(
+            "GET", f"/api/v1/service-agreements/{agreement_id}/messages", admin_scope=True
+        )
+        return rows if isinstance(rows, list) else []
+
+    def mark_service_agreement_sent(
+        self,
+        agreement_id: str,
+        *,
+        chat_id: int,
+        message_id: int,
+        telegram_user_id: int,
+        callback_id: str,
+    ) -> dict | None:
+        row = self._core_request_json(
+            "POST",
+            f"/api/v1/service-agreements/{agreement_id}/sent",
+            payload={
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "telegram_user_id": telegram_user_id,
+                "callback_id": callback_id,
+            },
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
+    def add_service_agreement_reply(
+        self,
+        agreement_id: str,
+        *,
+        telegram_user_id: int,
+        text: str,
+    ) -> dict | None:
+        row = self._core_request_json(
+            "POST",
+            f"/api/v1/service-agreements/{agreement_id}/replies",
+            payload={"telegram_user_id": telegram_user_id, "text": text},
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
 
     def _map_core_lead(self, row: dict) -> dict:
         return {

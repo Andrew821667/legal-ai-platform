@@ -335,6 +335,7 @@ class NdaSignature(Base):
     # Что подписано: версия и хеш текста, который клиент видел на экране.
     document_version: Mapped[str] = mapped_column(String(32), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    document_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Откуда пришло подписание — на случай появления других каналов.
     channel: Mapped[str] = mapped_column(String(32), nullable=False, default="telegram_bot")
 
@@ -342,6 +343,120 @@ class NdaSignature(Base):
         Index("ix_nda_signatures_lead", "lead_id"),
         Index("ix_nda_signatures_signed_at", "signed_at"),
     )
+
+
+class ServiceAgreementStatus(str, enum.Enum):
+    draft = "draft"
+    sent = "sent"
+    viewed = "viewed"
+    signed = "signed"
+    declined = "declined"
+    expired = "expired"
+    superseded = "superseded"
+    cancelled = "cancelled"
+
+
+class ServiceAgreementMessageRole(str, enum.Enum):
+    client = "client"
+    lawyer = "lawyer"
+
+
+class ServiceAgreement(Base):
+    """Неизменяемая редакция договора юридических услуг."""
+
+    __tablename__ = "service_agreements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agreement_number: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    intake_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("legal_intakes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    status: Mapped[ServiceAgreementStatus] = mapped_column(
+        Enum(ServiceAgreementStatus, name="service_agreement_status_enum"),
+        nullable=False,
+        default=ServiceAgreementStatus.draft,
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("service_agreements.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    scope_text: Mapped[str] = mapped_column(Text, nullable=False)
+    exclusions_text: Mapped[str] = mapped_column(Text, nullable=False)
+    schedule_text: Mapped[str] = mapped_column(Text, nullable=False)
+    price_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    payment_terms: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prepared_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    operator_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    client_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    document_text: Mapped[str] = mapped_column(Text, nullable=False)
+    document_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    client_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    signer_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    signer_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    signer_position: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    authority_basis: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sent_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sent_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sent_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sent_callback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    viewed_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    viewed_callback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signed_callback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    declined_callback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    decline_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
+    __table_args__ = (
+        Index("ix_service_agreements_lead", "lead_id", "created_at"),
+        Index("ix_service_agreements_intake", "intake_id", "created_at"),
+        Index("ix_service_agreements_client_tg", "client_telegram_user_id", "created_at"),
+        Index("ix_service_agreements_status", "status", "created_at"),
+    )
+
+
+class ServiceAgreementMessage(Base):
+    """Вопрос клиента или ответ юриста по конкретной редакции."""
+
+    __tablename__ = "service_agreement_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agreement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("service_agreements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    role: Mapped[ServiceAgreementMessageRole] = mapped_column(
+        Enum(ServiceAgreementMessageRole, name="service_agreement_message_role_enum"),
+        nullable=False,
+    )
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (Index("ix_service_agreement_messages_agreement", "agreement_id", "created_at"),)
 
 
 class LegalIntake(Base):

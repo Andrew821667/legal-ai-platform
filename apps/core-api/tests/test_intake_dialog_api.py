@@ -380,7 +380,11 @@ def test_signer_details_are_returned_in_status() -> None:
         finally:
             db.close()
 
-        client.post(
+        document = client.get(
+            "/api/v1/nda/document",
+            headers={"X-API-Key": bot_key},
+        ).json()
+        signed = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
             json={
@@ -388,8 +392,10 @@ def test_signer_details_are_returned_in_status() -> None:
                 "signer_full_name": "Петров Пётр Петрович",
                 "signer_contact": "petr@example.ru",
                 "signer_org": 'ООО "Ромашка", ИНН 7701234567',
+                "document_hash": document["hash"],
             },
         )
+        assert signed.status_code == 201, signed.text
         status = client.get(
             f"/api/v1/nda/status/{lead_uuid}", headers={"X-API-Key": bot_key}
         ).json()

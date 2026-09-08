@@ -248,6 +248,7 @@ class LegalIntakeOut(BaseModel):
     lead_contact: str | None
     lead_company: str | None
     lead_source: LeadSource
+    telegram_user_id: int | None = None
     # Состояние первого обращения к клиенту.
     #
     # Эти поля здесь потому, что без них сбой оказался невидимым: задача
