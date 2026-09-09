@@ -19,7 +19,7 @@ from core_api.models import (
 )
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 
 def _key(scope: Scope, name: str) -> str:
@@ -138,6 +138,7 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
         )
         assert sent.status_code == 200
         assert sent.json()["status"] == "sent"
+        assert sent.json()["client_details_complete"] is False
         visible = client.get(
             f"/api/v1/service-agreements/by-telegram/{telegram_id}",
             headers={"X-API-Key": bot_key},
@@ -166,7 +167,7 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
         )
         assert early_sign.status_code == 409
 
-        viewed = client.post(
+        early_view = client.post(
             f"/api/v1/service-agreements/{agreement_id}/viewed",
             headers={"X-API-Key": bot_key},
             json={
@@ -176,8 +177,7 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
                 "callback_id": "client-view-1",
             },
         )
-        assert viewed.status_code == 200
-        assert viewed.json()["status"] == "viewed"
+        assert early_view.status_code == 409
 
         question = client.post(
             f"/api/v1/service-agreements/{agreement_id}/questions",
@@ -185,6 +185,61 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
             json={"telegram_user_id": telegram_id, "text": "Можно оплатить двумя частями?"},
         )
         assert question.status_code == 201
+
+        original_id = agreement_id
+        completed = client.post(
+            f"/api/v1/service-agreements/{original_id}/client-details",
+            headers={
+                "X-API-Key": bot_key,
+                "Idempotency-Key": f"agreement-details-{uuid4().hex}",
+            },
+            json={
+                "telegram_user_id": telegram_id,
+                "client_type": "person",
+                "full_name": "Петров Пётр Петрович",
+                "contact": "+7 900 000-00-00",
+                "address": "г. Москва, ул. Тестовая, д. 1",
+                "identity_document": "паспорт 00 00 000000, выдан 01.01.2020",
+            },
+        )
+        assert completed.status_code == 201
+        agreement = completed.json()
+        agreement_id = agreement["id"]
+        assert agreement_id != original_id
+        assert agreement["revision"] == 2
+        assert agreement["status"] == "sent"
+        assert agreement["client_details_complete"] is True
+        assert "паспорт 00 00 000000" in agreement["text"]
+
+        visible = client.get(
+            f"/api/v1/service-agreements/by-telegram/{telegram_id}",
+            headers={"X-API-Key": bot_key},
+        )
+        assert [row["id"] for row in visible.json()] == [agreement_id]
+        revisions = client.get(
+            f"/api/v1/service-agreements/by-intake/{intake_id}",
+            headers={"X-API-Key": admin_key},
+        )
+        assert [row["status"] for row in revisions.json()] == ["sent", "superseded"]
+        carried_messages = client.get(
+            f"/api/v1/service-agreements/{agreement_id}/messages",
+            headers={"X-API-Key": admin_key},
+        )
+        assert [row["text"] for row in carried_messages.json()] == ["Можно оплатить двумя частями?"]
+
+        viewed = client.post(
+            f"/api/v1/service-agreements/{agreement_id}/viewed",
+            headers={"X-API-Key": bot_key},
+            json={
+                "telegram_user_id": telegram_id,
+                "document_hash": agreement["hash"],
+                "message_id": 103,
+                "callback_id": "client-view-2",
+            },
+        )
+        assert viewed.status_code == 200
+        assert viewed.json()["status"] == "viewed"
+
         reply = client.post(
             f"/api/v1/service-agreements/{agreement_id}/replies",
             headers={"X-API-Key": admin_key},
@@ -213,13 +268,21 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
     finally:
         db = SessionLocal()
         try:
-            if agreement_id:
+            if lead_id:
+                agreement_ids = list(
+                    db.execute(
+                        select(ServiceAgreement.id).where(ServiceAgreement.lead_id == lead_id)
+                    ).scalars()
+                )
+            else:
+                agreement_ids = []
+            if agreement_ids:
                 db.execute(
                     delete(ServiceAgreementMessage).where(
-                        ServiceAgreementMessage.agreement_id == agreement_id
+                        ServiceAgreementMessage.agreement_id.in_(agreement_ids)
                     )
                 )
-                db.execute(delete(ServiceAgreement).where(ServiceAgreement.id == agreement_id))
+                db.execute(delete(ServiceAgreement).where(ServiceAgreement.id.in_(agreement_ids)))
             db.execute(delete(NdaSignature).where(NdaSignature.lead_id == lead_id))
             db.execute(delete(LegalIntake).where(LegalIntake.id == intake_id))
             db.execute(delete(Lead).where(Lead.id == lead_id))

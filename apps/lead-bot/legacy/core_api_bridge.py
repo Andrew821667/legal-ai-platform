@@ -417,6 +417,20 @@ class CoreApiBridge:
             idempotency_key=f"agreement-view:{agreement_id}:{message_id or telegram_user_id}",
         )
 
+    def complete_service_agreement_client_details(
+        self,
+        agreement_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        return self._post(
+            f"/api/v1/service-agreements/{agreement_id}/client-details",
+            payload,
+            idempotency_key=_stable_sync_key(
+                f"agreement-client-details:{agreement_id}",
+                payload,
+            ),
+        )
+
     def sign_service_agreement(
         self,
         agreement_id: str,
