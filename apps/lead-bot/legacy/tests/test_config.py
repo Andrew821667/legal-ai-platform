@@ -1,7 +1,7 @@
 """
 Тесты для config.py - проверка корректности конфигурации
 """
-from config import default_ai_model_for_base_url, get_config
+from config import Config, default_ai_model_for_base_url, get_config
 
 # Создаем экземпляр конфигурации для тестов
 config = get_config()
@@ -40,6 +40,12 @@ def test_bot_behavior():
     assert config.PENDING_LEADS_IDLE_MINUTES >= 1, "Idle timeout pending leads должен быть >= 1 мин"
     assert config.PENDING_LEADS_JOB_MAX_BATCH >= 1, "Batch pending leads должен быть >= 1"
     assert config.PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS >= 2.0, "Timeout notify pending leads должен быть >= 2 сек"
+
+
+def test_telegram_proxy_is_read_from_environment(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_API_PROXY_URL", "http://192.168.64.1:10811")
+
+    assert Config().TELEGRAM_API_PROXY_URL == "http://192.168.64.1:10811"
 
 
 def test_log_level():

@@ -982,7 +982,7 @@ async def cleanup_conversations_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Error in conversation retention job: %s", error, exc_info=True)
 
 
-def build_application() -> Application:
+def _telegram_request(*, read_timeout: float) -> HTTPXRequest:
     httpx_kwargs: dict[str, Any] | None = None
     if config.TELEGRAM_FORCE_IPV4:
         # Binding the client to an IPv4 local address nudges httpx/httpcore to use
@@ -992,20 +992,19 @@ def build_application() -> Application:
             "transport": httpx.AsyncHTTPTransport(local_address="0.0.0.0"),
         }
 
-    request = HTTPXRequest(
+    return HTTPXRequest(
         connect_timeout=8.0,
-        read_timeout=20.0,
+        read_timeout=read_timeout,
         write_timeout=20.0,
         pool_timeout=3.0,
+        proxy=config.TELEGRAM_API_PROXY_URL or None,
         httpx_kwargs=httpx_kwargs,
     )
-    get_updates_request = HTTPXRequest(
-        connect_timeout=8.0,
-        read_timeout=45.0,
-        write_timeout=20.0,
-        pool_timeout=3.0,
-        httpx_kwargs=httpx_kwargs,
-    )
+
+
+def build_application() -> Application:
+    request = _telegram_request(read_timeout=20.0)
+    get_updates_request = _telegram_request(read_timeout=45.0)
 
     application = (
         Application.builder()
