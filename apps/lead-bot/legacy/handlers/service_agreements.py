@@ -31,6 +31,31 @@ _ADMIN_FIELDS = (
     ("payment_terms", "Укажите порядок и сроки оплаты."),
 )
 
+_CLIENT_FIELDS = {
+    "person": (
+        ("full_name", "Укажите ваши фамилию, имя и отчество полностью."),
+        ("contact", "Укажите телефон или email для связи по договору."),
+        ("address", "Укажите адрес регистрации."),
+        (
+            "identity_document",
+            "Укажите вид документа, серию, номер, кем и когда он выдан.",
+        ),
+    ),
+    "organization": (
+        ("org_name", "Укажите полное наименование организации или ИП."),
+        ("inn", "Укажите ИНН: 10 или 12 цифр."),
+        ("ogrn", "Укажите ОГРН или ОГРНИП: 13 или 15 цифр."),
+        ("address", "Укажите юридический адрес."),
+        ("full_name", "Укажите ФИО представителя полностью."),
+        ("position", "Укажите должность представителя."),
+        (
+            "authority_basis",
+            "Укажите основание полномочий: например, устав или доверенность с датой и номером.",
+        ),
+        ("contact", "Укажите телефон или email для связи по договору."),
+    ),
+}
+
 _STATUS = {
     "draft": "черновик",
     "sent": "направлен",
@@ -48,6 +73,8 @@ _CONFLICT = {
     "potential": "нужна дополнительная проверка",
     "conflict": "обнаружен конфликт",
 }
+
+_NO_AGREEMENT_NOTE = "Обращение закрыто без заключения договора/соглашения."
 
 
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -68,17 +95,74 @@ def _doc_markup(agreement_id: str) -> InlineKeyboardMarkup:
     )
 
 
+def _proposal_markup(agreement_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Заполнить данные и открыть проект",
+                    callback_data=f"sa_c:open:{agreement_id}",
+                )
+            ],
+            [InlineKeyboardButton("Задать вопрос", callback_data=f"sa_c:q:{agreement_id}")],
+            [InlineKeyboardButton("Отказаться", callback_data=f"sa_c:no:{agreement_id}")],
+        ]
+    )
+
+
+def _client_type_markup(agreement_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Физическое лицо",
+                    callback_data=f"sa_c:person:{agreement_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Организация или ИП",
+                    callback_data=f"sa_c:organization:{agreement_id}",
+                )
+            ],
+            [InlineKeyboardButton("Задать вопрос", callback_data=f"sa_c:q:{agreement_id}")],
+        ]
+    )
+
+
 def _admin_back() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("К обращениям", callback_data="sa_a:menu")]])
 
 
 def _summary(item: dict) -> str:
+    details = "заполнены" if item.get("client_details_complete") else "нужно заполнить"
     return (
         f"Договор № {item.get('agreement_number') or 'без номера'}\n"
         f"Статус: {_STATUS.get(item.get('status'), item.get('status') or 'неизвестен')}\n"
         f"Предмет: {item.get('subject') or 'не указан'}\n"
         f"Стоимость: {item.get('price_text') or 'не указана'}\n"
-        f"Оплата: {item.get('payment_terms') or 'не указана'}"
+        f"Оплата: {item.get('payment_terms') or 'не указана'}\n"
+        f"Данные клиента: {details}"
+    )
+
+
+def _client_value_error(field: str, value: str) -> str | None:
+    if field == "inn" and (not value.isdigit() or len(value) not in {10, 12}):
+        return "ИНН должен содержать 10 или 12 цифр. Введите его ещё раз."
+    if field == "ogrn" and (not value.isdigit() or len(value) not in {13, 15}):
+        return "ОГРН или ОГРНИП должен содержать 13 или 15 цифр. Введите его ещё раз."
+    minimum = 5 if field in {"full_name", "address", "identity_document"} else 3
+    if len(value) < minimum:
+        return "Значение слишком короткое. Введите данные полностью."
+    return None
+
+
+async def _ask_client_type(message, agreement_id: str) -> None:
+    await utils.safe_reply_text(
+        message,
+        "Перед подписанием заполните реквизиты стороны договора. Выберите, от чьего имени вы действуете.",
+        reply_markup=_client_type_markup(agreement_id),
+        action="agreement_client_type_prompt",
     )
 
 
@@ -179,6 +263,8 @@ async def _show_intake(message, intake_id: str) -> None:
     )
     if latest:
         text += f"\n\nПоследний договор:\n{_summary(latest)}"
+    elif _NO_AGREEMENT_NOTE in str(intake.get("internal_note") or ""):
+        text += "\n\nИтог: без заключения договора/соглашения."
     if messages:
         text += "\n\nПереписка по договору:"
         for entry in messages[-6:]:
@@ -214,6 +300,15 @@ async def _show_intake(message, intake_id: str) -> None:
     if latest and latest.get("client_telegram_user_id"):
         rows.append(
             [InlineKeyboardButton("Ответить клиенту", callback_data=f"sa_a:reply:{latest['id']}")]
+        )
+    if not latest and intake.get("status") != "closed":
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "Без заключения договора/соглашения",
+                    callback_data=f"sa_a:none:{intake_id}",
+                )
+            ]
         )
     rows.append([InlineKeyboardButton("К обращениям", callback_data="sa_a:menu")])
     await utils.safe_reply_text(
@@ -333,6 +428,110 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         return True
 
     agreement_id = str(data.get("agreement_id") or "")
+    if state == "client_details":
+        client_type = str(data.get("client_type") or "")
+        fields = _CLIENT_FIELDS.get(client_type)
+        if not fields:
+            _clear(context)
+            return False
+        idx = int(data.get("field_index") or 0)
+        field = fields[idx][0]
+        if error := _client_value_error(field, value):
+            await utils.safe_reply_text(
+                message,
+                error,
+                action="agreement_client_details_invalid",
+            )
+            return True
+        data[field] = value
+        idx += 1
+        data["field_index"] = idx
+        context.user_data[DATA_KEY] = data
+        if idx < len(fields):
+            await utils.safe_reply_text(
+                message,
+                fields[idx][1],
+                action="agreement_client_details_step",
+            )
+            return True
+
+        payload = {
+            key: data.get(key)
+            for key in (
+                "client_type",
+                "full_name",
+                "contact",
+                "address",
+                "identity_document",
+                "org_name",
+                "inn",
+                "ogrn",
+                "position",
+                "authority_basis",
+            )
+            if data.get(key) is not None
+        }
+        payload["telegram_user_id"] = user.id
+        revised = await asyncio.to_thread(
+            core_api_bridge.complete_service_agreement_client_details,
+            agreement_id,
+            payload,
+        )
+        if not revised:
+            await utils.safe_reply_text(
+                message,
+                "Данные не удалось сохранить. Проверьте их и начните заполнение ещё раз из раздела договоров.",
+                action="agreement_client_details_failed",
+            )
+            _clear(context)
+            return True
+
+        revised_id = str(revised["id"])
+        message_id = await _send_document(
+            context.bot,
+            message.chat_id,
+            revised,
+            f"Точная редакция договора № {revised['agreement_number']}",
+        )
+        viewed = await asyncio.to_thread(
+            core_api_bridge.mark_service_agreement_viewed,
+            revised_id,
+            telegram_user_id=user.id,
+            document_hash=str(revised["hash"]),
+            message_id=message_id,
+            callback_id=f"client-details:{message_id or user.id}",
+        )
+        _clear(context)
+        if not viewed:
+            await utils.safe_reply_text(
+                message,
+                "Реквизиты сохранены, но просмотр договора не удалось зафиксировать. Откройте договор ещё раз в разделе документов.",
+                action="agreement_client_details_view_failed",
+            )
+            return True
+        await utils.safe_reply_text(
+            message,
+            _summary(viewed)
+            + "\n\nПроверьте реквизиты и условия в файле. После этого договор можно подписать.",
+            reply_markup=_doc_markup(revised_id),
+            action="agreement_client_details_saved",
+        )
+        await _notify_admin(
+            context.bot,
+            f"Клиент заполнил реквизиты по договору № {revised['agreement_number']}.",
+            InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Открыть обращение",
+                            callback_data=f"sa_a:i:{revised['intake_id']}",
+                        )
+                    ]
+                ]
+            ),
+        )
+        return True
+
     if state == "client_question":
         saved = await asyncio.to_thread(
             core_api_bridge.add_service_agreement_question,
@@ -353,7 +552,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             context.bot,
             f"Вопрос клиента по договору № {(item or {}).get('agreement_number', agreement_id)}:\n\n{value}",
             InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Ответить клиенту", callback_data=f"sa_a:reply:{agreement_id}")]]
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Ответить клиенту", callback_data=f"sa_a:reply:{agreement_id}"
+                        )
+                    ]
+                ]
             ),
         )
         await utils.safe_reply_text(
@@ -414,10 +619,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             )
             return True
         try:
+            markup = (
+                _doc_markup(agreement_id)
+                if item.get("client_details_complete")
+                else _proposal_markup(agreement_id)
+            )
             await context.bot.send_message(
                 chat_id=target,
                 text=f"Ответ юриста по договору № {item.get('agreement_number')}:\n\n{value}",
-                reply_markup=_doc_markup(agreement_id),
+                reply_markup=markup,
             )
         except TelegramError:
             await utils.safe_reply_text(
@@ -505,6 +715,76 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
             action="agreement_nda_requested",
         )
         return
+    if action == "none" and len(parts) == 3:
+        await utils.safe_reply_text(
+            query.message,
+            "Закрыть обращение без заключения договора/соглашения?",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Подтвердить",
+                            callback_data=f"sa_a:noneok:{parts[2]}",
+                        )
+                    ],
+                    [InlineKeyboardButton("Назад", callback_data=f"sa_a:i:{parts[2]}")],
+                ]
+            ),
+            action="agreement_without_confirmation",
+        )
+        return
+    if action == "noneok" and len(parts) == 3:
+        intake_id = parts[2]
+        intake, agreements = await asyncio.gather(
+            asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, intake_id),
+            asyncio.to_thread(
+                admin_interface.admin_interface.list_service_agreements_for_intake,
+                intake_id,
+            ),
+        )
+        if not intake:
+            await utils.safe_reply_text(
+                query.message,
+                "Обращение не найдено.",
+                reply_markup=_admin_back(),
+                action="agreement_without_intake_missing",
+            )
+            return
+        if agreements:
+            await utils.safe_reply_text(
+                query.message,
+                "По обращению уже создан договор. Сначала завершите работу с ним.",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "К обращению",
+                                callback_data=f"sa_a:i:{intake_id}",
+                            )
+                        ]
+                    ]
+                ),
+                action="agreement_without_existing_agreement",
+            )
+            return
+        note = str(intake.get("internal_note") or "").strip()
+        if _NO_AGREEMENT_NOTE not in note:
+            note = "\n".join(part for part in (note, _NO_AGREEMENT_NOTE) if part)
+        updated = await asyncio.to_thread(
+            admin_interface.admin_interface.update_legal_intake,
+            intake_id,
+            {"status": "closed", "internal_note": note},
+        )
+        if not updated:
+            await utils.safe_reply_text(
+                query.message,
+                "Не удалось закрыть обращение.",
+                reply_markup=_admin_back(),
+                action="agreement_without_update_failed",
+            )
+            return
+        await _show_intake(query.message, intake_id)
+        return
     if action == "new" and len(parts) == 3:
         intake = await asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, parts[2])
         if not intake or intake.get("conflict_status") != "clear":
@@ -568,11 +848,11 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         sent = await context.bot.send_message(
             chat_id=target,
             text=(
-                "Юрист подготовил условия работы.\n\n"
+                "Юрист подготовил проект договора.\n\n"
                 + _summary(item)
-                + "\n\nОткройте точный текст перед подписанием."
+                + "\n\nЗаполните свои реквизиты. После этого бот сформирует точную редакцию для проверки и подписания."
             ),
-            reply_markup=_doc_markup(str(item["id"])),
+            reply_markup=_proposal_markup(str(item["id"])),
         )
         recorded = await asyncio.to_thread(
             admin_interface.admin_interface.mark_service_agreement_sent,
@@ -595,7 +875,7 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
             return
         await utils.safe_reply_text(
             query.message,
-            "Договор отправлен клиенту.",
+            "Проект договора отправлен клиенту для заполнения реквизитов.",
             reply_markup=_admin_back(),
             action="agreement_sent",
         )
@@ -661,6 +941,9 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
                 query.message, _summary(item), action="agreement_client_closed"
             )
             return
+        if item.get("status") != "signed" and not item.get("client_details_complete"):
+            await _ask_client_type(query.message, agreement_id)
+            return
         message_id = await _send_document(
             context.bot,
             query.message.chat_id,
@@ -690,6 +973,26 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
             action="agreement_opened",
         )
         return
+    if action in _CLIENT_FIELDS:
+        if item.get("status") != "sent" or item.get("client_details_complete"):
+            await utils.safe_reply_text(
+                query.message,
+                "Эта редакция уже заполнена или недоступна. Откройте актуальный договор в разделе документов.",
+                action="agreement_client_details_unavailable",
+            )
+            return
+        context.user_data[STATE_KEY] = "client_details"
+        context.user_data[DATA_KEY] = {
+            "agreement_id": agreement_id,
+            "client_type": action,
+            "field_index": 0,
+        }
+        await utils.safe_reply_text(
+            query.message,
+            _CLIENT_FIELDS[action][0][1] + "\n\nДля отмены напишите /cancel.",
+            action="agreement_client_details_start",
+        )
+        return
     if action == "q":
         context.user_data[STATE_KEY] = "client_question"
         context.user_data[DATA_KEY] = {"agreement_id": agreement_id}
@@ -700,6 +1003,14 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
     if action == "sign":
+        if item.get("status") == "signed":
+            await utils.safe_reply_text(
+                query.message, "Этот договор уже подписан.", action="agreement_already_signed"
+            )
+            return
+        if not item.get("client_details_complete"):
+            await _ask_client_type(query.message, agreement_id)
+            return
         if item.get("status") == "sent":
             await utils.safe_reply_text(
                 query.message,
@@ -708,14 +1019,16 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
                 action="agreement_open_required",
             )
             return
-        if item.get("status") == "signed":
-            await utils.safe_reply_text(
-                query.message, "Этот договор уже подписан.", action="agreement_already_signed"
-            )
-            return
-        data = {"agreement_id": agreement_id, "document_hash": item.get("hash")}
+        data = {
+            "agreement_id": agreement_id,
+            "document_hash": item.get("hash"),
+            "signer_position": item.get("client_position"),
+            "authority_basis": item.get("client_authority_basis"),
+        }
         context.user_data[DATA_KEY] = data
-        if item.get("client_org"):
+        if item.get("client_org") and not (
+            data.get("signer_position") and data.get("authority_basis")
+        ):
             context.user_data[STATE_KEY] = "client_position"
             await utils.safe_reply_text(
                 query.message,

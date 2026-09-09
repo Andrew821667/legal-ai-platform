@@ -15,6 +15,7 @@ def _render(**changes: str) -> str:
         "operator_details": "Москва, example@example.ru",
         "client_name": "Петров Пётр Петрович",
         "client_org": None,
+        "client_details": "паспорт 00 00 000000; адрес: г. Москва",
         "subject": "Правовой анализ договора поставки",
         "scope": "Изучить договор и подготовить письменные замечания",
         "exclusions": "Судебное представительство",
@@ -36,6 +37,7 @@ def test_document_contains_material_terms_and_pep_rules() -> None:
         "уникальным идентификатором",
         "подписанный указанным способом обеими сторонами",
         "административной версии Telegram-бота",
+        "паспорт 00 00 000000",
         AGREEMENT_VERSION,
     ):
         assert value in text
@@ -46,4 +48,6 @@ def test_exact_terms_change_document_hash() -> None:
 
 
 def test_company_is_named_as_client() -> None:
-    assert "от имени ООО «Пример»" in _render(client_org="ООО «Пример»")
+    assert "Заказчик: ООО «Пример», в лице Петров Пётр Петрович" in _render(
+        client_org="ООО «Пример»"
+    )

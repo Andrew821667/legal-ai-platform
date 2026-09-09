@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -78,6 +79,50 @@ class AgreementDecline(BaseModel):
     callback_id: str = Field(min_length=1, max_length=255)
 
 
+class AgreementClientDetails(BaseModel):
+    telegram_user_id: int = Field(gt=0)
+    client_type: Literal["person", "organization"]
+    full_name: str = Field(min_length=5, max_length=255)
+    contact: str = Field(min_length=3, max_length=255)
+    address: str = Field(min_length=5, max_length=500)
+    identity_document: str | None = Field(default=None, min_length=5, max_length=500)
+    org_name: str | None = Field(default=None, min_length=3, max_length=500)
+    inn: str | None = Field(default=None, max_length=12)
+    ogrn: str | None = Field(default=None, max_length=15)
+    position: str | None = Field(default=None, min_length=2, max_length=255)
+    authority_basis: str | None = Field(default=None, min_length=2, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_party_details(self) -> AgreementClientDetails:
+        fields = (
+            "full_name",
+            "contact",
+            "address",
+            "identity_document",
+            "org_name",
+            "inn",
+            "ogrn",
+            "position",
+            "authority_basis",
+        )
+        for name in fields:
+            if isinstance(value := getattr(self, name), str):
+                setattr(self, name, value.strip())
+        if not all((self.full_name, self.contact, self.address)):
+            raise ValueError("client details are incomplete")
+        if self.client_type == "person" and not self.identity_document:
+            raise ValueError("identity_document is required for a person")
+        if self.client_type == "organization":
+            required = (self.org_name, self.inn, self.ogrn, self.position, self.authority_basis)
+            if not all(required):
+                raise ValueError("organization details are incomplete")
+            if not self.inn.isdigit() or len(self.inn) not in {10, 12}:
+                raise ValueError("inn must contain 10 or 12 digits")
+            if not self.ogrn.isdigit() or len(self.ogrn) not in {13, 15}:
+                raise ValueError("ogrn must contain 13 or 15 digits")
+        return self
+
+
 class AgreementMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     telegram_user_id: int | None = None
@@ -123,6 +168,28 @@ def _assert_client(item: ServiceAgreement, telegram_user_id: int) -> None:
         raise HTTPException(status_code=403, detail="Agreement belongs to another client")
 
 
+def _client_details_text(client: dict) -> str:
+    if client.get("client_type") == "organization":
+        return "; ".join(
+            (
+                f"ИНН {client['inn']}",
+                f"ОГРН {client['ogrn']}",
+                f"адрес: {client['address']}",
+                f"представитель: {client['full_name']}",
+                f"должность: {client['position']}",
+                f"основание полномочий: {client['authority_basis']}",
+                f"контакт: {client['contact']}",
+            )
+        )
+    return "; ".join(
+        (
+            f"документ, удостоверяющий личность: {client['identity_document']}",
+            f"адрес: {client['address']}",
+            f"контакт: {client['contact']}",
+        )
+    )
+
+
 def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
     client = item.client_snapshot or {}
     data = {
@@ -148,6 +215,10 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "client_name": client.get("full_name"),
         "client_contact": client.get("contact"),
         "client_org": client.get("org"),
+        "client_type": client.get("client_type"),
+        "client_details_complete": bool(client.get("details_complete")),
+        "client_position": client.get("position"),
+        "client_authority_basis": client.get("authority_basis"),
         "signer_position": item.signer_position,
         "authority_basis": item.authority_basis,
         "version": item.document_version,
@@ -253,6 +324,7 @@ def create_agreement(
         "full_name": nda.signer_full_name or lead.name or "Заказчик",
         "contact": nda.signer_contact or lead.contact or "",
         "org": nda.signer_org,
+        "details_complete": False,
         "nda_id": str(nda.id),
         "nda_version": nda.document_version,
     }
@@ -269,6 +341,7 @@ def create_agreement(
         operator_details=operator["details"],
         client_name=client["full_name"],
         client_org=client["org"],
+        client_details="",
         subject=payload.subject,
         scope=payload.scope_text,
         exclusions=payload.exclusions_text,
@@ -345,7 +418,11 @@ def list_for_client(
         ServiceAgreement.client_telegram_user_id == telegram_user_id
     )
     if identity.scope == Scope.bot:
-        stmt = stmt.where(ServiceAgreement.status != ServiceAgreementStatus.draft)
+        stmt = stmt.where(
+            ServiceAgreement.status.not_in(
+                {ServiceAgreementStatus.draft, ServiceAgreementStatus.superseded}
+            )
+        )
     rows = db.execute(stmt.order_by(ServiceAgreement.created_at.desc()).limit(20)).scalars().all()
     return [_payload(row) for row in rows]
 
@@ -403,6 +480,8 @@ def mark_viewed(
     _assert_client(item, payload.telegram_user_id)
     if item.status not in {ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed}:
         raise HTTPException(status_code=409, detail="Agreement is not available for viewing")
+    if not (item.client_snapshot or {}).get("details_complete"):
+        raise HTTPException(status_code=409, detail="Client details must be completed first")
     if payload.document_hash.lower() != item.document_hash:
         raise HTTPException(status_code=409, detail="Document hash mismatch")
     item.status = ServiceAgreementStatus.viewed
@@ -412,6 +491,134 @@ def mark_viewed(
     _audit(db, identity, item, "service_agreement.viewed")
     db.commit()
     return _payload(item)
+
+
+@router.post("/{agreement_id}/client-details", status_code=status.HTTP_201_CREATED)
+def complete_client_details(
+    agreement_id: uuid.UUID,
+    payload: AgreementClientDetails,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot)),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict:
+    """Creates the signable revision from details entered by the client."""
+    namespace = "service_agreements.client_details"
+    if idempotency_key and (cached := cached_response(db, idempotency_key, namespace=namespace)):
+        code, body = cached
+        return JSONResponse(status_code=code, content=body)
+
+    item = _get(db, agreement_id, lock=True)
+    _assert_client(item, payload.telegram_user_id)
+    if item.status != ServiceAgreementStatus.sent:
+        raise HTTPException(status_code=409, detail="Agreement draft is not awaiting details")
+    if (item.client_snapshot or {}).get("details_complete"):
+        raise HTTPException(status_code=409, detail="Client details are already completed")
+
+    latest_id = db.execute(
+        select(ServiceAgreement.id)
+        .where(ServiceAgreement.intake_id == item.intake_id)
+        .order_by(ServiceAgreement.revision.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if latest_id != item.id:
+        raise HTTPException(status_code=409, detail="A newer agreement revision already exists")
+
+    previous_client = item.client_snapshot or {}
+    client = {
+        "client_type": payload.client_type,
+        "full_name": payload.full_name,
+        "contact": payload.contact,
+        "address": payload.address,
+        "identity_document": payload.identity_document,
+        "org": payload.org_name if payload.client_type == "organization" else None,
+        "inn": payload.inn,
+        "ogrn": payload.ogrn,
+        "position": payload.position,
+        "authority_basis": payload.authority_basis,
+        "details_complete": True,
+        "nda_id": previous_client.get("nda_id"),
+        "nda_version": previous_client.get("nda_version"),
+    }
+    created = _now()
+    expires = item.expires_at or (created + timedelta(days=7))
+    revision = item.revision + 1
+    number = item.agreement_number.split("-R", 1)[0]
+    display_number = f"{number}-R{revision}"
+    operator = item.operator_snapshot or {}
+    text = render_agreement_text(
+        number=display_number,
+        revision=revision,
+        created_date=created.strftime("%d.%m.%Y"),
+        expires_date=expires.strftime("%d.%m.%Y"),
+        operator_name=str(operator.get("name") or ""),
+        operator_status=str(operator.get("status") or ""),
+        operator_inn=str(operator.get("inn") or ""),
+        operator_details=str(operator.get("details") or ""),
+        client_name=client["full_name"],
+        client_org=client["org"],
+        client_details=_client_details_text(client),
+        subject=item.subject,
+        scope=item.scope_text,
+        exclusions=item.exclusions_text,
+        schedule=item.schedule_text,
+        price=item.price_text,
+        payment_terms=item.payment_terms,
+    )
+    item.status = ServiceAgreementStatus.superseded
+    revised = ServiceAgreement(
+        agreement_number=display_number,
+        lead_id=item.lead_id,
+        intake_id=item.intake_id,
+        revision=revision,
+        supersedes_id=item.id,
+        subject=item.subject,
+        scope_text=item.scope_text,
+        exclusions_text=item.exclusions_text,
+        schedule_text=item.schedule_text,
+        price_text=item.price_text,
+        payment_terms=item.payment_terms,
+        created_by=item.created_by,
+        prepared_by_telegram_user_id=item.prepared_by_telegram_user_id,
+        operator_snapshot=operator,
+        client_snapshot=client,
+        document_text=text,
+        document_version=AGREEMENT_VERSION,
+        document_hash=document_hash(text),
+        expires_at=expires,
+        sent_at=created,
+        client_telegram_user_id=item.client_telegram_user_id,
+        sent_chat_id=item.sent_chat_id,
+        sent_message_id=item.sent_message_id,
+        sent_by_telegram_user_id=item.sent_by_telegram_user_id,
+        sent_callback_id=item.sent_callback_id,
+        status=ServiceAgreementStatus.sent,
+    )
+    db.add(revised)
+    db.flush()
+    messages = db.execute(
+        select(ServiceAgreementMessage).where(ServiceAgreementMessage.agreement_id == item.id)
+    ).scalars()
+    for message in messages:
+        message.agreement_id = revised.id
+    _audit(
+        db,
+        identity,
+        revised,
+        "service_agreement.client_details",
+        {"client_type": payload.client_type, "supersedes_id": str(item.id)},
+    )
+    body = _payload(revised, include_text=True)
+    if idempotency_key:
+        store_response(
+            db,
+            idempotency_key,
+            status.HTTP_201_CREATED,
+            body,
+            namespace=namespace,
+        )
+    else:
+        db.commit()
+    return body
 
 
 @router.post("/{agreement_id}/sign", status_code=status.HTTP_201_CREATED)
@@ -431,7 +638,11 @@ def sign_agreement(
         raise HTTPException(status_code=409, detail="Document hash mismatch")
 
     client = item.client_snapshot or {}
-    if client.get("org") and (not payload.signer_position or not payload.authority_basis):
+    if not client.get("details_complete"):
+        raise HTTPException(status_code=409, detail="Client details must be completed first")
+    signer_position = client.get("position") or payload.signer_position
+    authority_basis = client.get("authority_basis") or payload.authority_basis
+    if client.get("org") and (not signer_position or not authority_basis):
         raise HTTPException(status_code=422, detail="Position and authority basis are required")
 
     item.status = ServiceAgreementStatus.signed
@@ -441,8 +652,8 @@ def sign_agreement(
     item.signer_full_name = client.get("full_name")
     item.signer_contact = client.get("contact")
     item.signer_org = client.get("org")
-    item.signer_position = payload.signer_position
-    item.authority_basis = payload.authority_basis
+    item.signer_position = signer_position
+    item.authority_basis = authority_basis
     item.signed_callback_id = payload.callback_id
     if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
         intake.status = LegalIntakeStatus.accepted

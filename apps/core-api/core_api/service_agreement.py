@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-AGREEMENT_VERSION = "2026-09-08.1"
+AGREEMENT_VERSION = "2026-09-10.1"
 
 AGREEMENT_TEXT = """ДОГОВОР ВОЗМЕЗДНОГО ОКАЗАНИЯ ЮРИДИЧЕСКИХ УСЛУГ № {number}
 Редакция {revision}. Дата предложения: {created_date}.
 
 1. Стороны
 Исполнитель: {operator_name}{operator_status}{operator_inn}{operator_details}.
-Заказчик: {client_name}{client_org}.
+Заказчик: {client_party}.
+Реквизиты Заказчика: {client_details}.
 
 2. Предмет
 Исполнитель обязуется оказать Заказчику юридические услуги по вопросу:
@@ -82,9 +83,9 @@ AGREEMENT_TEXT = """ДОГОВОР ВОЗМЕЗДНОГО ОКАЗАНИЯ ЮР�
 зафиксированным уникальным идентификатором. Договор считается заключённым после
 фиксации этого действия системой Исполнителя.
 
-Лицом, подписавшим документ, считается лицо, которое указало свои ФИО и контакт
-при подписании NDA и использовало соответствующую учётную запись Telegram. При
-действии от имени организации также указываются должность и основание
+Документ со стороны Заказчика подписывает лицо, которое заполнило реквизиты в
+боте и использовало соответствующую учётную запись Telegram. При действии от
+имени организации в реквизитах также указываются должность и основание
 полномочий представителя.
 
 Обе стороны обязаны сохранять конфиденциальность средств доступа к своим
@@ -117,6 +118,7 @@ def render_agreement_text(
     operator_inn: str,
     operator_details: str,
     client_name: str,
+    client_details: str,
     subject: str,
     scope: str,
     exclusions: str,
@@ -126,6 +128,11 @@ def render_agreement_text(
     client_org: str | None = None,
 ) -> str:
     """Собирает точный экземпляр договора перед сохранением."""
+    customer = (
+        f"{client_org}, в лице {client_name or 'представителя'}"
+        if client_org
+        else (client_name or "Заказчик")
+    )
     return AGREEMENT_TEXT.format(
         number=number,
         revision=revision,
@@ -135,8 +142,8 @@ def render_agreement_text(
         operator_status=f", {operator_status}" if operator_status else "",
         operator_inn=f", ИНН {operator_inn}" if operator_inn else "",
         operator_details=f", {operator_details}" if operator_details else "",
-        client_name=client_name or "Заказчик",
-        client_org=f", от имени {client_org}" if client_org else "",
+        client_party=customer,
+        client_details=(client_details or "").strip() or "будут заполнены Заказчиком до подписания",
         subject=(subject or "").strip() or "не указан",
         scope=(scope or "").strip() or "не указан",
         exclusions=(exclusions or "").strip() or "не указаны",
