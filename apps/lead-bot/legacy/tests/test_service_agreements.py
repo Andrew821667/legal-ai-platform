@@ -128,6 +128,121 @@ async def test_admin_nda_request_is_bound_to_the_core_lead(monkeypatch, replies)
 
 
 @pytest.mark.anyio
+async def test_admin_can_close_intake_without_agreement(monkeypatch, replies) -> None:
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    query = SimpleNamespace(
+        data=f"sa_a:noneok:{intake_id}",
+        from_user=SimpleNamespace(id=flow.config.ADMIN_TELEGRAM_ID),
+        message=SimpleNamespace(chat_id=flow.config.ADMIN_TELEGRAM_ID),
+    )
+    update = SimpleNamespace(callback_query=query)
+    ctx = SimpleNamespace(user_data={}, bot=Bot())
+    saved: list[dict] = []
+    shown: list[str] = []
+
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {"id": value, "internal_note": "Клиенту ответили."},
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda value: [],
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "update_legal_intake",
+        lambda value, payload: saved.append({"id": value, **payload}) or payload,
+    )
+
+    async def show(message, value) -> None:
+        shown.append(value)
+
+    monkeypatch.setattr(flow, "_show_intake", show)
+
+    await flow.handle_admin_callback(update, ctx)
+
+    assert saved[0]["status"] == "closed"
+    assert "без заключения договора/соглашения" in saved[0]["internal_note"]
+    assert shown == [intake_id]
+
+
+@pytest.mark.anyio
+async def test_admin_cannot_close_intake_with_existing_agreement(monkeypatch, replies) -> None:
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    query = SimpleNamespace(
+        data=f"sa_a:noneok:{intake_id}",
+        from_user=SimpleNamespace(id=flow.config.ADMIN_TELEGRAM_ID),
+        message=SimpleNamespace(chat_id=flow.config.ADMIN_TELEGRAM_ID),
+    )
+    update = SimpleNamespace(callback_query=query)
+    ctx = SimpleNamespace(user_data={}, bot=Bot())
+
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {"id": value},
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda value: [_agreement("draft")],
+    )
+
+    await flow.handle_admin_callback(update, ctx)
+
+    assert "уже создан договор" in replies[-1]
+
+
+@pytest.mark.anyio
+async def test_intake_card_offers_close_without_agreement(monkeypatch) -> None:
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    captured: dict = {}
+
+    async def reply(message, text, **kwargs) -> None:
+        captured.update(text=text, **kwargs)
+
+    monkeypatch.setattr(flow.utils, "safe_reply_text", reply)
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {
+            "id": value,
+            "lead_id": "33333333-3333-3333-3333-333333333333",
+            "lead_name": "Александр Рябов",
+            "status": "scope_preparation",
+            "conflict_status": "clear",
+            "description": "Юридическая помощь",
+        },
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda value: [],
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_nda_status",
+        lambda value: {"signed": True},
+    )
+
+    await flow._show_intake(SimpleNamespace(chat_id=1), intake_id)
+
+    buttons = [
+        button
+        for row in captured["reply_markup"].inline_keyboard
+        for button in row
+    ]
+    option = next(
+        button
+        for button in buttons
+        if button.text == "Без заключения договора/соглашения"
+    )
+    assert option.callback_data == f"sa_a:none:{intake_id}"
+
+
+@pytest.mark.anyio
 async def test_client_must_open_document_before_signing(monkeypatch, replies) -> None:
     bot = Bot()
     ctx = SimpleNamespace(user_data={}, bot=bot)

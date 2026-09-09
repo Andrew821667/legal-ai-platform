@@ -49,6 +49,8 @@ _CONFLICT = {
     "conflict": "обнаружен конфликт",
 }
 
+_NO_AGREEMENT_NOTE = "Обращение закрыто без заключения договора/соглашения."
+
 
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ctx.user_data.pop(STATE_KEY, None)
@@ -179,6 +181,8 @@ async def _show_intake(message, intake_id: str) -> None:
     )
     if latest:
         text += f"\n\nПоследний договор:\n{_summary(latest)}"
+    elif _NO_AGREEMENT_NOTE in str(intake.get("internal_note") or ""):
+        text += "\n\nИтог: без заключения договора/соглашения."
     if messages:
         text += "\n\nПереписка по договору:"
         for entry in messages[-6:]:
@@ -214,6 +218,15 @@ async def _show_intake(message, intake_id: str) -> None:
     if latest and latest.get("client_telegram_user_id"):
         rows.append(
             [InlineKeyboardButton("Ответить клиенту", callback_data=f"sa_a:reply:{latest['id']}")]
+        )
+    if not latest and intake.get("status") != "closed":
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "Без заключения договора/соглашения",
+                    callback_data=f"sa_a:none:{intake_id}",
+                )
+            ]
         )
     rows.append([InlineKeyboardButton("К обращениям", callback_data="sa_a:menu")])
     await utils.safe_reply_text(
@@ -504,6 +517,76 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
             "Запрос на подписание NDA отправлен клиенту.",
             action="agreement_nda_requested",
         )
+        return
+    if action == "none" and len(parts) == 3:
+        await utils.safe_reply_text(
+            query.message,
+            "Закрыть обращение без заключения договора/соглашения?",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Подтвердить",
+                            callback_data=f"sa_a:noneok:{parts[2]}",
+                        )
+                    ],
+                    [InlineKeyboardButton("Назад", callback_data=f"sa_a:i:{parts[2]}")],
+                ]
+            ),
+            action="agreement_without_confirmation",
+        )
+        return
+    if action == "noneok" and len(parts) == 3:
+        intake_id = parts[2]
+        intake, agreements = await asyncio.gather(
+            asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, intake_id),
+            asyncio.to_thread(
+                admin_interface.admin_interface.list_service_agreements_for_intake,
+                intake_id,
+            ),
+        )
+        if not intake:
+            await utils.safe_reply_text(
+                query.message,
+                "Обращение не найдено.",
+                reply_markup=_admin_back(),
+                action="agreement_without_intake_missing",
+            )
+            return
+        if agreements:
+            await utils.safe_reply_text(
+                query.message,
+                "По обращению уже создан договор. Сначала завершите работу с ним.",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "К обращению",
+                                callback_data=f"sa_a:i:{intake_id}",
+                            )
+                        ]
+                    ]
+                ),
+                action="agreement_without_existing_agreement",
+            )
+            return
+        note = str(intake.get("internal_note") or "").strip()
+        if _NO_AGREEMENT_NOTE not in note:
+            note = "\n".join(part for part in (note, _NO_AGREEMENT_NOTE) if part)
+        updated = await asyncio.to_thread(
+            admin_interface.admin_interface.update_legal_intake,
+            intake_id,
+            {"status": "closed", "internal_note": note},
+        )
+        if not updated:
+            await utils.safe_reply_text(
+                query.message,
+                "Не удалось закрыть обращение.",
+                reply_markup=_admin_back(),
+                action="agreement_without_update_failed",
+            )
+            return
+        await _show_intake(query.message, intake_id)
         return
     if action == "new" and len(parts) == 3:
         intake = await asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, parts[2])
