@@ -21,14 +21,17 @@ import asyncio
 import logging
 
 from telegram import InlineKeyboardMarkup, Update
+from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 
 import database
 import utils
+from config import get_config
 from core_api_bridge import core_api_bridge
 
 logger = logging.getLogger(__name__)
+config = get_config()
 
 STAGE_KEY = "nda_flow_stage"
 DATA_KEY = "nda_flow_data"
@@ -67,6 +70,30 @@ def confirm_markup() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("Отмена", callback_data="nda:cancel")],
         ]
     )
+
+
+async def _notify_admin_signed(bot, *, intake_id: str | None, signer_name: str) -> bool:
+    callback = f"sa_a:i:{intake_id}" if intake_id else "sa_a:menu"
+    text = (
+        "Клиент подписал NDA.\n\n"
+        f"Клиент: {signer_name}\n"
+        "Следующий шаг: провести проверку конфликта интересов, "
+        "затем подготовить соглашение об оказании юридической помощи."
+    )
+    try:
+        await utils.safe_send_message(
+            bot,
+            action="nda_admin_signed",
+            chat_id=config.ADMIN_TELEGRAM_ID,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Открыть обращение", callback_data=callback)]]
+            ),
+        )
+        return True
+    except TelegramError as exc:
+        logger.warning("NDA admin notification failed: %s", type(exc).__name__)
+        return False
 
 
 def build_intro(*, signed: bool, status: dict | None) -> str:
@@ -467,3 +494,9 @@ async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> 
         "у нас; по вашему запросу пришлём её в любой момент.",
         action="nda_signed",
     )
+    if not already:
+        await _notify_admin_signed(
+            context.bot,
+            intake_id=result.get("intake_id"),
+            signer_name=data["signer_full_name"],
+        )

@@ -20,7 +20,7 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api.models import ActorType, Lead, NdaSignature, Scope
+from core_api.models import ActorType, Lead, LegalIntake, NdaSignature, Scope
 from core_api.nda_document import NDA_VERSION, document_hash, render_nda_text
 
 router = APIRouter(prefix="/api/v1/nda", tags=["nda"])
@@ -57,6 +57,13 @@ def _status_payload(row: NdaSignature | None) -> dict:
         "signer_contact": row.signer_contact,
         "signer_org": row.signer_org,
     }
+
+
+def _intake_id_for_lead(db: Session, lead_id: uuid.UUID) -> str | None:
+    intake_id = db.execute(
+        select(LegalIntake.id).where(LegalIntake.lead_id == lead_id).limit(1)
+    ).scalar_one_or_none()
+    return str(intake_id) if intake_id else None
 
 
 @router.get("/document")
@@ -144,6 +151,7 @@ def sign_nda(
             "already_signed": True,
             "signed_at": existing.signed_at.isoformat() if existing.signed_at else None,
             "version": existing.document_version,
+            "intake_id": _intake_id_for_lead(db, lead.id),
         }
 
     settings = get_settings()
@@ -209,4 +217,5 @@ def sign_nda(
         "already_signed": False,
         "signed_at": row.signed_at.isoformat() if row.signed_at else None,
         "version": row.document_version,
+        "intake_id": _intake_id_for_lead(db, lead.id),
     }
