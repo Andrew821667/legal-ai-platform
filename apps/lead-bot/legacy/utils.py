@@ -251,6 +251,10 @@ async def telegram_call_with_retry(
                 delay,
             )
             await asyncio.sleep(delay)
+        except BadRequest:
+            # Telegram rejects malformed or expired callbacks deterministically;
+            # retrying only delays the actual button action.
+            raise
         except (TimedOut, NetworkError) as error:
             if attempt >= max_retries:
                 log_span_timing(
@@ -278,10 +282,17 @@ async def telegram_call_with_retry(
 
 async def safe_answer_callback(query, action: str = "callback_answer", **kwargs):
     """Безопасно отвечает на callback query с retry."""
-    return await telegram_call_with_retry(
-        lambda: query.answer(**kwargs),
-        action=action,
-    )
+    try:
+        return await telegram_call_with_retry(
+            lambda: query.answer(**kwargs),
+            action=action,
+        )
+    except BadRequest as error:
+        message = str(error).lower()
+        if "query is too old" in message or "query id is invalid" in message:
+            logger.info("Expired Telegram callback during %s; continuing action", action)
+            return None
+        raise
 
 
 async def safe_send_message(bot, action: str = "send_message", **kwargs):

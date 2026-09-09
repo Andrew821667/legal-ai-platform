@@ -170,6 +170,10 @@ class Config:
             'TELEGRAM_FORCE_IPV4',
             '1',
         ).strip().lower() in {'1', 'true', 'yes'}
+        self.TELEGRAM_API_PROXY_URL: str = os.getenv(
+            'TELEGRAM_API_PROXY_URL',
+            '',
+        ).strip()
         self.LEAD_PERF_LOGGING_ENABLED: bool = os.getenv('LEAD_PERF_LOGGING_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
         self.LEAD_PERF_LOG_ALL_UPDATES: bool = os.getenv('LEAD_PERF_LOG_ALL_UPDATES', '0').strip().lower() in {'1', 'true', 'yes'}
         self.LEAD_PERF_SLOW_UPDATE_MS: int = max(50, int(os.getenv('LEAD_PERF_SLOW_UPDATE_MS', '1200')))
