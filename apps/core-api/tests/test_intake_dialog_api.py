@@ -256,6 +256,7 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         assert fresh.status_code == 201, fresh.text
         assert fresh.json()["signed"] is True
         assert fresh.json()["version"] == NDA_VERSION
+        assert fresh.json()["intake_id"] == intake_id
     finally:
         _cleanup(names, intake_ids)
 

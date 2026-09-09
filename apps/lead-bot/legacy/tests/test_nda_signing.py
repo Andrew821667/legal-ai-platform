@@ -30,7 +30,15 @@ def replies(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 @pytest.fixture
 def context() -> SimpleNamespace:
-    return SimpleNamespace(user_data={nda.LEAD_KEY: "lead-1"})
+    class Bot:
+        def __init__(self) -> None:
+            self.messages: list[dict] = []
+
+        async def send_message(self, **kwargs):
+            self.messages.append(kwargs)
+            return SimpleNamespace(message_id=len(self.messages))
+
+    return SimpleNamespace(user_data={nda.LEAD_KEY: "lead-1"}, bot=Bot())
 
 
 @pytest.fixture
@@ -52,7 +60,14 @@ def _bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
 
     def _sign(**kwargs):
         calls["sign"] = kwargs
-        return overrides.get("sign_result", {"signed": True, "already_signed": False})
+        return overrides.get(
+            "sign_result",
+            {
+                "signed": True,
+                "already_signed": False,
+                "intake_id": "22222222-2222-2222-2222-222222222222",
+            },
+        )
 
     monkeypatch.setattr(nda.core_api_bridge, "get_nda_status", _status)
     monkeypatch.setattr(
@@ -217,8 +232,38 @@ async def test_full_path_collects_details_and_signs(update, context, replies, mo
     assert "Ромашка" in signed["signer_org"]
     assert signed["telegram_user_id"] == 42
     assert "подписано" in replies[-1].lower()
+    assert len(context.bot.messages) == 1
+    notice = context.bot.messages[0]
+    assert notice["chat_id"] == nda.config.ADMIN_TELEGRAM_ID
+    assert "подписал NDA" in notice["text"]
+    button = notice["reply_markup"].inline_keyboard[0][0]
+    assert button.callback_data == "sa_a:i:22222222-2222-2222-2222-222222222222"
     # Состояние сценария убрано — повторные сообщения в него не попадут.
     assert nda.STAGE_KEY not in context.user_data
+
+
+@pytest.mark.anyio
+async def test_repeated_signature_does_not_notify_admin(
+    update, context, replies, monkeypatch
+) -> None:
+    _bridge(
+        monkeypatch,
+        status={"signed": False},
+        sign_result={
+            "signed": True,
+            "already_signed": True,
+            "intake_id": "22222222-2222-2222-2222-222222222222",
+        },
+    )
+
+    await nda.open_signing(update, context)
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "ivan@example.ru")
+    await nda.handle_message(update, context, "от себя")
+    await _press(update, context, "confirm")
+
+    assert context.bot.messages == []
 
 
 @pytest.mark.anyio
