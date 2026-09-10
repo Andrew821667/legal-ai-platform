@@ -1,8 +1,7 @@
-"""Команды в кнопке меню.
+"""Команды в кнопке меню и вход в рабочее место.
 
-Раньше бот не задавал их вовсе: кнопка меню была пуста, и об админ-панели можно
-было узнать, только зная, что набрать «/admin». Эти проверки закрепляют, что
-меню заполняется и что админские команды не показываются клиенту.
+Раньше бот не задавал команды вовсе: кнопка меню была пуста, и об админ-панели
+можно было узнать, только зная, что набрать «/admin».
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ def test_every_menu_command_has_a_handler() -> None:
 
 class _Bot:
     def __init__(self, *, fail: Exception | None = None) -> None:
-        self.calls: list[tuple[int, object]] = []
+        self.calls: list[tuple[int, str]] = []
         self._fail = fail
 
     async def set_my_commands(self, commands, scope=None):
@@ -71,9 +70,7 @@ async def test_network_failure_does_not_block_startup(monkeypatch) -> None:
     from telegram.error import NetworkError
 
     monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
-    bot = _Bot(fail=NetworkError("сеть недоступна"))
-
-    await bot_module._set_command_menu(SimpleNamespace(bot=bot))
+    await bot_module._set_command_menu(SimpleNamespace(bot=_Bot(fail=NetworkError("нет сети"))))
 
 
 @pytest.mark.anyio
@@ -102,3 +99,23 @@ def test_admin_button_reuses_the_existing_callback() -> None:
 
     button = build_workspace_inline_menu(is_admin=True)[0][0]
     assert button.callback_data == "admin_panel"
+
+
+def test_workspace_button_opens_a_web_app() -> None:
+    """Рабочее место — мини-апп, а не переписка в чате."""
+    from handlers.constants import build_admin_panel_menu
+
+    button = build_admin_panel_menu()[0][0]
+    assert button.web_app is not None
+    assert "Рабочее место" in button.text
+
+
+def test_panel_survives_missing_workspace_url(monkeypatch) -> None:
+    """Кнопка, ведущая в никуда, хуже её отсутствия."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(constants.get_config(), "LAWYER_WORKSPACE_URL", "", raising=False)
+
+    labels = [b.text for row in constants.build_admin_panel_menu() for b in row]
+    assert not any("Рабочее место" in label for label in labels)
+    assert any("Лиды" in label for label in labels)

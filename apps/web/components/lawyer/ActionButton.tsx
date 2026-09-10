@@ -1,0 +1,57 @@
+"use client";
+
+import { useState } from "react";
+
+/**
+ * Кнопка действия с состоянием.
+ *
+ * Показывает ход и результат прямо на месте: отдельное всплывающее сообщение в
+ * мессенджере легко пропустить, а отправка договора — не то действие, о судьбе
+ * которого можно гадать.
+ */
+export default function ActionButton({
+  label,
+  done,
+  onRun,
+  tone = "primary",
+}: {
+  label: string;
+  done: string;
+  onRun: () => Promise<void>;
+  tone?: "primary" | "quiet";
+}) {
+  const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  if (state === "ok") {
+    return <p className="text-xs text-emerald-300">{done}</p>;
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={state === "busy"}
+        onClick={async () => {
+          setState("busy");
+          setError(null);
+          try {
+            await onRun();
+            setState("ok");
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Не получилось");
+            setState("idle");
+          }
+        }}
+        className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-60 ${
+          tone === "primary"
+            ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
+            : "bg-slate-800 text-slate-200 hover:bg-slate-700"
+        }`}
+      >
+        {state === "busy" ? "Отправляю…" : label}
+      </button>
+      {error ? <p className="mt-1 text-xs text-rose-300">{error}</p> : null}
+    </div>
+  );
+}

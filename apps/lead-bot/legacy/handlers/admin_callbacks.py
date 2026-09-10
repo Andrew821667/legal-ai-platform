@@ -26,6 +26,7 @@ from .constants import (
     ADMIN_EXPORT_MENU,
     ADMIN_LEADS_MENU,
     ADMIN_PANEL_MENU,
+    build_admin_panel_menu,
     ADMIN_RUNTIME_MENU,
     ADMIN_SECURITY_MENU,
     ADMIN_USERS_MENU,
@@ -1017,7 +1018,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                     "/revoke_user_consent <telegram_id> — отзыв согласия + очистка\n\n"
                     "Эти функции работают и доступны даже если не вынесены отдельной кнопкой."
                 ),
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                reply_markup=InlineKeyboardMarkup(build_admin_panel_menu()),
                 action="admin_commands",
             )
 
@@ -1025,7 +1026,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             await utils.safe_edit_text(
                 query.message,
                 "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                reply_markup=InlineKeyboardMarkup(build_admin_panel_menu()),
                 action="admin_panel",
             )
 
@@ -1036,7 +1037,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
             await utils.safe_edit_text(
                 query.message,
                 "⚠️ Неизвестное действие админ-панели.",
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                reply_markup=InlineKeyboardMarkup(build_admin_panel_menu()),
                 action="admin_unknown_action",
             )
 

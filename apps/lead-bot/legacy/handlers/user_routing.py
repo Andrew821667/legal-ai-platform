@@ -8,7 +8,7 @@ import database
 import utils
 from config import get_config
 from telegram_ui import normalize_button_text
-from .constants import ADMIN_PANEL_MENU
+from .constants import ADMIN_PANEL_MENU, build_admin_panel_menu
 from .markup import (
     consultation_contact_markup as _consultation_contact_markup,
     main_menu_markup as _main_menu_markup,
@@ -212,7 +212,7 @@ async def maybe_handle_static_reply_action(
             await utils.safe_reply_text(
                 original_message,
                 "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
-                reply_markup=InlineKeyboardMarkup(ADMIN_PANEL_MENU),
+                reply_markup=InlineKeyboardMarkup(build_admin_panel_menu()),
                 action="open_admin_panel_from_user_flow",
             )
         else:

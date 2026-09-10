@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     alert_bot_token: str | None = None
     alert_chat_id: str | None = None
     lead_notify_bot_token: str | None = None
+    # Токен бота-ассистента: им ядро пишет клиенту напрямую — например,
+    # отправляет подготовленный договор из рабочего места юриста. Раньше
+    # отправлял только бот, и любая доставка из другого места означала вторую
+    # копию текста и кнопок.
+    lead_bot_token: str | None = None
     lead_notify_chat_id: str | None = None
     lead_notify_web_base_url: str = "https://ai-verdict.ru"
     api_key_cache_ttl_seconds: int = 60
