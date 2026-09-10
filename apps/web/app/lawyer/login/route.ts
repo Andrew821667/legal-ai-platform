@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { checkLawyerSessionCookie } from "@/lib/lawyer-access";
 import { LAWYER_SESSION_COOKIE, allowedLawyerIds, lawyerSessionSecret } from "@/lib/lawyer-auth";
+import { publicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ detail: result.detail }, { status: result.status });
   }
 
-  const response = NextResponse.redirect(new URL("/lawyer", request.url));
+  const origin = publicOrigin(request.headers, request.nextUrl.host);
+  const response = NextResponse.redirect(new URL("/lawyer", origin));
   response.cookies.set(LAWYER_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,

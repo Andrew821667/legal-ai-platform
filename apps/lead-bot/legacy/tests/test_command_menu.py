@@ -173,8 +173,32 @@ def test_admin_reply_keyboard_hides_workspace_without_url(monkeypatch) -> None:
     monkeypatch.setattr(constants.get_config(), "LAWYER_WORKSPACE_URL", "", raising=False)
     labels = [b.text for row in constants.build_admin_reply_menu() for b in row]
     assert not any("Рабочее место" in label for label in labels)
-    # Обычный пункт остаётся на месте — новая кнопка ничего не вытесняет.
-    assert any("Рабочий стол" in label for label in labels)
+    # Первый ряд остаётся на месте — новая кнопка ничего не вытесняет.
+    assert any("Мини-апп" in label for label in labels)
+
+
+def test_client_button_opens_the_miniapp_directly(monkeypatch) -> None:
+    """Раньше нажатие слало текст, который потом разбирал роутер — теперь
+    открывается сразу, без круга через отправку и разбор сообщения."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "CLIENT_MINIAPP_URL", "https://example.ru/miniapp", raising=False
+    )
+    button = constants.client_miniapp_button()
+    assert button.web_app is not None
+    assert button.web_app.url == "https://example.ru/miniapp"
+
+
+def test_client_button_falls_back_to_text_without_url(monkeypatch) -> None:
+    """Этот ряд клавиатуры не может остаться пустым — в отличие от
+    необязательных кнопок вроде рабочего места юриста."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(constants.get_config(), "CLIENT_MINIAPP_URL", "", raising=False)
+    button = constants.client_miniapp_button()
+    assert button.web_app is None
+    assert button.text == "🧭 Рабочий стол"
 
 
 def test_case_management_button_hidden_without_username(monkeypatch) -> None:

@@ -189,6 +189,13 @@ class Config:
             'LAWYER_WORKSPACE_URL', 'https://ai-verdict.ru/lawyer'
         ).strip()
 
+        # Мини-апп клиента — тот же приём, что и для рабочего места юриста:
+        # постоянная кнопка открывает Telegram Mini App напрямую, а не
+        # присылает текстовое сообщение, которое потом разбирает роутер.
+        self.CLIENT_MINIAPP_URL: str = os.getenv(
+            'CLIENT_MINIAPP_URL', 'https://ai-verdict.ru/miniapp'
+        ).strip()
+
         # Sentry: пусто по умолчанию — включается явным заданием DSN, а
         # не молчаливым переходом в SaaS вне РФ.
         self.SENTRY_DSN: str = os.getenv('SENTRY_DSN', '').strip()
