@@ -173,7 +173,12 @@ async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | N
     data = io.BytesIO(text.encode("utf-8"))
     number = str(item.get("agreement_number") or "agreement").replace("/", "-")
     data.name = f"dogovor-{number}.txt"
-    sent = await bot.send_document(chat_id=chat_id, document=data, caption=caption)
+
+    async def send():
+        data.seek(0)
+        return await bot.send_document(chat_id=chat_id, document=data, caption=caption)
+
+    sent = await utils.telegram_call_with_retry(send, action="agreement_send_document")
     return getattr(sent, "message_id", None)
 
 
@@ -487,12 +492,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             return True
 
         revised_id = str(revised["id"])
-        message_id = await _send_document(
-            context.bot,
-            message.chat_id,
-            revised,
-            f"Точная редакция договора № {revised['agreement_number']}",
-        )
+        _clear(context)
+        try:
+            message_id = await _send_document(
+                context.bot,
+                message.chat_id,
+                revised,
+                f"Точная редакция договора № {revised['agreement_number']}",
+            )
+        except TelegramError:
+            await utils.safe_reply_text(
+                message,
+                "Реквизиты сохранены, но Telegram не доставил файл. Откройте актуальный договор ещё раз в разделе документов.",
+                action="agreement_client_details_delivery_failed",
+            )
+            return True
+        if message_id is None:
+            await utils.safe_reply_text(
+                message,
+                "Реквизиты сохранены, но файл договора пока недоступен. Откройте его ещё раз в разделе документов.",
+                action="agreement_client_details_document_missing",
+            )
+            return True
         viewed = await asyncio.to_thread(
             core_api_bridge.mark_service_agreement_viewed,
             revised_id,
@@ -501,7 +522,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             message_id=message_id,
             callback_id=f"client-details:{message_id or user.id}",
         )
-        _clear(context)
         if not viewed:
             await utils.safe_reply_text(
                 message,
@@ -944,12 +964,27 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         if item.get("status") != "signed" and not item.get("client_details_complete"):
             await _ask_client_type(query.message, agreement_id)
             return
-        message_id = await _send_document(
-            context.bot,
-            query.message.chat_id,
-            item,
-            f"Точная редакция договора № {item['agreement_number']}",
-        )
+        try:
+            message_id = await _send_document(
+                context.bot,
+                query.message.chat_id,
+                item,
+                f"Точная редакция договора № {item['agreement_number']}",
+            )
+        except TelegramError:
+            await utils.safe_reply_text(
+                query.message,
+                "Telegram не доставил файл договора. Попробуйте открыть его ещё раз.",
+                action="agreement_document_delivery_failed",
+            )
+            return
+        if message_id is None:
+            await utils.safe_reply_text(
+                query.message,
+                "Файл договора пока недоступен. Сообщите об этом юристу.",
+                action="agreement_document_missing",
+            )
+            return
         if item.get("status") in {"sent", "viewed"}:
             viewed = await asyncio.to_thread(
                 core_api_bridge.mark_service_agreement_viewed,

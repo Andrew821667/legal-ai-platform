@@ -375,6 +375,48 @@ async def test_client_details_create_and_open_signable_revision(monkeypatch, rep
 
 
 @pytest.mark.anyio
+async def test_client_details_survive_document_delivery_failure(monkeypatch, replies) -> None:
+    ctx = SimpleNamespace(
+        user_data={
+            flow.STATE_KEY: "client_details",
+            flow.DATA_KEY: {
+                "agreement_id": "11111111-1111-1111-1111-111111111111",
+                "client_type": "person",
+                "field_index": 3,
+                "full_name": "Петров Пётр Петрович",
+                "contact": "+7 900 000-00-00",
+                "address": "г. Москва, ул. Тестовая, д. 1",
+            },
+        },
+        bot=Bot(),
+    )
+    message = SimpleNamespace(chat_id=77)
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_user=SimpleNamespace(id=77, username="client"),
+    )
+    monkeypatch.setattr(
+        flow.core_api_bridge,
+        "complete_service_agreement_client_details",
+        lambda *args: _agreement("sent"),
+    )
+
+    async def fail(*args, **kwargs):
+        raise flow.TelegramError("delivery failed")
+
+    monkeypatch.setattr(flow, "_send_document", fail)
+
+    assert await flow.handle_message(
+        update,
+        ctx,
+        "паспорт 00 00 000000, выдан 01.01.2020",
+    )
+
+    assert flow.STATE_KEY not in ctx.user_data
+    assert "Реквизиты сохранены" in replies[-1]
+
+
+@pytest.mark.anyio
 async def test_company_signer_uses_stored_authority(monkeypatch, replies) -> None:
     bot = Bot()
     ctx = SimpleNamespace(user_data={}, bot=bot)
