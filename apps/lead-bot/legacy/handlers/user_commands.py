@@ -432,7 +432,11 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_row:
                 lead = database.db.get_local_lead_by_user_id(user_row["id"])
                 selected_profile = database.db.get_user_offer_profile(user_row["id"])
-        reply_markup = _workspace_markup_for(lead=lead, selected_profile=selected_profile)
+        reply_markup = _workspace_markup_for(
+            lead=lead,
+            selected_profile=selected_profile,
+            is_admin=bool(user and user.id == config.ADMIN_TELEGRAM_ID),
+        )
 
         message = update.effective_message
         if message:
