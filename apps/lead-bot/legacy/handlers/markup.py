@@ -11,11 +11,11 @@ import content
 from config import get_config
 from .constants import (
     build_admin_reply_menu,
+    build_client_reply_menu,
     CONSENT_PDN_MENU,
     CONSENT_TRANSBORDER_MENU,
     CONSULTATION_CTA_MENU,
     DOCUMENTS_MENU,
-    MAIN_MENU,
     PERSONAL_MODE_RETURN_MENU,
     QUICK_NAV_MENU,
     WORKSPACE_INLINE_MENU,
@@ -159,7 +159,7 @@ def with_channel_button(
 
 def main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        build_admin_reply_menu() if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
+        build_admin_reply_menu() if user_id == config.ADMIN_TELEGRAM_ID else build_client_reply_menu(),
         resize_keyboard=True,
     )
 

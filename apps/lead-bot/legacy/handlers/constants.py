@@ -7,7 +7,12 @@ from config import get_config
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
 
-# Меню кнопок
+# Меню кнопок.
+#
+# Текстовая кнопка оставлена запасным вариантом: build_client_reply_menu ниже
+# заменяет её на web_app-кнопку мини-аппа, если адрес настроен (а он настроен
+# по умолчанию). Пустой CLIENT_MINIAPP_URL — единственный случай, когда эти
+# списки используются как есть.
 MAIN_MENU = [
     [KeyboardButton("🧭 Рабочий стол")],
 ]
@@ -196,6 +201,29 @@ def lawyer_workspace_button():
     return InlineKeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))
 
 
+def client_miniapp_button():
+    """Кнопка мини-аппа для постоянной клавиатуры.
+
+    Раньше "🧭 Рабочий стол" была обычной текстовой кнопкой: нажатие слало
+    сообщение, а роутер по тексту открывал inline-меню. Мини-апп открывается
+    сразу, без прохождения через отправку и разбор текста, — тот же выигрыш,
+    что дала web_app-кнопка рабочего места юриста.
+
+    Запасной вариант — старая текстовая кнопка: этот ряд клавиатуры не может
+    остаться пустым, в отличие от необязательных кнопок вроде рабочего места
+    юриста или перехода в бота дел.
+    """
+    url = getattr(get_config(), "CLIENT_MINIAPP_URL", "")
+    if not url:
+        return KeyboardButton("🧭 Рабочий стол")
+    return KeyboardButton("📱 Мини-апп", web_app=WebAppInfo(url=url))
+
+
+def build_client_reply_menu():
+    """Постоянная клавиатура клиента."""
+    return [[client_miniapp_button()]]
+
+
 def build_admin_reply_menu():
     """Постоянная клавиатура владельца — то, что видно под полем ввода всегда.
 
@@ -204,7 +232,7 @@ def build_admin_reply_menu():
     ежедневный экран заметным, не отбирая при этом угловую кнопку меню у
     списка команд.
     """
-    rows = [row[:] for row in ADMIN_MENU]
+    rows = [[client_miniapp_button()]]
     url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
     if url:
         rows.append([KeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))])
