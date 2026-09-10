@@ -638,6 +638,30 @@ ssh legalai-prod 'cd ~/projects/legal-ai-platform && K=$(grep "^API_KEY_BOT=" .e
 
 Копию `.env.bak-*` удалить после проверки: в ней лежит прежний секрет.
 
+## Включить Sentry
+По умолчанию выключен — событие никуда не уходит, пока `SENTRY_DSN` пуст.
+Защита персданных (`send_default_pii=False`, `max_request_body_size="never"`,
+зачистка полей вроде `description`/`signer_full_name`/`contact` в
+`before_send`) уже встроена в код обоих сервисов и не зависит от того, что
+здесь настроено — включение DSN её не отключает.
+
+1. Завести проект в Sentry, скопировать DSN.
+2. Записать значение, тем же способом, что и для остальных секретов:
+   ```bash
+   ssh -t legalai-prod '~/rotate-env-key.sh SENTRY_DSN'
+   ```
+3. Пересоздать оба сервиса — `restart` не перечитывает `.env` (см. ловушку 3
+   в разделе выше):
+   ```bash
+   ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH      && cd /Users/legalai/projects/legal-ai-platform      && IMG_CORE=$(docker inspect -f "{{.Config.Image}}" legal-ai-core-api)      && IMG_BOT=$(docker inspect -f "{{.Config.Image}}" legal-ai-lead-bot)      && CORE_API_IMAGE="$IMG_CORE" LEAD_BOT_IMAGE="$IMG_BOT"         docker compose -p compose --env-file .env -f infra/compose/docker-compose.prod.yml         up -d --force-recreate core-api lead-bot'
+   ```
+4. Проверить: в логах контейнера должна появиться строка `sentry_initialized`
+   (core-api) или `Sentry включён` (lead-bot). Без DSN там же — `sentry_disabled`
+   / `Sentry не включён`, и это нормальное состояние по умолчанию.
+
+Один DSN подходит на оба сервиса — заводить второй проект в Sentry не нужно,
+события различаются по стеку вызовов.
+
 ## MacBook Protocol (contract-worker)
 Граница контура:
 - текущий production-контур договоров = `core-api` + `contract-worker`;

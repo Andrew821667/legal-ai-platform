@@ -44,6 +44,17 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         exc_info=(type(error), error, error.__traceback__) if error else None,
     )
 
+    # Сюда доходит уже то, что _is_transient_polling_error пропустил вперёд:
+    # реальные ошибки, а не рутинные сетевые обрывы polling. Тот же фильтр,
+    # что защищает логи от шума, защищает и Sentry от него же.
+    if error is not None and not isinstance(error, Conflict):
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_exception(error)
+        except Exception:  # noqa: BLE001 — сбой отправки не должен маскировать исходную ошибку
+            logger.warning("Не удалось отправить ошибку в Sentry", exc_info=True)
+
     if isinstance(error, Conflict):
         logger.error("Detected polling conflict: likely multiple bot instances are running")
         return

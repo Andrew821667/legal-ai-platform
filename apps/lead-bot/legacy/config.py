@@ -188,6 +188,19 @@ class Config:
         self.LAWYER_WORKSPACE_URL: str = os.getenv(
             'LAWYER_WORKSPACE_URL', 'https://ai-verdict.ru/lawyer'
         ).strip()
+
+        # Sentry: пусто по умолчанию — включается явным заданием DSN, а
+        # не молчаливым переходом в SaaS вне РФ.
+        self.SENTRY_DSN: str = os.getenv('SENTRY_DSN', '').strip()
+        self.ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'production').strip()
+
+        # Бот учёта судебных дел — отдельная система на Google Sheets.
+        # Пуст по умолчанию: username того бота не был известен, когда
+        # писался этот код. Кнопка появляется, только когда переменная
+        # задана — вести никуда хуже, чем не вести вовсе.
+        self.CASE_MANAGEMENT_BOT_USERNAME: str = os.getenv(
+            'CASE_MANAGEMENT_BOT_USERNAME', ''
+        ).strip().lstrip('@')
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
             'TRANSBORDER_CONSENT_URL',

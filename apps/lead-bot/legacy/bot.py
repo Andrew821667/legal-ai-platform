@@ -128,6 +128,12 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+# После настройки логирования: init_sentry сама логирует своё решение, и
+# лучше, чтобы эта запись уже попадала в файл, а не терялась до его открытия.
+from sentry_init import init_sentry  # noqa: E402
+
+init_sentry(config)
 logger = logging.getLogger(__name__)
 _LOCK_FILE_HANDLE = None
 

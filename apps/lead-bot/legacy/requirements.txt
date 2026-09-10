@@ -6,3 +6,4 @@ uvicorn>=0.34.0
 pytest>=9.0.3
 pytest-asyncio>=1.4.0
 numpy>=2.4.6
+sentry-sdk>=2.19

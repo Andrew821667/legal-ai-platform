@@ -160,3 +160,27 @@ async def test_menu_button_failure_does_not_block_startup(monkeypatch) -> None:
             raise NetworkError("нет сети")
 
     await bot_module._set_command_menu(SimpleNamespace(bot=_Failing()))
+
+
+def test_case_management_button_hidden_without_username(monkeypatch) -> None:
+    """Имя того бота неизвестно на момент написания — кнопка не должна вести в никуда."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "CASE_MANAGEMENT_BOT_USERNAME", "", raising=False
+    )
+    labels = [b.text for row in constants.build_admin_panel_menu() for b in row]
+    assert not any("Судебные" in label for label in labels)
+
+
+def test_case_management_button_appears_when_configured(monkeypatch) -> None:
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "CASE_MANAGEMENT_BOT_USERNAME", "lawtable_bot", raising=False
+    )
+    rows = constants.build_admin_panel_menu()
+    button = next(b for row in rows for b in row if "Судебные" in b.text)
+    assert button.url == "https://t.me/lawtable_bot"
+    # Пункт «Закрыть» остаётся последним — новая кнопка не должна его сдвигать в середину.
+    assert rows[-1][0].callback_data == "admin_close"
