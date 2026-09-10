@@ -12,6 +12,8 @@ export type TodayItem = {
   legal_area?: string;
   urgency?: string;
   days_waiting?: number | null;
+  expires_at?: string | null;
+  days_left?: number | null;
 };
 
 export type TodaySection = {
