@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import { lawyerAction } from "./useTelegram";
 
 /**
@@ -20,7 +21,8 @@ export default function ReplyBox({
   initData: string;
   onSent: () => void;
 }) {
-  const [text, setText] = useState("");
+  const draftKey = `lawyer.reply.${agreementId}`;
+  const [text, setText] = useState(() => readDraft(draftKey, ""));
   const [state, setState] = useState<"idle" | "busy" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +43,7 @@ export default function ReplyBox({
           await lawyerAction(`/api/lawyer/agreements/${agreementId}/reply`, initData, {
             text: value,
           });
+          dropDraft(draftKey);
           setState("sent");
           onSent();
         } catch (err) {
@@ -51,10 +54,13 @@ export default function ReplyBox({
     >
       <textarea
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          writeDraft(draftKey, event.target.value);
+        }}
         rows={3}
         placeholder="Ответ клиенту"
-        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-white placeholder:text-slate-600"
+        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-white placeholder:text-slate-400"
       />
       <button
         type="submit"

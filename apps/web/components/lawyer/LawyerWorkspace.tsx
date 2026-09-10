@@ -120,7 +120,7 @@ export default function LawyerWorkspace() {
   return (
     <div>
       <header className="mb-4">
-        <p className="text-sm uppercase tracking-widest text-slate-600">AI Verdict</p>
+        <p className="text-sm uppercase tracking-widest text-slate-400">AI Verdict</p>
         <h1 className="text-2xl font-semibold text-white">Рабочее место</h1>
       </header>
 
