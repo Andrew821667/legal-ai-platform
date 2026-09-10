@@ -20,7 +20,15 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, Update
+from telegram import (
+    BotCommand,
+    BotCommandScopeChat,
+    BotCommandScopeDefault,
+    MenuButtonDefault,
+    MenuButtonWebApp,
+    Update,
+    WebAppInfo,
+)
 from telegram.error import Forbidden, TelegramError
 from telegram.request import HTTPXRequest
 from telegram.ext import (
@@ -1046,6 +1054,37 @@ async def _set_command_menu(app: Application) -> None:
         )
     except TelegramError as error:
         logger.warning("Не удалось задать админское меню команд: %s", type(error).__name__)
+
+    await _set_workspace_menu_button(app, int(admin_id))
+
+
+async def _set_workspace_menu_button(app: Application, admin_id: int) -> None:
+    """Вешает рабочее место на кнопку меню в углу — только у владельца.
+
+    Кнопка меню одна на чат, и по умолчанию она показывает список команд. Для
+    владельца полезнее сразу открывать рабочее место: это ежедневный экран, и
+    два лишних касания на нём ощущаются.
+
+    Клиентам кнопку не трогаем: у них там команды, и подменять их разделом,
+    куда всё равно нет доступа, незачем.
+    """
+    url = getattr(config, "LAWYER_WORKSPACE_URL", "")
+    try:
+        if url:
+            await app.bot.set_chat_menu_button(
+                chat_id=admin_id,
+                menu_button=MenuButtonWebApp(
+                    text="Рабочее место", web_app=WebAppInfo(url=url)
+                ),
+            )
+        else:
+            # Адрес убрали из настроек — возвращаем обычное меню команд, иначе
+            # кнопка осталась бы вести в никуда.
+            await app.bot.set_chat_menu_button(
+                chat_id=admin_id, menu_button=MenuButtonDefault()
+            )
+    except TelegramError as error:
+        logger.warning("Не удалось задать кнопку меню: %s", type(error).__name__)
 
 
 def build_application() -> Application:

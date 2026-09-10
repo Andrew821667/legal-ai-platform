@@ -1,5 +1,6 @@
 "use client";
 
+import { Card, Pill } from "./ui";
 import { AGREEMENT_STATUS, AREA, OUTREACH_REASON, days, label } from "./labels";
 import type { Today, TodayItem, TodaySection } from "./types";
 
@@ -39,23 +40,27 @@ export default function TodayView({
 
   if (total === 0) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center">
+      <Card className="text-center">
         <p className="text-base font-medium text-white">Ничего не ждёт</p>
         <p className="mt-1 text-sm text-slate-400">
           Все договоры отправлены, вопросы отвечены, обращения в работе.
         </p>
-      </div>
+        <p className="mt-3 text-xs text-slate-600">
+          Здесь только то, что стоит из-за вас. Все клиенты — на соседней вкладке.
+        </p>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-400">
-        Требует внимания: {total}
+      <p className="text-xs text-slate-500">
+        Здесь только то, что стоит из-за вас — {total}. Полный список клиентов на
+        соседней вкладке.
       </p>
 
       {sections.map((section) => (
-        <section key={section.key} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <section key={section.key} className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4">
           <h2 className="text-sm font-semibold text-white">{section.title}</h2>
           <p className="mt-0.5 text-xs text-slate-500">{section.hint}</p>
 
@@ -66,14 +71,14 @@ export default function TodayView({
                   type="button"
                   disabled={!item.lead_id}
                   onClick={() => item.lead_id && onOpen(item.lead_id)}
-                  className="w-full rounded-lg bg-slate-800 p-3 text-left transition-colors hover:bg-slate-700 disabled:cursor-default disabled:opacity-70"
+                  className="w-full rounded-xl bg-slate-800/70 p-3 text-left transition-colors hover:bg-slate-800 disabled:cursor-default disabled:opacity-70"
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-sm font-medium text-white">{item.client}</span>
                     {item.days_waiting ? (
-                      <span className="shrink-0 text-xs text-amber-400">
+                      <Pill tone={item.days_waiting >= 3 ? "alert" : "warn"}>
                         {days(item.days_waiting)}
-                      </span>
+                      </Pill>
                     ) : null}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-slate-400">

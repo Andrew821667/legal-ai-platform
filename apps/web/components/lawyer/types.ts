@@ -26,6 +26,8 @@ export type Today = { generated_at: string; sections: TodaySection[] };
 export type ClientRow = {
   lead_id: string;
   name: string;
+  stage: string;
+  waiting_on_me: boolean;
   contact: string | null;
   company: string | null;
   intakes: number;
@@ -71,6 +73,15 @@ export type AgreementCard = {
   revision: number;
   subject: string;
   price_text: string;
+  payment_terms: string | null;
+  scope_text: string | null;
+  exclusions_text: string | null;
+  schedule_text: string | null;
+  expires_at: string | null;
+  client_snapshot: Record<string, unknown>;
+  signer_position: string | null;
+  authority_basis: string | null;
+  document_version: string | null;
   created_at: string | null;
   sent_at: string | null;
   viewed_at: string | null;
@@ -82,6 +93,7 @@ export type AgreementCard = {
 export type ClientCard = {
   lead_id: string;
   name: string;
+  stage: string;
   contact: string | null;
   company: string | null;
   telegram_user_id: number | null;

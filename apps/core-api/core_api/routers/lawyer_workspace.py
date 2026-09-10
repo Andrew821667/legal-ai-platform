@@ -67,6 +67,21 @@ def _days_since(value: datetime | None) -> int | None:
     return max(0, delta.days)
 
 
+def _stage_for(*, nda_signed: bool, agreement_status: str | None) -> str:
+    """Этап дела одной фразой — то, что юрист хочет увидеть, не открывая карточку."""
+    if agreement_status == "signed":
+        return "Договор подписан"
+    if agreement_status in {"sent", "viewed"}:
+        return "Договор у клиента"
+    if agreement_status == "draft":
+        return "Договор не отправлен"
+    if agreement_status == "declined":
+        return "Клиент отказался"
+    if nda_signed:
+        return "Готовим условия"
+    return "Первичное обращение"
+
+
 @router.get("/today")
 def today(
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
@@ -290,6 +305,33 @@ def clients(
         ).scalars().all()
     ) if lead_ids else set()
 
+    # Клиенты, чей последний вопрос остался без ответа.
+    awaiting_me: set[uuid.UUID] = set()
+    if lead_ids:
+        newest = (
+            select(
+                ServiceAgreementMessage.agreement_id.label("agreement_id"),
+                func.max(ServiceAgreementMessage.created_at).label("last_at"),
+            )
+            .group_by(ServiceAgreementMessage.agreement_id)
+            .subquery()
+        )
+        awaiting_me = {
+            lead_id
+            for (lead_id,) in db.execute(
+                select(ServiceAgreement.lead_id)
+                .join(ServiceAgreementMessage, ServiceAgreementMessage.agreement_id == ServiceAgreement.id)
+                .join(
+                    newest,
+                    (newest.c.agreement_id == ServiceAgreementMessage.agreement_id)
+                    & (newest.c.last_at == ServiceAgreementMessage.created_at),
+                )
+                .where(ServiceAgreement.lead_id.in_(lead_ids))
+                .where(ServiceAgreementMessage.role == ServiceAgreementMessageRole.client)
+            ).all()
+            if lead_id
+        }
+
     open_agreements: dict[uuid.UUID, str] = {}
     if lead_ids:
         for lead_id, status in db.execute(
@@ -299,6 +341,9 @@ def clients(
         ).all():
             open_agreements.setdefault(lead_id, status.value)
 
+    # Что сейчас происходит по клиенту — одной строкой. Без неё список
+    # выглядит одинаковым для того, кто ждёт договора, и того, кто уже
+    # подписал, и приходится открывать каждого, чтобы вспомнить.
     return [
         {
             "lead_id": str(lead.id),
@@ -310,6 +355,11 @@ def clients(
             "last_intake_at": _iso(last_at),
             "nda_signed": lead.id in signed_nda,
             "agreement_status": open_agreements.get(lead.id),
+            "stage": _stage_for(
+                nda_signed=lead.id in signed_nda,
+                agreement_status=open_agreements.get(lead.id),
+            ),
+            "waiting_on_me": lead.id in awaiting_me,
         }
         for lead, count, last_at in rows
     ]
@@ -394,9 +444,14 @@ def client_card(
                 }
             )
 
+    latest_agreement = agreements[0] if agreements else None
     return {
         "lead_id": str(lead.id),
         "name": _lead_title(lead),
+        "stage": _stage_for(
+            nda_signed=nda is not None,
+            agreement_status=latest_agreement.status.value if latest_agreement else None,
+        ),
         "contact": lead.contact,
         "company": lead.company,
         "telegram_user_id": lead.telegram_user_id,
@@ -441,11 +496,22 @@ def client_card(
                 "revision": item.revision,
                 "subject": item.subject,
                 "price_text": item.price_text,
+                "payment_terms": item.payment_terms,
+                "scope_text": item.scope_text,
+                "exclusions_text": item.exclusions_text,
+                "schedule_text": item.schedule_text,
+                "expires_at": _iso(item.expires_at),
                 "created_at": _iso(item.created_at),
                 "sent_at": _iso(item.sent_at),
                 "viewed_at": _iso(item.viewed_at),
                 "signed_at": _iso(item.signed_at),
                 "declined_at": _iso(item.declined_at),
+                # Реквизиты, которые клиент ввёл при подписании: юристу они
+                # нужны так же, как условия, — по ним видно, с кем договор.
+                "client_snapshot": item.client_snapshot or {},
+                "signer_position": item.signer_position,
+                "authority_basis": item.authority_basis,
+                "document_version": item.document_version,
                 "messages": messages.get(item.id, []),
             }
             for item in agreements
