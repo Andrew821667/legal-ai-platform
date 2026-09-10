@@ -491,6 +491,9 @@ def client_card(
         "agreements": [
             {
                 "agreement_id": str(item.id),
+                # Без этого при втором обращении клиента нельзя понять, к чему
+                # относится договор: на экране они лежат одним списком.
+                "intake_id": str(item.intake_id) if item.intake_id else None,
                 "number": item.agreement_number,
                 "status": item.status.value,
                 "revision": item.revision,
