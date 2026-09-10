@@ -37,8 +37,26 @@ export const AGREEMENT_STATUS: Record<string, string> = {
 
 export const URGENCY: Record<string, string> = {
   urgent: "Срочно",
-  this_week: "На неделе",
+  high: "Высокая",
+  normal: "Обычная",
   no_deadline: "Без срока",
+};
+
+/** Проверка конфликта интересов. Ядро не даёт создать договор, пока не «clear». */
+export const CONFLICT: Record<string, string> = {
+  unchecked: "Конфликт не проверен",
+  clear: "Конфликтов нет",
+  potential: "Нужна доп. проверка",
+  conflict: "Обнаружен конфликт",
+};
+
+export const CONFLICT_EXPLAINED: Record<string, string> = {
+  unchecked:
+    "Проверка на конфликт интересов не проводилась. Пока она не пройдена, договор по этому обращению создать нельзя.",
+  potential:
+    "Проверка показала возможный конфликт интересов. Пока он не снят, договор по этому обращению создать нельзя.",
+  conflict:
+    "По этому обращению обнаружен конфликт интересов. Договор заключать нельзя.",
 };
 
 export const OUTREACH_REASON: Record<string, string> = {

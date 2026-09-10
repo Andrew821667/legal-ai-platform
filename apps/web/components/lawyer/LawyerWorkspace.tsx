@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import ClientCardView from "./ClientCardView";
 import TodayView from "./TodayView";
@@ -38,9 +38,15 @@ export default function LawyerWorkspace() {
     }
   }, [ready, initData]);
 
+  // Последний поисковый запрос живёт в ref, а не в состоянии: обновление после
+  // действия должно сохранять фильтр, но не менять identity загрузчика — иначе
+  // эффект начнёт перезапускаться на каждый поиск.
+  const lastSearch = useRef("");
+
   const loadClients = useCallback(
-    async (search?: string) => {
+    async (search = lastSearch.current) => {
       if (!ready) return;
+      lastSearch.current = search;
       setLoading(true);
       setError(null);
       try {
@@ -85,6 +91,16 @@ export default function LawyerWorkspace() {
     [initData],
   );
 
+  // После любого действия внутри карточки экран обязан говорить правду.
+  // Раньше пилюля статуса продолжала показывать «Черновик» рядом с надписью
+  // «Отправлено», а счётчик задач не менялся, пока не переоткроешь карточку.
+  const refreshAfterAction = useCallback(
+    async (leadId: string) => {
+      await Promise.all([openClient(leadId), loadToday(), loadClients()]);
+    },
+    [openClient, loadToday, loadClients],
+  );
+
   const pendingCount = today
     ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
     : undefined;
@@ -94,6 +110,7 @@ export default function LawyerWorkspace() {
       <ClientCardView
         card={card}
         onBack={() => setCard(null)}
+        onChanged={() => void refreshAfterAction(card.lead_id)}
         loading={loading}
         initData={initData}
       />

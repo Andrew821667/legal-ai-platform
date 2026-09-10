@@ -14,11 +14,13 @@ export default function ActionButton({
   done,
   onRun,
   tone = "primary",
+  busy = "Отправляю…",
 }: {
   label: string;
   done: string;
   onRun: () => Promise<void>;
   tone?: "primary" | "quiet";
+  busy?: string;
 }) {
   const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function ActionButton({
             : "bg-slate-800 text-slate-200 hover:bg-slate-700"
         }`}
       >
-        {state === "busy" ? "Отправляю…" : label}
+        {state === "busy" ? busy : label}
       </button>
       {error ? <p className="mt-1 text-sm text-rose-300">{error}</p> : null}
     </div>
