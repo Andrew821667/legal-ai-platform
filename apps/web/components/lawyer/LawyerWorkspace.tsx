@@ -19,31 +19,56 @@ export default function LawyerWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  // Два независимых загрузчика — не читают состояние друг друга и не входят
+  // в зависимости друг друга. Раньше был один load() с [tab, clients, today]
+  // в зависимостях: setToday() внутри него менял today, today менял identity
+  // самого load, а это снова запускало useEffect([load]) — на вкладке
+  // «Задачи» цикл ничем не был ограничен и на проде долбил сервер сотнями
+  // запросов в секунду, пока вкладка открыта.
+  const loadToday = useCallback(async () => {
     if (!ready) return;
     setLoading(true);
     setError(null);
     try {
-      if (tab === "today") {
-        setToday(await lawyerFetch<Today>("/api/lawyer/today", initData));
-      } else if (clients === null) {
-        setClients(await lawyerFetch<ClientRow[]>("/api/lawyer/clients", initData));
-      }
-      // Счётчик задач нужен и на вкладке клиентов: он показывает, что где-то
-      // ждут ответа, не заставляя переключаться и проверять.
-      if (tab === "clients" && today === null) {
-        setToday(await lawyerFetch<Today>("/api/lawyer/today", initData));
-      }
+      setToday(await lawyerFetch<Today>("/api/lawyer/today", initData));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить данные");
     } finally {
       setLoading(false);
     }
-  }, [ready, tab, initData, clients, today]);
+  }, [ready, initData]);
 
+  const loadClients = useCallback(
+    async (search?: string) => {
+      if (!ready) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const query = search ? `?search=${encodeURIComponent(search)}` : "";
+        setClients(await lawyerFetch<ClientRow[]>(`/api/lawyer/clients${query}`, initData));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Не удалось найти");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ready, initData],
+  );
+
+  // Стартовая загрузка: клиенты — для списка, задачи — для счётчика на
+  // вкладке «Клиенты» (он показывает, что где-то ждут ответа, не заставляя
+  // переключаться и проверять). Оба загрузчика стабильны по identity, пока
+  // не меняются ready/initData, — эффект не перезапускает сам себя.
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadClients();
+    void loadToday();
+  }, [loadClients, loadToday]);
+
+  // При каждом переходе на «Задачи» — свежие данные, а не то, что было при
+  // первом заходе в раздел.
+  useEffect(() => {
+    if (tab === "today") void loadToday();
+  }, [tab, loadToday]);
 
   const openClient = useCallback(
     async (leadId: string) => {
@@ -53,22 +78,6 @@ export default function LawyerWorkspace() {
         setCard(await lawyerFetch<ClientCard>(`/api/lawyer/clients/${leadId}`, initData));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Не удалось открыть карточку");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [initData],
-  );
-
-  const search = useCallback(
-    async (term: string) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const query = term ? `?search=${encodeURIComponent(term)}` : "";
-        setClients(await lawyerFetch<ClientRow[]>(`/api/lawyer/clients${query}`, initData));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Не удалось найти");
       } finally {
         setLoading(false);
       }
@@ -134,7 +143,7 @@ export default function LawyerWorkspace() {
           {error}
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void (tab === "today" ? loadToday() : loadClients())}
             className="ml-3 underline underline-offset-2"
           >
             Повторить
@@ -146,7 +155,7 @@ export default function LawyerWorkspace() {
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={openClient} /> : null}
       {!error && tab === "clients" ? (
-        <ClientsView rows={clients} onOpen={openClient} onSearch={search} />
+        <ClientsView rows={clients} onOpen={openClient} onSearch={(term) => void loadClients(term)} />
       ) : null}
     </div>
   );
