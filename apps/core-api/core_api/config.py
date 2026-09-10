@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://legalai_app:change_me_local_only@localhost:5432/legalai_platform"
     cors_origins: str = "http://localhost:3000"
     alert_bot_token: str | None = None
+    # Sentry: пусто по умолчанию — мониторинг включается явным заданием
+    # DSN, а не молчаливым переходом в SaaS вне РФ.
+    sentry_dsn: str | None = None
     alert_chat_id: str | None = None
     lead_notify_bot_token: str | None = None
     # Токен бота-ассистента: им ядро пишет клиенту напрямую — например,

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from core_api.alerts import send_telegram_alert
 from core_api.config import get_settings
 from core_api.logging_config import setup_logging
+from core_api.sentry_init import init_sentry
 from core_api.routers import (
     admin,
     automation_controls,
@@ -32,6 +33,10 @@ from core_api.routers import (
 setup_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# До создания приложения: интеграция FastAPI/Starlette инструментирует ASGI
+# на этапе построения app, включать её позже смысла нет.
+init_sentry()
 
 app = FastAPI(title="AI Verdict Core API", version="1.0.0")
 app.state.started_at = datetime.now(timezone.utc)
@@ -65,5 +70,14 @@ app.include_router(admin.router)
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled exception", extra={"path": str(request.url.path)})
+    # Этот обработчик перехватывает исключение до того, как оно дойдёт до
+    # ASGI-уровня, поэтому автоматическая интеграция Sentry его не увидит —
+    # без явного вызова событие просто не было бы создано.
+    try:
+        import sentry_sdk
+
+        sentry_sdk.capture_exception(exc)
+    except Exception:  # noqa: BLE001 — сбой отправки не должен маскировать исходную ошибку
+        logger.warning("sentry_capture_failed", exc_info=True)
     send_telegram_alert(f"🔴 AI Verdict Core API error on {request.url.path}: {type(exc).__name__}")
     return JSONResponse({"detail": "Internal server error"}, status_code=500)

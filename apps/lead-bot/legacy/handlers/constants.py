@@ -196,13 +196,37 @@ def lawyer_workspace_button():
     return InlineKeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))
 
 
+def case_management_button():
+    """Кнопка перехода в бота учёта судебных дел.
+
+    Дела и клиентская переписка живут в разных системах: здесь — обращения и
+    договоры, там — заседания и сроки. Пока это не один продукт, кнопка хотя
+    бы убирает необходимость держать в голове, куда переключаться.
+
+    Возвращает None, если адрес не задан, — кнопка, ведущая в никуда, хуже её
+    отсутствия. По умолчанию не задан: имя того бота не было известно на
+    момент, когда писался этот код.
+    """
+    username = getattr(get_config(), "CASE_MANAGEMENT_BOT_USERNAME", "")
+    if not username:
+        return None
+    return InlineKeyboardButton(
+        "📅 Судебные дела", url=f"https://t.me/{username}"
+    )
+
+
 def build_admin_panel_menu():
     """Меню админ-панели. Рабочее место идёт первым: это ежедневный экран."""
     rows = []
     workspace = lawyer_workspace_button()
     if workspace is not None:
         rows.append([workspace])
-    return rows + ADMIN_PANEL_MENU
+    rows += ADMIN_PANEL_MENU[:-1]
+    case_management = case_management_button()
+    if case_management is not None:
+        rows.append([case_management])
+    rows.append(ADMIN_PANEL_MENU[-1])
+    return rows
 
 
 ADMIN_PANEL_MENU = [
