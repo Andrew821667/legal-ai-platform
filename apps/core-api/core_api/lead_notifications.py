@@ -183,7 +183,12 @@ _NOTIFY_MAX_ATTEMPTS = 3
 _NOTIFY_RETRY_BACKOFF_SECONDS = 2
 
 
-def _post_telegram_message(token: str, chat_id: str, text: str) -> None:
+def _post_telegram_message(
+    token: str,
+    chat_id: str,
+    text: str,
+    reply_markup: str | None = None,
+) -> None:
     """POST to Telegram sendMessage with a few retries on transient errors.
 
     Telegram via VPN/WARP occasionally takes 5–10s for the TLS handshake,
@@ -200,6 +205,8 @@ def _post_telegram_message(token: str, chat_id: str, text: str) -> None:
                     "chat_id": chat_id,
                     "text": text,
                     "disable_web_page_preview": "true",
+                    # Кнопки под сообщением. Telegram ждёт их строкой JSON.
+                    **({"reply_markup": reply_markup} if reply_markup else {}),
                 },
                 timeout=_NOTIFY_HTTP_TIMEOUT_SECONDS,
             )

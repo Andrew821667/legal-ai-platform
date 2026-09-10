@@ -16,7 +16,9 @@ const CORE_API_ADMIN_KEY =
 // Ядро на той же машине; если оно не ответило за это время, ответит и не позже.
 const TIMEOUT_MS = 15_000;
 
-export async function coreGet(path: string): Promise<NextResponse> {
+type Method = "GET" | "POST" | "PATCH";
+
+async function coreCall(method: Method, path: string, payload?: unknown): Promise<NextResponse> {
   if (!CORE_API_ADMIN_KEY) {
     return NextResponse.json(
       { detail: "Сервер не настроен: нет ключа доступа к ядру" },
@@ -28,12 +30,17 @@ export async function coreGet(path: string): Promise<NextResponse> {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await fetch(`${CORE_API_URL}${path}`, {
-      headers: { "X-API-Key": CORE_API_ADMIN_KEY },
+      method,
+      headers: {
+        "X-API-Key": CORE_API_ADMIN_KEY,
+        ...(payload === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: payload === undefined ? undefined : JSON.stringify(payload),
       signal: controller.signal,
       cache: "no-store",
     });
-    const body = await response.text();
-    return new NextResponse(body, {
+    const text = await response.text();
+    return new NextResponse(text, {
       status: response.status,
       headers: { "content-type": "application/json" },
     });
@@ -48,4 +55,16 @@ export async function coreGet(path: string): Promise<NextResponse> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function coreGet(path: string): Promise<NextResponse> {
+  return coreCall("GET", path);
+}
+
+export function corePost(path: string, payload?: unknown): Promise<NextResponse> {
+  return coreCall("POST", path, payload);
+}
+
+export function corePatch(path: string, payload: unknown): Promise<NextResponse> {
+  return coreCall("PATCH", path, payload);
 }

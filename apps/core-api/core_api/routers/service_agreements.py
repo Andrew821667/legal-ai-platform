@@ -14,7 +14,14 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_proposal import (
+    build_proposal_markup,
+    build_proposal_text,
+    build_reply_text,
+    build_summary,
+)
 from core_api.config import get_settings
+from core_api.lead_notifications import _post_telegram_message
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.models import (
@@ -224,6 +231,10 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "version": item.document_version,
         "hash": item.document_hash,
     }
+    # Готовое сообщение клиенту собирается здесь, а не у каждого отправителя.
+    # Бот берёт его отсюда, рабочее место — тоже: одна формулировка на всех.
+    data["proposal_text"] = build_proposal_text(data)
+    data["summary_text"] = build_summary(data)
     if include_text:
         data["text"] = item.document_text
     return data
@@ -751,3 +762,111 @@ def list_messages(
         .all()
     )
     return [_message_payload(row) for row in rows]
+
+
+def _client_bot_token() -> str:
+    settings = get_settings()
+    return (
+        getattr(settings, "lead_bot_token", None)
+        or getattr(settings, "lead_notify_bot_token", None)
+        or ""
+    )
+
+
+@router.post("/{agreement_id}/deliver")
+def deliver_agreement(
+    agreement_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Отправляет клиенту подготовленный договор и отмечает отправку.
+
+    Единственное место доставки: и кнопка в боте, и рабочее место юриста
+    вызывают её. Пока текст и кнопки собирались в боте, отправка из другого
+    места означала бы вторую копию, а разошедшиеся копии на этой неделе уже
+    дважды приводили к тихим сбоям.
+
+    Отметка ставится только после успешной отправки. Обратный порядок оставил
+    бы договор «отправленным» при неудаче, и юрист ждал бы ответа, которого
+    клиент не получал.
+    """
+    item = _get(db, agreement_id, lock=True)
+    if item.status != ServiceAgreementStatus.draft:
+        raise HTTPException(status_code=409, detail="Agreement is not a draft")
+    if not item.client_telegram_user_id:
+        raise HTTPException(status_code=409, detail="Client has no Telegram")
+
+    token = _client_bot_token()
+    if not token:
+        raise HTTPException(status_code=500, detail="Bot token is not configured")
+
+    payload = _payload(item)
+    try:
+        _post_telegram_message(
+            token,
+            str(item.client_telegram_user_id),
+            build_proposal_text(payload),
+            reply_markup=build_proposal_markup(str(item.id)),
+        )
+    except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
+        raise HTTPException(
+            status_code=502, detail=f"Telegram delivery failed: {type(exc).__name__}"
+        ) from exc
+
+    item.status = ServiceAgreementStatus.sent
+    item.sent_at = datetime.now(timezone.utc)
+    db.add(item)
+    _audit(db, identity, item, "service_agreement.deliver")
+    db.commit()
+    db.refresh(item)
+    return _payload(item)
+
+
+@router.post("/{agreement_id}/replies/deliver", status_code=status.HTTP_201_CREATED)
+def reply_and_deliver(
+    agreement_id: uuid.UUID,
+    payload: AgreementMessageIn,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Записывает ответ юриста и сразу отправляет его клиенту.
+
+    Отдельно от /replies: тот только записывает, и его вызывает бот, который
+    отправляет сам. Здесь оба шага вместе — для рабочего места, у которого
+    своего канала в Telegram нет.
+    """
+    item = _get(db, agreement_id)
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="text is required")
+    if not item.client_telegram_user_id:
+        raise HTTPException(status_code=409, detail="Client has no Telegram")
+
+    token = _client_bot_token()
+    if not token:
+        raise HTTPException(status_code=500, detail="Bot token is not configured")
+
+    try:
+        _post_telegram_message(
+            token,
+            str(item.client_telegram_user_id),
+            build_reply_text(_payload(item), text),
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Не записываем ответ, который не дошёл: иначе в переписке он будет
+        # выглядеть отправленным, и юрист решит, что клиент его проигнорировал.
+        raise HTTPException(
+            status_code=502, detail=f"Telegram delivery failed: {type(exc).__name__}"
+        ) from exc
+
+    msg = ServiceAgreementMessage(
+        agreement_id=item.id,
+        role=ServiceAgreementMessageRole.lawyer,
+        telegram_user_id=payload.telegram_user_id,
+        text=text,
+    )
+    db.add(msg)
+    db.flush()
+    _audit(db, identity, item, "service_agreement.reply")
+    db.commit()
+    return {"id": str(msg.id), "delivered": True}

@@ -1,5 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
+import ActionButton from "./ActionButton";
+import ReplyBox from "./ReplyBox";
+import NoteBox from "./NoteBox";
+import { lawyerAction } from "./useTelegram";
 import {
   AGREEMENT_STATUS,
   AREA,
@@ -20,10 +26,12 @@ export default function ClientCardView({
   card,
   onBack,
   loading,
+  initData,
 }: {
   card: ClientCard;
   onBack: () => void;
   loading: boolean;
+  initData: string;
 }) {
   return (
     <div>
@@ -70,7 +78,9 @@ export default function ClientCardView({
         {card.agreements.length === 0 ? (
           <Empty>Договоров пока нет.</Empty>
         ) : (
-          card.agreements.map((item) => <Agreement key={item.agreement_id} item={item} />)
+          card.agreements.map((item) => (
+            <Agreement key={item.agreement_id} item={item} initData={initData} />
+          ))
         )}
       </Section>
 
@@ -78,7 +88,9 @@ export default function ClientCardView({
         {card.intakes.length === 0 ? (
           <Empty>Обращений нет.</Empty>
         ) : (
-          card.intakes.map((item) => <Intake key={item.intake_id} item={item} />)
+          card.intakes.map((item) => (
+            <Intake key={item.intake_id} item={item} initData={initData} />
+          ))
         )}
       </Section>
     </div>
@@ -102,7 +114,7 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Agreement({ item }: { item: AgreementCard }) {
+function Agreement({ item, initData }: { item: AgreementCard; initData: string }) {
   const unanswered =
     item.messages.length > 0 && item.messages[item.messages.length - 1].role === "client";
 
@@ -125,6 +137,18 @@ function Agreement({ item }: { item: AgreementCard }) {
         {item.declined_at ? ` · отклонён ${shortDate(item.declined_at)}` : ""}
       </p>
 
+      {item.status === "draft" ? (
+        <div className="mt-2 border-t border-slate-800 pt-2">
+          <ActionButton
+            label="Отправить клиенту"
+            done="Отправлено. Клиент получил проект договора."
+            onRun={async () => {
+              await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
+            }}
+          />
+        </div>
+      ) : null}
+
       {item.messages.length > 0 ? (
         <div className="mt-2 space-y-1 border-t border-slate-800 pt-2">
           {unanswered ? (
@@ -138,13 +162,14 @@ function Agreement({ item }: { item: AgreementCard }) {
               {message.text}
             </p>
           ))}
+          {unanswered ? <ReplyBox agreementId={item.agreement_id} initData={initData} /> : null}
         </div>
       ) : null}
     </article>
   );
 }
 
-function Intake({ item }: { item: IntakeCard }) {
+function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
   return (
     <article className="rounded-lg border border-slate-800 bg-slate-900 p-3">
       <div className="flex items-baseline justify-between gap-3">
@@ -201,9 +226,7 @@ function Intake({ item }: { item: IntakeCard }) {
         </details>
       ) : null}
 
-      {item.internal_note ? (
-        <p className="mt-2 rounded bg-slate-800 p-2 text-xs text-slate-300">{item.internal_note}</p>
-      ) : null}
+      <NoteBox intakeId={item.intake_id} initialNote={item.internal_note} initData={initData} />
     </article>
   );
 }

@@ -49,3 +49,23 @@ export async function lawyerFetch<T>(path: string, initData: string): Promise<T>
   }
   return body as T;
 }
+
+export async function lawyerAction<T>(
+  path: string,
+  initData: string,
+  payload?: unknown,
+): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "x-telegram-init-data": initData,
+      ...(payload === undefined ? {} : { "content-type": "application/json" }),
+    },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.detail || `Ошибка ${response.status}`);
+  }
+  return body as T;
+}

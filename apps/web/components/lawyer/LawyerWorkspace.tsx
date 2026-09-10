@@ -77,6 +77,7 @@ export default function LawyerWorkspace() {
         card={card}
         onBack={() => setCard(null)}
         loading={loading}
+        initData={initData}
       />
     );
   }
