@@ -211,6 +211,98 @@ def test_unreachable_client_is_shown() -> None:
         _cleanup(names, seeded["lead_id"])
 
 
+def test_expiring_offer_is_surfaced_before_it_lapses() -> None:
+    """Статус «истёк» ставится, только когда клиент откроет просрочку.
+
+    То есть о сгорающем сроке юристу узнать неоткуда, а когда узнает — уже
+    поздно: редакцию придётся составлять заново.
+    """
+    client = TestClient(app)
+    names = ["pytest.workspace.expiring"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, seeded["agreement_id"])
+        agreement.status = ServiceAgreementStatus.sent
+        agreement.sent_at = datetime.now(timezone.utc) - timedelta(days=6)
+        agreement.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        mine = [
+            i
+            for i in _section(body, "expiring")["items"]
+            if i["agreement_id"] == seeded["agreement_id"]
+        ]
+        assert len(mine) == 1
+        assert mine[0]["days_left"] == 0
+        assert mine[0]["expires_at"] is not None
+
+        # И не задваивается в «клиент молчит»: дело одно, а задача — другая.
+        silent = _section(body, "awaiting_client")["items"]
+        assert not [i for i in silent if i["agreement_id"] == seeded["agreement_id"]]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_lapsed_offer_counts_down_past_zero() -> None:
+    """Просроченное предложение не исчезает: пока клиент его не открыл, оно
+    висит в «отправлен» и требует решения."""
+    client = TestClient(app)
+    names = ["pytest.workspace.lapsed"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, seeded["agreement_id"])
+        agreement.status = ServiceAgreementStatus.sent
+        agreement.sent_at = datetime.now(timezone.utc) - timedelta(days=10)
+        agreement.expires_at = datetime.now(timezone.utc) - timedelta(days=2)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        mine = [
+            i
+            for i in _section(body, "expiring")["items"]
+            if i["agreement_id"] == seeded["agreement_id"]
+        ]
+        assert len(mine) == 1
+        assert mine[0]["days_left"] < 0
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_offer_with_room_left_stays_out_of_the_expiring_list() -> None:
+    """Иначе раздел «истекает» превратится в список всех отправленных."""
+    client = TestClient(app)
+    names = ["pytest.workspace.roomy"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, seeded["agreement_id"])
+        agreement.status = ServiceAgreementStatus.sent
+        agreement.sent_at = datetime.now(timezone.utc)
+        agreement.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        items = _section(body, "expiring")["items"]
+        assert not [i for i in items if i["agreement_id"] == seeded["agreement_id"]]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
 def test_client_card_gathers_everything_in_one_answer() -> None:
     """Карточку открывают, чтобы вспомнить контекст перед разговором."""
     client = TestClient(app)

@@ -42,6 +42,9 @@ router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
 # Сколько дней ждать реакции клиента, прежде чем напомнить о себе юристу.
 _AWAITING_CLIENT_DAYS = 3
 
+# За сколько дней предупреждать, что предложение вот-вот сгорит.
+_EXPIRING_SOON_DAYS = 3
+
 # Статусы, из которых договор ещё может сдвинуться.
 _OPEN_AGREEMENT_STATUSES = (
     ServiceAgreementStatus.draft,
@@ -65,6 +68,15 @@ def _days_since(value: datetime | None) -> int | None:
         return None
     delta = datetime.now(timezone.utc) - value.astimezone(timezone.utc)
     return max(0, delta.days)
+
+
+def _days_until(value: datetime | None) -> int | None:
+    """Сколько целых дней осталось. Отрицательное — срок уже прошёл."""
+    if value is None:
+        return None
+    # timedelta.days округляет вниз: 2,5 дня впереди — это 2 полных дня, а
+    # полдня назад — уже -1, то есть «просрочено».
+    return (value.astimezone(timezone.utc) - datetime.now(timezone.utc)).days
 
 
 def _stage_for(*, nda_signed: bool, agreement_status: str | None) -> str:
@@ -150,6 +162,15 @@ def today(
         )
         .where(ServiceAgreement.sent_at.is_not(None))
         .where(ServiceAgreement.sent_at < stale_before)
+        # Сгорающее предложение показываем отдельным разделом: там другое
+        # действие — не напомнить, а успеть переиздать. Дважды в списке дел
+        # одно и то же дело выглядит как две задачи.
+        .where(
+            or_(
+                ServiceAgreement.expires_at.is_(None),
+                ServiceAgreement.expires_at >= now + timedelta(days=_EXPIRING_SOON_DAYS),
+            )
+        )
         .order_by(ServiceAgreement.sent_at)
     ).all()
 
@@ -167,6 +188,23 @@ def today(
             )
         )
         .order_by(LegalIntake.created_at)
+    ).all()
+
+    # 6. Предложение вот-вот сгорит. В «истёк» договор переводится только
+    #    когда клиент сам откроет просроченное предложение (service_agreements.py):
+    #    до тех пор о сгорающем сроке юристу узнать неоткуда, а после — поздно,
+    #    редакцию придётся составлять заново.
+    expiring = db.execute(
+        select(ServiceAgreement, Lead)
+        .outerjoin(Lead, Lead.id == ServiceAgreement.lead_id)
+        .where(
+            ServiceAgreement.status.in_(
+                [ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed]
+            )
+        )
+        .where(ServiceAgreement.expires_at.is_not(None))
+        .where(ServiceAgreement.expires_at < now + timedelta(days=_EXPIRING_SOON_DAYS))
+        .order_by(ServiceAgreement.expires_at)
     ).all()
 
     return {
@@ -237,6 +275,23 @@ def today(
                         "days_waiting": _days_since(a.sent_at),
                     }
                     for a, lead in awaiting
+                ],
+            },
+            {
+                "key": "expiring",
+                "title": "Предложение истекает",
+                "hint": "После этой даты редакцию придётся составлять заново.",
+                "items": [
+                    {
+                        "agreement_id": str(a.id),
+                        "lead_id": str(a.lead_id) if a.lead_id else None,
+                        "client": _lead_title(lead),
+                        "subject": a.subject[:160],
+                        "status": a.status.value,
+                        "expires_at": _iso(a.expires_at),
+                        "days_left": _days_until(a.expires_at),
+                    }
+                    for a, lead in expiring
                 ],
             },
             {
