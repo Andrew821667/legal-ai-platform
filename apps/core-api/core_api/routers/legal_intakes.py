@@ -55,6 +55,7 @@ def _payload(item: LegalIntake, lead: Lead) -> LegalIntakeOut:
         description=item.description,
         urgency=item.urgency,
         deadline=item.deadline,
+        deadline_at=item.deadline_at,
         region=item.region,
         source_context=item.source_context,
         status=item.status,

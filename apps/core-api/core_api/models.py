@@ -489,7 +489,11 @@ class LegalIntake(Base):
         nullable=False,
         default=LegalUrgency.no_deadline,
     )
+    # Слова клиента о сроке — как он их сказал («к этому четвергу»).
     deadline: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Дата, которую юрист проставил осознанно. Разбирать её из текста выше не
+    # пытаемся: догадка о процессуальном сроке дороже, чем пустое поле.
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     region: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_context: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[LegalIntakeStatus] = mapped_column(

@@ -78,6 +78,26 @@ export function days(count: number | null | undefined): string {
   return `${count} ${word}`;
 }
 
+/**
+ * Дата, выбранная в календаре, — именно она, а не соседний день.
+ *
+ * Срок хранится как конец дня по UTC, а `toLocaleDateString` рисует в поясе
+ * зрителя: в Москве 23:59Z переезжает на следующие сутки, и юрист, поставивший
+ * 17-е, видел на карточке 18-е. Для настоящих моментов времени («когда
+ * отправлено») это не так — там местный пояс и нужен.
+ */
+export function shortDay(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);

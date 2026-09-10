@@ -224,6 +224,7 @@ class LegalIntakeCreate(BaseModel):
 class LegalIntakePatch(BaseModel):
     status: LegalIntakeStatus | None = None
     conflict_status: ConflictCheckStatus | None = None
+    deadline_at: datetime | None = None
     assigned_to: str | None = Field(default=None, max_length=255)
     internal_note: str | None = Field(default=None, max_length=4000)
 
@@ -238,6 +239,7 @@ class LegalIntakeOut(BaseModel):
     description: str
     urgency: LegalUrgency
     deadline: str | None
+    deadline_at: datetime | None = None
     region: str | None
     source_context: str | None
     status: LegalIntakeStatus
