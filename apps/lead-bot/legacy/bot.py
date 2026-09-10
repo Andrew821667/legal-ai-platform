@@ -25,9 +25,7 @@ from telegram import (
     BotCommandScopeChat,
     BotCommandScopeDefault,
     MenuButtonDefault,
-    MenuButtonWebApp,
     Update,
-    WebAppInfo,
 )
 from telegram.error import Forbidden, TelegramError
 from telegram.request import HTTPXRequest
@@ -1061,34 +1059,26 @@ async def _set_command_menu(app: Application) -> None:
     except TelegramError as error:
         logger.warning("Не удалось задать админское меню команд: %s", type(error).__name__)
 
-    await _set_workspace_menu_button(app, int(admin_id))
+    await _restore_default_menu_button(app, int(admin_id))
 
 
-async def _set_workspace_menu_button(app: Application, admin_id: int) -> None:
-    """Вешает рабочее место на кнопку меню в углу — только у владельца.
+async def _restore_default_menu_button(app: Application, admin_id: int) -> None:
+    """Возвращает владельцу обычную кнопку меню — список команд.
 
-    Кнопка меню одна на чат, и по умолчанию она показывает список команд. Для
-    владельца полезнее сразу открывать рабочее место: это ежедневный экран, и
-    два лишних касания на нём ощущаются.
+    Прежде здесь она подменялась на прямое открытие рабочего места
+    (MenuButtonWebApp). На практике это забирало быстрый доступ к остальным
+    командам — /admin в том числе, который в этот список и входит, — ради
+    одного касания до одного экрана. Явный вызов нужен: Telegram запоминает
+    последний заданный тип кнопки на чат и сам не откатывает его назад.
 
-    Клиентам кнопку не трогаем: у них там команды, и подменять их разделом,
-    куда всё равно нет доступа, незачем.
+    Широкий доступ к рабочему месту теперь на постоянной reply-клавиатуре
+    (main_menu_markup/ADMIN_MENU) — она открывается кнопкой во весь ряд, а не
+    отбирает угловую кнопку у команд.
     """
-    url = getattr(config, "LAWYER_WORKSPACE_URL", "")
     try:
-        if url:
-            await app.bot.set_chat_menu_button(
-                chat_id=admin_id,
-                menu_button=MenuButtonWebApp(
-                    text="Рабочее место", web_app=WebAppInfo(url=url)
-                ),
-            )
-        else:
-            # Адрес убрали из настроек — возвращаем обычное меню команд, иначе
-            # кнопка осталась бы вести в никуда.
-            await app.bot.set_chat_menu_button(
-                chat_id=admin_id, menu_button=MenuButtonDefault()
-            )
+        await app.bot.set_chat_menu_button(
+            chat_id=admin_id, menu_button=MenuButtonDefault()
+        )
     except TelegramError as error:
         logger.warning("Не удалось задать кнопку меню: %s", type(error).__name__)
 

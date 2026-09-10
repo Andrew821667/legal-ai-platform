@@ -126,23 +126,14 @@ def test_panel_survives_missing_workspace_url(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_menu_button_opens_the_workspace(monkeypatch) -> None:
-    """Ежедневный экран должен открываться одним касанием, а не через /admin."""
+async def test_menu_button_stays_the_commands_list(monkeypatch) -> None:
+    """Угловая кнопка меню — список команд, а не прямое открытие раздела.
+
+    Раньше здесь стоял MenuButtonWebApp, и он забирал быстрый доступ к /admin
+    и остальным командам ради одного касания до одного экрана. Широкий доступ
+    к рабочему месту теперь на постоянной клавиатуре, а не здесь.
+    """
     monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
-    monkeypatch.setattr(
-        bot_module.config, "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
-    )
-    bot = _Bot()
-    await bot_module._set_command_menu(SimpleNamespace(bot=bot))
-
-    assert bot.menu == [(42, "MenuButtonWebApp")]
-
-
-@pytest.mark.anyio
-async def test_menu_button_returns_to_commands_without_url(monkeypatch) -> None:
-    """Адрес убрали — кнопка не должна остаться ведущей в никуда."""
-    monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
-    monkeypatch.setattr(bot_module.config, "LAWYER_WORKSPACE_URL", "", raising=False)
     bot = _Bot()
     await bot_module._set_command_menu(SimpleNamespace(bot=bot))
 
@@ -160,6 +151,30 @@ async def test_menu_button_failure_does_not_block_startup(monkeypatch) -> None:
             raise NetworkError("нет сети")
 
     await bot_module._set_command_menu(SimpleNamespace(bot=_Failing()))
+
+
+def test_admin_reply_keyboard_has_workspace_on_its_own_row(monkeypatch) -> None:
+    """Одиночная кнопка в reply-клавиатуре растягивается на весь ряд —
+    ровно так рабочее место становится заметным без лишних касаний."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    rows = constants.build_admin_reply_menu()
+    workspace_row = next(row for row in rows if any("Рабочее место" in b.text for b in row))
+    assert len(workspace_row) == 1
+    assert workspace_row[0].web_app is not None
+
+
+def test_admin_reply_keyboard_hides_workspace_without_url(monkeypatch) -> None:
+    import handlers.constants as constants
+
+    monkeypatch.setattr(constants.get_config(), "LAWYER_WORKSPACE_URL", "", raising=False)
+    labels = [b.text for row in constants.build_admin_reply_menu() for b in row]
+    assert not any("Рабочее место" in label for label in labels)
+    # Обычный пункт остаётся на месте — новая кнопка ничего не вытесняет.
+    assert any("Рабочий стол" in label for label in labels)
 
 
 def test_case_management_button_hidden_without_username(monkeypatch) -> None:

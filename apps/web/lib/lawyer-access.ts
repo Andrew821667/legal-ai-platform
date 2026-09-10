@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { verifyLawyerSessionToken } from "./lawyer-session-token.ts";
+
 /**
  * Решение о доступе к рабочему месту юриста.
  *
@@ -106,4 +108,50 @@ export function checkLawyerAccess({
   }
 
   return { ok: true, telegramUserId };
+}
+
+const DEFAULT_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+export type SessionCookieInput = {
+  cookie: string;
+  secret: string;
+  allowedIds: number[];
+  maxAgeSeconds?: number;
+  now?: number;
+};
+
+/**
+ * Проверка автономного входа (вне Telegram) — токен из httpOnly-куки,
+ * выданный ботом через /lawyer/login. Тот же контракт AccessResult, что и у
+ * checkLawyerAccess: requireLawyer в lawyer-auth.ts пробует Telegram первым,
+ * эту проверку — запасным путём, когда initData нет вовсе.
+ */
+export function checkLawyerSessionCookie({
+  cookie,
+  secret,
+  allowedIds,
+  maxAgeSeconds = DEFAULT_SESSION_MAX_AGE_SECONDS,
+  now = Math.floor(Date.now() / 1000),
+}: SessionCookieInput): AccessResult {
+  if (!cookie.trim()) {
+    return { ok: false, status: 401, detail: "Требуется вход через Telegram" };
+  }
+  if (!secret.trim()) {
+    return {
+      ok: false,
+      status: 500,
+      detail: "Сервер не настроен: нет секрета для автономного входа",
+    };
+  }
+
+  const verified = verifyLawyerSessionToken(cookie, secret, maxAgeSeconds, now);
+  if (verified === null) {
+    return { ok: false, status: 401, detail: "Ссылка для входа устарела или недействительна" };
+  }
+
+  if (!allowedIds.includes(verified.telegramUserId)) {
+    return { ok: false, status: 403, detail: "Раздел доступен только юристу практики" };
+  }
+
+  return { ok: true, telegramUserId: verified.telegramUserId };
 }

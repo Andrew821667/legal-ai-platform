@@ -17,6 +17,7 @@ from telegram_ui import inline_button as InlineKeyboardButton
 import admin_interface
 import content
 import database
+import lawyer_session_link
 import security
 import utils
 from config import get_config
@@ -227,6 +228,39 @@ def _format_runtime_settings_for_admin() -> str:
         f"• idle timeout: {config.PENDING_LEADS_IDLE_MINUTES} мин\n"
         f"• batch size: {config.PENDING_LEADS_JOB_MAX_BATCH}\n"
         f"• check interval: {config.PENDING_LEADS_CHECK_INTERVAL_SECONDS} сек (после рестарта для нового расписания)"
+    )
+
+
+async def _send_standalone_login_link(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Выдаёт разовую ссылку для входа в рабочее место вне Telegram.
+
+    Токен подписывается временем клика — минт делается здесь, а не при сборке
+    меню, поэтому кнопка не может нести готовую ссылку и живёт как callback.
+    Ссылку можно перевыпустить в любой момент; отозвать одну-единственную,
+    не трогая остальные, нельзя — при потере телефона стоит сменить
+    LAWYER_SESSION_SECRET (см. docs/runbook.md).
+    """
+    config = get_config()
+    url = lawyer_session_link.build_login_url(
+        query.from_user.id,
+        workspace_url=getattr(config, "LAWYER_WORKSPACE_URL", ""),
+        secret=getattr(config, "LAWYER_SESSION_SECRET", ""),
+    )
+    if not url:
+        await utils.safe_reply_text(
+            query.message,
+            "Автономный вход не настроен: нет LAWYER_SESSION_SECRET.",
+            action="admin_lawyer_link_unavailable",
+        )
+        return
+    await utils.safe_reply_text(
+        query.message,
+        "Ссылка на рабочее место без Telegram — откройте её в Safari и добавьте "
+        "страницу на экран «Домой».\n\n"
+        f"{url}\n\n"
+        "Действует 30 дней. Если телефон потерян — смените LAWYER_SESSION_SECRET, "
+        "и эта и все прежние ссылки перестанут работать.",
+        action="admin_lawyer_link_sent",
     )
 
 
@@ -1029,6 +1063,9 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
                 reply_markup=InlineKeyboardMarkup(build_admin_panel_menu()),
                 action="admin_panel",
             )
+
+        elif action == "admin_lawyer_link":
+            await _send_standalone_login_link(query, context)
 
         elif action == "admin_close":
             await utils.safe_edit_text(query.message, "⚙️ Админ-панель закрыта", action="admin_close")

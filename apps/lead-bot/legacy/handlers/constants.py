@@ -185,7 +185,7 @@ DOCUMENTS_MENU = [
 
 # Админ-панель inline кнопки
 def lawyer_workspace_button():
-    """Кнопка входа в рабочее место юриста.
+    """Кнопка входа в рабочее место юриста для inline-меню.
 
     Возвращает None, если адрес не задан: кнопка, ведущая в никуда, хуже её
     отсутствия.
@@ -194,6 +194,21 @@ def lawyer_workspace_button():
     if not url:
         return None
     return InlineKeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))
+
+
+def build_admin_reply_menu():
+    """Постоянная клавиатура владельца — то, что видно под полем ввода всегда.
+
+    Рабочее место — на отдельной строке: у одиночной кнопки в reply-клавиатуре
+    Telegram растягивает её на всю ширину ряда, и это ровно то, что делает
+    ежедневный экран заметным, не отбирая при этом угловую кнопку меню у
+    списка команд.
+    """
+    rows = [row[:] for row in ADMIN_MENU]
+    url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
+    if url:
+        rows.append([KeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))])
+    return rows
 
 
 def case_management_button():
@@ -215,6 +230,19 @@ def case_management_button():
     )
 
 
+def standalone_login_button():
+    """Кнопка выдачи ссылки для входа в рабочее место вне Telegram.
+
+    Сама ссылка на кнопке не помещается: токен подписывается временем клика,
+    а не временем сборки меню, — обрабатывается отдельным callback'ом.
+    Возвращает None, если секрет не задан: выдавать ссылку, которую сервер не
+    сможет проверить, хуже её отсутствия.
+    """
+    if not getattr(get_config(), "LAWYER_SESSION_SECRET", ""):
+        return None
+    return InlineKeyboardButton("🔗 Ссылка для Safari", callback_data="admin_lawyer_link")
+
+
 def build_admin_panel_menu():
     """Меню админ-панели. Рабочее место идёт первым: это ежедневный экран."""
     rows = []
@@ -225,6 +253,9 @@ def build_admin_panel_menu():
     case_management = case_management_button()
     if case_management is not None:
         rows.append([case_management])
+    login_link = standalone_login_button()
+    if login_link is not None:
+        rows.append([login_link])
     rows.append(ADMIN_PANEL_MENU[-1])
     return rows
 

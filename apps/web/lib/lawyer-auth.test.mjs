@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
 
-import { checkLawyerAccess, parseAllowedIds } from "./lawyer-access.ts";
+import { checkLawyerAccess, checkLawyerSessionCookie, parseAllowedIds } from "./lawyer-access.ts";
+import { mintLawyerSessionToken } from "./lawyer-session-token.ts";
 
 const BOT_TOKEN = "8124330166:TESTTOKENTESTTOKENTESTTOKEN";
 const LAWYER_ID = 848510279;
@@ -101,4 +102,53 @@ test("мусор в списке допущенных отбрасывается
   // Испорченная переменная не должна превращаться в NaN и тем более никого
   // не пропускать по совпадению с ним.
   assert.deepEqual(parseAllowedIds("", "abc, -5, 0, 777"), [777]);
+});
+
+// --- Автономный вход: куки вне Telegram (без initData вовсе) ---
+
+const SESSION_SECRET = "session-shared-secret";
+
+function checkCookie(cookie, overrides = {}) {
+  return checkLawyerSessionCookie({
+    cookie,
+    secret: SESSION_SECRET,
+    allowedIds: ALLOWED,
+    ...overrides,
+  });
+}
+
+test("юрист с валидным токеном в куке проходит", () => {
+  const token = mintLawyerSessionToken(LAWYER_ID, SESSION_SECRET);
+  const result = checkCookie(token);
+  assert.equal(result.ok, true);
+  assert.equal(result.telegramUserId, LAWYER_ID);
+});
+
+test("без куки — как без initData: 401 с просьбой войти", () => {
+  const result = checkCookie("");
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 401);
+});
+
+test("посторонний с валидным токеном получает 403, а не доступ", () => {
+  const token = mintLawyerSessionToken(STRANGER_ID, SESSION_SECRET);
+  const result = checkCookie(token);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 403);
+});
+
+test("токен, подписанный другим секретом, не проходит", () => {
+  const token = mintLawyerSessionToken(LAWYER_ID, "чужой-секрет");
+  const result = checkCookie(token);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 401);
+});
+
+test("без секрета на сервере автономный вход не пропускает никого", () => {
+  // Проверить токен нечем — тот же принцип, что и для ботового токена в
+  // Telegram-пути: молчаливый пропуск здесь означал бы дыру, а не удобство.
+  const token = mintLawyerSessionToken(LAWYER_ID, SESSION_SECRET);
+  const result = checkCookie(token, { secret: "" });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
 });

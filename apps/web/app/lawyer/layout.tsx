@@ -6,6 +6,20 @@ export const metadata: Metadata = {
   description: "Клиенты, обращения, документы и договоры практики.",
   // Раздел не для поисковиков: он показывает данные клиентов.
   robots: { index: false, follow: false, nocache: true },
+  // «Добавить на экран Домой» в Safari — самостоятельный запуск без
+  // Telegram. apple-mobile-web-app-capable убирает адресную строку и chrome
+  // браузера, оставляя раздел похожим на обычное приложение; иконка
+  // берётся из app/lawyer/apple-icon.tsx (next/og, без внешних инструментов
+  // конвертации SVG → PNG на боевом хосте).
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Рабочее место",
+  },
+};
+
+export const viewport = {
+  themeColor: "#0a1423",
 };
 
 export default function LawyerLayout({ children }: { children: React.ReactNode }) {

@@ -11,14 +11,19 @@ import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isMiniAppRoute = pathname.startsWith("/miniapp");
+  // /lawyer — то же самое соображение, что и для /miniapp: это не страница
+  // сайта, а самостоятельный экран, который в основном открывают внутри
+  // Telegram или добавленным на экран «Домой». Шапка и подвал публичного
+  // сайта там были бы лишним экраном поверх и без того тесного мобильного
+  // вида — на скриншоте это было отчётливо видно.
+  const isChromelessAppRoute = pathname.startsWith("/miniapp") || pathname.startsWith("/lawyer");
   const isInternalRoute = pathname.startsWith("/admin") || pathname.startsWith("/monitor");
 
   useEffect(() => {
-    if (!isMiniAppRoute && !isInternalRoute) captureLeadAttribution();
-  }, [isInternalRoute, isMiniAppRoute]);
+    if (!isChromelessAppRoute && !isInternalRoute) captureLeadAttribution();
+  }, [isInternalRoute, isChromelessAppRoute]);
 
-  if (isMiniAppRoute) {
+  if (isChromelessAppRoute) {
     return <>{children}</>;
   }
 
