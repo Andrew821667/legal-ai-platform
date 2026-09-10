@@ -41,12 +41,16 @@ def test_every_menu_command_has_a_handler() -> None:
 class _Bot:
     def __init__(self, *, fail: Exception | None = None) -> None:
         self.calls: list[tuple[int, str]] = []
+        self.menu: list[tuple[int, str]] = []
         self._fail = fail
 
     async def set_my_commands(self, commands, scope=None):
         if self._fail is not None:
             raise self._fail
         self.calls.append((len(commands), type(scope).__name__))
+
+    async def set_chat_menu_button(self, chat_id, menu_button):
+        self.menu.append((chat_id, type(menu_button).__name__))
 
 
 @pytest.mark.anyio
@@ -119,3 +123,40 @@ def test_panel_survives_missing_workspace_url(monkeypatch) -> None:
     labels = [b.text for row in constants.build_admin_panel_menu() for b in row]
     assert not any("Рабочее место" in label for label in labels)
     assert any("Лиды" in label for label in labels)
+
+
+@pytest.mark.anyio
+async def test_menu_button_opens_the_workspace(monkeypatch) -> None:
+    """Ежедневный экран должен открываться одним касанием, а не через /admin."""
+    monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
+    monkeypatch.setattr(
+        bot_module.config, "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    bot = _Bot()
+    await bot_module._set_command_menu(SimpleNamespace(bot=bot))
+
+    assert bot.menu == [(42, "MenuButtonWebApp")]
+
+
+@pytest.mark.anyio
+async def test_menu_button_returns_to_commands_without_url(monkeypatch) -> None:
+    """Адрес убрали — кнопка не должна остаться ведущей в никуда."""
+    monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
+    monkeypatch.setattr(bot_module.config, "LAWYER_WORKSPACE_URL", "", raising=False)
+    bot = _Bot()
+    await bot_module._set_command_menu(SimpleNamespace(bot=bot))
+
+    assert bot.menu == [(42, "MenuButtonDefault")]
+
+
+@pytest.mark.anyio
+async def test_menu_button_failure_does_not_block_startup(monkeypatch) -> None:
+    from telegram.error import NetworkError
+
+    monkeypatch.setattr(bot_module.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
+
+    class _Failing(_Bot):
+        async def set_chat_menu_button(self, chat_id, menu_button):
+            raise NetworkError("нет сети")
+
+    await bot_module._set_command_menu(SimpleNamespace(bot=_Failing()))
