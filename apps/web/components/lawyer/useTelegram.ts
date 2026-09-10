@@ -1,0 +1,51 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+/**
+ * Доступ к окружению Telegram.
+ *
+ * initData передаётся на сервер заголовком и там проверяется по подписи.
+ * Полагаться на то, что говорит о себе клиентский код, нельзя: страницу можно
+ * открыть и вне Telegram.
+ */
+
+type TelegramWebApp = {
+  initData?: string;
+  ready?: () => void;
+  expand?: () => void;
+  colorScheme?: string;
+};
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: TelegramWebApp };
+  }
+}
+
+export function useTelegramInitData(): { initData: string; ready: boolean } {
+  const [initData, setInitData] = useState("");
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const app = window.Telegram?.WebApp;
+    app?.ready?.();
+    app?.expand?.();
+    setInitData(app?.initData || "");
+    setReady(true);
+  }, []);
+
+  return { initData, ready };
+}
+
+export async function lawyerFetch<T>(path: string, initData: string): Promise<T> {
+  const response = await fetch(path, {
+    headers: { "x-telegram-init-data": initData },
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.detail || `Ошибка ${response.status}`);
+  }
+  return body as T;
+}

@@ -1,7 +1,9 @@
 """
 Константы для handlers - меню кнопок и другие константы
 """
-from telegram import InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup, WebAppInfo
+
+from config import get_config
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
 
@@ -182,6 +184,27 @@ DOCUMENTS_MENU = [
 ]
 
 # Админ-панель inline кнопки
+def lawyer_workspace_button():
+    """Кнопка входа в рабочее место юриста.
+
+    Возвращает None, если адрес не задан: кнопка, ведущая в никуда, хуже её
+    отсутствия.
+    """
+    url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
+    if not url:
+        return None
+    return InlineKeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))
+
+
+def build_admin_panel_menu():
+    """Меню админ-панели. Рабочее место идёт первым: это ежедневный экран."""
+    rows = []
+    workspace = lawyer_workspace_button()
+    if workspace is not None:
+        rows.append([workspace])
+    return rows + ADMIN_PANEL_MENU
+
+
 ADMIN_PANEL_MENU = [
     [InlineKeyboardButton("⚖️ Юридические обращения и договоры", callback_data="sa_a:menu")],
     [InlineKeyboardButton("📊 Лиды и воронка", callback_data="admin_section_leads")],

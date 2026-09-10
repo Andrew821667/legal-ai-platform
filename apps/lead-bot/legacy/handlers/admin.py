@@ -20,7 +20,7 @@ import utils
 import email_sender
 import security
 import prompts
-from .constants import ADMIN_PANEL_MENU
+from .constants import ADMIN_PANEL_MENU, build_admin_panel_menu
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +385,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Выберите действие:"
         )
 
-        reply_markup = InlineKeyboardMarkup(ADMIN_PANEL_MENU)
+        reply_markup = InlineKeyboardMarkup(build_admin_panel_menu())
         await update.message.reply_text(admin_panel_message, reply_markup=reply_markup)
 
     except (TelegramError, KeyError, AttributeError) as e:

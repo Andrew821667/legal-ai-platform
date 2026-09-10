@@ -182,6 +182,12 @@ class Config:
         self.AVAILABLE_SERVICE_MODULES: list[str] = [item.strip() for item in modules_raw.split(',') if item.strip()]
 
         # Compliance / документы
+        # Рабочее место юриста — мини-апп в Telegram. Открывается только у
+        # владельца практики: доступ проверяется на стороне веба по подписи
+        # Telegram, кнопка лишь ведёт туда.
+        self.LAWYER_WORKSPACE_URL: str = os.getenv(
+            'LAWYER_WORKSPACE_URL', 'https://ai-verdict.ru/lawyer'
+        ).strip()
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
             'TRANSBORDER_CONSENT_URL',

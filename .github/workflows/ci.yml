@@ -91,6 +91,9 @@ jobs:
       - run: npm ci --prefix apps/web
       - run: npm run lint --prefix apps/web
       - run: npm run test:copy --prefix apps/web
+      # Проверки доступа и безопасности. Существовали, но не запускались:
+      # непроверяемая проверка доступа — самое неудачное место для доверия.
+      - run: npm run test:security --prefix apps/web
 
   contract-ai-entrypoint-smoke:
     if: ${{ vars.CONTRACT_AI_SYSTEM_SMOKE_URL != '' }}

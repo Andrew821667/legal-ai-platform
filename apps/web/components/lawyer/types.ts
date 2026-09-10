@@ -1,0 +1,99 @@
+export type TodayItem = {
+  agreement_id?: string;
+  intake_id?: string;
+  lead_id?: string | null;
+  client: string;
+  subject?: string;
+  price_text?: string;
+  question?: string;
+  contact?: string | null;
+  reason?: string | null;
+  status?: string;
+  legal_area?: string;
+  urgency?: string;
+  days_waiting?: number | null;
+};
+
+export type TodaySection = {
+  key: string;
+  title: string;
+  hint: string;
+  items: TodayItem[];
+};
+
+export type Today = { generated_at: string; sections: TodaySection[] };
+
+export type ClientRow = {
+  lead_id: string;
+  name: string;
+  contact: string | null;
+  company: string | null;
+  intakes: number;
+  last_intake_at: string | null;
+  nda_signed: boolean;
+  agreement_status: string | null;
+};
+
+export type Clarification = { question: string; answer: string; created_at: string | null };
+
+export type IntakeDocumentRow = {
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  nda_signed_at_upload: boolean;
+  created_at: string | null;
+};
+
+export type IntakeCard = {
+  intake_id: string;
+  created_at: string | null;
+  legal_area: string;
+  client_type: string;
+  urgency: string;
+  deadline: string | null;
+  region: string | null;
+  status: string;
+  conflict_status: string;
+  description: string;
+  internal_note: string | null;
+  outreach_sent_at: string | null;
+  outreach_blocked_reason: string | null;
+  clarifications: Clarification[];
+  documents: IntakeDocumentRow[];
+};
+
+export type AgreementMessage = { role: string; text: string; created_at: string | null };
+
+export type AgreementCard = {
+  agreement_id: string;
+  number: string;
+  status: string;
+  revision: number;
+  subject: string;
+  price_text: string;
+  created_at: string | null;
+  sent_at: string | null;
+  viewed_at: string | null;
+  signed_at: string | null;
+  declined_at: string | null;
+  messages: AgreementMessage[];
+};
+
+export type ClientCard = {
+  lead_id: string;
+  name: string;
+  contact: string | null;
+  company: string | null;
+  telegram_user_id: number | null;
+  source: string | null;
+  created_at: string | null;
+  nda: {
+    signed_at: string | null;
+    signer_full_name: string | null;
+    signer_contact: string | null;
+    signer_org: string | null;
+    version: string;
+  } | null;
+  intakes: IntakeCard[];
+  agreements: AgreementCard[];
+};
