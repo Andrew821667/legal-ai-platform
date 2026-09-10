@@ -94,8 +94,8 @@ export default function LawyerWorkspace() {
   return (
     <div>
       <header className="mb-4">
-        <p className="text-[11px] uppercase tracking-widest text-slate-600">AI Verdict</p>
-        <h1 className="text-xl font-semibold text-white">Рабочее место</h1>
+        <p className="text-sm uppercase tracking-widest text-slate-600">AI Verdict</p>
+        <h1 className="text-2xl font-semibold text-white">Рабочее место</h1>
       </header>
 
       <nav className="mb-4 flex gap-1 rounded-xl bg-slate-900/70 p-1" role="tablist">
@@ -111,14 +111,14 @@ export default function LawyerWorkspace() {
             role="tab"
             aria-selected={tab === key}
             onClick={() => setTab(key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium transition-colors ${
               tab === key ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"
             }`}
           >
             {title}
             {count ? (
               <span
-                className={`rounded-full px-1.5 text-[11px] ${
+                className={`rounded-full px-1.5 text-sm ${
                   key === "today" ? "bg-amber-500 text-slate-950" : "bg-slate-700 text-slate-300"
                 }`}
               >
@@ -130,7 +130,7 @@ export default function LawyerWorkspace() {
       </nav>
 
       {error ? (
-        <div className="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-sm text-rose-200">
+        <div className="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-base text-rose-200">
           {error}
           <button
             type="button"
@@ -142,7 +142,7 @@ export default function LawyerWorkspace() {
         </div>
       ) : null}
 
-      {loading && !error ? <p className="text-sm text-slate-400">Загружаю…</p> : null}
+      {loading && !error ? <p className="text-base text-slate-400">Загружаю…</p> : null}
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={openClient} /> : null}
       {!error && tab === "clients" ? (

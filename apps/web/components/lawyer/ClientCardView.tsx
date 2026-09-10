@@ -51,7 +51,7 @@ export default function ClientCardView({
       <button
         type="button"
         onClick={onBack}
-        className="text-sm text-slate-400 transition-colors hover:text-slate-200"
+        className="text-base text-slate-400 transition-colors hover:text-slate-200"
       >
         ← К списку
       </button>
@@ -59,8 +59,8 @@ export default function ClientCardView({
       <Card>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-white">{card.name}</h1>
-            <p className="mt-0.5 text-sm text-slate-400">
+            <h1 className="text-xl font-semibold text-white">{card.name}</h1>
+            <p className="mt-0.5 text-base text-slate-400">
               {card.contact || "контакт не указан"}
               {card.company ? ` · ${card.company}` : ""}
             </p>
@@ -73,7 +73,7 @@ export default function ClientCardView({
         <div className="mt-4 rounded-xl bg-slate-950/60 p-3">
           {card.nda ? (
             <>
-              <p className="text-xs font-medium text-emerald-300">
+              <p className="text-sm font-medium text-emerald-300">
                 Соглашение о конфиденциальности подписано {shortDate(card.nda.signed_at)}
               </p>
               <Row label="Подписант" value={card.nda.signer_full_name} />
@@ -81,20 +81,20 @@ export default function ClientCardView({
               <Row label="Организация" value={card.nda.signer_org} />
             </>
           ) : (
-            <p className="text-xs text-amber-300">
+            <p className="text-sm text-amber-300">
               NDA не подписан — документы принимаются с пометкой
             </p>
           )}
         </div>
       </Card>
 
-      {loading ? <p className="text-sm text-slate-500">Обновляю…</p> : null}
+      {loading ? <p className="text-base text-slate-500">Обновляю…</p> : null}
 
       <section>
         <SectionTitle count={card.agreements.length}>Договоры</SectionTitle>
         {card.agreements.length === 0 ? (
           <Card>
-            <p className="text-xs text-slate-500">Договоров пока нет.</p>
+            <p className="text-sm text-slate-500">Договоров пока нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -103,7 +103,7 @@ export default function ClientCardView({
             ))}
             {history.length > 0 ? (
               <details className="rounded-2xl border border-slate-800/60 bg-slate-900/30 p-3">
-                <summary className="cursor-pointer text-xs text-slate-500">
+                <summary className="cursor-pointer text-sm text-slate-500">
                   Прежние редакции ({history.length})
                 </summary>
                 <div className="mt-2 space-y-2">
@@ -121,7 +121,7 @@ export default function ClientCardView({
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>
         {card.intakes.length === 0 ? (
           <Card>
-            <p className="text-xs text-slate-500">Обращений нет.</p>
+            <p className="text-sm text-slate-500">Обращений нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -146,8 +146,8 @@ function Agreement({ item, initData }: { item: AgreementCard; initData: string }
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white">{item.subject}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+          <p className="text-base font-medium text-white">{item.subject}</p>
+          <p className="mt-0.5 text-sm text-slate-500">
             № {item.number}
             {item.revision > 1 ? ` · редакция ${item.revision}` : ""}
           </p>
@@ -170,7 +170,7 @@ function Agreement({ item, initData }: { item: AgreementCard; initData: string }
         <Row label="Основание" value={item.authority_basis} />
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-slate-800/60 pt-2 text-sm text-slate-500">
         <span>составлен {shortDate(item.created_at)}</span>
         {item.sent_at ? <span>отправлен {shortDate(item.sent_at)}</span> : null}
         {item.viewed_at ? <span>просмотрен {shortDate(item.viewed_at)}</span> : null}
@@ -197,18 +197,18 @@ function Agreement({ item, initData }: { item: AgreementCard; initData: string }
 
       {item.messages.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">Переписка</p>
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">Переписка</p>
           <div className="space-y-2">
             {item.messages.map((message, index) => (
               <div
                 key={index}
-                className={`rounded-xl p-2.5 text-xs ${
+                className={`rounded-xl p-3 text-base leading-relaxed ${
                   message.role === "client"
                     ? "bg-slate-800/70 text-slate-200"
                     : "bg-amber-500/10 text-amber-100"
                 }`}
               >
-                <p className="mb-0.5 text-[10px] text-slate-500">
+                <p className="mb-1 text-sm text-slate-500">
                   {message.role === "client" ? "Клиент" : "Вы"} · {shortDate(message.created_at)}
                 </p>
                 {message.text}
@@ -226,11 +226,11 @@ function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-white">{label(AREA, item.legal_area)}</p>
+        <p className="text-base font-medium text-white">{label(AREA, item.legal_area)}</p>
         <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+      <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-500">
         <span>{shortDate(item.created_at)}</span>
         <span>{label(URGENCY, item.urgency)}</span>
         {item.deadline ? <span>срок: {item.deadline}</span> : null}
@@ -238,25 +238,25 @@ function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
       </div>
 
       {item.outreach_blocked_reason ? (
-        <p className="mt-2 text-[11px] text-amber-300">
+        <p className="mt-2 text-sm text-amber-300">
           Связаться не удалось: {label(OUTREACH_REASON, item.outreach_blocked_reason)}
         </p>
       ) : null}
 
-      <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-slate-300">
+      <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-slate-300">
         {item.description}
       </p>
 
       {item.clarifications.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">
             Что уточнили · {item.clarifications.length}
           </p>
           <dl className="space-y-2">
             {item.clarifications.map((row, index) => (
               <div key={index}>
-                <dt className="text-[11px] text-slate-500">{row.question}</dt>
-                <dd className="text-xs text-slate-200">{row.answer}</dd>
+                <dt className="text-sm text-slate-500">{row.question}</dt>
+                <dd className="text-base leading-relaxed text-slate-200">{row.answer}</dd>
               </div>
             ))}
           </dl>
@@ -265,16 +265,16 @@ function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
 
       {item.documents.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">
             Документы · {item.documents.length}
           </p>
           <ul className="space-y-1">
             {item.documents.map((doc, index) => (
-              <li key={index} className="flex items-baseline justify-between gap-2 text-xs">
+              <li key={index} className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate text-slate-200">
                   {doc.file_name || "без имени"}
                 </span>
-                <span className="shrink-0 text-[11px] text-slate-600">
+                <span className="shrink-0 text-sm text-slate-600">
                   {shortDate(doc.created_at)}
                   {doc.nda_signed_at_upload ? "" : " · без NDA"}
                 </span>

@@ -194,6 +194,12 @@ class Config:
         self.SENTRY_DSN: str = os.getenv('SENTRY_DSN', '').strip()
         self.ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'production').strip()
 
+        # Автономный вход в рабочее место — минуя Telegram (иконка на экране
+        # iPhone, обычная вкладка Safari). Пуст по умолчанию: без секрета
+        # кнопка выдачи ссылки в /admin просто не появляется — попытка
+        # выдать неподписываемую ссылку хуже её отсутствия.
+        self.LAWYER_SESSION_SECRET: str = os.getenv('LAWYER_SESSION_SECRET', '').strip()
+
         # Бот учёта судебных дел — отдельная система на Google Sheets.
         # Пуст по умолчанию: username того бота не был известен, когда
         # писался этот код. Кнопка появляется, только когда переменная

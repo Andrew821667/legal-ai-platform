@@ -45,11 +45,11 @@ export default function ClientsView({
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Имя, контакт или компания"
-          className="w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-slate-600"
+          className="w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-base text-white outline-none transition-colors placeholder:text-slate-600 focus:border-slate-600"
         />
         <button
           type="submit"
-          className="shrink-0 rounded-xl bg-slate-800 px-4 text-sm text-slate-200 transition-colors hover:bg-slate-700"
+          className="shrink-0 rounded-xl bg-slate-800 px-4 text-base text-slate-200 transition-colors hover:bg-slate-700"
         >
           Найти
         </button>
@@ -57,7 +57,7 @@ export default function ClientsView({
 
       {rows === null ? null : rows.length === 0 ? (
         <Card>
-          <p className="text-sm text-slate-400">Никого не нашлось.</p>
+          <p className="text-base text-slate-400">Никого не нашлось.</p>
         </Card>
       ) : (
         <ul className="space-y-2">
@@ -70,13 +70,13 @@ export default function ClientsView({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-[15px] font-medium text-white">{row.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                    <p className="truncate text-lg font-medium text-white">{row.name}</p>
+                    <p className="mt-0.5 truncate text-sm text-slate-500">
                       {row.contact || "контакт не указан"}
                       {row.company ? ` · ${row.company}` : ""}
                     </p>
                   </div>
-                  <span className="shrink-0 text-[11px] text-slate-600">
+                  <span className="shrink-0 text-sm text-slate-600">
                     {shortDate(row.last_intake_at)}
                   </span>
                 </div>

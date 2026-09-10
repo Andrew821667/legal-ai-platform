@@ -10,7 +10,7 @@ from telegram_ui import reply_button as KeyboardButton
 import content
 from config import get_config
 from .constants import (
-    ADMIN_MENU,
+    build_admin_reply_menu,
     CONSENT_PDN_MENU,
     CONSENT_TRANSBORDER_MENU,
     CONSULTATION_CTA_MENU,
@@ -159,7 +159,7 @@ def with_channel_button(
 
 def main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        ADMIN_MENU if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
+        build_admin_reply_menu() if user_id == config.ADMIN_TELEGRAM_ID else MAIN_MENU,
         resize_keyboard=True,
     )
 

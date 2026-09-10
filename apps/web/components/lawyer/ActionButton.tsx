@@ -24,7 +24,7 @@ export default function ActionButton({
   const [error, setError] = useState<string | null>(null);
 
   if (state === "ok") {
-    return <p className="text-xs text-emerald-300">{done}</p>;
+    return <p className="text-sm text-emerald-300">{done}</p>;
   }
 
   return (
@@ -43,7 +43,7 @@ export default function ActionButton({
             setState("idle");
           }
         }}
-        className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-60 ${
+        className={`w-full rounded-xl px-4 py-3 text-base font-medium transition-colors disabled:opacity-60 ${
           tone === "primary"
             ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
             : "bg-slate-800 text-slate-200 hover:bg-slate-700"
@@ -51,7 +51,7 @@ export default function ActionButton({
       >
         {state === "busy" ? "Отправляю…" : label}
       </button>
-      {error ? <p className="mt-1 text-xs text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-1 text-sm text-rose-300">{error}</p> : null}
     </div>
   );
 }
