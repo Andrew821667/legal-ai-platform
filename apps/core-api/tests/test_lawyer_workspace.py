@@ -303,6 +303,88 @@ def test_offer_with_room_left_stays_out_of_the_expiring_list() -> None:
         _cleanup(names, seeded["lead_id"])
 
 
+def test_intake_deadline_reaches_the_task_screen() -> None:
+    """Слова клиента о сроке лежат в тексте и напоминанием стать не могут.
+
+    Дату юрист ставит сам — и вот она уже должна поднимать дело на экран.
+    """
+    client = TestClient(app)
+    names = ["pytest.workspace.deadline"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        intake = db.get(LegalIntake, seeded["intake_id"])
+        intake.deadline = "к этому четвергу"
+        intake.deadline_at = datetime.now(timezone.utc) + timedelta(days=1)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        mine = [
+            i
+            for i in _section(body, "deadline_soon")["items"]
+            if i["intake_id"] == seeded["intake_id"]
+        ]
+        assert len(mine) == 1
+        assert mine[0]["days_left"] == 0
+
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        # Слова клиента остаются нетронутыми рядом с датой.
+        assert card["intakes"][0]["deadline"] == "к этому четвергу"
+        assert card["intakes"][0]["deadline_at"] is not None
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_intake_without_a_date_stays_off_the_task_screen() -> None:
+    """Иначе раздел наполнился бы всеми обращениями сразу."""
+    client = TestClient(app)
+    names = ["pytest.workspace.nodeadline"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        intake = db.get(LegalIntake, seeded["intake_id"])
+        # Срок словами есть, даты нет — напоминать не по чему.
+        intake.deadline = "как получится"
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        items = _section(body, "deadline_soon")["items"]
+        assert not [i for i in items if i["intake_id"] == seeded["intake_id"]]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_far_deadline_waits_its_turn() -> None:
+    client = TestClient(app)
+    names = ["pytest.workspace.fardeadline"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        intake = db.get(LegalIntake, seeded["intake_id"])
+        intake.deadline_at = datetime.now(timezone.utc) + timedelta(days=30)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        items = _section(body, "deadline_soon")["items"]
+        assert not [i for i in items if i["intake_id"] == seeded["intake_id"]]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
 def test_client_card_gathers_everything_in_one_answer() -> None:
     """Карточку открывают, чтобы вспомнить контекст перед разговором."""
     client = TestClient(app)

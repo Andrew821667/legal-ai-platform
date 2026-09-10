@@ -2,6 +2,7 @@
 
 import ActionButton from "./ActionButton";
 import AgreementForm from "./AgreementForm";
+import DeadlineBox from "./DeadlineBox";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
@@ -16,6 +17,7 @@ import {
   URGENCY,
   label,
   shortDate,
+  shortDay,
 } from "./labels";
 import type { AgreementCard, ClientCard, IntakeCard } from "./types";
 
@@ -344,7 +346,7 @@ function Intake({
       <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-500">
         <span>{shortDate(item.created_at)}</span>
         <span>{label(URGENCY, item.urgency)}</span>
-        {item.deadline ? <span>срок: {item.deadline}</span> : null}
+        {item.deadline_at ? <span>срок до {shortDay(item.deadline_at)}</span> : null}
         {item.region ? <span>{item.region}</span> : null}
       </div>
 
@@ -434,6 +436,14 @@ function Intake({
           onCreated={onChanged}
         />
       )}
+
+      <DeadlineBox
+        intakeId={item.intake_id}
+        deadlineAt={item.deadline_at}
+        clientWords={item.deadline}
+        initData={initData}
+        onChanged={onChanged}
+      />
 
       <NoteBox intakeId={item.intake_id} initialNote={item.internal_note} initData={initData} />
     </Card>

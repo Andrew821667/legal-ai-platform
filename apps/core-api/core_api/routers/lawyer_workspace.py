@@ -45,6 +45,9 @@ _AWAITING_CLIENT_DAYS = 3
 # За сколько дней предупреждать, что предложение вот-вот сгорит.
 _EXPIRING_SOON_DAYS = 3
 
+# За сколько дней напоминать о сроке, который юрист проставил по обращению.
+_DEADLINE_SOON_DAYS = 3
+
 # Статусы, из которых договор ещё может сдвинуться.
 _OPEN_AGREEMENT_STATUSES = (
     ServiceAgreementStatus.draft,
@@ -207,6 +210,18 @@ def today(
         .order_by(ServiceAgreement.expires_at)
     ).all()
 
+    # 7. Срок по обращению. В отличие от остальных разделов этот наполняет сам
+    #    юрист: колонка `deadline` — слова клиента («к этому четвергу»), и
+    #    напоминать по ним нельзя, а `deadline_at` он проставил осознанно.
+    deadline_soon = db.execute(
+        select(LegalIntake, Lead)
+        .join(Lead, Lead.id == LegalIntake.lead_id)
+        .where(LegalIntake.deadline_at.is_not(None))
+        .where(LegalIntake.deadline_at < now + timedelta(days=_DEADLINE_SOON_DAYS))
+        .where(LegalIntake.status.not_in([LegalIntakeStatus.closed, LegalIntakeStatus.declined]))
+        .order_by(LegalIntake.deadline_at)
+    ).all()
+
     return {
         "generated_at": _iso(now),
         "sections": [
@@ -292,6 +307,23 @@ def today(
                         "days_left": _days_until(a.expires_at),
                     }
                     for a, lead in expiring
+                ],
+            },
+            {
+                "key": "deadline_soon",
+                "title": "Срок по обращению",
+                "hint": "Дату вы поставили сами — она подходит.",
+                "items": [
+                    {
+                        "intake_id": str(i.id),
+                        "lead_id": str(i.lead_id),
+                        "client": _lead_title(lead),
+                        "legal_area": i.legal_area.value,
+                        "status": i.status.value,
+                        "deadline_at": _iso(i.deadline_at),
+                        "days_left": _days_until(i.deadline_at),
+                    }
+                    for i, lead in deadline_soon
                 ],
             },
             {
@@ -531,6 +563,7 @@ def client_card(
                 "client_type": item.client_type.value,
                 "urgency": item.urgency.value,
                 "deadline": item.deadline,
+                "deadline_at": _iso(item.deadline_at),
                 "region": item.region,
                 "status": item.status.value,
                 "conflict_status": item.conflict_status.value,

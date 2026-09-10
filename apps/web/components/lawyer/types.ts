@@ -13,6 +13,7 @@ export type TodayItem = {
   urgency?: string;
   days_waiting?: number | null;
   expires_at?: string | null;
+  deadline_at?: string | null;
   days_left?: number | null;
 };
 
@@ -55,6 +56,7 @@ export type IntakeCard = {
   client_type: string;
   urgency: string;
   deadline: string | null;
+  deadline_at: string | null;
   region: string | null;
   status: string;
   conflict_status: string;
