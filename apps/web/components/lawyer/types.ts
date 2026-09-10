@@ -68,6 +68,7 @@ export type AgreementMessage = { role: string; text: string; created_at: string 
 
 export type AgreementCard = {
   agreement_id: string;
+  intake_id: string | null;
   number: string;
   status: string;
   revision: number;

@@ -1,6 +1,7 @@
 "use client";
 
 import ActionButton from "./ActionButton";
+import AgreementForm from "./AgreementForm";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
@@ -176,6 +177,9 @@ export default function ClientCardView({
                 item={item}
                 initData={initData}
                 onChanged={onChanged}
+                agreements={card.agreements.filter((a) => a.intake_id === item.intake_id)}
+                ndaSigned={Boolean(card.nda)}
+                hasDialog={card.telegram_user_id !== null}
               />
             ))}
           </div>
@@ -291,13 +295,32 @@ function Intake({
   item,
   initData,
   onChanged,
+  agreements,
+  ndaSigned,
+  hasDialog,
 }: {
   item: IntakeCard;
   initData: string;
   onChanged: () => void;
+  agreements: AgreementCard[];
+  ndaSigned: boolean;
+  hasDialog: boolean;
 }) {
   const conflictBlocks = item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
+
+  // Условия ядра: подписанный договор не переписывают, а остальное оно
+  // отвергает с 409 — лучше назвать причину заранее, чем показать кнопку,
+  // которая упрётся в отказ.
+  const signed = agreements.some((a) => a.status === "signed");
+  const openAgreement = agreements.some((a) => a.status !== "superseded" && a.status !== "signed");
+  const blocker = conflictBlocks
+    ? null // о проверке конфликта рядом уже сказано подробно
+    : !ndaSigned
+      ? "Договор нельзя составить, пока клиент не подписал соглашение о конфиденциальности."
+      : !hasDialog
+        ? "У клиента нет диалога в Telegram — отправить договор будет некуда."
+        : null;
 
   const markConflict = async (status: "clear" | "conflict") => {
     await lawyerAction(`/api/lawyer/intakes/${item.intake_id}/conflict`, initData, {
@@ -400,6 +423,17 @@ function Intake({
           </ul>
         </div>
       ) : null}
+
+      {signed ? null : blocker ? (
+        <p className="mt-3 rounded-xl bg-slate-800/60 p-3 text-sm text-slate-300">{blocker}</p>
+      ) : conflictBlocks ? null : (
+        <AgreementForm
+          intakeId={item.intake_id}
+          initData={initData}
+          again={openAgreement}
+          onCreated={onChanged}
+        />
+      )}
 
       <NoteBox intakeId={item.intake_id} initialNote={item.internal_note} initData={initData} />
     </Card>

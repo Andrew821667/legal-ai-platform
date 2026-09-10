@@ -241,6 +241,9 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
         assert "ипотеке" in card["intakes"][0]["description"]
         assert len(card["agreements"]) == 1
         assert card["agreements"][0]["status"] == "draft"
+        # По какому обращению договор — без этого при втором обращении клиента
+        # на экране не разобрать, к чему он относится.
+        assert card["agreements"][0]["intake_id"] == seeded["intake_id"]
     finally:
         _cleanup(names, seeded["lead_id"])
 
