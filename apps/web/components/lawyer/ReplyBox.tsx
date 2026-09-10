@@ -14,9 +14,11 @@ import { lawyerAction } from "./useTelegram";
 export default function ReplyBox({
   agreementId,
   initData,
+  onSent,
 }: {
   agreementId: string;
   initData: string;
+  onSent: () => void;
 }) {
   const [text, setText] = useState("");
   const [state, setState] = useState<"idle" | "busy" | "sent">("idle");
@@ -40,6 +42,7 @@ export default function ReplyBox({
             text: value,
           });
           setState("sent");
+          onSent();
         } catch (err) {
           setError(err instanceof Error ? err.message : "Не получилось отправить");
           setState("idle");

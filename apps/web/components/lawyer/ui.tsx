@@ -14,7 +14,7 @@ export type Tone = keyof typeof TONES;
 export function Pill({ children, tone = "mute" }: { children: React.ReactNode; tone?: Tone }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-sm font-medium ring-1 ring-inset ${TONES[tone]}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ring-1 ring-inset ${TONES[tone]}`}
     >
       {children}
     </span>

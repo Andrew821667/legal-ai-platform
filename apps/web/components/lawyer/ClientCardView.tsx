@@ -8,6 +8,8 @@ import { lawyerAction } from "./useTelegram";
 import {
   AGREEMENT_STATUS,
   AREA,
+  CONFLICT,
+  CONFLICT_EXPLAINED,
   INTAKE_STATUS,
   OUTREACH_REASON,
   URGENCY,
@@ -32,19 +34,47 @@ function statusTone(status: string) {
   return "mute" as const;
 }
 
+function conflictTone(status: string) {
+  if (status === "clear") return "ok" as const;
+  if (status === "conflict" || status === "potential") return "alert" as const;
+  return "warn" as const;
+}
+
+/**
+ * Худшая проверка конфликта среди обращений клиента.
+ *
+ * Поднимаем её в шапку карточки: это не справочное поле, а условие работы —
+ * ядро отказывается создавать договор, пока проверка не пройдена, — и цена
+ * пропущенного конфликта репутационная, а не операционная.
+ */
+const CONFLICT_RANK: Record<string, number> = { clear: 0, unchecked: 1, potential: 2, conflict: 3 };
+
+function worstConflict(intakes: IntakeCard[]): string | null {
+  let worst: string | null = null;
+  for (const item of intakes) {
+    if ((CONFLICT_RANK[item.conflict_status] ?? 0) > (CONFLICT_RANK[worst ?? "clear"] ?? 0)) {
+      worst = item.conflict_status;
+    }
+  }
+  return worst;
+}
+
 export default function ClientCardView({
   card,
   onBack,
+  onChanged,
   loading,
   initData,
 }: {
   card: ClientCard;
   onBack: () => void;
+  onChanged: () => void;
   loading: boolean;
   initData: string;
 }) {
   const active = card.agreements.filter((a) => a.status !== "superseded");
   const history = card.agreements.filter((a) => a.status === "superseded");
+  const conflictAlert = worstConflict(card.intakes);
 
   return (
     <div className="space-y-4">
@@ -65,7 +95,12 @@ export default function ClientCardView({
               {card.company ? ` · ${card.company}` : ""}
             </p>
           </div>
-          <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
+            {conflictAlert ? (
+              <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
+            ) : null}
+          </div>
         </div>
 
         <Progress stage={card.stage} />
@@ -99,7 +134,12 @@ export default function ClientCardView({
         ) : (
           <div className="space-y-2">
             {active.map((item) => (
-              <Agreement key={item.agreement_id} item={item} initData={initData} />
+              <Agreement
+                key={item.agreement_id}
+                item={item}
+                initData={initData}
+                onChanged={onChanged}
+              />
             ))}
             {history.length > 0 ? (
               <details className="rounded-2xl border border-slate-800/60 bg-slate-900/30 p-3">
@@ -108,7 +148,12 @@ export default function ClientCardView({
                 </summary>
                 <div className="mt-2 space-y-2">
                   {history.map((item) => (
-                    <Agreement key={item.agreement_id} item={item} initData={initData} />
+                    <Agreement
+                      key={item.agreement_id}
+                      item={item}
+                      initData={initData}
+                      onChanged={onChanged}
+                    />
                   ))}
                 </div>
               </details>
@@ -126,7 +171,12 @@ export default function ClientCardView({
         ) : (
           <div className="space-y-2">
             {card.intakes.map((item) => (
-              <Intake key={item.intake_id} item={item} initData={initData} />
+              <Intake
+                key={item.intake_id}
+                item={item}
+                initData={initData}
+                onChanged={onChanged}
+              />
             ))}
           </div>
         )}
@@ -135,7 +185,15 @@ export default function ClientCardView({
   );
 }
 
-function Agreement({ item, initData }: { item: AgreementCard; initData: string }) {
+function Agreement({
+  item,
+  initData,
+  onChanged,
+}: {
+  item: AgreementCard;
+  initData: string;
+  onChanged: () => void;
+}) {
   const unanswered =
     item.messages.length > 0 && item.messages[item.messages.length - 1].role === "client";
   const client = item.client_snapshot || {};
@@ -190,6 +248,7 @@ function Agreement({ item, initData }: { item: AgreementCard; initData: string }
             done="Отправлено. Клиент получил проект договора."
             onRun={async () => {
               await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
+              onChanged();
             }}
           />
         </div>
@@ -215,19 +274,48 @@ function Agreement({ item, initData }: { item: AgreementCard; initData: string }
               </div>
             ))}
           </div>
-          {unanswered ? <ReplyBox agreementId={item.agreement_id} initData={initData} /> : null}
+          {unanswered ? (
+            <ReplyBox
+              agreementId={item.agreement_id}
+              initData={initData}
+              onSent={onChanged}
+            />
+          ) : null}
         </div>
       ) : null}
     </Card>
   );
 }
 
-function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
+function Intake({
+  item,
+  initData,
+  onChanged,
+}: {
+  item: IntakeCard;
+  initData: string;
+  onChanged: () => void;
+}) {
+  const conflictBlocks = item.conflict_status !== "clear";
+  const severe = item.conflict_status === "conflict";
+
+  const markConflict = async (status: "clear" | "conflict") => {
+    await lawyerAction(`/api/lawyer/intakes/${item.intake_id}/conflict`, initData, {
+      conflict_status: status,
+    });
+    onChanged();
+  };
+
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-base font-medium text-white">{label(AREA, item.legal_area)}</p>
-        <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
+        <p className="min-w-0 text-base font-medium text-white">{label(AREA, item.legal_area)}</p>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
+          <Pill tone={conflictTone(item.conflict_status)}>
+            {label(CONFLICT, item.conflict_status)}
+          </Pill>
+        </div>
       </div>
 
       <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-500">
@@ -241,6 +329,35 @@ function Intake({ item, initData }: { item: IntakeCard; initData: string }) {
         <p className="mt-2 text-sm text-amber-300">
           Связаться не удалось: {label(OUTREACH_REASON, item.outreach_blocked_reason)}
         </p>
+      ) : null}
+
+      {conflictBlocks ? (
+        <div className={`mt-3 rounded-xl p-3 ${severe ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
+          <p className={`text-sm ${severe ? "text-rose-200" : "text-amber-200"}`}>
+            {CONFLICT_EXPLAINED[item.conflict_status] || label(CONFLICT, item.conflict_status)}
+          </p>
+          {severe ? null : (
+            <div className="mt-3 flex gap-2">
+              <div className="flex-1">
+                <ActionButton
+                  label="Конфликта нет"
+                  busy="Отмечаю…"
+                  done="Проверка пройдена — договор можно составлять."
+                  onRun={() => markConflict("clear")}
+                />
+              </div>
+              <div className="flex-1">
+                <ActionButton
+                  label="Есть конфликт"
+                  tone="quiet"
+                  busy="Отмечаю…"
+                  done="Отмечен конфликт интересов."
+                  onRun={() => markConflict("conflict")}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       ) : null}
 
       <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-slate-300">
