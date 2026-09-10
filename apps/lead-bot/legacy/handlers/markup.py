@@ -98,13 +98,16 @@ def services_inline_menu_markup() -> InlineKeyboardMarkup:
 def workspace_markup_for(
     lead: dict | None = None,
     selected_profile: str | None = None,
+    *,
+    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         build_workspace_inline_menu(
             content.offer_profile_cta_label(
                 lead=lead,
                 selected_profile=selected_profile,
-            )
+            ),
+            is_admin=is_admin,
         )
     )
 

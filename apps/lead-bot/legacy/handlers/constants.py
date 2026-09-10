@@ -22,8 +22,23 @@ def contract_ai_menu_url() -> str:
     return "open_web:contract_ai"
 
 
-def build_workspace_inline_menu(profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL):
-    return [
+def build_workspace_inline_menu(
+    profile_cta_label: str = DEFAULT_PROFILE_CTA_LABEL,
+    *,
+    is_admin: bool = False,
+):
+    """Кнопки рабочего стола.
+
+    Админу первой строкой добавляется вход в панель. Раньше попасть туда можно
+    было, только зная про команду /admin: панель существовала, но на экране её
+    не было.
+    """
+    admin_row = (
+        [[InlineKeyboardButton("🛠 Админ-панель", callback_data="admin_panel")]]
+        if is_admin
+        else []
+    )
+    return admin_row + [
         [InlineKeyboardButton(profile_cta_label, callback_data="menu_offer_profile")],
         [InlineKeyboardButton("⚖️ Юридическая практика", callback_data="legal_help_start")],
         # Рядом с юридической практикой: соглашение подписывают в связи с

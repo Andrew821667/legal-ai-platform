@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from telegram import Update
-from telegram.error import Forbidden
+from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, Update
+from telegram.error import Forbidden, TelegramError
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
@@ -1002,6 +1002,52 @@ def _telegram_request(*, read_timeout: float) -> HTTPXRequest:
     )
 
 
+# Команды в кнопке меню — то, что человек видит, не зная, что набрать.
+#
+# Клиенту показываем короткий список: длинный перечень в мессенджере читается
+# как свалка, и нужное в нём теряется. Всё остальное доступно через рабочий
+# стол.
+CLIENT_COMMANDS = [
+    BotCommand("menu", "Рабочий стол"),
+    BotCommand("profile", "Мой профиль"),
+    BotCommand("documents", "Документы и согласия"),
+    BotCommand("help", "Помощь"),
+    BotCommand("reset", "Начать диалог заново"),
+]
+
+# Админу — то же плюс его инструменты. Отдельная область видимости нужна,
+# чтобы клиент не видел админских команд: скрытая команда, о которой знаешь
+# только ты, — не защита, но и показывать её незачем.
+ADMIN_COMMANDS = [
+    BotCommand("admin", "Админ-панель"),
+    *CLIENT_COMMANDS,
+    BotCommand("stats", "Статистика"),
+    BotCommand("leads", "Лиды"),
+]
+
+
+async def _set_command_menu(app: Application) -> None:
+    """Заполняет кнопку меню командами.
+
+    Меню — украшение интерфейса, а не условие работы: сетевая ошибка здесь не
+    должна мешать боту запуститься и принимать сообщения.
+    """
+    try:
+        await app.bot.set_my_commands(CLIENT_COMMANDS, scope=BotCommandScopeDefault())
+    except TelegramError as error:
+        logger.warning("Не удалось задать меню команд: %s", type(error).__name__)
+
+    admin_id = getattr(config, "ADMIN_TELEGRAM_ID", None)
+    if not admin_id:
+        return
+    try:
+        await app.bot.set_my_commands(
+            ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=int(admin_id))
+        )
+    except TelegramError as error:
+        logger.warning("Не удалось задать админское меню команд: %s", type(error).__name__)
+
+
 def build_application() -> Application:
     request = _telegram_request(read_timeout=20.0)
     get_updates_request = _telegram_request(read_timeout=45.0)
@@ -1011,6 +1057,7 @@ def build_application() -> Application:
         .token(config.TELEGRAM_BOT_TOKEN)
         .request(request)
         .get_updates_request(get_updates_request)
+        .post_init(_set_command_menu)
         .build()
     )
 
