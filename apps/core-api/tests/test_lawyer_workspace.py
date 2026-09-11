@@ -724,6 +724,57 @@ def test_history_reads_back_what_the_journal_already_wrote() -> None:
         _cleanup([], stranger["lead_id"])
 
 
+def test_document_meta_resolves_the_telegram_file() -> None:
+    """Файл живёт в Telegram; по номеру документа веб узнаёт, что именно просить у бота."""
+    from core_api.models import IntakeDocument
+
+    client = TestClient(app)
+    names = ["pytest.workspace.docmeta"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        doc = IntakeDocument(
+            intake_id=uuid.UUID(seeded["intake_id"]),
+            telegram_file_id="BQACAgIAAxkBAAIB",
+            file_name="договор.pdf",
+            file_size=12345,
+            mime_type="application/pdf",
+        )
+        db.add(doc)
+        db.commit()
+        doc_id = str(doc.id)
+    finally:
+        db.close()
+
+    try:
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        listed = card["intakes"][0]["documents"][0]
+        assert listed["document_id"] == doc_id
+
+        meta = client.get(f"/api/v1/lawyer/documents/{doc_id}", headers={"X-API-Key": key}).json()
+        assert meta["telegram_file_id"] == "BQACAgIAAxkBAAIB"
+        assert meta["file_name"] == "договор.pdf"
+        assert meta["lead_id"] == seeded["lead_id"]
+
+        assert client.get(
+            "/api/v1/lawyer/documents/00000000-0000-4000-8000-000000000000",
+            headers={"X-API-Key": key},
+        ).status_code == 404
+    finally:
+        db = SessionLocal()
+        try:
+            from sqlalchemy import delete as _delete
+
+            db.execute(_delete(IntakeDocument).where(IntakeDocument.id == uuid.UUID(doc_id)))
+            db.commit()
+        finally:
+            db.close()
+        _cleanup(names, seeded["lead_id"])
+
+
 def test_client_list_shows_only_those_with_intakes() -> None:
     """В таблице лидов лежат и те, кто просто нажал кнопку, — в рабочем месте они лишние."""
     client = TestClient(app)

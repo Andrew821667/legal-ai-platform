@@ -42,6 +42,7 @@ export type ClientRow = {
 export type Clarification = { question: string; answer: string; created_at: string | null };
 
 export type IntakeDocumentRow = {
+  document_id: string;
   file_name: string | null;
   file_size: number | null;
   mime_type: string | null;
