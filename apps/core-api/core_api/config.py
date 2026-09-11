@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # отправлял только бот, и любая доставка из другого места означала вторую
     # копию текста и кнопок.
     lead_bot_token: str | None = None
+    # Реквизиты для оплаты акта. Самозанятый (НПД, без ИП) не может принять
+    # оплату эквайрингом от своего лица — только переводом на карту и через
+    # СБП по номеру телефона; это ядро вставляет в текст акта при отправке.
+    # Пусто — акт уйдёт без реквизитов, а не с местом для них.
+    lawyer_payment_card_number: str | None = None
+    lawyer_payment_sbp_phone: str | None = None
     lead_notify_chat_id: str | None = None
     lead_notify_web_base_url: str = "https://ai-verdict.ru"
     api_key_cache_ttl_seconds: int = 60

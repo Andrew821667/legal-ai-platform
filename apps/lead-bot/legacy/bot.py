@@ -87,6 +87,8 @@ from handlers.legal_help import handle_legal_help_callback
 from handlers.nda_signing import handle_callback as handle_nda_callback
 from handlers.service_agreements import handle_admin_callback as handle_service_agreement_admin_callback
 from handlers.service_agreements import handle_client_callback as handle_service_agreement_client_callback
+from handlers.work_acts import handle_admin_callback as handle_work_act_admin_callback
+from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from handlers.user import (
@@ -820,6 +822,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_service_agreement_admin_callback(update, context)
         elif data.startswith("sa_c:"):
             await handle_service_agreement_client_callback(update, context)
+        elif data.startswith("act_a:"):
+            await handle_work_act_admin_callback(update, context)
+        elif data.startswith("act_c:"):
+            await handle_work_act_client_callback(update, context)
         elif data.startswith("nda:"):
             await handle_nda_callback(update, context)
         elif data == "contract_upload":

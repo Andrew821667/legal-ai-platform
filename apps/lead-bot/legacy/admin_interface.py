@@ -204,6 +204,59 @@ class AdminInterface:
         )
         return row if isinstance(row, dict) else None
 
+    def create_work_act(
+        self,
+        *,
+        agreement_id: str,
+        description_text: str,
+        amount_minor: int,
+        prepared_by_telegram_user_id: int | None,
+    ) -> dict | None:
+        row = self._core_request_json(
+            "POST",
+            "/api/v1/work-acts",
+            payload={
+                "agreement_id": agreement_id,
+                "description_text": description_text,
+                "amount_minor": amount_minor,
+                "prepared_by_telegram_user_id": prepared_by_telegram_user_id,
+            },
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
+    def list_work_acts_for_agreement(self, agreement_id: str) -> list[dict]:
+        rows = self._core_request_json(
+            "GET", f"/api/v1/work-acts/by-agreement/{agreement_id}", admin_scope=True
+        )
+        return rows if isinstance(rows, list) else []
+
+    def send_work_act(self, act_id: str) -> dict | None:
+        """Отправляет акт клиенту — ядро само шлёт сообщение в Telegram
+        (тот же приём, что у deliver_service_agreement)."""
+        row = self._core_request_json("POST", f"/api/v1/work-acts/{act_id}/send", admin_scope=True)
+        return row if isinstance(row, dict) else None
+
+    def claim_work_act_paid(self, act_id: str, *, telegram_user_id: int) -> dict | None:
+        row = self._core_request_json(
+            "POST",
+            f"/api/v1/work-acts/{act_id}/claim-paid",
+            payload={"telegram_user_id": telegram_user_id},
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
+    def mark_work_act_paid(
+        self, act_id: str, *, paid_by_telegram_user_id: int | None, note: str | None = None
+    ) -> dict | None:
+        row = self._core_request_json(
+            "PATCH",
+            f"/api/v1/work-acts/{act_id}/paid",
+            payload={"paid_by_telegram_user_id": paid_by_telegram_user_id, "note": note},
+            admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
     def _map_core_lead(self, row: dict) -> dict:
         return {
             "id": row.get("id"),

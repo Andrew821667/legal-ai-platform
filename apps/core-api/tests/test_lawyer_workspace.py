@@ -26,6 +26,7 @@ from core_api.models import (
     ServiceAgreementMessage,
     ServiceAgreementMessageRole,
     ServiceAgreementStatus,
+    WorkAct,
 )
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
@@ -422,6 +423,45 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
         # По какому обращению договор — без этого при втором обращении клиента
         # на экране не разобрать, к чему он относится.
         assert card["agreements"][0]["intake_id"] == seeded["intake_id"]
+        # Пустой список, а не отсутствующий ключ — фронту не нужно гадать.
+        assert card["agreements"][0]["acts"] == []
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_client_card_lists_acts_under_their_agreement() -> None:
+    """Акт — под тем договором, по которому выставлен, не общим списком."""
+    client = TestClient(app)
+    names = ["pytest.workspace.card.acts"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, uuid.UUID(seeded["agreement_id"]))
+        agreement.status = ServiceAgreementStatus.signed
+        db.add(agreement)
+        db.add(
+            WorkAct(
+                act_number="AC-20260911-TEST01",
+                agreement_id=agreement.id,
+                lead_id=agreement.lead_id,
+                description_text="Подготовлено и подано заявление.",
+                amount_minor=8_000_000,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        (acts,) = [a["acts"] for a in card["agreements"] if a["agreement_id"] == seeded["agreement_id"]]
+        assert len(acts) == 1
+        assert acts[0]["act_number"] == "AC-20260911-TEST01"
+        assert acts[0]["status"] == "draft"
+        assert acts[0]["amount_minor"] == 8_000_000
     finally:
         _cleanup(names, seeded["lead_id"])
 

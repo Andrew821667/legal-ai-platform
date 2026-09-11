@@ -35,6 +35,15 @@ export const AGREEMENT_STATUS: Record<string, string> = {
   cancelled: "Отменён",
 };
 
+export const WORK_ACT_STATUS: Record<string, string> = {
+  draft: "Черновик",
+  sent: "Отправлен",
+  // Клиент нажал «Я оплатил(а)» — заявление, не подтверждение: юрист
+  // проверяет зачисление сам и подтверждает отдельно.
+  claimed_paid: "Клиент отметил оплату",
+  paid: "Оплачен",
+};
+
 export const URGENCY: Record<string, string> = {
   urgent: "Срочно",
   high: "Высокая",

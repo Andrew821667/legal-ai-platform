@@ -99,6 +99,21 @@ export type AgreementCard = {
   declined_at: string | null;
   decline_reason: string | null;
   messages: AgreementMessage[];
+  acts: WorkAct[];
+};
+
+export type WorkAct = {
+  act_id: string;
+  act_number: string;
+  status: "draft" | "sent" | "claimed_paid" | "paid";
+  description_text: string;
+  amount_minor: number;
+  currency: string;
+  created_at: string | null;
+  sent_at: string | null;
+  claimed_paid_at: string | null;
+  paid_at: string | null;
+  paid_note: string | null;
 };
 
 export type ClientCard = {

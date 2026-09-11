@@ -10,6 +10,7 @@ import HistoryList from "./HistoryList";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import RichText from "./RichText";
+import WorkActBox from "./WorkActBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
 import { lawyerAction } from "./useTelegram";
 import {
@@ -363,6 +364,8 @@ function Agreement({
           ) : null}
         </div>
       ) : null}
+
+      <WorkActBox agreement={item} initData={initData} onChanged={onChanged} />
     </Card>
   );
 }
