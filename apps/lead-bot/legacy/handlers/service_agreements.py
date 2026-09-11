@@ -11,6 +11,7 @@ import admin_interface
 import utils
 from config import get_config
 from core_api_bridge import core_api_bridge
+from handlers.constants import workspace_row
 from telegram import InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -555,12 +556,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             f"Клиент заполнил реквизиты по договору № {revised['agreement_number']}.",
             InlineKeyboardMarkup(
                 [
+                    *workspace_row(revised.get("lead_id")),
                     [
                         InlineKeyboardButton(
                             "Открыть обращение",
                             callback_data=f"sa_a:i:{revised['intake_id']}",
                         )
-                    ]
+                    ],
                 ]
             ),
         )
@@ -587,11 +589,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             f"Вопрос клиента по договору № {(item or {}).get('agreement_number', agreement_id)}:\n\n{value}",
             InlineKeyboardMarkup(
                 [
+                    *workspace_row((item or {}).get("lead_id")),
                     [
                         InlineKeyboardButton(
                             "Ответить клиенту", callback_data=f"sa_a:reply:{agreement_id}"
                         )
-                    ]
+                    ],
                 ]
             ),
         )
@@ -1142,11 +1145,12 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
             f"Клиент подписал договор № {item['agreement_number']}.",
             InlineKeyboardMarkup(
                 [
+                    *workspace_row(item.get("lead_id")),
                     [
                         InlineKeyboardButton(
                             "Открыть обращение", callback_data=f"sa_a:i:{item['intake_id']}"
                         )
-                    ]
+                    ],
                 ]
             ),
         )
@@ -1191,11 +1195,12 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
             f"Клиент отказался от договора № {item['agreement_number']}.",
             InlineKeyboardMarkup(
                 [
+                    *workspace_row(item.get("lead_id")),
                     [
                         InlineKeyboardButton(
                             "Открыть обращение", callback_data=f"sa_a:i:{item['intake_id']}"
                         )
-                    ]
+                    ],
                 ]
             ),
         )

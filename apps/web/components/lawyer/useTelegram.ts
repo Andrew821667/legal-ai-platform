@@ -10,12 +10,25 @@ import { useEffect, useState } from "react";
  * открыть и вне Telegram.
  */
 
+type TelegramBackButton = {
+  show: () => void;
+  hide: () => void;
+  onClick: (handler: () => void) => void;
+  offClick: (handler: () => void) => void;
+};
+
 type TelegramWebApp = {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
   colorScheme?: string;
+  BackButton?: TelegramBackButton;
 };
+
+/** Нативная кнопка «назад» Telegram — та, что в шапке мини-аппа. */
+export function telegramBackButton(): TelegramBackButton | undefined {
+  return window.Telegram?.WebApp?.BackButton;
+}
 
 declare global {
   interface Window {

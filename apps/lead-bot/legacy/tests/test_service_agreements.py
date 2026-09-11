@@ -458,3 +458,42 @@ async def test_already_signed_message_is_sent_once(monkeypatch, replies) -> None
     await flow.handle_client_callback(update, ctx)
 
     assert replies == ["Этот договор уже подписан."]
+
+
+@pytest.mark.anyio
+async def test_client_question_notice_opens_the_card_directly(replies, monkeypatch) -> None:
+    """Самое частое действие юриста — ответить на вопрос клиента.
+
+    Раньше уведомление вело только в старый диалог с ботом, а из рабочего
+    места до нужной карточки надо было добираться через список. Теперь первая
+    кнопка — сразу карточка этого клиента; старый путь остаётся рядом.
+    """
+    bot = Bot()
+    agreement = {**_agreement("sent"), "lead_id": "33333333-3333-3333-3333-333333333333"}
+    monkeypatch.setattr(
+        flow.core_api_bridge, "add_service_agreement_question", lambda *a, **k: {"ok": True}
+    )
+    monkeypatch.setattr(flow.core_api_bridge, "get_service_agreement", lambda *a, **k: agreement)
+    monkeypatch.setattr(
+        flow.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    context = SimpleNamespace(
+        bot=bot,
+        user_data={
+            flow.STATE_KEY: "client_question",
+            flow.DATA_KEY: {"agreement_id": agreement["id"]},
+        },
+    )
+    update = SimpleNamespace(
+        effective_message=SimpleNamespace(chat_id=7),
+        effective_user=SimpleNamespace(id=7),
+    )
+
+    handled = await flow.handle_message(update, context, "А что с нотариусом?")
+
+    assert handled
+    notice = bot.messages[0]
+    assert "А что с нотариусом?" in notice["text"]
+    rows = notice["reply_markup"].inline_keyboard
+    assert rows[0][0].web_app.url == "https://example.ru/lawyer?client=33333333-3333-3333-3333-333333333333"
+    assert rows[1][0].callback_data == f"sa_a:reply:{agreement['id']}"

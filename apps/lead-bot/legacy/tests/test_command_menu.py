@@ -223,3 +223,44 @@ def test_case_management_button_appears_when_configured(monkeypatch) -> None:
     assert button.url == "https://t.me/lawtable_bot"
     # Пункт «Закрыть» остаётся последним — новая кнопка не должна его сдвигать в середину.
     assert rows[-1][0].callback_data == "admin_close"
+
+
+def test_workspace_link_points_at_the_client(monkeypatch) -> None:
+    """Из уведомления — сразу в карточку, а не в общий список."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    lead = "11111111-1111-4111-8111-111111111111"
+    assert constants.lawyer_workspace_link(lead) == f"https://example.ru/lawyer?client={lead}"
+    assert constants.lawyer_workspace_link() == "https://example.ru/lawyer"
+
+
+def test_workspace_link_survives_a_query_in_the_base_url(monkeypatch) -> None:
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer?src=bot", raising=False
+    )
+    assert constants.lawyer_workspace_link("abc") == "https://example.ru/lawyer?src=bot&client=abc"
+
+
+def test_workspace_row_is_empty_without_an_address(monkeypatch) -> None:
+    """Кнопка, ведущая в никуда, хуже её отсутствия — ряд просто не добавляется."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(constants.get_config(), "LAWYER_WORKSPACE_URL", "", raising=False)
+    assert constants.workspace_row("abc") == []
+    assert constants.lawyer_workspace_link("abc") == ""
+
+
+def test_workspace_row_without_lead_opens_the_list(monkeypatch) -> None:
+    """Если клиент неизвестен, кнопка всё равно полезна — ведёт в список."""
+    import handlers.constants as constants
+
+    monkeypatch.setattr(
+        constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    (row,) = constants.workspace_row(None)
+    assert row[0].web_app.url == "https://example.ru/lawyer"
