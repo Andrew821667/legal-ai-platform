@@ -21,6 +21,7 @@ import email_sender
 import security
 import prompts
 from .constants import ADMIN_PANEL_MENU, build_admin_panel_menu
+from .markup import main_menu_hint, main_menu_markup
 
 logger = logging.getLogger(__name__)
 
@@ -387,6 +388,11 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply_markup = InlineKeyboardMarkup(build_admin_panel_menu())
         await update.message.reply_text(admin_panel_message, reply_markup=reply_markup)
+        # Постоянная клавиатура — отдельным сообщением: к панели с inline-кнопками
+        # её не прикрепить, а без неё кнопки внизу у владельца просто нет.
+        await update.message.reply_text(
+            main_menu_hint(user.id), reply_markup=main_menu_markup(user.id)
+        )
 
     except (TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in show_admin_panel: {e}")
