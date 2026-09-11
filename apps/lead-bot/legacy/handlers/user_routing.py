@@ -8,7 +8,12 @@ import database
 import utils
 from config import get_config
 from telegram_ui import normalize_button_text
-from .constants import ADMIN_PANEL_MENU, build_admin_panel_menu
+from .constants import (
+    ADMIN_PANEL_MENU,
+    CLIENT_MINIAPP_BUTTON_TEXT,
+    build_admin_panel_menu,
+    client_miniapp_inline_row,
+)
 from .markup import (
     consultation_contact_markup as _consultation_contact_markup,
     main_menu_markup as _main_menu_markup,
@@ -34,9 +39,33 @@ def _is_navigation_shortcut(message_text: str) -> bool:
     raw = (message_text or "").strip()
     if not raw:
         return False
-    if _button_text_equals(raw, "🧭 Рабочий стол") or _button_text_equals(raw, "📋 Меню услуг"):
+    if (
+        _button_text_equals(raw, "🧭 Рабочий стол")
+        or _button_text_equals(raw, CLIENT_MINIAPP_BUTTON_TEXT)
+        or _button_text_equals(raw, "📋 Меню услуг")
+    ):
         return True
     return raw.lower() in ["/menu", "menu", "/меню", "меню"]
+
+
+async def send_client_miniapp_entry(message: Message) -> bool:
+    """Ответ на кнопку «📱 Мини-апп» внизу экрана — inline-кнопка мини-аппа.
+
+    Нижняя кнопка нарочно текстовая: Mini App, запущенный кнопкой
+    reply-клавиатуры, получает пустой initData, и клиент внутри оказывался
+    никем. Inline-кнопка открывает его с полноценным входом. False — адрес
+    не задан, тогда пусть сработает обычное меню.
+    """
+    rows = client_miniapp_inline_row()
+    if not rows:
+        return False
+    await utils.safe_reply_text(
+        message,
+        "Мини-апп открывается кнопкой ниже.",
+        reply_markup=InlineKeyboardMarkup(rows),
+        action="client_miniapp_entry",
+    )
+    return True
 
 
 async def send_workspace_entry(
@@ -156,6 +185,10 @@ async def maybe_handle_static_reply_action(
     documents_handler,
     reset_handler,
 ) -> bool:
+    if _button_text_equals(message_text, CLIENT_MINIAPP_BUTTON_TEXT):
+        if await send_client_miniapp_entry(original_message):
+            return True
+
     if _is_navigation_shortcut(message_text):
         await menu_handler(update, context)
         return True

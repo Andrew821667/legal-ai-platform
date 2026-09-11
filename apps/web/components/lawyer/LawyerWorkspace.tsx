@@ -7,7 +7,7 @@ import FinanceView from "./FinanceView";
 import TodayView from "./TodayView";
 import ClientsView from "./ClientsView";
 import { formatRub } from "@/lib/money";
-import { lawyerFetch, telegramBackButton, useTelegramInitData } from "./useTelegram";
+import { LawyerFetchError, lawyerFetch, telegramBackButton, useTelegramInitData } from "./useTelegram";
 import type { ClientCard, ClientRow, Finance, Today } from "./types";
 import { buildWorkspaceSearch, parseWorkspaceRoute } from "@/lib/lawyer-route";
 import type { Tab, WorkspaceRoute } from "@/lib/lawyer-route";
@@ -41,6 +41,7 @@ export default function LawyerWorkspace() {
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [card, setCard] = useState<ClientCard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unauthorized, setUnauthorized] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Два независимых загрузчика — не читают состояние друг друга и не входят
@@ -53,10 +54,12 @@ export default function LawyerWorkspace() {
     if (!ready) return;
     setLoading(true);
     setError(null);
+    setUnauthorized(false);
     try {
       setToday(await lawyerFetch<Today>("/api/lawyer/today", initData));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить данные");
+      setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
     } finally {
       setLoading(false);
     }
@@ -77,6 +80,7 @@ export default function LawyerWorkspace() {
       setFinance(await lawyerFetch<Finance>("/api/lawyer/finance", initData));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить деньги");
+      setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
     } finally {
       setLoading(false);
     }
@@ -88,11 +92,13 @@ export default function LawyerWorkspace() {
       lastSearch.current = search;
       setLoading(true);
       setError(null);
+      setUnauthorized(false);
       try {
         const query = search ? `?search=${encodeURIComponent(search)}` : "";
         setClients(await lawyerFetch<ClientRow[]>(`/api/lawyer/clients${query}`, initData));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Не удалось найти");
+        setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
       } finally {
         setLoading(false);
       }
@@ -160,14 +166,28 @@ export default function LawyerWorkspace() {
   // Ref, а не состояние: эффект не должен перезапускаться от смены identity
   // openClient — тот самый класс ошибок, что чинили в #340.
   const landed = useRef(false);
+  const [loginHint, setLoginHint] = useState<string | null>(null);
   useEffect(() => {
     if (!ready || landed.current) return;
     landed.current = true;
+    // /lawyer/login отправляет сюда с причиной, если токен не подошёл.
+    setLoginHint(new URLSearchParams(window.location.search).get("login"));
     const route = parseWorkspaceRoute(window.location.search);
     setTab(route.tab);
     syncAddress(route, "replace");
     if (route.client) void openClient(route.client);
   }, [ready, openClient]);
+
+  // Кнопка reply-клавиатуры Telegram открывает Mini App с пустым initData —
+  // так устроен Telegram. Обычно её адрес несёт токен входа, и сюда мы не
+  // попадаем; если попали — токен устарел или Telegram открыл голый адрес.
+  const noIdentity = ready && initData === "" && unauthorized;
+  const guidance =
+    loginHint === "denied"
+      ? "Этот вход не для вашего аккаунта."
+      : loginHint === "stale"
+        ? "Ссылка в кнопке устарела. Отправьте боту /admin — кнопка обновится и вход заработает."
+        : "Открыто без данных входа. В Telegram отправьте боту /admin — кнопка внизу обновится; в браузере возьмите там же новую «Ссылку для Safari».";
 
   // Кнопка «назад» браузера или Telegram: состояние — из адреса, не наоборот.
   useEffect(() => {
@@ -276,7 +296,12 @@ export default function LawyerWorkspace() {
         ))}
       </nav>
 
-      {error ? (
+      {noIdentity ? (
+        <div className="lw-card p-4 text-lw-base text-lw-ink">
+          <p className="font-semibold">Нужен вход</p>
+          <p className="mt-1 text-lw-muted">{guidance}</p>
+        </div>
+      ) : error ? (
         <div className="rounded-lg border border-lw-danger/30 bg-lw-danger-soft p-3 text-lw-base text-lw-danger">
           {error}
           <button

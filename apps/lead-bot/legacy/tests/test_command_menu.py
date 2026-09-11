@@ -181,28 +181,117 @@ def test_admin_reply_keyboard_falls_back_to_client_menu_without_url(monkeypatch)
     assert any("Мини-апп" in label for label in labels)
 
 
-def test_client_button_opens_the_miniapp_directly(monkeypatch) -> None:
-    """Раньше нажатие слало текст, который потом разбирал роутер — теперь
-    открывается сразу, без круга через отправку и разбор сообщения."""
+def test_client_button_is_text() -> None:
+    """Mini App из кнопки reply-клавиатуры получает пустой initData — так
+    устроен Telegram. Поэтому кнопка текстовая: бот отвечает inline-кнопкой,
+    а уже она открывает мини-апп с полноценным входом."""
+    import handlers.constants as constants
+    from handlers.user_routing import _is_navigation_shortcut
+
+    button = constants.client_miniapp_button()
+    assert button.web_app is None
+    assert button.text == "📱 Мини-апп"
+    # Навигация, а не запрос клиента: первое сообщение новичка с этой кнопки
+    # не должно уйти в разбор лида.
+    assert _is_navigation_shortcut("📱 Мини-апп")
+    assert _is_navigation_shortcut("🧭 Рабочий стол")  # старая надпись на старых клавиатурах
+
+
+def _static_reply_call(text: str, sent: list, *, menu_calls: list):
+    from handlers.user_routing import maybe_handle_static_reply_action
+
+    async def reply_text(message_text, reply_markup=None, **kwargs):
+        sent.append((message_text, reply_markup))
+
+    async def menu_handler(update, context):
+        menu_calls.append(text)
+
+    async def unexpected(update, context):  # pragma: no cover - страховка
+        raise AssertionError("не та ветка")
+
+    return maybe_handle_static_reply_action(
+        update=SimpleNamespace(),
+        context=SimpleNamespace(),
+        original_message=SimpleNamespace(reply_text=reply_text),
+        message_text=text,
+        user=SimpleNamespace(id=7),
+        user_data={"id": 1},
+        consent_state={},
+        is_admin=False,
+        allow_lead_processing=True,
+        consultation_requires_pdn=False,
+        menu_handler=menu_handler,
+        profile_handler=unexpected,
+        documents_handler=unexpected,
+        reset_handler=unexpected,
+    )
+
+
+@pytest.mark.anyio
+async def test_client_button_answers_with_an_inline_miniapp_button(monkeypatch) -> None:
+    """Одно касание длиннее — зато мини-апп открывается с полноценным входом."""
     import handlers.constants as constants
 
     monkeypatch.setattr(
         constants.get_config(), "CLIENT_MINIAPP_URL", "https://example.ru/miniapp", raising=False
     )
-    button = constants.client_miniapp_button()
-    assert button.web_app is not None
-    assert button.web_app.url == "https://example.ru/miniapp"
+    sent: list = []
+    menu_calls: list = []
+    assert await _static_reply_call("📱 Мини-апп", sent, menu_calls=menu_calls)
+
+    assert menu_calls == []
+    ((_, markup),) = sent
+    (button,) = [b for row in markup.inline_keyboard for b in row]
+    assert button.web_app is not None and button.web_app.url == "https://example.ru/miniapp"
 
 
-def test_client_button_falls_back_to_text_without_url(monkeypatch) -> None:
-    """Этот ряд клавиатуры не может остаться пустым — в отличие от
-    необязательных кнопок вроде рабочего места юриста."""
+@pytest.mark.anyio
+async def test_client_button_without_an_address_opens_the_menu(monkeypatch) -> None:
+    """Кнопка, ведущая в никуда, хуже её отсутствия — тогда обычное меню."""
     import handlers.constants as constants
 
     monkeypatch.setattr(constants.get_config(), "CLIENT_MINIAPP_URL", "", raising=False)
-    button = constants.client_miniapp_button()
-    assert button.web_app is None
-    assert button.text == "🧭 Рабочий стол"
+    sent: list = []
+    menu_calls: list = []
+    assert await _static_reply_call("📱 Мини-апп", sent, menu_calls=menu_calls)
+
+    assert sent == []
+    assert menu_calls == ["📱 Мини-апп"]
+
+
+def test_admin_bottom_button_carries_a_login_token(monkeypatch) -> None:
+    """Нижняя кнопка не может войти по initData — Telegram его не передаёт.
+    Поэтому она ведёт на /lawyer/login с тем же токеном, что «Ссылка для Safari»."""
+    import handlers.constants as constants
+
+    cfg = constants.get_config()
+    monkeypatch.setattr(cfg, "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False)
+    monkeypatch.setattr(cfg, "LAWYER_SESSION_SECRET", "s3cret", raising=False)
+    monkeypatch.setattr(cfg, "ADMIN_TELEGRAM_ID", 42, raising=False)
+
+    url = constants.build_admin_reply_menu()[0][0].web_app.url
+    assert url.startswith("https://example.ru/lawyer/login?token=42.")
+
+    # Токен настоящий: подпись пересчитывается тем же способом, что и в вебе.
+    import hashlib
+    import hmac
+
+    token = url.split("token=", 1)[1]
+    user_id, issued_at, signature = token.split(".")
+    assert user_id == "42"
+    expected = hmac.new(b"s3cret", f"{user_id}.{issued_at}".encode(), hashlib.sha256).hexdigest()
+    assert signature == expected
+
+
+def test_admin_bottom_button_without_secret_is_a_plain_link(monkeypatch) -> None:
+    """Без секрета выпускать токен нечем — тогда голый адрес, и рабочее место
+    само объяснит, что делать."""
+    import handlers.constants as constants
+
+    cfg = constants.get_config()
+    monkeypatch.setattr(cfg, "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False)
+    monkeypatch.setattr(cfg, "LAWYER_SESSION_SECRET", "", raising=False)
+    assert constants.build_admin_reply_menu()[0][0].web_app.url == "https://example.ru/lawyer"
 
 
 def test_case_management_button_hidden_without_username(monkeypatch) -> None:
