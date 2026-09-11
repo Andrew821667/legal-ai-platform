@@ -23,6 +23,8 @@ type TelegramWebApp = {
   expand?: () => void;
   colorScheme?: string;
   BackButton?: TelegramBackButton;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 };
 
 /** Нативная кнопка «назад» Telegram — та, что в шапке мини-аппа. */
@@ -44,6 +46,10 @@ export function useTelegramInitData(): { initData: string; ready: boolean } {
     const app = window.Telegram?.WebApp;
     app?.ready?.();
     app?.expand?.();
+    // Шапка и подложка Telegram — в цвет страницы, иначе над светлым экраном
+    // остаётся тёмная полоса от прежней темы.
+    app?.setHeaderColor?.("#f7f8fb");
+    app?.setBackgroundColor?.("#f7f8fb");
     setInitData(app?.initData || "");
     setReady(true);
   }, []);

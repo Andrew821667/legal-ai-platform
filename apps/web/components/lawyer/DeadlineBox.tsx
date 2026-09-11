@@ -51,22 +51,22 @@ export default function DeadlineBox({
   };
 
   return (
-    <div className="mt-3 border-t border-slate-800/60 pt-3">
+    <div className="mt-3 border-t border-lw-border pt-3">
       <div className="flex items-center gap-3">
-        <span className="text-sm text-slate-400">Срок</span>
+        <span className="text-lw-sm text-lw-muted">Срок</span>
         <input
           type="date"
           value={value}
           disabled={busy}
           onChange={(event) => void save(event.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-100 disabled:opacity-60"
+          className="lw-input !w-auto !py-2 disabled:opacity-60"
         />
         {value ? (
           <button
             type="button"
             disabled={busy}
             onClick={() => void save("")}
-            className="text-sm text-slate-400 underline underline-offset-2 hover:text-slate-200"
+            className="text-lw-sm text-lw-muted underline underline-offset-2 hover:text-lw-primary"
           >
             снять
           </button>
@@ -74,9 +74,9 @@ export default function DeadlineBox({
       </div>
 
       {clientWords ? (
-        <p className="mt-1.5 text-sm text-slate-400">Со слов клиента: «{clientWords}»</p>
+        <p className="mt-1.5 text-lw-sm text-lw-muted">Со слов клиента: «{clientWords}»</p>
       ) : null}
-      {error ? <p className="mt-1 text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-1 text-lw-sm text-lw-danger">{error}</p> : null}
     </div>
   );
 }

@@ -31,17 +31,17 @@ function statusTone(status: string): Tone {
 function Tile({ title, bucket, note }: { title: string; bucket: MoneyBucket; note?: string }) {
   return (
     <Card>
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{formatRub(bucket.minor)}</p>
-      <p className="mt-0.5 text-sm text-slate-400">
+      <p className="text-lw-sm text-lw-muted">{title}</p>
+      <p className="mt-1 text-lw-xl font-extrabold tabular-nums text-lw-ink">{formatRub(bucket.minor)}</p>
+      <p className="mt-0.5 text-lw-sm text-lw-muted">
         {bucket.count === 0
           ? "нет договоров"
           : `${bucket.count} ${bucket.count === 1 ? "договор" : bucket.count < 5 ? "договора" : "договоров"}`}
         {bucket.unpriced ? (
-          <span className="text-amber-200"> · без суммы: {bucket.unpriced}</span>
+          <span className="text-lw-warning"> · без суммы: {bucket.unpriced}</span>
         ) : null}
       </p>
-      {note ? <p className="mt-1 text-sm text-slate-400">{note}</p> : null}
+      {note ? <p className="mt-1 text-lw-sm text-lw-muted">{note}</p> : null}
     </Card>
   );
 }
@@ -54,19 +54,19 @@ function Row({ item, onOpen }: { item: FinanceAgreement; onOpen: (leadId: string
         type="button"
         disabled={!item.lead_id}
         onClick={() => item.lead_id && onOpen(item.lead_id)}
-        className="w-full rounded-xl bg-slate-800/70 p-3 text-left transition-colors hover:bg-slate-800 disabled:cursor-default"
+        className="w-full rounded-xl bg-lw-cell p-3 text-left transition-colors hover:bg-lw-blue-soft disabled:cursor-default"
       >
         <div className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 truncate text-base font-medium text-white">{item.client}</span>
-          <span className="shrink-0 tabular-nums text-base font-medium text-white">
+          <span className="min-w-0 truncate text-lw-base font-medium text-lw-ink">{item.client}</span>
+          <span className="shrink-0 tabular-nums text-lw-base font-medium text-lw-ink">
             {item.amount_minor === null ? (
-              <span className="text-sm font-normal text-amber-200">нет суммы</span>
+              <span className="text-lw-sm font-normal text-lw-warning">нет суммы</span>
             ) : (
               formatRub(item.amount_minor)
             )}
           </span>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-400">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-lw-sm text-lw-muted">
           <Pill tone={statusTone(item.status)}>{label(AGREEMENT_STATUS, item.status)}</Pill>
           <span className="min-w-0 truncate">{item.subject}</span>
           <span className="shrink-0">{shortDate(when)}</span>
@@ -91,7 +91,7 @@ export default function FinanceView({
   return (
     <div className="space-y-4">
       {unpriced > 0 ? (
-        <p className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-200">
+        <p className="rounded-xl bg-lw-warning-soft p-3 text-lw-sm text-lw-warning">
           У {unpriced} {unpriced === 1 ? "договора" : "договоров"} не указана сумма к учёту —
           итоги ниже неполные. Указать можно в карточке клиента, в блоке договора.
         </p>
@@ -106,30 +106,33 @@ export default function FinanceView({
         <Tile title="В работе у клиентов" bucket={finance.in_pipeline} />
         <Tile title="Черновики" bucket={finance.drafts} />
         <Card>
-          <p className="text-sm text-slate-400">Средний чек</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {formatRub(finance.average_signed_minor)}
+          <p className="text-lw-sm text-lw-muted">Средний чек</p>
+          {/* Среднему копейки ни к чему — а с ними число не влезает в плитку. */}
+          <p className="mt-1 text-lw-xl font-extrabold tabular-nums text-lw-ink">
+            {formatRub(
+              finance.average_signed_minor === null
+                ? null
+                : Math.round(finance.average_signed_minor / 100) * 100,
+            )}
           </p>
-          <p className="mt-0.5 text-sm text-slate-400">
+          <p className="mt-0.5 text-lw-sm text-lw-muted">
             по {finance.signed_total.count - finance.signed_total.unpriced} подписанным за всё время
           </p>
         </Card>
       </div>
 
       {finance.declined_this_month.count ? (
-        <p className="text-sm text-slate-400">
+        <p className="text-lw-sm text-lw-muted">
           Отклонено в этом месяце: {finance.declined_this_month.count} на{" "}
           {formatRub(finance.declined_this_month.minor)}.
         </p>
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-base font-semibold uppercase tracking-wide text-slate-300">
-          Договоры
-        </h2>
+        <h2 className="lw-eyebrow mb-2">Договоры</h2>
         {finance.agreements.length === 0 ? (
           <Card>
-            <p className="text-base text-slate-400">Договоров ещё нет.</p>
+            <p className="text-lw-base text-lw-muted">Договоров ещё нет.</p>
           </Card>
         ) : (
           <ul className="space-y-2">

@@ -13,20 +13,21 @@ export const metadata: Metadata = {
   // конвертации SVG → PNG на боевом хосте).
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Рабочее место",
   },
 };
 
 export const viewport = {
-  themeColor: "#0a1423",
+  themeColor: "#f7f8fb",
+  colorScheme: "light",
 };
 
 export default function LawyerLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-      <main className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="lw-page min-h-screen text-lw-base">
         {/* На телефоне — одна колонка; на ноутбуке — список слева, карточка
             справа. Раньше был тот же мобильный столбец, отцентрированный посреди
             широкого экрана, с пустотой по бокам. */}

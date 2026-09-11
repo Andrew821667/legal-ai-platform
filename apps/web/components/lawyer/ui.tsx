@@ -2,11 +2,12 @@
 
 /** Общие элементы рабочего места: статусы, строки данных, заголовки блоков. */
 
+// Мягкие бейджи, как в «Судебных делах»: цветная подложка и насыщенный текст.
 const TONES = {
-  ok: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
-  warn: "bg-amber-500/15 text-amber-300 ring-amber-500/25",
-  alert: "bg-rose-500/15 text-rose-300 ring-rose-500/25",
-  mute: "bg-slate-500/15 text-slate-300 ring-slate-500/25",
+  ok: "bg-lw-success-soft text-lw-success",
+  warn: "bg-lw-warning-soft text-lw-warning",
+  alert: "bg-lw-danger-soft text-lw-danger",
+  mute: "bg-lw-soft text-lw-muted",
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -14,7 +15,7 @@ export type Tone = keyof typeof TONES;
 export function Pill({ children, tone = "mute" }: { children: React.ReactNode; tone?: Tone }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ring-1 ring-inset ${TONES[tone]}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-lw-sm font-semibold ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -27,9 +28,9 @@ export function Row({ label, value }: { label: string; value: React.ReactNode })
     return null;
   }
   return (
-    <div className="flex gap-3 py-1.5 text-sm">
-      <span className="w-32 shrink-0 text-slate-400">{label}</span>
-      <span className="min-w-0 flex-1 text-slate-200">{value}</span>
+    <div className="flex gap-3 py-2 text-lw-base">
+      <span className="w-32 shrink-0 text-lw-muted">{label}</span>
+      <span className="min-w-0 flex-1 text-lw-ink">{value}</span>
     </div>
   );
 }
@@ -41,11 +42,7 @@ export function Card({
   children: React.ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={`rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`lw-card p-4 ${className}`}>{children}</div>;
 }
 
 export function SectionTitle({
@@ -56,9 +53,9 @@ export function SectionTitle({
   count?: number;
 }) {
   return (
-    <h2 className="mb-2 flex items-baseline gap-2 text-base font-semibold uppercase tracking-wide text-slate-300">
+    <h2 className="lw-eyebrow mb-2 flex items-baseline gap-2">
       {children}
-      {count !== undefined ? <span className="text-slate-400">{count}</span> : null}
+      {count !== undefined ? <span className="text-lw-muted">{count}</span> : null}
     </h2>
   );
 }
@@ -76,13 +73,22 @@ export function Progress({ stage }: { stage: string }) {
           : 1;
 
   return (
-    <div className="mt-3 flex items-center gap-1">
+    <div className="mt-3 flex items-center gap-1.5">
       {steps.map((step, index) => {
-        const done = index + 1 <= reached;
+        const done = index + 1 < reached;
+        const current = index + 1 === reached;
         return (
-          <div key={step} className="flex flex-1 flex-col gap-1">
-            <div className={`h-1 rounded-full ${done ? "bg-amber-500" : "bg-slate-800"}`} />
-            <span className={`text-sm ${done ? "text-slate-300" : "text-slate-400"}`}>
+          <div key={step} className="flex flex-1 flex-col gap-1.5">
+            <div
+              className={`h-1.5 rounded-full ${
+                done ? "bg-lw-primary" : current ? "bg-lw-primary-2" : "bg-lw-border"
+              }`}
+            />
+            <span
+              className={`text-lw-sm ${
+                current ? "font-semibold text-lw-primary" : done ? "text-lw-ink" : "text-lw-muted"
+              }`}
+            >
               {step}
             </span>
           </div>

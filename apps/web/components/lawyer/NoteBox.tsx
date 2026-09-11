@@ -32,7 +32,7 @@ export default function NoteBox({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-2 py-1 text-base text-slate-400 hover:text-slate-300"
+        className="lw-btn-quiet mt-3 !py-2"
       >
         + заметка
       </button>
@@ -50,7 +50,7 @@ export default function NoteBox({
         }}
         rows={3}
         placeholder="Заметка для себя — клиент её не видит"
-        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-200 placeholder:text-slate-400"
+        className="lw-input"
       />
       <div className="mt-1 flex items-center gap-3">
         <button
@@ -68,12 +68,12 @@ export default function NoteBox({
               setState("idle");
             }
           }}
-          className="rounded-xl bg-slate-800 px-4 py-2 text-base text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+          className="lw-btn-quiet !py-2"
         >
           {state === "busy" ? "Сохраняю…" : "Сохранить"}
         </button>
-        {state === "saved" ? <span className="text-sm text-emerald-300">Сохранено</span> : null}
-        {error ? <span className="text-sm text-rose-300">{error}</span> : null}
+        {state === "saved" ? <span className="text-lw-sm text-lw-success">Сохранено</span> : null}
+        {error ? <span className="text-lw-sm text-lw-danger">{error}</span> : null}
       </div>
     </div>
   );

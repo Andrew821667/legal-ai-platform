@@ -1,5 +1,122 @@
 @import "tailwindcss";
 
+/*
+ * Рабочее место юриста — палитра и масштаб «Судебных дел».
+ *
+ * Тот же владелец открывает оба мини-аппа по многу раз в день; два разных
+ * языка интерфейса — тёмный мелкий здесь, светлый крупный там — заставляли
+ * перестраиваться на каждом переключении. Токены повторяют app.html
+ * «Судебных дел» один в один: светлый сине-серый фон, белые карточки с
+ * мягкой тенью, глубокий синий как единственный акцент, мягкие цветные
+ * бейджи. Шрифт крупнее обычного: экран читают с телефона между встречами.
+ */
+@theme {
+  --color-lw-bg: #f7f8fb;
+  --color-lw-bg-2: #eef2f7;
+  --color-lw-surface: #ffffff;
+  --color-lw-soft: #f3f6fa;
+  --color-lw-blue-soft: #eaf2fb;
+  --color-lw-cell: #eef4fb;
+  --color-lw-border: #d8e0ea;
+  --color-lw-border-strong: #b9c6d6;
+  --color-lw-ink: #172033;
+  /* Темнее, чем в «Судебных делах» (#697386): тот на голубых подложках даёт
+     ~4.3:1 — ниже AA. #5b6577 сохраняет тон и держит 5.3:1 и там. */
+  --color-lw-muted: #5b6577;
+  --color-lw-primary: #1f4e79;
+  --color-lw-primary-2: #2f6b9d;
+  --color-lw-primary-soft: #dceafa;
+  /* Оригинальный #d97706 на #fff3dc — 2.9:1: бейдж «без NDA» читался бы
+     хуже всего на экране. Глубже янтарный держит 5.6:1. */
+  --color-lw-warning: #9a4c00;
+  --color-lw-warning-soft: #fff3dc;
+  --color-lw-danger: #b42318;
+  --color-lw-danger-soft: #fde7e4;
+  --color-lw-success: #067647;
+  --color-lw-success-soft: #ddf4e9;
+
+  --text-lw-xs: 13px;
+  --text-lw-xs--line-height: 1.3;
+  --text-lw-sm: 15px;
+  --text-lw-sm--line-height: 1.4;
+  --text-lw-base: 17px;
+  --text-lw-base--line-height: 1.5;
+  --text-lw-lg: 19px;
+  --text-lw-lg--line-height: 1.35;
+  --text-lw-xl: 22px;
+  --text-lw-xl--line-height: 1.25;
+  --text-lw-2xl: 28px;
+  --text-lw-2xl--line-height: 1.15;
+  --text-lw-3xl: 32px;
+  --text-lw-3xl--line-height: 1.1;
+
+  --shadow-lw-card: 0 12px 28px rgba(23, 32, 51, 0.08);
+  --shadow-lw-card-hover: 0 16px 34px rgba(23, 32, 51, 0.14);
+  --shadow-lw-fab: 0 16px 34px rgba(31, 78, 121, 0.28);
+}
+
+@layer components {
+  .lw-page {
+    color: var(--color-lw-ink);
+    background:
+      radial-gradient(circle at top left, rgba(31, 78, 121, 0.13), transparent 34%),
+      linear-gradient(180deg, var(--color-lw-bg) 0%, var(--color-lw-bg-2) 100%);
+    -webkit-font-smoothing: antialiased;
+  }
+  .lw-card {
+    background: var(--color-lw-surface);
+    border: 1px solid rgba(216, 224, 234, 0.92);
+    border-radius: 18px;
+    box-shadow: var(--shadow-lw-card);
+  }
+  .lw-hero {
+    border-radius: 24px;
+    border: 1px solid rgba(31, 78, 121, 0.16);
+    background:
+      radial-gradient(circle at top right, rgba(31, 78, 121, 0.18), transparent 34%),
+      linear-gradient(135deg, #ffffff 0%, #edf5ff 100%);
+    box-shadow: var(--shadow-lw-card);
+  }
+  .lw-eyebrow {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-lw-primary);
+  }
+  .lw-btn {
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--color-lw-primary), var(--color-lw-primary-2));
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+  .lw-btn:active { transform: scale(0.98); }
+  .lw-btn:disabled { opacity: 0.6; }
+  .lw-btn-quiet {
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-lw-primary);
+    background: var(--color-lw-primary-soft);
+  }
+  .lw-btn-quiet:disabled { opacity: 0.6; }
+  .lw-input {
+    width: 100%;
+    border: 1px solid var(--color-lw-border);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 17px;
+    background: var(--color-lw-soft);
+    color: var(--color-lw-ink);
+  }
+  .lw-input::placeholder { color: var(--color-lw-muted); }
+  .lw-input:focus { outline: 2px solid rgba(31, 78, 121, 0.35); outline-offset: 1px; }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
