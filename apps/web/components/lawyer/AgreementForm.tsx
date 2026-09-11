@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { AGREEMENT_FIELDS } from "@/lib/agreement-draft";
+import { formatRub, parseRublesInput } from "@/lib/money";
 import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import { lawyerAction } from "./useTelegram";
 
@@ -54,6 +55,17 @@ export default function AgreementForm({
 
   const update = (key: string, text: string) => {
     const next = { ...values, [key]: text };
+    // Сумма к учёту и формулировка в документе — две записи об одном. Пока
+    // одна пуста, она подтягивается из другой: набрал «10 000» в стоимости —
+    // сумма встала сама; набрал сумму — формулировка предложена.
+    if (key === "price_text" && !(next.amount || "").trim()) {
+      const parsed = parseRublesInput(text);
+      if (parsed.ok && parsed.minor !== null) next.amount = String(parsed.minor / 100);
+    }
+    if (key === "amount" && !(next.price_text || "").trim()) {
+      const parsed = parseRublesInput(text);
+      if (parsed.ok && parsed.minor !== null) next.price_text = formatRub(parsed.minor);
+    }
     setValues(next);
     writeDraft(draftKey(intakeId), next);
   };
@@ -86,16 +98,33 @@ export default function AgreementForm({
       ) : null}
 
       {AGREEMENT_FIELDS.map((field) => (
-        <label key={field.key} className="block">
-          <span className="text-sm text-slate-400">{field.label}</span>
-          <textarea
-            value={values[field.key] || ""}
-            onChange={(event) => update(field.key, event.target.value)}
-            rows={field.rows}
-            placeholder={field.hint}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
-          />
-        </label>
+        <div key={field.key}>
+          <label className="block">
+            <span className="text-sm text-slate-400">{field.label}</span>
+            <textarea
+              value={values[field.key] || ""}
+              onChange={(event) => update(field.key, event.target.value)}
+              rows={field.rows}
+              placeholder={field.hint}
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
+            />
+          </label>
+          {field.key === "price_text" ? (
+            <label className="mt-2 block">
+              <span className="text-sm text-slate-400">Сумма к учёту, ₽</span>
+              <input
+                inputMode="decimal"
+                value={values.amount || ""}
+                onChange={(event) => update("amount", event.target.value)}
+                placeholder="10 000"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
+              />
+              <span className="mt-1 block text-sm text-slate-400">
+                Число для итогов. В документ уходит формулировка выше.
+              </span>
+            </label>
+          ) : null}
+        </div>
       ))}
 
       <p className="text-sm text-slate-400">

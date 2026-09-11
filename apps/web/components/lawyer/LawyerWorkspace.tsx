@@ -3,17 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import ClientCardView from "./ClientCardView";
+import FinanceView from "./FinanceView";
 import TodayView from "./TodayView";
 import ClientsView from "./ClientsView";
 import { lawyerFetch, useTelegramInitData } from "./useTelegram";
-import type { ClientCard, ClientRow, Today } from "./types";
+import type { ClientCard, ClientRow, Finance, Today } from "./types";
 
-type Tab = "clients" | "today";
+type Tab = "clients" | "today" | "finance";
 
 export default function LawyerWorkspace() {
   const { initData, ready } = useTelegramInitData();
   const [tab, setTab] = useState<Tab>("clients");
   const [today, setToday] = useState<Today | null>(null);
+  const [finance, setFinance] = useState<Finance | null>(null);
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [card, setCard] = useState<ClientCard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,21 @@ export default function LawyerWorkspace() {
   // действия должно сохранять фильтр, но не менять identity загрузчика — иначе
   // эффект начнёт перезапускаться на каждый поиск.
   const lastSearch = useRef("");
+
+  // Тот же контракт, что у loadToday: зависит только от ready/initData и не
+  // читает состояние, которое сам меняет, — иначе вернётся цикл из #340.
+  const loadFinance = useCallback(async () => {
+    if (!ready) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setFinance(await lawyerFetch<Finance>("/api/lawyer/finance", initData));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось загрузить деньги");
+    } finally {
+      setLoading(false);
+    }
+  }, [ready, initData]);
 
   const loadClients = useCallback(
     async (search = lastSearch.current) => {
@@ -74,7 +91,8 @@ export default function LawyerWorkspace() {
   // первом заходе в раздел.
   useEffect(() => {
     if (tab === "today") void loadToday();
-  }, [tab, loadToday]);
+    if (tab === "finance") void loadFinance();
+  }, [tab, loadToday, loadFinance]);
 
   const openClient = useCallback(
     async (leadId: string) => {
@@ -96,9 +114,9 @@ export default function LawyerWorkspace() {
   // «Отправлено», а счётчик задач не менялся, пока не переоткроешь карточку.
   const refreshAfterAction = useCallback(
     async (leadId: string) => {
-      await Promise.all([openClient(leadId), loadToday(), loadClients()]);
+      await Promise.all([openClient(leadId), loadToday(), loadClients(), loadFinance()]);
     },
-    [openClient, loadToday, loadClients],
+    [openClient, loadToday, loadClients, loadFinance],
   );
 
   const pendingCount = today
@@ -129,6 +147,7 @@ export default function LawyerWorkspace() {
           [
             ["clients", "Клиенты", clients?.length],
             ["today", "Задачи", pendingCount],
+            ["finance", "Деньги", undefined],
           ] as [Tab, string, number | undefined][]
         ).map(([key, title, count]) => (
           <button
@@ -160,7 +179,9 @@ export default function LawyerWorkspace() {
           {error}
           <button
             type="button"
-            onClick={() => void (tab === "today" ? loadToday() : loadClients())}
+            onClick={() =>
+              void (tab === "today" ? loadToday() : tab === "finance" ? loadFinance() : loadClients())
+            }
             className="ml-3 underline underline-offset-2"
           >
             Повторить
@@ -171,6 +192,9 @@ export default function LawyerWorkspace() {
       {loading && !error ? <p className="text-base text-slate-400">Загружаю…</p> : null}
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={openClient} /> : null}
+      {!error && tab === "finance" && finance ? (
+        <FinanceView finance={finance} onOpen={openClient} />
+      ) : null}
       {!error && tab === "clients" ? (
         <ClientsView rows={clients} onOpen={openClient} onSearch={(term) => void loadClients(term)} />
       ) : null}

@@ -528,6 +528,136 @@ def test_unknown_document_is_not_found() -> None:
             db.close()
 
 
+def test_finance_counts_what_is_signed_and_flags_the_unpriced() -> None:
+    """«Сколько за месяц» раньше нельзя было посчитать даже вручную по экрану.
+
+    SUM пропускает пустые суммы молча — рядом с итогом должно быть видно,
+    сколько договоров в него не вошло.
+    """
+    client = TestClient(app)
+    names = ["pytest.workspace.finance"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    now = datetime.now(timezone.utc)
+    try:
+        # Черновик из _seed остаётся черновиком — в подписанное не попадает.
+        db.add_all(
+            [
+                _agreement(
+                    lead_id=seeded["lead_id"],
+                    intake_id=seeded["intake_id"],
+                    status=ServiceAgreementStatus.signed,
+                    signed_at=now,
+                    amount_minor=8_000_000,
+                ),
+                _agreement(
+                    lead_id=seeded["lead_id"],
+                    intake_id=seeded["intake_id"],
+                    status=ServiceAgreementStatus.signed,
+                    signed_at=now,
+                    amount_minor=None,  # старый договор, сумму не проставили
+                ),
+                _agreement(
+                    lead_id=seeded["lead_id"],
+                    intake_id=seeded["intake_id"],
+                    status=ServiceAgreementStatus.superseded,
+                    amount_minor=99_999_999,  # заменённая редакция — не считается
+                ),
+                _agreement(
+                    lead_id=seeded["lead_id"],
+                    intake_id=seeded["intake_id"],
+                    status=ServiceAgreementStatus.sent,
+                    sent_at=now,
+                    amount_minor=5_000_000,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get("/api/v1/lawyer/finance", headers={"X-API-Key": key}).json()
+        assert body["currency"] == "RUB"
+        month = body["signed_this_month"]
+        assert month["count"] >= 2
+        assert month["unpriced"] >= 1
+        assert month["minor"] >= 8_000_000
+        assert body["in_pipeline"]["minor"] >= 5_000_000
+        # Заменённая редакция не попадает ни в итоги, ни в список.
+        listed = {a["agreement_id"] for a in body["agreements"]}
+        assert all(a["status"] != "superseded" for a in body["agreements"])
+        assert seeded["agreement_id"] in listed
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_amount_can_be_set_after_the_fact() -> None:
+    """Сумма к учёту — поле бухгалтерии, не документа: у подписанного договора
+    текст не меняется, а учётную сумму проставить можно."""
+    client = TestClient(app)
+    names = ["pytest.workspace.amount"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, seeded["agreement_id"])
+        agreement.status = ServiceAgreementStatus.signed
+        agreement.signed_at = datetime.now(timezone.utc)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        resp = client.patch(
+            f"/api/v1/lawyer/agreements/{seeded['agreement_id']}/amount",
+            headers={"X-API-Key": key},
+            json={"amount_minor": 1_000_000},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["amount_minor"] == 1_000_000
+
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        assert card["agreements"][0]["amount_minor"] == 1_000_000
+        assert card["agreements"][0]["currency"] == "RUB"
+
+        # Отрицательная сумма — не сумма.
+        bad = client.patch(
+            f"/api/v1/lawyer/agreements/{seeded['agreement_id']}/amount",
+            headers={"X-API-Key": key},
+            json={"amount_minor": -1},
+        )
+        assert bad.status_code == 422
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_backfill_parser_takes_only_the_unambiguous() -> None:
+    """Бэкофилл берёт «10 тысяч» и «10000 руб» — то, что реально лежит в базе, —
+    и не трогает формулировки с оговорками: угадать хуже, чем оставить пустым."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "20260911_0023_agreement_amount.py"
+    spec = importlib.util.spec_from_file_location("agreement_amount_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    parse = module.parse_rubles_to_minor
+
+    assert parse("10000 руб") == 1_000_000
+    assert parse("10 тысяч") == 1_000_000
+    assert parse("10 000 ₽") == 1_000_000
+    assert parse("12500,50 р") == 1_250_050
+    assert parse("10 000 ₽, НДС не облагается") is None
+    assert parse("от 50 000") is None
+    assert parse("по договорённости") is None
+    assert parse("0 руб") is None
+    assert parse(None) is None
+
+
 def test_client_list_shows_only_those_with_intakes() -> None:
     """В таблице лидов лежат и те, кто просто нажал кнопку, — в рабочем месте они лишние."""
     client = TestClient(app)

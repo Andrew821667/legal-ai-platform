@@ -397,7 +397,12 @@ class ServiceAgreement(Base):
     scope_text: Mapped[str] = mapped_column(Text, nullable=False)
     exclusions_text: Mapped[str] = mapped_column(Text, nullable=False)
     schedule_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Формулировка стоимости, как она уходит в документ и подписывается.
     price_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Сумма к учёту в копейках. Отдельно от текста: по «10 тысяч» и
+    # «10000 руб» итоги не сложить, а в документе формулировка важнее числа.
+    amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default="RUB")
     payment_terms: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     prepared_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

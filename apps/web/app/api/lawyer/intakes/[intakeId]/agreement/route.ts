@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { checkAgreementDraft } from "@/lib/agreement-draft";
+import { parseRublesInput } from "@/lib/money";
 import { corePost } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
@@ -37,9 +38,16 @@ export async function POST(
   if (!draft.ok) {
     return Response.json({ detail: draft.detail }, { status: 400 });
   }
+  // Сумма к учёту — отдельно от формулировки в документе: по тексту итоги
+  // не сложить, а число без формулировки в договор не положить.
+  const amount = parseRublesInput(body.amount);
+  if (!amount.ok) {
+    return Response.json({ detail: amount.detail }, { status: 400 });
+  }
 
   return corePost("/api/v1/service-agreements", {
     ...draft.value,
+    amount_minor: amount.minor,
     intake_id: intakeId,
     prepared_by_telegram_user_id: auth.telegramUserId,
     expires_in_days: EXPIRES_IN_DAYS,
