@@ -94,6 +94,19 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         isPartOf: { "@id": url },
         offers: { "@type": "Offer", price: "0", priceCurrency: "RUB" },
       }] : []),
+      ...(topic.slug === "prompts-for-lawyers" ? [{
+        "@type": "HowTo",
+        "@id": `${url}#howto`,
+        name: "Как составить проверяемый промпт для юридической задачи",
+        description: topic.shortAnswer,
+        inLanguage: "ru-RU",
+        step: topic.workflow.map((item, idx) => ({
+          "@type": "HowToStep",
+          position: idx + 1,
+          name: item.title.replace(/^\d+\.\s*/, ""),
+          text: item.text,
+        })),
+      }] : []),
     ],
   };
 
