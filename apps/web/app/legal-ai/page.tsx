@@ -251,7 +251,7 @@ export default function LegalAiPage() {
             Для решения о внедрении нужны работающий интерфейс, проверяемая методика и расчет на собственных данных.
             Эти материалы можно использовать отдельно от консультации.
           </p>
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <Link href="/contract-ai-system" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
               <h3 className="text-lg font-semibold text-amber-300">Contract AI →</h3>
               <p className="mt-3 text-sm leading-6 text-slate-300">Действующий интерфейс для анализа и первичной проверки договоров.</p>
@@ -263,6 +263,10 @@ export default function LegalAiPage() {
             <Link href="/cases" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
               <h3 className="text-lg font-semibold text-amber-300">Методика кейса →</h3>
               <p className="mt-3 text-sm leading-6 text-slate-300">Какие показатели фиксировать и когда результат можно считать подтвержденным.</p>
+            </Link>
+            <Link href="/legal-ai/prompts-for-lawyers" className="rounded-xl border border-slate-700 bg-slate-950/70 p-6 hover:border-amber-500">
+              <h3 className="text-lg font-semibold text-amber-300">8 промптов для юриста →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Готовые запросы для документов, договоров, правового поиска и судебной практики.</p>
             </Link>
           </div>
         </div>
@@ -403,12 +407,14 @@ export default function LegalAiPage() {
             Федеральный закон № 149-ФЗ
             </a>. Конкретные обязанности зависят от данных, участников и архитектуры проекта.
           </p>
-          <Link
-            href="/ai-law"
-            className="mt-5 inline-flex font-semibold text-amber-300 hover:text-amber-200"
-          >
-            Комментарии новых норм об искусственном интеллекте →
-          </Link>
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+            <Link href="/ai-law/243-fz-ai-support-2026" className="font-semibold text-amber-300 hover:text-amber-200">
+              Закон № 243-ФЗ об ИИ: сроки и действия бизнеса →
+            </Link>
+            <Link href="/ai-law" className="font-semibold text-sky-300 hover:text-sky-200">
+              Все комментарии законодательства →
+            </Link>
+          </div>
         </div>
       </section>
 

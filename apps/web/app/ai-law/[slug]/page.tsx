@@ -21,6 +21,21 @@ type AiLawCommentPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+const searchSnippets: Record<string, { title: string; description: string }> = {
+  "243-fz-ai-support-2026": {
+    title: "Закон 243-ФЗ об ИИ: что действует с 1 сентября 2026",
+    description:
+      "Разбираем Закон № 243-ФЗ об искусственном интеллекте: что действует с 1 сентября 2026 года, что отложено до марта 2027-го и что проверить бизнесу.",
+  },
+};
+
+function getSearchSnippet(comment: { slug: string; seoTitle: string; description: string }) {
+  return searchSnippets[comment.slug] ?? {
+    title: comment.seoTitle,
+    description: comment.description,
+  };
+}
+
 export const dynamic = "force-dynamic";
 
 function formatDate(date: string): string {
@@ -38,10 +53,11 @@ export async function generateMetadata({ params }: AiLawCommentPageProps): Promi
   if (!comment) {
     return { title: "Комментарий не найден", robots: { index: false, follow: false } };
   }
+  const snippet = getSearchSnippet(comment);
 
   return createPageMetadata({
-    title: comment.seoTitle,
-    description: comment.description,
+    title: snippet.title,
+    description: snippet.description,
     path: `/ai-law/${comment.slug}`,
     type: "article",
     keywords: comment.keywords,
@@ -55,6 +71,7 @@ export default async function AiLawCommentPage({ params }: AiLawCommentPageProps
 
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const canonicalUrl = `${baseUrl}/ai-law/${comment.slug}`;
+  const snippet = getSearchSnippet(comment);
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -62,7 +79,7 @@ export default async function AiLawCommentPage({ params }: AiLawCommentPageProps
         "@type": "Article",
         "@id": `${canonicalUrl}#article`,
         headline: comment.title,
-        description: comment.description,
+        description: snippet.description,
         datePublished: comment.publishedAt,
         dateModified: comment.reviewedAt,
         inLanguage: "ru-RU",

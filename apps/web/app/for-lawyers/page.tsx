@@ -5,10 +5,14 @@ import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import CtaFrameworkPanel from "@/components/CtaFrameworkPanel";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
+const pageTitle = "ИИ для юристов: инструменты, нейросети и сценарии";
+const pageDescription =
+  "ИИ для юристов и юридических отделов: как выбрать инструмент для договоров, документов, правового поиска, RAG, судебной работы и безопасного пилота.";
+const reviewedAt = "2026-09-11";
+
 export const metadata: Metadata = createPageMetadata({
-  title: "ИИ для юристов: нейросети, сервисы и сценарии",
-  description:
-    "ИИ и нейросети для юристов и юридических отделов: договоры, документы, претензионная работа, правовой поиск, Legal AI и безопасный запуск пилота.",
+  title: pageTitle,
+  description: pageDescription,
   path: "/for-lawyers",
   keywords: [
     "ИИ для юристов",
@@ -75,6 +79,69 @@ const practicalTopics = [
   { href: "/legal-ai/rag-knowledge-base", title: "RAG и база знаний", text: "Поиск по внутренним материалам с цитатами и учетом прав доступа." },
   { href: "/legal-ai/ai-agents", title: "AI-агенты для юристов", text: "Многошаговые задачи, инструменты и контролируемая автономность." },
   { href: "/legal-ai/law-firm", title: "ИИ для юридической фирмы", text: "Сценарии для адвоката, частного юриста и профессиональной практики." },
+  { href: "/ai-law/243-fz-ai-support-2026", title: "Закон № 243-ФЗ об ИИ", text: "Что уже действует, какие нормы отложены до марта 2027 года и что проверить бизнесу." },
+];
+
+const decisionMap = [
+  {
+    task: "Проверить договор",
+    result: "Таблица условий, цитаты, отклонения от правил и вопросы юристу",
+    href: "/services/contracts-ai",
+    link: "Разбор договорного процесса",
+  },
+  {
+    task: "Найти судебную практику",
+    result: "Выборка актов по фактам дела и матрица доводов с источниками",
+    href: "/legal-ai/court-practice-analysis",
+    link: "Анализ судебной практики",
+  },
+  {
+    task: "Подготовить юридический документ",
+    result: "Проверяемая структура и черновик без придуманных реквизитов",
+    href: "/guides/ai-legal-documents",
+    link: "ИИ для документов",
+  },
+  {
+    task: "Искать по внутренним материалам",
+    result: "Ответ по утвержденной базе с цитатами, версиями и правами доступа",
+    href: "/legal-ai/rag-knowledge-base",
+    link: "RAG для юристов",
+  },
+  {
+    task: "Настроить запрос к нейросети",
+    result: "Готовый промпт с форматом ответа, запретами и самопроверкой",
+    href: "/legal-ai/prompts-for-lawyers",
+    link: "8 готовых промптов",
+  },
+  {
+    task: "Автоматизировать поток задач",
+    result: "Legal intake, роли, сроки, журнал и интеграция с рабочей системой",
+    href: "/legal-ai/legal-department",
+    link: "ИИ для юридического отдела",
+  },
+];
+
+const productExamples = [
+  {
+    title: "Contract AI",
+    text: "Рабочий интерфейс для первичного анализа договора: документы, замечания и контроль результата в одном процессе.",
+    href: "/contract-ai-system",
+  },
+  {
+    title: "Встроенный помощник",
+    text: "Помогает сориентироваться в возможностях платформы и передает практическую задачу в защищенную форму, не собирая документы в чате.",
+    href: "/legal-ai/ai-legal-assistant",
+  },
+  {
+    title: "RAG и база знаний",
+    text: "Ответ строится по разрешенному корпусу, сопровождается фрагментами источников и учитывает версии материалов.",
+    href: "/legal-ai/rag-knowledge-base",
+  },
+  {
+    title: "Legal intake и интеграции",
+    text: "Обращение классифицируется, получает ответственного и продолжает движение в существующей CRM, ЭДО или внутреннем кабинете.",
+    href: "/engineering",
+  },
 ];
 
 const selectionCriteria = [
@@ -128,15 +195,51 @@ const faq = [
 ];
 
 export default function ForLawyersPage() {
+  const url = `${SEO_SITE_URL}/for-lawyers`;
   const structuredData = {
     "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "@id": `${SEO_SITE_URL}/for-lawyers#faq`,
-    mainEntity: faq.map((item) => ({
-      "@type": "Question",
-      name: item.question,
-      acceptedAnswer: { "@type": "Answer", text: item.answer },
-    })),
+    "@graph": [
+      {
+        "@type": ["WebPage", "CollectionPage"],
+        "@id": url,
+        url,
+        name: pageTitle,
+        description: pageDescription,
+        dateModified: reviewedAt,
+        inLanguage: "ru-RU",
+        about: ["ИИ для юристов", "Legal AI", "нейросеть для юриста"],
+        publisher: { "@id": `${SEO_SITE_URL}/#organization` },
+      },
+      {
+        "@type": "ItemList",
+        "@id": `${url}#tasks`,
+        name: "Задачи ИИ для юристов",
+        numberOfItems: decisionMap.length,
+        itemListElement: decisionMap.map((item, idx) => ({
+          "@type": "ListItem",
+          position: idx + 1,
+          name: item.task,
+          url: `${SEO_SITE_URL}${item.href}`,
+        })),
+      },
+      {
+        "@type": "FAQPage",
+        "@id": `${url}#faq`,
+        mainEntity: faq.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${url}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Главная", item: SEO_SITE_URL },
+          { "@type": "ListItem", position: 2, name: "ИИ для юристов", item: url },
+        ],
+      },
+    ],
   };
 
   return (
@@ -187,6 +290,27 @@ export default function ForLawyersPage() {
         </Link>
       </section>
 
+      <section className="border-y border-slate-800 bg-slate-900/70">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-semibold text-white">Какой ИИ нужен юристу: выбираем по задаче</h2>
+          <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+            Для разных задач нужен разный рабочий контур. Универсальный чат может помочь с черновиком, но договор,
+            судебная выборка и внутренняя база знаний требуют разных источников и способов проверки.
+          </p>
+          <div className="mt-8 divide-y divide-slate-700 overflow-hidden rounded-2xl border border-slate-700">
+            {decisionMap.map((item) => (
+              <article key={item.task} className="grid gap-3 bg-slate-950/70 p-5 md:grid-cols-[0.75fr_1.4fr_0.85fr] md:items-center md:gap-6">
+                <h3 className="font-semibold text-white">{item.task}</h3>
+                <p className="text-sm leading-6 text-slate-300">{item.result}</p>
+                <Link href={item.href} className="text-sm font-semibold text-amber-300 hover:text-amber-200 md:text-right">
+                  {item.link} →
+                </Link>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="border-y border-slate-800 bg-slate-800/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Где ИИ помогает юристу на практике</h2>
@@ -205,6 +329,23 @@ export default function ForLawyersPage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        <p className="text-sm font-semibold uppercase tracking-wide text-sky-300">Не демонстрация в вакууме</p>
+        <h2 className="mt-3 text-3xl font-semibold text-white">Что уже работает в AI Verdict</h2>
+        <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+          Эти компоненты можно разбирать по отдельности или собирать в один юридический процесс. В каждом случае
+          заранее определяется источник, роль человека и действие после ответа модели.
+        </p>
+        <div className="mt-8 grid gap-5 md:grid-cols-2">
+          {productExamples.map((item) => (
+            <Link key={item.href} href={item.href} className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 hover:border-amber-500">
+              <h3 className="text-xl font-semibold text-amber-300">{item.title} →</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
+            </Link>
+          ))}
         </div>
       </section>
 
