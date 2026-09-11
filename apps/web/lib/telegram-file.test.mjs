@@ -8,6 +8,7 @@ import {
   sendTelegramDocument,
   showsInline,
   telegramFileUrl,
+  uploadTelegramDocument,
 } from "./telegram-file.ts";
 
 const TOKEN = "123456:SECRET-TOKEN-VALUE";
@@ -77,4 +78,32 @@ test("пересылка в чат идёт по идентификатору, �
   await sendTelegramDocument(TOKEN, 321, "FILE_ID", "договор.pdf", fetchImpl);
   assert.equal(calls[0].url, `https://api.telegram.org/bot${TOKEN}/sendDocument`);
   assert.deepEqual(calls[0].body, { chat_id: 321, document: "FILE_ID", caption: "договор.pdf" });
+});
+
+test("выгрузка уходит в чат multipart-формой с именем файла", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, form: init.body });
+    return new Response(JSON.stringify({ ok: true, result: {} }));
+  };
+  const bytes = new TextEncoder().encode("\uFEFFНомер;Клиент\r\n");
+  await uploadTelegramDocument(TOKEN, 42, { name: "договоры-2026-09-11.csv", type: "text/csv", bytes }, "Договоры", fetchImpl);
+
+  assert.equal(calls[0].url, `https://api.telegram.org/bot${TOKEN}/sendDocument`);
+  const form = calls[0].form;
+  assert.ok(form instanceof FormData);
+  assert.equal(form.get("chat_id"), "42");
+  assert.equal(form.get("caption"), "Договоры");
+  const file = form.get("document");
+  assert.equal(file.name, "договоры-2026-09-11.csv");
+  // text() по спецификации снимает BOM — сверяем байты: в файле он должен остаться.
+  assert.deepEqual(new Uint8Array(await file.arrayBuffer()), bytes);
+});
+
+test("отказ Telegram при выгрузке — по-русски и без токена", async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({ ok: false, description: "Bad Request" }), { status: 400 });
+  await assert.rejects(
+    uploadTelegramDocument(TOKEN, 42, { name: "a.csv", type: "text/csv", bytes: new Uint8Array() }, "x", fetchImpl),
+    (err) => err instanceof TelegramFileError && !err.message.includes("SECRET"),
+  );
 });

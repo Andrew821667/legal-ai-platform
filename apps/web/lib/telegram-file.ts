@@ -85,6 +85,34 @@ export async function sendTelegramDocument(
 }
 
 /**
+ * Отправить в чат файл, которого в Telegram ещё нет, — выгрузку, собранную
+ * здесь. Байты идут через multipart: sendDocument принимает их только так.
+ * Ответ Telegram разбирается тем же способом, что и у остальных вызовов.
+ */
+export async function uploadTelegramDocument(
+  token: string,
+  chatId: number,
+  file: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> },
+  caption: string,
+  fetchImpl: Fetch = fetch,
+): Promise<void> {
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  form.set("caption", caption);
+  form.set("document", new Blob([file.bytes], { type: file.type }), file.name);
+  let response: Response;
+  try {
+    response = await fetchImpl(`${API}/bot${token}/sendDocument`, { method: "POST", body: form, cache: "no-store" });
+  } catch {
+    throw new TelegramFileError("Telegram не отвечает");
+  }
+  const body = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+  if (!response.ok || !body.ok) {
+    throw new TelegramFileError("Не удалось отправить файл в чат");
+  }
+}
+
+/**
  * Заголовок с именем файла, переживающий кириллицу.
  *
  * `filename=` понимают все, но только в ASCII; `filename*=` (RFC 5987) несёт

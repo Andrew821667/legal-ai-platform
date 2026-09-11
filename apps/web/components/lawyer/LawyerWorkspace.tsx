@@ -34,7 +34,7 @@ function syncAddress(route: WorkspaceRoute, mode: "push" | "replace") {
 }
 
 export default function LawyerWorkspace() {
-  const { initData, ready } = useTelegramInitData();
+  const { initData, ready, insideTelegram } = useTelegramInitData();
   const [tab, setTab] = useState<Tab>("clients");
   const [today, setToday] = useState<Today | null>(null);
   const [finance, setFinance] = useState<Finance | null>(null);
@@ -340,7 +340,12 @@ export default function LawyerWorkspace() {
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
       {!error && tab === "finance" && finance ? (
-        <FinanceView finance={finance} onOpen={showClient} />
+        <FinanceView
+          finance={finance}
+          onOpen={showClient}
+          initData={initData}
+          insideTelegram={insideTelegram}
+        />
       ) : null}
       {!error && tab === "clients" ? (
         <ClientsView
@@ -371,6 +376,7 @@ export default function LawyerWorkspace() {
             onChanged={() => void refreshAfterAction(card.lead_id)}
             loading={loading}
             initData={initData}
+            insideTelegram={insideTelegram}
           />
         ) : (
           <div className="mt-16 rounded-3xl border border-dashed border-lw-border-strong p-10 text-center">
