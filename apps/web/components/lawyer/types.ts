@@ -78,6 +78,8 @@ export type AgreementCard = {
   revision: number;
   subject: string;
   price_text: string;
+  amount_minor: number | null;
+  currency: string;
   payment_terms: string | null;
   scope_text: string | null;
   exclusions_text: string | null;
@@ -115,4 +117,34 @@ export type ClientCard = {
   } | null;
   intakes: IntakeCard[];
   agreements: AgreementCard[];
+};
+
+export type MoneyBucket = { count: number; minor: number; unpriced: number };
+
+export type FinanceAgreement = {
+  agreement_id: string;
+  lead_id: string | null;
+  client: string;
+  number: string;
+  subject: string;
+  status: string;
+  amount_minor: number | null;
+  price_text: string;
+  signed_at: string | null;
+  sent_at: string | null;
+  created_at: string | null;
+};
+
+export type Finance = {
+  generated_at: string;
+  currency: string;
+  month_from: string;
+  signed_this_month: MoneyBucket;
+  signed_prev_month: MoneyBucket;
+  signed_total: MoneyBucket;
+  average_signed_minor: number | null;
+  in_pipeline: MoneyBucket;
+  drafts: MoneyBucket;
+  declined_this_month: MoneyBucket;
+  agreements: FinanceAgreement[];
 };

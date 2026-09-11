@@ -2,6 +2,7 @@
 
 import ActionButton from "./ActionButton";
 import AgreementForm from "./AgreementForm";
+import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
 import DocumentText from "./DocumentText";
 import NoteBox from "./NoteBox";
@@ -230,6 +231,14 @@ function Agreement({
 
       <div className="mt-3 border-t border-slate-800/60 pt-2">
         <Row label="Стоимость" value={item.price_text} />
+        {item.status === "superseded" ? null : (
+          <AmountBox
+            agreementId={item.agreement_id}
+            amountMinor={item.amount_minor}
+            initData={initData}
+            onChanged={onChanged}
+          />
+        )}
         <Row label="Оплата" value={item.payment_terms} />
         <Row label="Что входит" value={item.scope_text} />
         <Row label="Не входит" value={item.exclusions_text} />

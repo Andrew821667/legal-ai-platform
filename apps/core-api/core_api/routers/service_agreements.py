@@ -56,6 +56,8 @@ class AgreementCreate(BaseModel):
     exclusions_text: str = Field(min_length=2, max_length=2000)
     schedule_text: str = Field(min_length=2, max_length=2000)
     price_text: str = Field(min_length=2, max_length=500)
+    # Копейки. Необязательно: мастер в боте пока спрашивает только текст.
+    amount_minor: int | None = Field(default=None, ge=0, le=10**13)
     payment_terms: str = Field(min_length=2, max_length=2000)
     expires_in_days: int = Field(default=7, ge=1, le=30)
 
@@ -211,6 +213,8 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "exclusions_text": item.exclusions_text,
         "schedule_text": item.schedule_text,
         "price_text": item.price_text,
+        "amount_minor": item.amount_minor,
+        "currency": item.currency,
         "payment_terms": item.payment_terms,
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "expires_at": item.expires_at.isoformat() if item.expires_at else None,
@@ -371,6 +375,7 @@ def create_agreement(
         exclusions_text=payload.exclusions_text.strip(),
         schedule_text=payload.schedule_text.strip(),
         price_text=payload.price_text.strip(),
+        amount_minor=payload.amount_minor,
         payment_terms=payload.payment_terms.strip(),
         created_by=identity.name,
         prepared_by_telegram_user_id=payload.prepared_by_telegram_user_id,
@@ -587,6 +592,8 @@ def complete_client_details(
         exclusions_text=item.exclusions_text,
         schedule_text=item.schedule_text,
         price_text=item.price_text,
+        amount_minor=item.amount_minor,
+        currency=item.currency,
         payment_terms=item.payment_terms,
         created_by=item.created_by,
         prepared_by_telegram_user_id=item.prepared_by_telegram_user_id,

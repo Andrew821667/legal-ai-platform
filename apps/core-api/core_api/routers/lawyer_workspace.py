@@ -16,14 +16,18 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.models import (
+    ActorType,
     IntakeClarification,
     IntakeDocument,
     Lead,
@@ -588,6 +592,8 @@ def client_card(
                 "revision": item.revision,
                 "subject": item.subject,
                 "price_text": item.price_text,
+                "amount_minor": item.amount_minor,
+                "currency": item.currency,
                 "payment_terms": item.payment_terms,
                 "scope_text": item.scope_text,
                 "exclusions_text": item.exclusions_text,
@@ -656,4 +662,145 @@ def nda_document(
         "document_version": item.document_version,
         "document_hash": item.document_hash,
         "document_text": item.document_text,
+    }
+
+
+# Практика в Москве: «этот месяц» считается по московской полуночи, иначе
+# подпись в час ночи первого числа уезжала бы в прошлый месяц.
+_PRACTICE_TZ = ZoneInfo("Europe/Moscow")
+
+# Статусы, по которым сумма ещё может стать деньгами.
+_PIPELINE_STATUSES = (ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed)
+
+
+def _month_start(now: datetime, months_back: int = 0) -> datetime:
+    local = now.astimezone(_PRACTICE_TZ)
+    year, month = local.year, local.month - months_back
+    while month < 1:
+        month += 12
+        year -= 1
+    return datetime(year, month, 1, tzinfo=_PRACTICE_TZ).astimezone(timezone.utc)
+
+
+def _sum_and_count(db: Session, *conditions) -> dict:
+    """Сумма и число договоров; отдельно — сколько из них без суммы.
+
+    SUM пропускает NULL молча, и итог выглядел бы полным, когда он неполный.
+    Число «без суммы» — это честное предупреждение рядом с цифрой.
+    """
+    row = db.execute(
+        select(
+            func.count(ServiceAgreement.id),
+            func.coalesce(func.sum(ServiceAgreement.amount_minor), 0),
+            func.count(ServiceAgreement.id).filter(ServiceAgreement.amount_minor.is_(None)),
+        ).where(*conditions)
+    ).one()
+    return {"count": int(row[0]), "minor": int(row[1]), "unpriced": int(row[2])}
+
+
+@router.get("/finance")
+def finance(
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Деньги практики одним взглядом: сколько подписано, сколько в работе.
+
+    До этого сумма существовала только текстом внутри карточки одного клиента —
+    «сколько за месяц» нельзя было посчитать даже вручную по экрану.
+    """
+    _ = identity
+    now = datetime.now(timezone.utc)
+    this_month = _month_start(now)
+    prev_month = _month_start(now, 1)
+    signed = ServiceAgreement.status == ServiceAgreementStatus.signed
+
+    rows = db.execute(
+        select(ServiceAgreement, Lead)
+        .outerjoin(Lead, Lead.id == ServiceAgreement.lead_id)
+        .where(ServiceAgreement.status != ServiceAgreementStatus.superseded)
+        .order_by(ServiceAgreement.created_at.desc())
+        .limit(200)
+    ).all()
+
+    signed_total = _sum_and_count(db, signed)
+    priced_signed = signed_total["count"] - signed_total["unpriced"]
+
+    return {
+        "generated_at": _iso(now),
+        "currency": "RUB",
+        "month_from": _iso(this_month),
+        "signed_this_month": _sum_and_count(db, signed, ServiceAgreement.signed_at >= this_month),
+        "signed_prev_month": _sum_and_count(
+            db,
+            signed,
+            ServiceAgreement.signed_at >= prev_month,
+            ServiceAgreement.signed_at < this_month,
+        ),
+        "signed_total": signed_total,
+        "average_signed_minor": (
+            signed_total["minor"] // priced_signed if priced_signed else None
+        ),
+        "in_pipeline": _sum_and_count(db, ServiceAgreement.status.in_(_PIPELINE_STATUSES)),
+        "drafts": _sum_and_count(db, ServiceAgreement.status == ServiceAgreementStatus.draft),
+        "declined_this_month": _sum_and_count(
+            db,
+            ServiceAgreement.status == ServiceAgreementStatus.declined,
+            ServiceAgreement.declined_at >= this_month,
+        ),
+        "agreements": [
+            {
+                "agreement_id": str(a.id),
+                "lead_id": str(a.lead_id) if a.lead_id else None,
+                "client": _lead_title(lead),
+                "number": a.agreement_number,
+                "subject": a.subject[:160],
+                "status": a.status.value,
+                "amount_minor": a.amount_minor,
+                "price_text": a.price_text,
+                "signed_at": _iso(a.signed_at),
+                "sent_at": _iso(a.sent_at),
+                "created_at": _iso(a.created_at),
+            }
+            for a, lead in rows
+        ],
+    }
+
+
+class AmountPatch(BaseModel):
+    amount_minor: int | None = Field(default=None, ge=0, le=10**13)
+
+
+@router.patch("/agreements/{agreement_id}/amount")
+def set_agreement_amount(
+    agreement_id: uuid.UUID,
+    payload: AmountPatch,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Сумма к учёту — поле бухгалтерии, а не документа.
+
+    Меняется и у подписанного договора: текст, под которым стоит подпись,
+    остаётся прежним, а вот учётная сумма могла быть не проставлена вовсе —
+    у договоров, составленных до того, как она появилась.
+    """
+    item = db.get(ServiceAgreement, agreement_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    before = item.amount_minor
+    item.amount_minor = payload.amount_minor
+    db.add(item)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="service_agreement.amount",
+        target_type="service_agreement",
+        target_id=item.id,
+        details={"from": before, "to": payload.amount_minor},
+    )
+    db.commit()
+    return {
+        "agreement_id": str(item.id),
+        "amount_minor": item.amount_minor,
+        "currency": item.currency,
     }
