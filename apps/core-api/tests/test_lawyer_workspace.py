@@ -681,12 +681,16 @@ def test_history_reads_back_what_the_journal_already_wrote() -> None:
                     uuid.UUID(seeded["lead_id"]), {"version": "v1"})
         write_audit(db, ActorType.api_key, "test", "service_agreement.deliver", "service_agreement",
                     uuid.UUID(seeded["agreement_id"]))
-        write_audit(db, ActorType.api_key, "test", "legal_intake.update", "legal_intake",
-                    uuid.UUID(seeded["intake_id"]),
-                    {"deadline_at": datetime(2026, 9, 17, tzinfo=timezone.utc), "conflict_status": "clear"})
         # Чужое — не должно попасть.
         write_audit(db, ActorType.api_key, "test", "service_agreement.sign", "service_agreement",
                     uuid.UUID(stranger["agreement_id"]))
+        db.commit()
+        # Отдельной транзакцией — как отдельный запрос на проде: created_at
+        # в PostgreSQL равен началу транзакции, и внутри одной оно у всех
+        # записей одинаковое.
+        write_audit(db, ActorType.api_key, "test", "legal_intake.update", "legal_intake",
+                    uuid.UUID(seeded["intake_id"]),
+                    {"deadline_at": datetime(2026, 9, 17, tzinfo=timezone.utc), "conflict_status": "clear"})
         db.commit()
     finally:
         db.close()

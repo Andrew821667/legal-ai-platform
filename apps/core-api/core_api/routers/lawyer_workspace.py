@@ -846,7 +846,9 @@ def client_history(
                 and_(AuditLog.target_type == "lead", AuditLog.target_id == lead_id),
             )
         )
-        .order_by(AuditLog.created_at.desc())
+        # created_at — это now() на момент начала транзакции: у записей одного
+        # запроса оно совпадает. Второй ключ делает порядок стабильным.
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         .limit(limit)
     ).scalars().all()
 
