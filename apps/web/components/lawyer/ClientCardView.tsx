@@ -87,7 +87,7 @@ export default function ClientCardView({
       <button
         type="button"
         onClick={onBack}
-        className="text-base text-slate-400 transition-colors hover:text-slate-200"
+        className="text-base text-slate-400 transition-colors hover:text-slate-200 lg:hidden"
       >
         ← К списку
       </button>

@@ -25,10 +25,12 @@ export default function ClientsView({
   rows,
   onOpen,
   onSearch,
+  selectedId = null,
 }: {
   rows: ClientRow[] | null;
   onOpen: (leadId: string) => void;
   onSearch: (term: string) => void;
+  selectedId?: string | null;
 }) {
   const [term, setTerm] = useState("");
 
@@ -66,7 +68,12 @@ export default function ClientsView({
               <button
                 type="button"
                 onClick={() => onOpen(row.lead_id)}
-                className="w-full rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 text-left transition-colors hover:border-slate-700 hover:bg-slate-900"
+                aria-current={row.lead_id === selectedId ? "true" : undefined}
+                className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+                  row.lead_id === selectedId
+                    ? "border-amber-500/60 bg-slate-900"
+                    : "border-slate-800/80 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900"
+                }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

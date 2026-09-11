@@ -203,19 +203,7 @@ export default function LawyerWorkspace() {
     ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
     : undefined;
 
-  if (card) {
-    return (
-      <ClientCardView
-        card={card}
-        onBack={closeCard}
-        onChanged={() => void refreshAfterAction(card.lead_id)}
-        loading={loading}
-        initData={initData}
-      />
-    );
-  }
-
-  return (
+  const list = (
     <div>
       <header className="mb-4">
         <p className="text-sm uppercase tracking-widest text-slate-400">AI Verdict</p>
@@ -269,15 +257,49 @@ export default function LawyerWorkspace() {
         </div>
       ) : null}
 
-      {loading && !error ? <p className="text-base text-slate-400">Загружаю…</p> : null}
+      {loading && !error && !card ? <p className="text-base text-slate-400">Загружаю…</p> : null}
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
       {!error && tab === "finance" && finance ? (
         <FinanceView finance={finance} onOpen={showClient} />
       ) : null}
       {!error && tab === "clients" ? (
-        <ClientsView rows={clients} onOpen={showClient} onSearch={(term) => void loadClients(term)} />
+        <ClientsView
+          rows={clients}
+          onOpen={showClient}
+          onSearch={(term) => void loadClients(term)}
+          selectedId={card?.lead_id ?? null}
+        />
       ) : null}
+    </div>
+  );
+
+  // Телефон: карточка вместо списка. Ноутбук: список слева, карточка справа —
+  // это данные вида «выбрал в списке, читаешь рядом», и раньше на широком
+  // экране они лежали одним мобильным столбцом посреди пустоты.
+  return (
+    <div className="lg:grid lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <div
+        className={`${card ? "hidden lg:block" : ""} lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto lg:pr-1`}
+      >
+        {list}
+      </div>
+      <div className={card ? "" : "hidden lg:block"}>
+        {card ? (
+          <ClientCardView
+            card={card}
+            onBack={closeCard}
+            onChanged={() => void refreshAfterAction(card.lead_id)}
+            loading={loading}
+            initData={initData}
+          />
+        ) : (
+          <div className="mt-16 rounded-2xl border border-dashed border-slate-800 p-10 text-center">
+            <p className="text-lg font-medium text-slate-300">Карточка клиента откроется здесь</p>
+            <p className="mt-1 text-base text-slate-400">Выберите клиента, задачу или договор слева.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
