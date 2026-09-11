@@ -551,6 +551,7 @@ def client_card(
                 "signer_contact": nda.signer_contact,
                 "signer_org": nda.signer_org,
                 "version": nda.document_version,
+                "nda_id": str(nda.id),
             }
             if nda
             else None
@@ -597,6 +598,9 @@ def client_card(
                 "viewed_at": _iso(item.viewed_at),
                 "signed_at": _iso(item.signed_at),
                 "declined_at": _iso(item.declined_at),
+                # Клиент называет причину, когда отклоняет, — она писалась в
+                # базу и нигде не читалась: юрист видел только дату отказа.
+                "decline_reason": item.decline_reason,
                 # Реквизиты, которые клиент ввёл при подписании: юристу они
                 # нужны так же, как условия, — по ним видно, с кем договор.
                 "client_snapshot": item.client_snapshot or {},
@@ -607,4 +611,49 @@ def client_card(
             }
             for item in agreements
         ],
+    }
+
+
+@router.get("/agreements/{agreement_id}/document")
+def agreement_document(
+    agreement_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Точный текст, который видел и подписывал клиент, и его хеш.
+
+    Карточка показывает условия по полям — это реконструкция. При споре о
+    содержании нужна не она, а сам документ: хеш здесь и есть то, под чем
+    клиент поставил подпись, и без текста рядом он ничего не доказывает.
+    Отдаётся отдельно: текст длинный, а нужен редко.
+    """
+    _ = identity
+    item = db.get(ServiceAgreement, agreement_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    return {
+        "agreement_id": str(item.id),
+        "number": item.agreement_number,
+        "document_version": item.document_version,
+        "document_hash": item.document_hash,
+        "document_text": item.document_text,
+    }
+
+
+@router.get("/nda/{nda_id}/document")
+def nda_document(
+    nda_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """То же для соглашения о конфиденциальности."""
+    _ = identity
+    item = db.get(NdaSignature, nda_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="NDA not found")
+    return {
+        "nda_id": str(item.id),
+        "document_version": item.document_version,
+        "document_hash": item.document_hash,
+        "document_text": item.document_text,
     }

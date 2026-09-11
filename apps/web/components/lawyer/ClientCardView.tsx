@@ -3,6 +3,7 @@
 import ActionButton from "./ActionButton";
 import AgreementForm from "./AgreementForm";
 import DeadlineBox from "./DeadlineBox";
+import DocumentText from "./DocumentText";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
@@ -117,6 +118,11 @@ export default function ClientCardView({
               <Row label="Подписант" value={card.nda.signer_full_name} />
               <Row label="Контакт" value={card.nda.signer_contact} />
               <Row label="Организация" value={card.nda.signer_org} />
+              <DocumentText
+                url={`/api/lawyer/nda/${card.nda.nda_id}/document`}
+                title="Точный текст, который подписал клиент"
+                initData={initData}
+              />
             </>
           ) : (
             <p className="text-sm text-amber-300">
@@ -242,10 +248,25 @@ function Agreement({
           <span className="text-emerald-400">подписан {shortDate(item.signed_at)}</span>
         ) : null}
         {item.declined_at ? (
-          <span className="text-rose-400">отклонён {shortDate(item.declined_at)}</span>
+          <span className="text-rose-400">
+            отклонён {shortDate(item.declined_at)}
+            {item.decline_reason ? ` — «${item.decline_reason}»` : ""}
+          </span>
         ) : null}
         {item.expires_at ? <span>действует до {shortDate(item.expires_at)}</span> : null}
       </div>
+
+      {item.status !== "draft" ? (
+        <DocumentText
+          url={`/api/lawyer/agreements/${item.agreement_id}/document`}
+          title={
+            item.status === "signed"
+              ? "Точный текст, который подписал клиент"
+              : "Точный текст, который получил клиент"
+          }
+          initData={initData}
+        />
+      ) : null}
 
       {item.status === "draft" ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">

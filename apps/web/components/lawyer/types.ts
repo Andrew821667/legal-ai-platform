@@ -92,6 +92,7 @@ export type AgreementCard = {
   viewed_at: string | null;
   signed_at: string | null;
   declined_at: string | null;
+  decline_reason: string | null;
   messages: AgreementMessage[];
 };
 
@@ -110,6 +111,7 @@ export type ClientCard = {
     signer_contact: string | null;
     signer_org: string | null;
     version: string;
+    nda_id: string;
   } | null;
   intakes: IntakeCard[];
   agreements: AgreementCard[];
