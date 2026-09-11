@@ -27,7 +27,10 @@ export default function LawyerLayout({ children }: { children: React.ReactNode }
     <>
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       <main className="min-h-screen bg-slate-950 text-slate-100">
-        <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-5">{children}</div>
+        {/* На телефоне — одна колонка; на ноутбуке — список слева, карточка
+            справа. Раньше был тот же мобильный столбец, отцентрированный посреди
+            широкого экрана, с пустотой по бокам. */}
+        <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-5 lg:max-w-6xl">{children}</div>
       </main>
     </>
   );
