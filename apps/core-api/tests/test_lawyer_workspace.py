@@ -16,6 +16,7 @@ from core_api.main import app
 from core_api.models import (
     ApiKey,
     Lead,
+    LegalArea,
     LegalIntake,
     LeadSource,
     LegalIntakeStatus,
@@ -775,6 +776,52 @@ def test_document_meta_resolves_the_telegram_file() -> None:
         finally:
             db.close()
         _cleanup(names, seeded["lead_id"])
+
+
+def test_client_list_carries_area_and_amount_for_filters() -> None:
+    """Строка списка несёт то, по чему фильтруют и сортируют, — без похода в карточку.
+
+    Сумма — только подписанное и то, что у клиента на руках: черновик ещё не
+    деньги, отклонённый — уже не деньги, и оба не должны попасть в сумму. У
+    intake ровно один на лида (unique constraint на legal_intakes.lead_id —
+    повторное обращение того же человека заводит новый Lead, не второй
+    intake), поэтому область здесь одна; сумма же складывается по всем
+    договорам лида, которых может быть несколько — черновик и подписанная
+    редакция разом.
+    """
+    client = TestClient(app)
+    names = ["pytest.workspace.list.area"]
+    key = _key(names[0])
+    db = SessionLocal()
+    try:
+        lead = Lead(name="Пример Клиентов", contact="@example.client", source=LeadSource.telegram_bot)
+        db.add(lead)
+        db.flush()
+        intake = LegalIntake(
+            lead_id=lead.id,
+            description="Спор с работодателем.",
+            status=LegalIntakeStatus.scope_preparation,
+            legal_area=LegalArea.employment,
+        )
+        db.add(intake)
+        db.flush()
+        db.add(_agreement(lead_id=lead.id, intake_id=intake.id, status=ServiceAgreementStatus.signed, amount_minor=50_000))
+        # Черновик без суммы — не должен уронить агрегат или попасть в неё.
+        db.add(_agreement(lead_id=lead.id, intake_id=intake.id, status=ServiceAgreementStatus.draft, amount_minor=None))
+        # Отклонённый договор — деньги, которых не будет; не должен войти в сумму.
+        db.add(_agreement(lead_id=lead.id, intake_id=intake.id, status=ServiceAgreementStatus.declined, amount_minor=999_999))
+        db.commit()
+        lead_id = str(lead.id)
+    finally:
+        db.close()
+
+    try:
+        rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
+        row = next(r for r in rows if r["lead_id"] == lead_id)
+        assert row["legal_areas"] == ["employment"]
+        assert row["amount_minor"] == 50_000
+    finally:
+        _cleanup(names, lead_id)
 
 
 def test_client_list_shows_only_those_with_intakes() -> None:

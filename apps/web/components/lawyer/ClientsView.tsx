@@ -3,10 +3,11 @@
 import { useState } from "react";
 
 import { Card, Pill } from "./ui";
-import { shortDate } from "./labels";
+import { AREA, label, shortDate } from "./labels";
 import type { ClientRow } from "./types";
-import { CLIENT_FILTERS, groupClients } from "@/lib/lawyer-clients";
-import type { ClientFilter } from "@/lib/lawyer-clients";
+import { formatRub } from "@/lib/money";
+import { CLIENT_FILTERS, CLIENT_SORTS, availableAreas, groupClients } from "@/lib/lawyer-clients";
+import type { ClientFilter, ClientSort } from "@/lib/lawyer-clients";
 import { EXTERNAL_LINKS } from "@/lib/links";
 
 /**
@@ -53,8 +54,15 @@ export default function ClientsView({
 }) {
   const [term, setTerm] = useState("");
   const [filter, setFilter] = useState<ClientFilter>("all");
-  const groups = rows ? groupClients(rows, filter) : [];
+  const [areas, setAreas] = useState<string[]>([]);
+  const [sort, setSort] = useState<ClientSort>("recent");
+  const areaOptions = rows ? availableAreas(rows) : [];
+  const groups = rows ? groupClients(rows, filter, { areas, sort }) : [];
   const shown = groups.reduce((sum, group) => sum + group.rows.length, 0);
+
+  const toggleArea = (area: string) => {
+    setAreas((current) => (current.includes(area) ? current.filter((a) => a !== area) : [...current, area]));
+  };
 
   return (
     <div>
@@ -99,6 +107,47 @@ export default function ClientsView({
         </div>
       ) : null}
 
+      {/* Чипов областей нет, пока практика ведёт дела в одном направлении —
+          фильтровать не из чего, а ряд занял бы место без пользы. */}
+      {areaOptions.length > 1 ? (
+        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Область права">
+          {areaOptions.map((area) => (
+            <button
+              key={area}
+              type="button"
+              aria-pressed={areas.includes(area)}
+              onClick={() => toggleArea(area)}
+              className={`rounded-full px-3 py-1.5 text-lw-sm font-semibold transition-colors ${
+                areas.includes(area)
+                  ? "bg-lw-primary-2 text-white"
+                  : "bg-white text-lw-ink ring-1 ring-lw-border hover:bg-lw-blue-soft"
+              }`}
+            >
+              {label(AREA, area)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {rows && rows.length > 1 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-lw-sm text-lw-muted">
+          <span>Порядок:</span>
+          {CLIENT_SORTS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={sort === item.key}
+              onClick={() => setSort(item.key)}
+              className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                sort === item.key ? "bg-lw-ink text-white" : "hover:bg-lw-blue-soft hover:text-lw-ink"
+              }`}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {rows === null ? null : rows.length === 0 ? (
         <Card>
           <p className="text-lw-base text-lw-muted">Никого не нашлось.</p>
@@ -133,8 +182,13 @@ export default function ClientsView({
                           {row.company ? ` · ${row.company}` : ""}
                         </p>
                       </div>
-                      <span className="shrink-0 text-lw-sm text-lw-muted">
-                        {shortDate(row.last_intake_at)}
+                      <span className="shrink-0 text-right text-lw-sm text-lw-muted">
+                        <span className="block">{shortDate(row.last_intake_at)}</span>
+                        {row.amount_minor !== null ? (
+                          <span className="block font-semibold tabular-nums text-lw-ink">
+                            {formatRub(row.amount_minor)}
+                          </span>
+                        ) : null}
                       </span>
                     </div>
 
@@ -143,6 +197,11 @@ export default function ClientsView({
                       {row.waiting_on_me ? <Pill tone="alert">Ждёт ответа</Pill> : null}
                       {row.nda_signed ? null : <Pill tone="warn">без NDA</Pill>}
                       {row.intakes > 1 ? <Pill>{row.intakes} обращения</Pill> : null}
+                      {row.legal_areas.map((area) => (
+                        <Pill key={area} tone="mute">
+                          {label(AREA, area)}
+                        </Pill>
+                      ))}
                     </div>
                   </button>
                 </li>
