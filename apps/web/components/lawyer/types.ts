@@ -105,6 +105,8 @@ export type ClientCard = {
   stage: string;
   contact: string | null;
   company: string | null;
+  email: string | null;
+  phone: string | null;
   telegram_user_id: number | null;
   source: string | null;
   created_at: string | null;

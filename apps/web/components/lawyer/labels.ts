@@ -130,3 +130,18 @@ export const HISTORY: Record<string, string> = {
   "service_agreement.reply": "Вы ответили клиенту",
   "service_agreement.amount": "Сумма к учёту изменена",
 };
+
+/** Откуда пришёл клиент. */
+export const SOURCE: Record<string, string> = {
+  telegram_bot: "Telegram-бот",
+  website_form: "форма на сайте",
+  telegram_channel: "Telegram-канал",
+  miniapp_form: "мини-апп",
+};
+
+/** Кто перед нами — компания, ИП или человек. «unknown» не показываем. */
+export const CLIENT_TYPE: Record<string, string> = {
+  company: "Компания",
+  entrepreneur: "ИП",
+  individual: "Физлицо",
+};

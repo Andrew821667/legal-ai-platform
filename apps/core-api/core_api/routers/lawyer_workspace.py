@@ -547,6 +547,8 @@ def client_card(
         ),
         "contact": lead.contact,
         "company": lead.company,
+        "email": lead.email,
+        "phone": lead.phone,
         "telegram_user_id": lead.telegram_user_id,
         "source": lead.source.value if lead.source else None,
         "created_at": _iso(lead.created_at),

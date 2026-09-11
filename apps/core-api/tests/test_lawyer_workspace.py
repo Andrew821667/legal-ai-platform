@@ -412,6 +412,8 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
             f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
         ).json()
         assert card["nda"]["signer_full_name"] == "Рябов Александр Алексеевич"
+        # Прямые контакты и источник отдаются отдельно, а не схлопнуты в строку.
+        assert "email" in card and "phone" in card and "source" in card
         assert len(card["intakes"]) == 1
         assert "ипотеке" in card["intakes"][0]["description"]
         assert len(card["agreements"]) == 1
