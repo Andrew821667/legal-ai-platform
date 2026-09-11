@@ -422,6 +422,112 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
         _cleanup(names, seeded["lead_id"])
 
 
+def test_decline_reason_reaches_the_card() -> None:
+    """Клиент называет причину, когда отклоняет. Раньше юрист видел только дату."""
+    client = TestClient(app)
+    names = ["pytest.workspace.decline"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        agreement = db.get(ServiceAgreement, seeded["agreement_id"])
+        agreement.status = ServiceAgreementStatus.declined
+        agreement.declined_at = datetime.now(timezone.utc)
+        agreement.decline_reason = "Дорого, буду искать другого юриста"
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        assert card["agreements"][0]["decline_reason"] == "Дорого, буду искать другого юриста"
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_signed_text_is_available_on_demand() -> None:
+    """Условия в карточке — реконструкция по полям. При споре нужен сам документ.
+
+    Хеш — то, под чем клиент поставил подпись; без текста рядом он ничего не
+    доказывает, поэтому отдаются вместе.
+    """
+    client = TestClient(app)
+    names = ["pytest.workspace.doc"]
+    key = _key(names[0])
+    seeded = _seed()
+    try:
+        body = client.get(
+            f"/api/v1/lawyer/agreements/{seeded['agreement_id']}/document",
+            headers={"X-API-Key": key},
+        ).json()
+        assert body["document_text"] == "текст"
+        assert body["document_hash"] == "h" * 64
+        assert body["document_version"] == "v1"
+
+        # Полный текст не должен раздувать карточку — там его нет.
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        assert "document_text" not in card["agreements"][0]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_nda_text_is_available_on_demand() -> None:
+    client = TestClient(app)
+    names = ["pytest.workspace.ndadoc"]
+    key = _key(names[0])
+    seeded = _seed()
+    db = SessionLocal()
+    try:
+        nda = NdaSignature(
+            lead_id=seeded["lead_id"],
+            signer_full_name="Рябов Александр",
+            document_version="v3",
+            document_hash="n" * 64,
+            document_text="Соглашение о конфиденциальности, редакция 3",
+        )
+        db.add(nda)
+        db.commit()
+        nda_id = str(nda.id)
+    finally:
+        db.close()
+
+    try:
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        assert card["nda"]["nda_id"] == nda_id
+
+        body = client.get(
+            f"/api/v1/lawyer/nda/{nda_id}/document", headers={"X-API-Key": key}
+        ).json()
+        assert body["document_text"] == "Соглашение о конфиденциальности, редакция 3"
+        assert body["document_hash"] == "n" * 64
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_unknown_document_is_not_found() -> None:
+    client = TestClient(app)
+    names = ["pytest.workspace.nodoc"]
+    key = _key(names[0])
+    try:
+        missing = "00000000-0000-4000-8000-000000000000"
+        assert client.get(f"/api/v1/lawyer/agreements/{missing}/document", headers={"X-API-Key": key}).status_code == 404
+        assert client.get(f"/api/v1/lawyer/nda/{missing}/document", headers={"X-API-Key": key}).status_code == 404
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ApiKey).where(ApiKey.name.in_(names)))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
 def test_client_list_shows_only_those_with_intakes() -> None:
     """В таблице лидов лежат и те, кто просто нажал кнопку, — в рабочем месте они лишние."""
     client = TestClient(app)
