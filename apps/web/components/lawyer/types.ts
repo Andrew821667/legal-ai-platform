@@ -37,6 +37,8 @@ export type ClientRow = {
   last_intake_at: string | null;
   nda_signed: boolean;
   agreement_status: string | null;
+  legal_areas: string[];
+  amount_minor: number | null;
 };
 
 export type Clarification = { question: string; answer: string; created_at: string | null };

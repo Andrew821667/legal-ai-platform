@@ -13,6 +13,8 @@ export type ClientLike = {
   stage: string;
   waiting_on_me: boolean;
   nda_signed: boolean;
+  legal_areas: string[];
+  amount_minor: number | null;
 };
 
 export const CLIENT_GROUPS: { key: ClientGroupKey; title: string; hint: string }[] = [
@@ -46,18 +48,61 @@ export function matchesFilter(row: ClientLike, filter: ClientFilter): boolean {
   return true;
 }
 
+/** Пусто — область не выбрана вовсе, тогда проходят все. */
+export function matchesAreas(row: ClientLike, areas: string[]): boolean {
+  if (areas.length === 0) return true;
+  return row.legal_areas.some((area) => areas.includes(area));
+}
+
+/**
+ * Области, которые реально встречаются в списке, — самые частые первыми.
+ *
+ * Кодов — десяток, а у практики обычно два-три направления; статичный
+ * список чипов на все области был бы забит лишними.
+ */
+export function availableAreas(rows: ClientLike[]): string[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const area of row.legal_areas) counts.set(area, (counts.get(area) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([area]) => area);
+}
+
+export type ClientSort = "recent" | "amount_desc";
+
+export const CLIENT_SORTS: { key: ClientSort; title: string }[] = [
+  { key: "recent", title: "Сначала новые" },
+  { key: "amount_desc", title: "Сначала дороже" },
+];
+
+/**
+ * По сумме — только те, у кого она известна; остальные хвостом, в своём
+ * прежнем порядке. Ноль в неизвестной сумме означал бы «копейки», а её
+ * там попросту нет — молчание, а не грош.
+ */
+function sortRows<T extends ClientLike>(rows: T[], sort: ClientSort): T[] {
+  if (sort === "recent") return rows;
+  const priced = rows.filter((r) => r.amount_minor !== null);
+  const unpriced = rows.filter((r) => r.amount_minor === null);
+  priced.sort((a, b) => (b.amount_minor as number) - (a.amount_minor as number));
+  return [...priced, ...unpriced];
+}
+
 export function groupClients<T extends ClientLike>(
   rows: T[],
   filter: ClientFilter = "all",
+  options: { areas?: string[]; sort?: ClientSort } = {},
 ): { key: ClientGroupKey; title: string; hint: string; rows: T[] }[] {
+  const areas = options.areas || [];
+  const sort = options.sort || "recent";
   const buckets = new Map<ClientGroupKey, T[]>();
   for (const row of rows) {
-    if (!matchesFilter(row, filter)) continue;
+    if (!matchesFilter(row, filter) || !matchesAreas(row, areas)) continue;
     const key = clientGroup(row);
     buckets.set(key, [...(buckets.get(key) || []), row]);
   }
   return CLIENT_GROUPS.filter((group) => buckets.has(group.key)).map((group) => ({
     ...group,
-    rows: buckets.get(group.key) || [],
+    rows: sortRows(buckets.get(group.key) || [], sort),
   }));
 }

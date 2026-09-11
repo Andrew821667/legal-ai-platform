@@ -425,13 +425,30 @@ def clients(
         }
 
     open_agreements: dict[uuid.UUID, str] = {}
+    # Деньги по клиенту — подписанное и то, что у клиента на руках (черновики
+    # и отклонённые не считаем: это ещё не деньги или уже не деньги). Нужны,
+    # чтобы список можно было отсортировать по сумме, не открывая карточки.
+    amounts: dict[uuid.UUID, int] = {}
     if lead_ids:
-        for lead_id, status in db.execute(
-            select(ServiceAgreement.lead_id, ServiceAgreement.status)
+        for lead_id, status, amount_minor in db.execute(
+            select(ServiceAgreement.lead_id, ServiceAgreement.status, ServiceAgreement.amount_minor)
             .where(ServiceAgreement.lead_id.in_(lead_ids))
             .order_by(ServiceAgreement.created_at.desc())
         ).all():
             open_agreements.setdefault(lead_id, status.value)
+            if amount_minor is not None and status in _MONEY_STATUSES:
+                amounts[lead_id] = amounts.get(lead_id, 0) + int(amount_minor)
+
+    # Область права по клиенту. Список, а не одно значение: на
+    # legal_intakes.lead_id стоит unique — сейчас у лида ровно один intake, —
+    # но фильтру на экране проще работать с массивом сразу, не переделывая
+    # его в день, когда это ограничение снимут.
+    areas: dict[uuid.UUID, list[str]] = {}
+    if lead_ids:
+        for lead_id, area in db.execute(
+            select(LegalIntake.lead_id, LegalIntake.legal_area).where(LegalIntake.lead_id.in_(lead_ids))
+        ).all():
+            areas.setdefault(lead_id, []).append(area.value)
 
     # Что сейчас происходит по клиенту — одной строкой. Без неё список
     # выглядит одинаковым для того, кто ждёт договора, и того, кто уже
@@ -452,6 +469,8 @@ def clients(
                 agreement_status=open_agreements.get(lead.id),
             ),
             "waiting_on_me": lead.id in awaiting_me,
+            "legal_areas": areas.get(lead.id, []),
+            "amount_minor": amounts.get(lead.id),
         }
         for lead, count, last_at in rows
     ]
@@ -675,6 +694,8 @@ _PRACTICE_TZ = ZoneInfo("Europe/Moscow")
 
 # Статусы, по которым сумма ещё может стать деньгами.
 _PIPELINE_STATUSES = (ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed)
+# Что считается деньгами клиента в списке: подписано или лежит у клиента.
+_MONEY_STATUSES = (ServiceAgreementStatus.signed, *_PIPELINE_STATUSES)
 
 
 def _month_start(now: datetime, months_back: int = 0) -> datetime:
