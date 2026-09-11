@@ -60,7 +60,9 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
 
     assert len(bottom) == 1
     assert isinstance(bottom[0][1], ReplyKeyboardMarkup)
-    assert "внизу экрана" in bottom[0][0]
+    # Второе сообщение — только ради клавиатуры (Telegram не прикрепит её к
+    # сообщению с inline-кнопками); текст здесь — иконка, не подсказка.
+    assert bottom[0][0].strip()
 
 
 @pytest.mark.anyio
