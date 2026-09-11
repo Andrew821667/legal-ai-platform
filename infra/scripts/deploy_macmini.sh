@@ -69,6 +69,14 @@ if [ -z "$COMPOSE_BUILD_MODE" ]; then
   fi
 fi
 
+# Старые образы — до pull, а не после: каждый деплой тянет шесть новых, и
+# за день без чистки виртуальный диск Docker Desktop переполнился — слои
+# перестали распаковываться, web и мини-апп клиентов упали в 500. Удаляются
+# только образы, которые не использует ни один контейнер; тома не трогаются.
+echo "Pruning unused images and build cache..."
+docker image prune -af >/dev/null 2>&1 || echo "image prune failed; continuing"
+docker builder prune -af >/dev/null 2>&1 || echo "builder prune failed; continuing"
+
 if [ "$SKIP_PULL" != "1" ]; then
   echo "Pulling production images where available..."
   "${compose[@]}" pull "${services[@]}" || true
