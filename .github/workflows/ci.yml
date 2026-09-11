@@ -183,6 +183,13 @@ jobs:
     needs: [build-and-push]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_MACMINI_DEPLOY == 'true'
     runs-on: ubuntu-latest
+    # Два мержа подряд запускали два деплоя на один и тот же хост
+    # одновременно: они пересоздавали контейнеры наперегонки, зависимость
+    # падала на полпути, и деплой обрывался. Очередь, а не отмена: начатый
+    # деплой надо дать закончить, иначе хост останется в середине пересборки.
+    concurrency:
+      group: deploy-macmini
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: read
