@@ -19,6 +19,8 @@ type TelegramBackButton = {
 
 type TelegramWebApp = {
   initData?: string;
+  /** «ios», «android», «tdesktop», «weba»…; «unknown» — страница открыта не в Telegram. */
+  platform?: string;
   ready?: () => void;
   expand?: () => void;
   colorScheme?: string;
@@ -35,11 +37,25 @@ export function telegramBackButton(): TelegramBackButton | undefined {
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp };
+    /** Мост в нативное приложение — есть только внутри WebView Telegram. */
+    TelegramWebviewProxy?: unknown;
   }
 }
 
-export function useTelegramInitData(): { initData: string; ready: boolean } {
+/**
+ * Открыто ли внутри Telegram. Раньше об этом судили по initData, но кнопка
+ * reply-клавиатуры открывает Mini App с пустым initData — а это всё ещё
+ * Telegram, где скачивание не работает и файлы надо слать в чат.
+ */
+function detectInsideTelegram(app: TelegramWebApp | undefined): boolean {
+  if (typeof window !== "undefined" && window.TelegramWebviewProxy !== undefined) return true;
+  const platform = app?.platform || "unknown";
+  return platform !== "unknown";
+}
+
+export function useTelegramInitData(): { initData: string; ready: boolean; insideTelegram: boolean } {
   const [initData, setInitData] = useState("");
+  const [insideTelegram, setInsideTelegram] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -51,10 +67,11 @@ export function useTelegramInitData(): { initData: string; ready: boolean } {
     app?.setHeaderColor?.("#f7f8fb");
     app?.setBackgroundColor?.("#f7f8fb");
     setInitData(app?.initData || "");
+    setInsideTelegram(detectInsideTelegram(app));
     setReady(true);
   }, []);
 
-  return { initData, ready };
+  return { initData, ready, insideTelegram };
 }
 
 /** Ошибка запроса с кодом: 401 значит «нет входа», и экран должен это отличать. */

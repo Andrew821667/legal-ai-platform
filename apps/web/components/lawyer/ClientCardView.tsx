@@ -87,12 +87,14 @@ export default function ClientCardView({
   onChanged,
   loading,
   initData,
+  insideTelegram,
 }: {
   card: ClientCard;
   onBack: () => void;
   onChanged: () => void;
   loading: boolean;
   initData: string;
+  insideTelegram: boolean;
 }) {
   const active = card.agreements.filter((a) => a.status !== "superseded");
   const history = card.agreements.filter((a) => a.status === "superseded");
@@ -226,6 +228,7 @@ export default function ClientCardView({
                 ndaSigned={Boolean(card.nda)}
                 hasDialog={card.telegram_user_id !== null}
                 ownProgress={card.intakes.length > 1}
+                insideTelegram={insideTelegram}
               />
             ))}
           </div>
@@ -372,6 +375,7 @@ function Intake({
   ndaSigned,
   hasDialog,
   ownProgress,
+  insideTelegram,
 }: {
   item: IntakeCard;
   initData: string;
@@ -380,6 +384,7 @@ function Intake({
   ndaSigned: boolean;
   hasDialog: boolean;
   ownProgress: boolean;
+  insideTelegram: boolean;
 }) {
   const conflictBlocks = item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
@@ -483,7 +488,12 @@ function Intake({
           </p>
           <ul className="space-y-1.5">
             {item.documents.map((doc) => (
-              <DocumentRow key={doc.document_id} doc={doc} initData={initData} />
+              <DocumentRow
+                key={doc.document_id}
+                doc={doc}
+                initData={initData}
+                insideTelegram={insideTelegram}
+              />
             ))}
           </ul>
         </div>

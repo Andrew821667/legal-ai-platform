@@ -26,13 +26,14 @@ function fileSize(bytes: number | null): string {
 export default function DocumentRow({
   doc,
   initData,
+  insideTelegram: inTelegram,
 }: {
   doc: IntakeDocumentRow;
   initData: string;
+  insideTelegram: boolean;
 }) {
   const [state, setState] = useState<"idle" | "busy" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
-  const inTelegram = initData !== "";
   const url = `/api/lawyer/documents/${doc.document_id}`;
 
   return (
