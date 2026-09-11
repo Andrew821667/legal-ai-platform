@@ -5,7 +5,7 @@ from uuid import uuid4
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, Lead, LegalIntake, Scope
+from core_api.models import ApiKey, AuditLog, Lead, LegalIntake, Scope
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
@@ -117,6 +117,29 @@ def test_create_list_update_and_idempotency() -> None:
         assert updated.json()["status"] == "conflict_check"
         assert updated.json()["conflict_status"] == "clear"
         assert updated.json()["assigned_to"] == "Андрей"
+
+        # Дата в изменённых полях. Журнал кладёт их в JSON как есть — и
+        # datetime ронял весь запрос на коммите: установка срока из рабочего
+        # места отдавала бы 500. Действие не должно теряться из-за формата.
+        dated = client.patch(
+            f"/api/v1/legal-intakes/{intake_ids[0]}",
+            headers={"X-API-Key": admin_key},
+            json={"deadline_at": "2026-09-17T23:59:59Z"},
+        )
+        assert dated.status_code == 200, dated.text
+        assert dated.json()["deadline_at"].startswith("2026-09-17T23:59:59")
+        db = SessionLocal()
+        try:
+            row = db.execute(
+                select(AuditLog)
+                .where(AuditLog.action == "legal_intake.update")
+                .where(AuditLog.target_id == intake_ids[0])
+                .order_by(AuditLog.created_at.desc())
+            ).scalars().first()
+            assert row is not None
+            assert row.details["deadline_at"].startswith("2026-09-17T23:59:59")
+        finally:
+            db.close()
     finally:
         _cleanup([bot_name, admin_name], intake_ids)
 

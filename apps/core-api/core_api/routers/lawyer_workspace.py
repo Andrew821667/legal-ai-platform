@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
@@ -28,6 +28,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.models import (
     ActorType,
+    AuditLog,
     IntakeClarification,
     IntakeDocument,
     Lead,
@@ -803,4 +804,64 @@ def set_agreement_amount(
         "agreement_id": str(item.id),
         "amount_minor": item.amount_minor,
         "currency": item.currency,
+    }
+
+
+@router.get("/clients/{lead_id}/history")
+def client_history(
+    lead_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=300),
+) -> dict:
+    """Что и когда происходило с клиентом — из журнала, который уже писался.
+
+    Карточка показывает только текущее состояние. Кто отправил договор,
+    когда клиент его открыл, когда подписал и почему сорвалось — всё это
+    записывалось при каждом действии и ни разу не читалось обратно.
+    Отдаётся отдельно от карточки: длинно, а нужно не всякий раз.
+    """
+    _ = identity
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    intake_ids = select(LegalIntake.id).where(LegalIntake.lead_id == lead_id)
+    agreements = {
+        a.id: a.agreement_number
+        for a in db.execute(
+            select(ServiceAgreement).where(ServiceAgreement.lead_id == lead_id)
+        ).scalars()
+    }
+
+    rows = db.execute(
+        select(AuditLog)
+        .where(
+            or_(
+                and_(AuditLog.target_type == "legal_intake", AuditLog.target_id.in_(intake_ids)),
+                and_(
+                    AuditLog.target_type == "service_agreement",
+                    AuditLog.target_id.in_(list(agreements) or [uuid.UUID(int=0)]),
+                ),
+                and_(AuditLog.target_type == "lead", AuditLog.target_id == lead_id),
+            )
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    ).scalars().all()
+
+    return {
+        "lead_id": str(lead_id),
+        "items": [
+            {
+                "at": _iso(row.created_at),
+                "action": row.action,
+                "target_type": row.target_type,
+                "target_id": str(row.target_id) if row.target_id else None,
+                # Номер договора — чтобы в ленте было видно, о какой редакции речь.
+                "agreement_number": agreements.get(row.target_id),
+                "details": row.details or {},
+            }
+            for row in rows
+        ],
     }

@@ -5,6 +5,7 @@ import AgreementForm from "./AgreementForm";
 import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
 import DocumentText from "./DocumentText";
+import HistoryList from "./HistoryList";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
@@ -194,6 +195,8 @@ export default function ClientCardView({
           </div>
         )}
       </section>
+
+      <HistoryList leadId={card.lead_id} initData={initData} />
     </div>
   );
 }

@@ -148,3 +148,14 @@ export type Finance = {
   declined_this_month: MoneyBucket;
   agreements: FinanceAgreement[];
 };
+
+export type HistoryItem = {
+  at: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  agreement_number: string | null;
+  details: Record<string, unknown>;
+};
+
+export type History = { lead_id: string; items: HistoryItem[] };
