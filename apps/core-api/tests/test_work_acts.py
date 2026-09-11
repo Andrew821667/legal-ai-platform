@@ -18,7 +18,6 @@ from core_api.models import (
     ServiceAgreement,
     ServiceAgreementStatus,
     WorkAct,
-    WorkActStatus,
 )
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
