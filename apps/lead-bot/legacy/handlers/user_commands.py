@@ -17,6 +17,8 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from .markup import (
     documents_markup as _documents_markup,
+    main_menu_hint as _main_menu_hint,
+    main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     profile_panel_markup as _profile_panel_markup,
     quick_nav_markup_for as _quick_nav_markup_for,
@@ -136,6 +138,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 action="start_entry",
             )
             logger.info("Start entry sent on /start for user %s", user.id)
+            await utils.safe_reply_text(
+                update.message,
+                _main_menu_hint(user.id),
+                reply_markup=_main_menu_markup(user.id),
+                action="start_bottom_menu",
+            )
 
         user_data = database.db.get_local_user_by_id(user_id)
         if user_data and not needs_pdn_consent:

@@ -164,6 +164,18 @@ def main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
     )
 
 
+def main_menu_hint(user_id: int) -> str:
+    """Строка, с которой уходит постоянная клавиатура.
+
+    Telegram не даёт прислать клавиатуру без сообщения, а к сообщению с
+    inline-кнопками её не прикрепить. До этого клавиатура уходила только по
+    «Отмене» и правке профиля — кто туда не заходил, кнопки внизу не видел.
+    """
+    if user_id == config.ADMIN_TELEGRAM_ID:
+        return "🗂 Рабочее пространство — кнопка внизу экрана."
+    return "📱 Мини-апп — кнопка внизу экрана."
+
+
 def profile_edit_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [

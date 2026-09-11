@@ -17,7 +17,13 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     async def _fake_process_pending_start_payload(**kwargs) -> None:
         return None
 
+    bottom: list[tuple[str, object | None]] = []
+
+    async def _fake_reply_text(message, text, **kwargs) -> None:
+        bottom.append((text, kwargs.get("reply_markup")))
+
     monkeypatch.setattr(user_commands.utils, "safe_reply_html", _fake_reply_html)
+    monkeypatch.setattr(user_commands.utils, "safe_reply_text", _fake_reply_text)
     monkeypatch.setattr(user_commands, "process_pending_start_payload", _fake_process_pending_start_payload)
     monkeypatch.setattr(user_commands.database.db, "create_or_update_user", lambda **kwargs: 1)
     monkeypatch.setattr(user_commands.database.db, "set_chat_mode", lambda chat_id, mode: None)
@@ -47,6 +53,14 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     assert "Юридическая практика" in messages[0][0]
     assert "Инженерная практика" in messages[0][0]
     assert messages[0][1] is not None
+
+    # Постоянная клавиатура приходит вместе с /start — раньше она уходила
+    # только по «Отмене» и правке профиля, и кнопки внизу у многих не было.
+    from telegram import ReplyKeyboardMarkup
+
+    assert len(bottom) == 1
+    assert isinstance(bottom[0][1], ReplyKeyboardMarkup)
+    assert "внизу экрана" in bottom[0][0]
 
 
 @pytest.mark.anyio

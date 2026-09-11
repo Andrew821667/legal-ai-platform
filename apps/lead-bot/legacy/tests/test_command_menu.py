@@ -153,27 +153,31 @@ async def test_menu_button_failure_does_not_block_startup(monkeypatch) -> None:
     await bot_module._set_command_menu(SimpleNamespace(bot=_Failing()))
 
 
-def test_admin_reply_keyboard_has_workspace_on_its_own_row(monkeypatch) -> None:
-    """Одиночная кнопка в reply-клавиатуре растягивается на весь ряд —
-    ровно так рабочее место становится заметным без лишних касаний."""
+def test_admin_reply_keyboard_is_a_single_workspace_button(monkeypatch) -> None:
+    """Одна кнопка на всю ширину — там, где у клиента «Рабочий стол».
+
+    Второй ряд с клиентским мини-аппом закрывал низ экрана, а владельцу он
+    не нужен: клавиатура в один ряд не закрывает ничего.
+    """
     import handlers.constants as constants
 
     monkeypatch.setattr(
         constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
     )
     rows = constants.build_admin_reply_menu()
-    workspace_row = next(row for row in rows if any("Рабочее место" in b.text for b in row))
-    assert len(workspace_row) == 1
-    assert workspace_row[0].web_app is not None
+    assert len(rows) == 1 and len(rows[0]) == 1
+    button = rows[0][0]
+    assert "Рабочее пространство" in button.text
+    assert button.web_app is not None and button.web_app.url == "https://example.ru/lawyer"
 
 
-def test_admin_reply_keyboard_hides_workspace_without_url(monkeypatch) -> None:
+def test_admin_reply_keyboard_falls_back_to_client_menu_without_url(monkeypatch) -> None:
+    """Ряд не может остаться пустым — без адреса владелец видит то же, что клиент."""
     import handlers.constants as constants
 
     monkeypatch.setattr(constants.get_config(), "LAWYER_WORKSPACE_URL", "", raising=False)
     labels = [b.text for row in constants.build_admin_reply_menu() for b in row]
-    assert not any("Рабочее место" in label for label in labels)
-    # Первый ряд остаётся на месте — новая кнопка ничего не вытесняет.
+    assert not any("Рабочее пространство" in label for label in labels)
     assert any("Мини-апп" in label for label in labels)
 
 
@@ -264,3 +268,34 @@ def test_workspace_row_without_lead_opens_the_list(monkeypatch) -> None:
     )
     (row,) = constants.workspace_row(None)
     assert row[0].web_app.url == "https://example.ru/lawyer"
+
+
+@pytest.mark.anyio
+async def test_admin_panel_brings_the_bottom_button(monkeypatch) -> None:
+    """Владелец заходит в /admin чаще, чем в /start — клавиатура должна прийти и отсюда."""
+    from telegram import ReplyKeyboardMarkup
+
+    import handlers.admin as admin
+    import handlers.constants as constants
+
+    monkeypatch.setattr(admin.config, "ADMIN_TELEGRAM_ID", 42, raising=False)
+    monkeypatch.setattr(
+        constants.get_config(), "LAWYER_WORKSPACE_URL", "https://example.ru/lawyer", raising=False
+    )
+    sent: list[tuple[str, object]] = []
+
+    async def reply_text(text, reply_markup=None, **kwargs):
+        sent.append((text, reply_markup))
+
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=42),
+        message=SimpleNamespace(reply_text=reply_text),
+    )
+    await admin.show_admin_panel(update, SimpleNamespace())
+
+    assert len(sent) == 2
+    assert "АДМИН-ПАНЕЛЬ" in sent[0][0]
+    keyboard = sent[1][1]
+    assert isinstance(keyboard, ReplyKeyboardMarkup)
+    labels = [b.text for row in keyboard.keyboard for b in row]
+    assert labels == ["🗂 Рабочее пространство"]
