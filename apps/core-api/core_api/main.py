@@ -28,6 +28,7 @@ from core_api.routers import (
     users,
     workers,
     lawyer_workspace,
+    work_acts,
 )
 
 setup_logging()
@@ -63,6 +64,7 @@ app.include_router(contract_ai_bridge.router)
 app.include_router(special_consultations.router)
 app.include_router(service_agreements.router)
 app.include_router(lawyer_workspace.router)
+app.include_router(work_acts.router)
 app.include_router(workers.router)
 app.include_router(admin.router)
 

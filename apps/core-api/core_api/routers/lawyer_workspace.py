@@ -40,6 +40,7 @@ from core_api.models import (
     ServiceAgreementMessage,
     ServiceAgreementMessageRole,
     ServiceAgreementStatus,
+    WorkAct,
 )
 
 router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
@@ -556,6 +557,29 @@ def client_card(
                 }
             )
 
+    acts: dict[uuid.UUID, list[dict]] = {}
+    if agreements:
+        for act in db.execute(
+            select(WorkAct)
+            .where(WorkAct.agreement_id.in_([a.id for a in agreements]))
+            .order_by(WorkAct.created_at.desc())
+        ).scalars().all():
+            acts.setdefault(act.agreement_id, []).append(
+                {
+                    "act_id": str(act.id),
+                    "act_number": act.act_number,
+                    "status": act.status.value,
+                    "description_text": act.description_text,
+                    "amount_minor": act.amount_minor,
+                    "currency": act.currency,
+                    "created_at": _iso(act.created_at),
+                    "sent_at": _iso(act.sent_at),
+                    "claimed_paid_at": _iso(act.claimed_paid_at),
+                    "paid_at": _iso(act.paid_at),
+                    "paid_note": act.paid_note,
+                }
+            )
+
     latest_agreement = agreements[0] if agreements else None
     return {
         "lead_id": str(lead.id),
@@ -637,6 +661,7 @@ def client_card(
                 "authority_basis": item.authority_basis,
                 "document_version": item.document_version,
                 "messages": messages.get(item.id, []),
+                "acts": acts.get(item.id, []),
             }
             for item in agreements
         ],

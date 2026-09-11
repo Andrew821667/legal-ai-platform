@@ -243,6 +243,104 @@ async def test_intake_card_offers_close_without_agreement(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
+async def test_signed_agreement_offers_the_act_button_and_lists_acts(monkeypatch) -> None:
+    """Кнопка «Выставить акт» — только у подписанного договора; черновики и
+    отправленные-непросмотренные её не получают, выставлять счёт не за что."""
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    captured: dict = {}
+
+    async def reply(message, text, **kwargs) -> None:
+        captured.update(text=text, **kwargs)
+
+    monkeypatch.setattr(flow.utils, "safe_reply_text", reply)
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {
+            "id": value,
+            "lead_id": "33333333-3333-3333-3333-333333333333",
+            "lead_name": "Александр Рябов",
+            "status": "accepted",
+            "conflict_status": "clear",
+            "description": "Раздел имущества",
+        },
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda value: [_agreement("signed")],
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface, "get_nda_status", lambda value: {"signed": True}
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface, "list_service_agreement_messages", lambda value: []
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_work_acts_for_agreement",
+        lambda value: [
+            {"act_number": "AC-20260911-ONE", "status": "paid", "amount_minor": 8_000_000}
+        ],
+    )
+
+    await flow._show_intake(SimpleNamespace(chat_id=1), intake_id)
+
+    assert "AC-20260911-ONE" in captured["text"]
+    assert "оплачен" in captured["text"]
+    buttons = [button for row in captured["reply_markup"].inline_keyboard for button in row]
+    option = next(button for button in buttons if button.text == "Выставить акт")
+    assert option.callback_data == "act_a:new:11111111-1111-1111-1111-111111111111"
+
+
+@pytest.mark.anyio
+async def test_unsigned_agreement_has_no_act_button(monkeypatch) -> None:
+    intake_id = "22222222-2222-2222-2222-222222222222"
+    captured: dict = {}
+
+    async def reply(message, text, **kwargs) -> None:
+        captured.update(text=text, **kwargs)
+
+    monkeypatch.setattr(flow.utils, "safe_reply_text", reply)
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda value: {
+            "id": value,
+            "lead_id": "33333333-3333-3333-3333-333333333333",
+            "lead_name": "Александр Рябов",
+            "status": "accepted",
+            "conflict_status": "clear",
+            "description": "Раздел имущества",
+        },
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda value: [_agreement("sent")],
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface, "get_nda_status", lambda value: {"signed": True}
+    )
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface, "list_service_agreement_messages", lambda value: []
+    )
+    called: list[str] = []
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface,
+        "list_work_acts_for_agreement",
+        lambda value: called.append(value) or [],
+    )
+
+    await flow._show_intake(SimpleNamespace(chat_id=1), intake_id)
+
+    buttons = [button for row in captured["reply_markup"].inline_keyboard for button in row]
+    assert not any(button.text == "Выставить акт" for button in buttons)
+    # Ненужный поход в ядро за актами договора, который не подписан.
+    assert called == []
+
+
+@pytest.mark.anyio
 async def test_client_must_open_document_before_signing(monkeypatch, replies) -> None:
     bot = Bot()
     ctx = SimpleNamespace(user_data={}, bot=bot)

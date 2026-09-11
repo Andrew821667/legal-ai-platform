@@ -188,11 +188,16 @@ def _post_telegram_message(
     chat_id: str,
     text: str,
     reply_markup: str | None = None,
-) -> None:
+    parse_mode: str | None = None,
+) -> dict:
     """POST to Telegram sendMessage with a few retries on transient errors.
 
     Telegram via VPN/WARP occasionally takes 5–10s for the TLS handshake,
     so we use a generous timeout and retry on timeout/connection errors.
+
+    Возвращает отправленное сообщение (result из ответа Telegram) — вызовам,
+    которым нужен message_id для последующего трекинга (акт), не приходится
+    заново разбирать ответ.
     """
     import time
 
@@ -207,11 +212,13 @@ def _post_telegram_message(
                     "disable_web_page_preview": "true",
                     # Кнопки под сообщением. Telegram ждёт их строкой JSON.
                     **({"reply_markup": reply_markup} if reply_markup else {}),
+                    **({"parse_mode": parse_mode} if parse_mode else {}),
                 },
                 timeout=_NOTIFY_HTTP_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
-            return
+            body = response.json()
+            return body.get("result") or {}
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
             last_exc = exc
             if attempt < _NOTIFY_MAX_ATTEMPTS:

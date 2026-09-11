@@ -464,6 +464,71 @@ class ServiceAgreementMessage(Base):
     __table_args__ = (Index("ix_service_agreement_messages_agreement", "agreement_id", "created_at"),)
 
 
+class WorkActStatus(str, enum.Enum):
+    draft = "draft"
+    sent = "sent"
+    # Клиент нажал «Я оплатил(а)» — это заявление, не подтверждение: у
+    # самозанятого нет банковского API, чтобы проверить платёж программно,
+    # зачисление видит только сам юрист.
+    claimed_paid = "claimed_paid"
+    paid = "paid"
+
+
+class WorkAct(Base):
+    """Акт выполненных работ — документ на оплату по уже подписанному договору.
+
+    Отдельно от ServiceAgreement: договор описывает условия, акт — что по
+    ним фактически сделано и сколько к оплате. У договора есть редакции и
+    двустороннее подписание; акт проще — если ошибся, создаёшь новый, старый
+    остаётся историей. lead_id рядом с agreement_id — тот же приём, что и в
+    остальных таблицах: JOIN на клиента без прыжка через договор.
+    """
+
+    __tablename__ = "work_acts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    act_number: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    agreement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("service_agreements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    status: Mapped[WorkActStatus] = mapped_column(
+        Enum(WorkActStatus, name="work_act_status_enum"),
+        nullable=False,
+        default=WorkActStatus.draft,
+    )
+    # Что сделано — текст самого акта, отдельно от scope_text договора:
+    # договор описывает объём работ заранее, акт — что реально выполнено.
+    description_text: Mapped[str] = mapped_column(Text, nullable=False)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB", server_default="RUB")
+    prepared_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sent_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    claimed_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Необязательная заметка юриста при подтверждении: «пришло на СБП 11.09».
+    paid_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    __table_args__ = (
+        Index("ix_work_acts_agreement", "agreement_id", "created_at"),
+        Index("ix_work_acts_lead", "lead_id", "created_at"),
+        Index("ix_work_acts_status", "status", "created_at"),
+    )
+
+
 class LegalIntake(Base):
     __tablename__ = "legal_intakes"
 

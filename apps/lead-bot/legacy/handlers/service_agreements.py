@@ -11,6 +11,7 @@ import admin_interface
 import utils
 from config import get_config
 from core_api_bridge import core_api_bridge
+from handlers import work_acts
 from handlers.constants import workspace_row
 from telegram import InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
@@ -267,11 +268,17 @@ async def _show_intake(message, intake_id: str) -> None:
     )
     latest = agreements[0] if agreements else None
     messages = []
+    acts = []
     if latest:
         messages = await asyncio.to_thread(
             admin_interface.admin_interface.list_service_agreement_messages,
             str(latest["id"]),
         )
+        if latest.get("status") == "signed":
+            acts = await asyncio.to_thread(
+                admin_interface.admin_interface.list_work_acts_for_agreement,
+                str(latest["id"]),
+            )
     text = (
         f"Обращение: {intake.get('lead_name') or 'Без имени'}\n"
         f"Контакт: {intake.get('lead_contact') or 'не указан'}\n"
@@ -291,6 +298,12 @@ async def _show_intake(message, intake_id: str) -> None:
             author = "Клиент" if entry.get("role") == "client" else "Юрист"
             body = " ".join(str(entry.get("text") or "").split())[:500]
             text += f"\n{author}: {body}"
+    if acts:
+        text += "\n\nАкты:"
+        for act in acts:
+            act_status = work_acts.ACT_STATUS_LABELS.get(act["status"], act["status"])
+            amount = work_acts.format_rub(act["amount_minor"])
+            text += f"\n№ {act['act_number']} · {amount} · {act_status}"
 
     rows = [
         [
@@ -320,6 +333,10 @@ async def _show_intake(message, intake_id: str) -> None:
     if latest and latest.get("client_telegram_user_id"):
         rows.append(
             [InlineKeyboardButton("Ответить клиенту", callback_data=f"sa_a:reply:{latest['id']}")]
+        )
+    if latest and latest.get("status") == "signed":
+        rows.append(
+            [InlineKeyboardButton("Выставить акт", callback_data=f"act_a:new:{latest['id']}")]
         )
     if not latest and intake.get("status") != "closed":
         rows.append(
