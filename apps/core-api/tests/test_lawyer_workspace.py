@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from core_api.auth import cache
@@ -656,6 +657,71 @@ def test_backfill_parser_takes_only_the_unambiguous() -> None:
     assert parse("по договорённости") is None
     assert parse("0 руб") is None
     assert parse(None) is None
+
+
+def test_history_reads_back_what_the_journal_already_wrote() -> None:
+    """Журнал наполнялся при каждом действии и ни разу не читался обратно.
+
+    Лента собирается по трём типам целей — обращение, договор, сам клиент
+    (NDA) — и не подмешивает события чужих клиентов.
+    """
+    from core_api.audit import write_audit
+    from core_api.models import ActorType
+
+    client = TestClient(app)
+    names = ["pytest.workspace.history"]
+    key = _key(names[0])
+    seeded = _seed()
+    stranger = _seed()
+    db = SessionLocal()
+    try:
+        write_audit(db, ActorType.api_key, "test", "legal_intake.create", "legal_intake",
+                    uuid.UUID(seeded["intake_id"]))
+        write_audit(db, ActorType.api_key, "test", "nda.sign", "lead",
+                    uuid.UUID(seeded["lead_id"]), {"version": "v1"})
+        write_audit(db, ActorType.api_key, "test", "service_agreement.deliver", "service_agreement",
+                    uuid.UUID(seeded["agreement_id"]))
+        # Чужое — не должно попасть.
+        write_audit(db, ActorType.api_key, "test", "service_agreement.sign", "service_agreement",
+                    uuid.UUID(stranger["agreement_id"]))
+        db.commit()
+        # Отдельной транзакцией — как отдельный запрос на проде: created_at
+        # в PostgreSQL равен началу транзакции, и внутри одной оно у всех
+        # записей одинаковое.
+        write_audit(db, ActorType.api_key, "test", "legal_intake.update", "legal_intake",
+                    uuid.UUID(seeded["intake_id"]),
+                    {"deadline_at": datetime(2026, 9, 17, tzinfo=timezone.utc), "conflict_status": "clear"})
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        body = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}/history", headers={"X-API-Key": key}
+        ).json()
+        actions = [i["action"] for i in body["items"]]
+        assert "legal_intake.create" in actions
+        assert "nda.sign" in actions
+        assert "service_agreement.deliver" in actions
+        assert "service_agreement.sign" not in actions  # чужой договор
+
+        # Свежее — сверху.
+        assert actions[0] == "legal_intake.update"
+        update = body["items"][0]
+        assert update["details"]["conflict_status"] == "clear"
+        # Дата пережила журнал: ISO-строка, а не падение на json.dumps.
+        assert update["details"]["deadline_at"].startswith("2026-09-17")
+
+        deliver = next(i for i in body["items"] if i["action"] == "service_agreement.deliver")
+        assert deliver["agreement_number"]  # видно, о каком договоре речь
+
+        assert client.get(
+            "/api/v1/lawyer/clients/00000000-0000-4000-8000-000000000000/history",
+            headers={"X-API-Key": key},
+        ).status_code == 404
+    finally:
+        _cleanup(names, seeded["lead_id"])
+        _cleanup([], stranger["lead_id"])
 
 
 def test_client_list_shows_only_those_with_intakes() -> None:

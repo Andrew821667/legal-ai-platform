@@ -104,3 +104,29 @@ export function shortDate(value: string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
+
+/**
+ * Событие журнала — одной строкой, от лица того, кто действовал.
+ *
+ * Журнал пишет имя API-ключа, а не человека: кто сделал, понятно из самого
+ * действия. «Клиент …» и «Вы …» — так лента читается как история дела, а не
+ * как лог сервера.
+ */
+export const HISTORY: Record<string, string> = {
+  "legal_intake.create": "Обращение принято",
+  "legal_intake.update": "Обращение изменено",
+  "legal_intake.outreach": "Бот написал клиенту первым",
+  "legal_intake.clarification": "Клиент ответил на уточнение",
+  "legal_intake.document": "Клиент прислал документ",
+  "nda.sign": "Клиент подписал соглашение о конфиденциальности",
+  "service_agreement.create": "Договор составлен",
+  "service_agreement.sent": "Договор отправлен клиенту",
+  "service_agreement.deliver": "Договор отправлен клиенту",
+  "service_agreement.viewed": "Клиент открыл договор",
+  "service_agreement.client_details": "Клиент заполнил реквизиты",
+  "service_agreement.sign": "Клиент подписал договор",
+  "service_agreement.decline": "Клиент отклонил договор",
+  "service_agreement.question": "Клиент задал вопрос по договору",
+  "service_agreement.reply": "Вы ответили клиенту",
+  "service_agreement.amount": "Сумма к учёту изменена",
+};
