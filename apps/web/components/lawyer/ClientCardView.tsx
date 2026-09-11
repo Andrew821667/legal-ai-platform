@@ -9,21 +9,26 @@ import DocumentText from "./DocumentText";
 import HistoryList from "./HistoryList";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
+import RichText from "./RichText";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
 import { lawyerAction } from "./useTelegram";
 import {
   AGREEMENT_STATUS,
   AREA,
+  CLIENT_TYPE,
   CONFLICT,
   CONFLICT_EXPLAINED,
   INTAKE_STATUS,
   OUTREACH_REASON,
+  SOURCE,
   URGENCY,
   label,
   shortDate,
   shortDay,
 } from "./labels";
 import type { AgreementCard, ClientCard, IntakeCard } from "./types";
+import { clientContacts } from "@/lib/lawyer-contacts";
+import { matterStage } from "@/lib/lawyer-stage";
 
 /**
  * Карточку открывают, чтобы вспомнить всё о деле перед разговором.
@@ -66,6 +71,16 @@ function worstConflict(intakes: IntakeCard[]): string | null {
   return worst;
 }
 
+/**
+ * Кто перед нами — компания, ИП или человек. Тип живёт в обращении, а не в
+ * клиенте; берём из последнего, где он назван. «unknown» не показываем:
+ * пилюля «неизвестно» ничего не сообщает.
+ */
+function knownClientType(intakes: IntakeCard[]): string | null {
+  const known = intakes.find((item) => item.client_type in CLIENT_TYPE);
+  return known ? known.client_type : null;
+}
+
 export default function ClientCardView({
   card,
   onBack,
@@ -82,6 +97,8 @@ export default function ClientCardView({
   const active = card.agreements.filter((a) => a.status !== "superseded");
   const history = card.agreements.filter((a) => a.status === "superseded");
   const conflictAlert = worstConflict(card.intakes);
+  const clientType = knownClientType(card.intakes);
+  const contacts = clientContacts(card);
 
   return (
     <div className="space-y-4">
@@ -96,18 +113,36 @@ export default function ClientCardView({
       <Card>
         {/* Имя крупное — пилюли под ним, а не рядом: на телефоне им тесно. */}
         <h1 className="text-lw-2xl font-extrabold tracking-tight text-lw-ink">{card.name}</h1>
-        <p className="mt-0.5 text-lw-base text-lw-muted">
-          {card.contact || "контакт не указан"}
-          {card.company ? ` · ${card.company}` : ""}
+        {card.company ? <p className="mt-0.5 text-lw-base text-lw-muted">{card.company}</p> : null}
+        {/* Контакты — ссылками: карточку открывают перед разговором, и по
+            контакту отсюда нужно сразу написать или позвонить. */}
+        <p className="mt-0.5 flex flex-wrap gap-x-3 text-lw-base text-lw-muted">
+          {contacts.length === 0 ? <span>контакт не указан</span> : null}
+          {contacts.map((item) =>
+            item.href ? (
+              <a key={item.value} href={item.href} className="text-lw-primary underline-offset-2 hover:underline">
+                {item.value}
+              </a>
+            ) : (
+              <span key={item.value}>{item.value}</span>
+            ),
+          )}
+        </p>
+        <p className="mt-1 text-lw-sm text-lw-muted">
+          с {shortDate(card.created_at)}
+          {card.source ? ` · ${label(SOURCE, card.source)}` : ""}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
+          {clientType ? <Pill>{label(CLIENT_TYPE, clientType)}</Pill> : null}
           {conflictAlert ? (
             <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
           ) : null}
         </div>
 
-        <Progress stage={card.stage} />
+        {/* Шкала хода — одна сделка. У клиента с несколькими обращениями она
+            стоит у каждого из них, а не в шапке: там показала бы только одно. */}
+        {card.intakes.length > 1 ? null : <Progress stage={card.stage} />}
 
         {/* Самый юридически значимый статус на карточке — акцентным блоком,
             а не «проваленным» полем: от него зависит, можно ли принимать документы. */}
@@ -190,6 +225,7 @@ export default function ClientCardView({
                 agreements={card.agreements.filter((a) => a.intake_id === item.intake_id)}
                 ndaSigned={Boolean(card.nda)}
                 hasDialog={card.telegram_user_id !== null}
+                ownProgress={card.intakes.length > 1}
               />
             ))}
           </div>
@@ -335,6 +371,7 @@ function Intake({
   agreements,
   ndaSigned,
   hasDialog,
+  ownProgress,
 }: {
   item: IntakeCard;
   initData: string;
@@ -342,6 +379,7 @@ function Intake({
   agreements: AgreementCard[];
   ndaSigned: boolean;
   hasDialog: boolean;
+  ownProgress: boolean;
 }) {
   const conflictBlocks = item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
@@ -381,6 +419,8 @@ function Intake({
         {item.region ? <span>{item.region}</span> : null}
       </div>
 
+      {ownProgress ? <Progress stage={matterStage(agreements, ndaSigned)} /> : null}
+
       {item.outreach_blocked_reason ? (
         <p className="mt-2 text-lw-sm text-lw-warning">
           Связаться не удалось: {label(OUTREACH_REASON, item.outreach_blocked_reason)}
@@ -416,9 +456,7 @@ function Intake({
         </div>
       ) : null}
 
-      <p className="mt-3 whitespace-pre-wrap text-lw-base leading-relaxed text-lw-ink">
-        {item.description}
-      </p>
+      <RichText text={item.description} className="mt-3" />
 
       {item.clarifications.length > 0 ? (
         <div className="mt-3 border-t border-lw-border pt-3">
@@ -429,7 +467,9 @@ function Intake({
             {item.clarifications.map((row, index) => (
               <div key={index}>
                 <dt className="text-lw-sm text-lw-muted">{row.question}</dt>
-                <dd className="text-lw-base leading-relaxed text-lw-ink">{row.answer}</dd>
+                <dd>
+                  <RichText text={row.answer} />
+                </dd>
               </div>
             ))}
           </dl>

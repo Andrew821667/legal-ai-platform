@@ -42,7 +42,21 @@ export default function LawyerWorkspace() {
   const [card, setCard] = useState<ClientCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
+
+  // «Загружаю…» — пока в пути хоть один запрос. Раньше это был один флаг на
+  // четыре загрузчика: стартовые три уходили разом, первый вернувшийся
+  // гасил индикатор для остальных, а обновление после действия — наоборот,
+  // включало его над давно готовым экраном. Счётчик, а не флаг.
   const [loading, setLoading] = useState(false);
+  const inflight = useRef(0);
+  const beginLoading = useCallback(() => {
+    inflight.current += 1;
+    setLoading(true);
+  }, []);
+  const endLoading = useCallback(() => {
+    inflight.current = Math.max(0, inflight.current - 1);
+    if (inflight.current === 0) setLoading(false);
+  }, []);
 
   // Два независимых загрузчика — не читают состояние друг друга и не входят
   // в зависимости друг друга. Раньше был один load() с [tab, clients, today]
@@ -52,7 +66,7 @@ export default function LawyerWorkspace() {
   // запросов в секунду, пока вкладка открыта.
   const loadToday = useCallback(async () => {
     if (!ready) return;
-    setLoading(true);
+    beginLoading();
     setError(null);
     setUnauthorized(false);
     try {
@@ -61,9 +75,9 @@ export default function LawyerWorkspace() {
       setError(err instanceof Error ? err.message : "Не удалось загрузить данные");
       setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
     } finally {
-      setLoading(false);
+      endLoading();
     }
-  }, [ready, initData]);
+  }, [ready, initData, beginLoading, endLoading]);
 
   // Последний поисковый запрос живёт в ref, а не в состоянии: обновление после
   // действия должно сохранять фильтр, но не менять identity загрузчика — иначе
@@ -74,7 +88,7 @@ export default function LawyerWorkspace() {
   // читает состояние, которое сам меняет, — иначе вернётся цикл из #340.
   const loadFinance = useCallback(async () => {
     if (!ready) return;
-    setLoading(true);
+    beginLoading();
     setError(null);
     try {
       setFinance(await lawyerFetch<Finance>("/api/lawyer/finance", initData));
@@ -82,15 +96,15 @@ export default function LawyerWorkspace() {
       setError(err instanceof Error ? err.message : "Не удалось загрузить деньги");
       setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
     } finally {
-      setLoading(false);
+      endLoading();
     }
-  }, [ready, initData]);
+  }, [ready, initData, beginLoading, endLoading]);
 
   const loadClients = useCallback(
     async (search = lastSearch.current) => {
       if (!ready) return;
       lastSearch.current = search;
-      setLoading(true);
+      beginLoading();
       setError(null);
       setUnauthorized(false);
       try {
@@ -100,10 +114,10 @@ export default function LawyerWorkspace() {
         setError(err instanceof Error ? err.message : "Не удалось найти");
         setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
       } finally {
-        setLoading(false);
+        endLoading();
       }
     },
-    [ready, initData],
+    [ready, initData, beginLoading, endLoading],
   );
 
   // Стартовая загрузка: клиенты — для списка, задачи — для счётчика на
@@ -125,17 +139,17 @@ export default function LawyerWorkspace() {
 
   const openClient = useCallback(
     async (leadId: string) => {
-      setLoading(true);
+      beginLoading();
       setError(null);
       try {
         setCard(await lawyerFetch<ClientCard>(`/api/lawyer/clients/${leadId}`, initData));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Не удалось открыть карточку");
       } finally {
-        setLoading(false);
+        endLoading();
       }
     },
-    [initData],
+    [initData, beginLoading, endLoading],
   );
 
   // Открыть карточку по нажатию — с записью в историю.
@@ -228,6 +242,8 @@ export default function LawyerWorkspace() {
   const pendingCount = today
     ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
     : undefined;
+  const tabIsEmpty =
+    tab === "today" ? today === null : tab === "finance" ? finance === null : clients === null;
 
   const list = (
     <div>
@@ -316,7 +332,11 @@ export default function LawyerWorkspace() {
         </div>
       ) : null}
 
-      {loading && !error && !card ? <p className="text-lw-base text-lw-muted">Загружаю…</p> : null}
+      {/* Индикатор — только пока показывать нечего. Обновление поверх готового
+          экрана идёт молча: данные просто сменяются на свежие. */}
+      {loading && !error && !card && tabIsEmpty ? (
+        <p className="text-lw-base text-lw-muted">Загружаю…</p>
+      ) : null}
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
       {!error && tab === "finance" && finance ? (
