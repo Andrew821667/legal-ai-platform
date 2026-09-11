@@ -29,6 +29,7 @@ import database
 import utils
 from config import get_config
 from core_api_bridge import core_api_bridge
+from handlers.constants import workspace_row
 
 logger = logging.getLogger(__name__)
 config = get_config()
@@ -72,7 +73,9 @@ def confirm_markup() -> InlineKeyboardMarkup:
     )
 
 
-async def _notify_admin_signed(bot, *, intake_id: str | None, signer_name: str) -> bool:
+async def _notify_admin_signed(
+    bot, *, intake_id: str | None, signer_name: str, lead_id: str | None = None
+) -> bool:
     callback = f"sa_a:i:{intake_id}" if intake_id else "sa_a:menu"
     text = (
         "Клиент подписал NDA.\n\n"
@@ -87,7 +90,10 @@ async def _notify_admin_signed(bot, *, intake_id: str | None, signer_name: str) 
             chat_id=config.ADMIN_TELEGRAM_ID,
             text=text,
             reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Открыть обращение", callback_data=callback)]]
+                [
+                    *workspace_row(lead_id),
+                    [InlineKeyboardButton("Открыть обращение", callback_data=callback)],
+                ]
             ),
         )
         return True
@@ -499,4 +505,5 @@ async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> 
             context.bot,
             intake_id=result.get("intake_id"),
             signer_name=data["signer_full_name"],
+            lead_id=str(lead_id),
         )

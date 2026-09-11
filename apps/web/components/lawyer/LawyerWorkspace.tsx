@@ -6,10 +6,27 @@ import ClientCardView from "./ClientCardView";
 import FinanceView from "./FinanceView";
 import TodayView from "./TodayView";
 import ClientsView from "./ClientsView";
-import { lawyerFetch, useTelegramInitData } from "./useTelegram";
+import { lawyerFetch, telegramBackButton, useTelegramInitData } from "./useTelegram";
 import type { ClientCard, ClientRow, Finance, Today } from "./types";
+import { buildWorkspaceSearch, parseWorkspaceRoute } from "@/lib/lawyer-route";
+import type { Tab, WorkspaceRoute } from "@/lib/lawyer-route";
 
-type Tab = "clients" | "today" | "finance";
+/**
+ * Экран живёт в адресе: `?client=<id>` — карточка, `?tab=today` — вкладка.
+ *
+ * Вкладки не создают записей в истории (replaceState): «назад» с вкладки
+ * закрывает мини-апп, как в любом мобильном приложении. Карточка — создаёт
+ * (pushState): «назад» из неё возвращает туда, откуда пришли. Исключение —
+ * приземление по прямой ссылке из уведомления: за карточкой ничего нет, и
+ * history.back() закрыл бы мини-апп целиком, поэтому такая запись помечена
+ * как не наша, и «назад» просто подменяет адрес на список.
+ */
+function syncAddress(route: WorkspaceRoute, mode: "push" | "replace") {
+  const url = `${window.location.pathname}${buildWorkspaceSearch(route)}`;
+  const state = { pushed: mode === "push" };
+  if (mode === "push") window.history.pushState(state, "", url);
+  else window.history.replaceState(state, "", url);
+}
 
 export default function LawyerWorkspace() {
   const { initData, ready } = useTelegramInitData();
@@ -109,6 +126,69 @@ export default function LawyerWorkspace() {
     [initData],
   );
 
+  // Открыть карточку по нажатию — с записью в историю.
+  const showClient = useCallback(
+    (leadId: string) => {
+      syncAddress({ tab, client: leadId }, "push");
+      void openClient(leadId);
+    },
+    [tab, openClient],
+  );
+
+  const closeCard = useCallback(() => {
+    if (window.history.state?.pushed) {
+      // Запись наша — назад по истории, popstate восстановит вкладку.
+      window.history.back();
+      return;
+    }
+    syncAddress({ tab, client: null }, "replace");
+    setCard(null);
+  }, [tab]);
+
+  const selectTab = useCallback((next: Tab) => {
+    setTab(next);
+    syncAddress({ tab: next, client: null }, "replace");
+  }, []);
+
+  // Приземление: адрес читается один раз, когда есть чем подписать запрос.
+  // Ref, а не состояние: эффект не должен перезапускаться от смены identity
+  // openClient — тот самый класс ошибок, что чинили в #340.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (!ready || landed.current) return;
+    landed.current = true;
+    const route = parseWorkspaceRoute(window.location.search);
+    setTab(route.tab);
+    syncAddress(route, "replace");
+    if (route.client) void openClient(route.client);
+  }, [ready, openClient]);
+
+  // Кнопка «назад» браузера или Telegram: состояние — из адреса, не наоборот.
+  useEffect(() => {
+    const onPop = () => {
+      const route = parseWorkspaceRoute(window.location.search);
+      setTab(route.tab);
+      if (route.client) void openClient(route.client);
+      else setCard(null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [openClient]);
+
+  // Нативная кнопка «назад» Telegram видна только в карточке. Без неё жест
+  // «назад» закрывал мини-апп целиком — работала лишь ссылка «К списку».
+  useEffect(() => {
+    const back = telegramBackButton();
+    if (!back) return;
+    if (!card) {
+      back.hide();
+      return;
+    }
+    back.show();
+    back.onClick(closeCard);
+    return () => back.offClick(closeCard);
+  }, [card, closeCard]);
+
   // После любого действия внутри карточки экран обязан говорить правду.
   // Раньше пилюля статуса продолжала показывать «Черновик» рядом с надписью
   // «Отправлено», а счётчик задач не менялся, пока не переоткроешь карточку.
@@ -127,7 +207,7 @@ export default function LawyerWorkspace() {
     return (
       <ClientCardView
         card={card}
-        onBack={() => setCard(null)}
+        onBack={closeCard}
         onChanged={() => void refreshAfterAction(card.lead_id)}
         loading={loading}
         initData={initData}
@@ -155,7 +235,7 @@ export default function LawyerWorkspace() {
             type="button"
             role="tab"
             aria-selected={tab === key}
-            onClick={() => setTab(key)}
+            onClick={() => selectTab(key)}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium transition-colors ${
               tab === key ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"
             }`}
@@ -191,12 +271,12 @@ export default function LawyerWorkspace() {
 
       {loading && !error ? <p className="text-base text-slate-400">Загружаю…</p> : null}
 
-      {!error && tab === "today" && today ? <TodayView today={today} onOpen={openClient} /> : null}
+      {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
       {!error && tab === "finance" && finance ? (
-        <FinanceView finance={finance} onOpen={openClient} />
+        <FinanceView finance={finance} onOpen={showClient} />
       ) : null}
       {!error && tab === "clients" ? (
-        <ClientsView rows={clients} onOpen={openClient} onSearch={(term) => void loadClients(term)} />
+        <ClientsView rows={clients} onOpen={showClient} onSearch={(term) => void loadClients(term)} />
       ) : null}
     </div>
   );

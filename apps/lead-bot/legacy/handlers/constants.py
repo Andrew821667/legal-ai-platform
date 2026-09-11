@@ -1,6 +1,8 @@
 """
 Константы для handlers - меню кнопок и другие константы
 """
+from urllib.parse import quote
+
 from telegram import InlineKeyboardMarkup, WebAppInfo
 
 from config import get_config
@@ -189,16 +191,36 @@ DOCUMENTS_MENU = [
 ]
 
 # Админ-панель inline кнопки
-def lawyer_workspace_button():
+def lawyer_workspace_link(lead_id: str | None = None) -> str:
+    """Адрес рабочего места; с lead_id — сразу карточка этого клиента.
+
+    Пустая строка, если адрес не задан. До этого уведомление «клиент задал
+    вопрос» вело в старый диалог с ботом, а рабочее место открывалось только
+    общим списком — до нужной карточки приходилось добираться руками.
+    """
+    url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
+    if not url or not lead_id:
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}client={quote(str(lead_id), safe='')}"
+
+
+def lawyer_workspace_button(lead_id: str | None = None, label: str = "🗂 Рабочее место"):
     """Кнопка входа в рабочее место юриста для inline-меню.
 
     Возвращает None, если адрес не задан: кнопка, ведущая в никуда, хуже её
     отсутствия.
     """
-    url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
+    url = lawyer_workspace_link(lead_id)
     if not url:
         return None
-    return InlineKeyboardButton("🗂 Рабочее место", web_app=WebAppInfo(url=url))
+    return InlineKeyboardButton(label, web_app=WebAppInfo(url=url))
+
+
+def workspace_row(lead_id: str | None):
+    """Ряд с кнопкой карточки для уведомления юристу — или ничего."""
+    button = lawyer_workspace_button(lead_id, "Открыть в рабочем месте")
+    return [[button]] if button else []
 
 
 def client_miniapp_button():

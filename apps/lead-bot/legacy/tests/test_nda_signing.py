@@ -236,8 +236,13 @@ async def test_full_path_collects_details_and_signs(update, context, replies, mo
     notice = context.bot.messages[0]
     assert notice["chat_id"] == nda.config.ADMIN_TELEGRAM_ID
     assert "подписал NDA" in notice["text"]
-    button = notice["reply_markup"].inline_keyboard[0][0]
-    assert button.callback_data == "sa_a:i:22222222-2222-2222-2222-222222222222"
+    buttons = [b for row in notice["reply_markup"].inline_keyboard for b in row]
+    assert "sa_a:i:22222222-2222-2222-2222-222222222222" in {b.callback_data for b in buttons}
+    # Первой — карточка клиента в рабочем месте: раньше уведомление вело
+    # только в старый диалог с ботом, а до карточки приходилось добираться руками.
+    first = notice["reply_markup"].inline_keyboard[0][0]
+    assert first.web_app is not None
+    assert first.web_app.url.endswith("/lawyer?client=lead-1")
     # Состояние сценария убрано — повторные сообщения в него не попадут.
     assert nda.STAGE_KEY not in context.user_data
 
