@@ -69,7 +69,7 @@ export default function TodayView({
         <p className="mt-1 text-base text-slate-400">
           Все договоры отправлены, вопросы отвечены, обращения в работе.
         </p>
-        <p className="mt-3 text-sm text-slate-600">
+        <p className="mt-3 text-sm text-slate-400">
           Здесь только то, что стоит из-за вас. Все клиенты — на соседней вкладке.
         </p>
       </Card>
@@ -78,7 +78,7 @@ export default function TodayView({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-400">
         Здесь только то, что стоит из-за вас — {total}. Полный список клиентов на
         соседней вкладке.
       </p>
@@ -86,7 +86,7 @@ export default function TodayView({
       {sections.map((section) => (
         <section key={section.key} className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4">
           <h2 className="text-base font-semibold text-white">{section.title}</h2>
-          <p className="mt-0.5 text-sm text-slate-500">{section.hint}</p>
+          <p className="mt-0.5 text-sm text-slate-400">{section.hint}</p>
 
           <ul className="mt-3 space-y-2">
             {section.items.map((item, index) => (

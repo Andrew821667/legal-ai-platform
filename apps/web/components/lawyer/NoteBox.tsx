@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import { lawyerAction } from "./useTelegram";
 
 /**
@@ -19,8 +20,10 @@ export default function NoteBox({
   initialNote: string | null;
   initData: string;
 }) {
-  const [note, setNote] = useState(initialNote || "");
-  const [open, setOpen] = useState(Boolean(initialNote));
+  // Черновик перевешивает сохранённое: он и есть то, что не успели сохранить.
+  const draftKey = `lawyer.note.${intakeId}`;
+  const [note, setNote] = useState(() => readDraft(draftKey, initialNote || ""));
+  const [open, setOpen] = useState(() => Boolean(initialNote) || Boolean(readDraft(draftKey, "")));
   const [state, setState] = useState<"idle" | "busy" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +32,7 @@ export default function NoteBox({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-2 py-1 text-base text-slate-500 hover:text-slate-300"
+        className="mt-2 py-1 text-base text-slate-400 hover:text-slate-300"
       >
         + заметка
       </button>
@@ -42,11 +45,12 @@ export default function NoteBox({
         value={note}
         onChange={(event) => {
           setNote(event.target.value);
+          writeDraft(draftKey, event.target.value);
           setState("idle");
         }}
         rows={3}
         placeholder="Заметка для себя — клиент её не видит"
-        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-200 placeholder:text-slate-600"
+        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-200 placeholder:text-slate-400"
       />
       <div className="mt-1 flex items-center gap-3">
         <button
@@ -57,6 +61,7 @@ export default function NoteBox({
             setError(null);
             try {
               await lawyerAction(`/api/lawyer/intakes/${intakeId}/note`, initData, { note });
+              dropDraft(draftKey);
               setState("saved");
             } catch (err) {
               setError(err instanceof Error ? err.message : "Не получилось сохранить");

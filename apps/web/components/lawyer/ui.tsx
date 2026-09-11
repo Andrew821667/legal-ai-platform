@@ -28,7 +28,7 @@ export function Row({ label, value }: { label: string; value: React.ReactNode })
   }
   return (
     <div className="flex gap-3 py-1.5 text-sm">
-      <span className="w-32 shrink-0 text-slate-500">{label}</span>
+      <span className="w-32 shrink-0 text-slate-400">{label}</span>
       <span className="min-w-0 flex-1 text-slate-200">{value}</span>
     </div>
   );
@@ -56,9 +56,9 @@ export function SectionTitle({
   count?: number;
 }) {
   return (
-    <h2 className="mb-2 flex items-baseline gap-2 text-base font-semibold uppercase tracking-wide text-slate-400">
+    <h2 className="mb-2 flex items-baseline gap-2 text-base font-semibold uppercase tracking-wide text-slate-300">
       {children}
-      {count !== undefined ? <span className="text-slate-600">{count}</span> : null}
+      {count !== undefined ? <span className="text-slate-400">{count}</span> : null}
     </h2>
   );
 }
@@ -82,7 +82,7 @@ export function Progress({ stage }: { stage: string }) {
         return (
           <div key={step} className="flex flex-1 flex-col gap-1">
             <div className={`h-1 rounded-full ${done ? "bg-amber-500" : "bg-slate-800"}`} />
-            <span className={`text-sm ${done ? "text-slate-300" : "text-slate-600"}`}>
+            <span className={`text-sm ${done ? "text-slate-300" : "text-slate-400"}`}>
               {step}
             </span>
           </div>

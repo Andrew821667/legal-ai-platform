@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { AGREEMENT_FIELDS } from "@/lib/agreement-draft";
+import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import { lawyerAction } from "./useTelegram";
 
 /**
@@ -16,31 +17,7 @@ import { lawyerAction } from "./useTelegram";
  * встречами, слишком дорого терять из-за случайного касания «Отмена».
  */
 
-const STORAGE_PREFIX = "lawyer.agreement.";
-
-function readDraft(intakeId: string): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_PREFIX + intakeId) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function writeDraft(intakeId: string, values: Record<string, string>) {
-  try {
-    localStorage.setItem(STORAGE_PREFIX + intakeId, JSON.stringify(values));
-  } catch {
-    // Приватный режим или переполненное хранилище — не повод ломать форму.
-  }
-}
-
-function dropDraft(intakeId: string) {
-  try {
-    localStorage.removeItem(STORAGE_PREFIX + intakeId);
-  } catch {
-    // см. writeDraft
-  }
-}
+const draftKey = (intakeId: string) => `lawyer.agreement.${intakeId}`;
 
 export default function AgreementForm({
   intakeId,
@@ -65,7 +42,7 @@ export default function AgreementForm({
       <button
         type="button"
         onClick={() => {
-          setValues(readDraft(intakeId));
+          setValues(readDraft<Record<string, string>>(draftKey(intakeId), {}));
           setOpen(true);
         }}
         className="mt-3 w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-medium text-slate-950 transition-colors hover:bg-amber-400"
@@ -78,7 +55,7 @@ export default function AgreementForm({
   const update = (key: string, text: string) => {
     const next = { ...values, [key]: text };
     setValues(next);
-    writeDraft(intakeId, next);
+    writeDraft(draftKey(intakeId), next);
   };
 
   return (
@@ -90,7 +67,7 @@ export default function AgreementForm({
         setError(null);
         try {
           await lawyerAction(`/api/lawyer/intakes/${intakeId}/agreement`, initData, values);
-          dropDraft(intakeId);
+          dropDraft(draftKey(intakeId));
           setOpen(false);
           setValues({});
           onCreated();
@@ -116,7 +93,7 @@ export default function AgreementForm({
             onChange={(event) => update(field.key, event.target.value)}
             rows={field.rows}
             placeholder={field.hint}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-500"
+            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
           />
         </label>
       ))}

@@ -126,13 +126,13 @@ export default function ClientCardView({
         </div>
       </Card>
 
-      {loading ? <p className="text-base text-slate-500">Обновляю…</p> : null}
+      {loading ? <p className="text-base text-slate-400">Обновляю…</p> : null}
 
       <section>
         <SectionTitle count={card.agreements.length}>Договоры</SectionTitle>
         {card.agreements.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate-500">Договоров пока нет.</p>
+            <p className="text-sm text-slate-400">Договоров пока нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -146,7 +146,7 @@ export default function ClientCardView({
             ))}
             {history.length > 0 ? (
               <details className="rounded-2xl border border-slate-800/60 bg-slate-900/30 p-3">
-                <summary className="cursor-pointer text-sm text-slate-500">
+                <summary className="cursor-pointer text-sm text-slate-400">
                   Прежние редакции ({history.length})
                 </summary>
                 <div className="mt-2 space-y-2">
@@ -169,7 +169,7 @@ export default function ClientCardView({
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>
         {card.intakes.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate-500">Обращений нет.</p>
+            <p className="text-sm text-slate-400">Обращений нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -211,7 +211,7 @@ function Agreement({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-medium text-white">{item.subject}</p>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-slate-400">
             № {item.number}
             {item.revision > 1 ? ` · редакция ${item.revision}` : ""}
           </p>
@@ -234,7 +234,7 @@ function Agreement({
         <Row label="Основание" value={item.authority_basis} />
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-slate-800/60 pt-2 text-sm text-slate-500">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-slate-800/60 pt-2 text-sm text-slate-400">
         <span>составлен {shortDate(item.created_at)}</span>
         {item.sent_at ? <span>отправлен {shortDate(item.sent_at)}</span> : null}
         {item.viewed_at ? <span>просмотрен {shortDate(item.viewed_at)}</span> : null}
@@ -262,23 +262,29 @@ function Agreement({
 
       {item.messages.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">Переписка</p>
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">Переписка</p>
+          {/* Раздел живёт внутри Telegram, где «своё справа, чужое слева» —
+              рефлекс. Раньше оба голоса шли одинаковыми блоками во всю ширину,
+              и при беглом скролле приходилось читать подпись, чтобы понять,
+              кто говорит. */}
           <div className="space-y-2">
-            {item.messages.map((message, index) => (
-              <div
-                key={index}
-                className={`rounded-xl p-3 text-base leading-relaxed ${
-                  message.role === "client"
-                    ? "bg-slate-800/70 text-slate-200"
-                    : "bg-amber-500/10 text-amber-100"
-                }`}
-              >
-                <p className="mb-1 text-sm text-slate-500">
-                  {message.role === "client" ? "Клиент" : "Вы"} · {shortDate(message.created_at)}
-                </p>
-                {message.text}
-              </div>
-            ))}
+            {item.messages.map((message, index) => {
+              const mine = message.role !== "client";
+              return (
+                <div key={index} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[85%] rounded-xl p-3 text-base leading-relaxed ${
+                      mine ? "bg-amber-500/10 text-amber-100" : "bg-slate-800/70 text-slate-200"
+                    }`}
+                  >
+                    <p className="mb-1 text-sm text-slate-400">
+                      {mine ? "Вы" : "Клиент"} · {shortDate(message.created_at)}
+                    </p>
+                    {message.text}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {unanswered ? (
             <ReplyBox
@@ -343,7 +349,7 @@ function Intake({
         </div>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-500">
+      <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-400">
         <span>{shortDate(item.created_at)}</span>
         <span>{label(URGENCY, item.urgency)}</span>
         {item.deadline_at ? <span>срок до {shortDay(item.deadline_at)}</span> : null}
@@ -391,13 +397,13 @@ function Intake({
 
       {item.clarifications.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">
             Что уточнили · {item.clarifications.length}
           </p>
           <dl className="space-y-2">
             {item.clarifications.map((row, index) => (
               <div key={index}>
-                <dt className="text-sm text-slate-500">{row.question}</dt>
+                <dt className="text-sm text-slate-400">{row.question}</dt>
                 <dd className="text-base leading-relaxed text-slate-200">{row.answer}</dd>
               </div>
             ))}
@@ -407,7 +413,7 @@ function Intake({
 
       {item.documents.length > 0 ? (
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-500">
+          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">
             Документы · {item.documents.length}
           </p>
           <ul className="space-y-1">
@@ -416,7 +422,7 @@ function Intake({
                 <span className="min-w-0 truncate text-slate-200">
                   {doc.file_name || "без имени"}
                 </span>
-                <span className="shrink-0 text-sm text-slate-600">
+                <span className="shrink-0 text-sm text-slate-400">
                   {shortDate(doc.created_at)}
                   {doc.nda_signed_at_upload ? "" : " · без NDA"}
                 </span>
