@@ -34,7 +34,7 @@ export default function DocumentText({
 
   return (
     <details
-      className="mt-2 text-sm"
+      className="mt-2 text-lw-sm"
       onToggle={(event) => {
         if (!event.currentTarget.open || doc || busy) return;
         setBusy(true);
@@ -45,18 +45,18 @@ export default function DocumentText({
           .finally(() => setBusy(false));
       }}
     >
-      <summary className="cursor-pointer text-slate-400 underline underline-offset-2 hover:text-slate-200">
+      <summary className="cursor-pointer text-lw-muted underline underline-offset-2 hover:text-lw-primary">
         {title}
       </summary>
-      {busy ? <p className="mt-2 text-slate-400">Загружаю…</p> : null}
-      {error ? <p className="mt-2 text-rose-300">{error}</p> : null}
+      {busy ? <p className="mt-2 text-lw-muted">Загружаю…</p> : null}
+      {error ? <p className="mt-2 text-lw-danger">{error}</p> : null}
       {doc ? (
-        <div className="mt-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <p className="mb-2 break-all font-mono text-xs text-slate-400">
+        <div className="mt-2 rounded-xl border border-lw-border bg-lw-soft p-3">
+          <p className="mb-2 break-all font-mono text-lw-xs text-lw-muted">
             {doc.document_version ? `редакция ${doc.document_version} · ` : ""}
             sha256 {doc.document_hash}
           </p>
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-200">
+          <pre className="whitespace-pre-wrap font-sans text-lw-sm leading-relaxed text-lw-ink">
             {doc.document_text || "Текст не сохранён."}
           </pre>
         </div>

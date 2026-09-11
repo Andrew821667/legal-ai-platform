@@ -46,7 +46,7 @@ export default function AgreementForm({
           setValues(readDraft<Record<string, string>>(draftKey(intakeId), {}));
           setOpen(true);
         }}
-        className="mt-3 w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-medium text-slate-950 transition-colors hover:bg-amber-400"
+        className="lw-btn mt-3 w-full"
       >
         {title}
       </button>
@@ -72,7 +72,7 @@ export default function AgreementForm({
 
   return (
     <form
-      className="mt-3 space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+      className="lw-card mt-3 space-y-3 p-4"
       onSubmit={async (event) => {
         event.preventDefault();
         setBusy(true);
@@ -90,9 +90,9 @@ export default function AgreementForm({
         }
       }}
     >
-      <p className="text-base font-medium text-white">{title}</p>
+      <p className="text-lw-base font-medium text-lw-ink">{title}</p>
       {again ? (
-        <p className="text-sm text-amber-200">
+        <p className="text-lw-sm text-lw-warning">
           Прежняя редакция станет заменённой, как только новая будет составлена.
         </p>
       ) : null}
@@ -100,26 +100,26 @@ export default function AgreementForm({
       {AGREEMENT_FIELDS.map((field) => (
         <div key={field.key}>
           <label className="block">
-            <span className="text-sm text-slate-400">{field.label}</span>
+            <span className="text-lw-sm text-lw-muted">{field.label}</span>
             <textarea
               value={values[field.key] || ""}
               onChange={(event) => update(field.key, event.target.value)}
               rows={field.rows}
               placeholder={field.hint}
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
+              className="lw-input mt-1"
             />
           </label>
           {field.key === "price_text" ? (
             <label className="mt-2 block">
-              <span className="text-sm text-slate-400">Сумма к учёту, ₽</span>
+              <span className="text-lw-sm text-lw-muted">Сумма к учёту, ₽</span>
               <input
                 inputMode="decimal"
                 value={values.amount || ""}
                 onChange={(event) => update("amount", event.target.value)}
                 placeholder="10 000"
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-slate-100 placeholder:text-slate-400"
+                className="lw-input mt-1"
               />
-              <span className="mt-1 block text-sm text-slate-400">
+              <span className="mt-1 block text-lw-sm text-lw-muted">
                 Число для итогов. В документ уходит формулировка выше.
               </span>
             </label>
@@ -127,25 +127,25 @@ export default function AgreementForm({
         </div>
       ))}
 
-      <p className="text-sm text-slate-400">
+      <p className="text-lw-sm text-lw-muted">
         Предложение будет действовать 7 дней. Договор появится черновиком — клиент
         увидит его только после отправки.
       </p>
 
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="text-lw-sm text-lw-danger">{error}</p> : null}
 
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={busy}
-          className="flex-1 rounded-xl bg-amber-500 px-4 py-3 text-base font-medium text-slate-950 disabled:opacity-60"
+          className="lw-btn flex-1"
         >
           {busy ? "Составляю…" : "Составить"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-xl bg-slate-800 px-4 py-3 text-base text-slate-200 hover:bg-slate-700"
+          className="lw-btn-quiet"
         >
           Свернуть
         </button>

@@ -31,12 +31,12 @@ export default function AmountBox({
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-sm">
-        <span className="w-32 shrink-0 text-slate-400">Сумма к учёту</span>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-lw-sm">
+        <span className="w-32 shrink-0 text-lw-muted">Сумма к учёту</span>
         {amountMinor === null ? (
-          <span className="text-amber-200">не указана — в итоги не попадает</span>
+          <span className="text-lw-warning">не указана — в итоги не попадает</span>
         ) : (
-          <span className="font-medium text-slate-100">{formatRub(amountMinor)}</span>
+          <span className="font-medium text-lw-ink">{formatRub(amountMinor)}</span>
         )}
         <button
           type="button"
@@ -44,7 +44,7 @@ export default function AmountBox({
             setValue(amountMinor === null ? "" : String(amountMinor / 100));
             setEditing(true);
           }}
-          className="text-slate-400 underline underline-offset-2 hover:text-slate-200"
+          className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
         >
           {amountMinor === null ? "указать" : "изменить"}
         </button>
@@ -72,30 +72,30 @@ export default function AmountBox({
         }
       }}
     >
-      <span className="w-32 shrink-0 text-sm text-slate-400">Сумма к учёту</span>
+      <span className="w-32 shrink-0 text-lw-sm text-lw-muted">Сумма к учёту</span>
       <input
         inputMode="decimal"
         autoFocus
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="10 000"
-        className="w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400"
+        className="lw-input !w-36 !py-2"
       />
       <button
         type="submit"
         disabled={busy}
-        className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-slate-950 disabled:opacity-60"
+        className="lw-btn !px-4 !py-2 !text-[15px]"
       >
         {busy ? "Сохраняю…" : "Сохранить"}
       </button>
       <button
         type="button"
         onClick={() => setEditing(false)}
-        className="text-sm text-slate-400 hover:text-slate-200"
+        className="text-lw-sm text-lw-muted hover:text-lw-primary"
       >
         Отмена
       </button>
-      {error ? <p className="w-full text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="w-full text-lw-sm text-lw-danger">{error}</p> : null}
     </form>
   );
 }

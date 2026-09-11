@@ -88,34 +88,33 @@ export default function ClientCardView({
       <button
         type="button"
         onClick={onBack}
-        className="text-base text-slate-400 transition-colors hover:text-slate-200 lg:hidden"
+        className="text-lw-base text-lw-muted transition-colors hover:text-lw-primary lg:hidden"
       >
         ← К списку
       </button>
 
       <Card>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-white">{card.name}</h1>
-            <p className="mt-0.5 text-base text-slate-400">
-              {card.contact || "контакт не указан"}
-              {card.company ? ` · ${card.company}` : ""}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
-            {conflictAlert ? (
-              <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
-            ) : null}
-          </div>
+        {/* Имя крупное — пилюли под ним, а не рядом: на телефоне им тесно. */}
+        <h1 className="text-lw-2xl font-extrabold tracking-tight text-lw-ink">{card.name}</h1>
+        <p className="mt-0.5 text-lw-base text-lw-muted">
+          {card.contact || "контакт не указан"}
+          {card.company ? ` · ${card.company}` : ""}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
+          {conflictAlert ? (
+            <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
+          ) : null}
         </div>
 
         <Progress stage={card.stage} />
 
-        <div className="mt-4 rounded-xl bg-slate-950/60 p-3">
+        {/* Самый юридически значимый статус на карточке — акцентным блоком,
+            а не «проваленным» полем: от него зависит, можно ли принимать документы. */}
+        <div className={`mt-4 rounded-2xl p-4 ${card.nda ? "bg-lw-success-soft" : "bg-lw-warning-soft"}`}>
           {card.nda ? (
             <>
-              <p className="text-sm font-medium text-emerald-300">
+              <p className="text-lw-base font-semibold text-lw-success">
                 Соглашение о конфиденциальности подписано {shortDate(card.nda.signed_at)}
               </p>
               <Row label="Подписант" value={card.nda.signer_full_name} />
@@ -128,20 +127,20 @@ export default function ClientCardView({
               />
             </>
           ) : (
-            <p className="text-sm text-amber-300">
+            <p className="text-lw-base font-semibold text-lw-warning">
               NDA не подписан — документы принимаются с пометкой
             </p>
           )}
         </div>
       </Card>
 
-      {loading ? <p className="text-base text-slate-400">Обновляю…</p> : null}
+      {loading ? <p className="text-lw-base text-lw-muted">Обновляю…</p> : null}
 
       <section>
         <SectionTitle count={card.agreements.length}>Договоры</SectionTitle>
         {card.agreements.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate-400">Договоров пока нет.</p>
+            <p className="text-lw-sm text-lw-muted">Договоров пока нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -154,8 +153,8 @@ export default function ClientCardView({
               />
             ))}
             {history.length > 0 ? (
-              <details className="rounded-2xl border border-slate-800/60 bg-slate-900/30 p-3">
-                <summary className="cursor-pointer text-sm text-slate-400">
+              <details className="lw-card p-3">
+                <summary className="cursor-pointer text-lw-sm text-lw-muted">
                   Прежние редакции ({history.length})
                 </summary>
                 <div className="mt-2 space-y-2">
@@ -178,7 +177,7 @@ export default function ClientCardView({
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>
         {card.intakes.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate-400">Обращений нет.</p>
+            <p className="text-lw-sm text-lw-muted">Обращений нет.</p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -219,21 +218,17 @@ function Agreement({
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-medium text-white">{item.subject}</p>
-          <p className="mt-0.5 text-sm text-slate-400">
-            № {item.number}
-            {item.revision > 1 ? ` · редакция ${item.revision}` : ""}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Pill tone={statusTone(item.status)}>{label(AGREEMENT_STATUS, item.status)}</Pill>
-          {unanswered ? <Pill tone="alert">Ждёт ответа</Pill> : null}
-        </div>
+      <p className="text-lw-lg font-bold text-lw-ink">{item.subject}</p>
+      <p className="mt-0.5 text-lw-sm text-lw-muted">
+        № {item.number}
+        {item.revision > 1 ? ` · редакция ${item.revision}` : ""}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Pill tone={statusTone(item.status)}>{label(AGREEMENT_STATUS, item.status)}</Pill>
+        {unanswered ? <Pill tone="alert">Ждёт ответа</Pill> : null}
       </div>
 
-      <div className="mt-3 border-t border-slate-800/60 pt-2">
+      <div className="mt-3 border-t border-lw-border pt-2">
         <Row label="Стоимость" value={item.price_text} />
         {item.status === "superseded" ? null : (
           <AmountBox
@@ -253,15 +248,15 @@ function Agreement({
         <Row label="Основание" value={item.authority_basis} />
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-slate-800/60 pt-2 text-sm text-slate-400">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-lw-border pt-2 text-lw-sm text-lw-muted">
         <span>составлен {shortDate(item.created_at)}</span>
         {item.sent_at ? <span>отправлен {shortDate(item.sent_at)}</span> : null}
         {item.viewed_at ? <span>просмотрен {shortDate(item.viewed_at)}</span> : null}
         {item.signed_at ? (
-          <span className="text-emerald-400">подписан {shortDate(item.signed_at)}</span>
+          <span className="text-lw-success">подписан {shortDate(item.signed_at)}</span>
         ) : null}
         {item.declined_at ? (
-          <span className="text-rose-400">
+          <span className="text-lw-danger">
             отклонён {shortDate(item.declined_at)}
             {item.decline_reason ? ` — «${item.decline_reason}»` : ""}
           </span>
@@ -282,7 +277,7 @@ function Agreement({
       ) : null}
 
       {item.status === "draft" ? (
-        <div className="mt-3 border-t border-slate-800/60 pt-3">
+        <div className="mt-3 border-t border-lw-border pt-3">
           <ActionButton
             label="Отправить клиенту"
             done="Отправлено. Клиент получил проект договора."
@@ -295,8 +290,8 @@ function Agreement({
       ) : null}
 
       {item.messages.length > 0 ? (
-        <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">Переписка</p>
+        <div className="mt-3 border-t border-lw-border pt-3">
+          <p className="mb-2 text-lw-sm uppercase tracking-wide text-lw-muted">Переписка</p>
           {/* Раздел живёт внутри Telegram, где «своё справа, чужое слева» —
               рефлекс. Раньше оба голоса шли одинаковыми блоками во всю ширину,
               и при беглом скролле приходилось читать подпись, чтобы понять,
@@ -307,11 +302,11 @@ function Agreement({
               return (
                 <div key={index} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[85%] rounded-xl p-3 text-base leading-relaxed ${
-                      mine ? "bg-amber-500/10 text-amber-100" : "bg-slate-800/70 text-slate-200"
+                    className={`max-w-[85%] rounded-xl p-3 text-lw-base leading-relaxed ${
+                      mine ? "bg-lw-primary-soft text-lw-ink" : "bg-lw-cell text-lw-ink"
                     }`}
                   >
-                    <p className="mb-1 text-sm text-slate-400">
+                    <p className="mb-1 text-lw-sm text-lw-muted">
                       {mine ? "Вы" : "Клиент"} · {shortDate(message.created_at)}
                     </p>
                     {message.text}
@@ -373,17 +368,13 @@ function Intake({
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-base font-medium text-white">{label(AREA, item.legal_area)}</p>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
-          <Pill tone={conflictTone(item.conflict_status)}>
-            {label(CONFLICT, item.conflict_status)}
-          </Pill>
-        </div>
+      <p className="text-lw-lg font-bold text-lw-ink">{label(AREA, item.legal_area)}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
+        <Pill tone={conflictTone(item.conflict_status)}>{label(CONFLICT, item.conflict_status)}</Pill>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-400">
+      <div className="mt-1 flex flex-wrap gap-x-3 text-lw-sm text-lw-muted">
         <span>{shortDate(item.created_at)}</span>
         <span>{label(URGENCY, item.urgency)}</span>
         {item.deadline_at ? <span>срок до {shortDay(item.deadline_at)}</span> : null}
@@ -391,14 +382,14 @@ function Intake({
       </div>
 
       {item.outreach_blocked_reason ? (
-        <p className="mt-2 text-sm text-amber-300">
+        <p className="mt-2 text-lw-sm text-lw-warning">
           Связаться не удалось: {label(OUTREACH_REASON, item.outreach_blocked_reason)}
         </p>
       ) : null}
 
       {conflictBlocks ? (
-        <div className={`mt-3 rounded-xl p-3 ${severe ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
-          <p className={`text-sm ${severe ? "text-rose-200" : "text-amber-200"}`}>
+        <div className={`mt-3 rounded-xl p-3 ${severe ? "bg-lw-danger-soft" : "bg-lw-warning-soft"}`}>
+          <p className={`text-lw-sm ${severe ? "text-lw-danger" : "text-lw-warning"}`}>
             {CONFLICT_EXPLAINED[item.conflict_status] || label(CONFLICT, item.conflict_status)}
           </p>
           {severe ? null : (
@@ -425,20 +416,20 @@ function Intake({
         </div>
       ) : null}
 
-      <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-slate-300">
+      <p className="mt-3 whitespace-pre-wrap text-lw-base leading-relaxed text-lw-ink">
         {item.description}
       </p>
 
       {item.clarifications.length > 0 ? (
-        <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">
+        <div className="mt-3 border-t border-lw-border pt-3">
+          <p className="mb-2 text-lw-sm uppercase tracking-wide text-lw-muted">
             Что уточнили · {item.clarifications.length}
           </p>
           <dl className="space-y-2">
             {item.clarifications.map((row, index) => (
               <div key={index}>
-                <dt className="text-sm text-slate-400">{row.question}</dt>
-                <dd className="text-base leading-relaxed text-slate-200">{row.answer}</dd>
+                <dt className="text-lw-sm text-lw-muted">{row.question}</dt>
+                <dd className="text-lw-base leading-relaxed text-lw-ink">{row.answer}</dd>
               </div>
             ))}
           </dl>
@@ -446,8 +437,8 @@ function Intake({
       ) : null}
 
       {item.documents.length > 0 ? (
-        <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">
+        <div className="mt-3 border-t border-lw-border pt-3">
+          <p className="mb-2 text-lw-sm uppercase tracking-wide text-lw-muted">
             Документы · {item.documents.length}
           </p>
           <ul className="space-y-1.5">
@@ -459,7 +450,7 @@ function Intake({
       ) : null}
 
       {signed ? null : blocker ? (
-        <p className="mt-3 rounded-xl bg-slate-800/60 p-3 text-sm text-slate-300">{blocker}</p>
+        <p className="mt-3 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-ink">{blocker}</p>
       ) : conflictBlocks ? null : (
         <AgreementForm
           intakeId={item.intake_id}

@@ -47,11 +47,11 @@ export default function ClientsView({
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Имя, контакт или компания"
-          className="w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-base text-white outline-none transition-colors placeholder:text-slate-400 focus:border-slate-600"
+          className="lw-input"
         />
         <button
           type="submit"
-          className="shrink-0 rounded-xl bg-slate-800 px-4 text-base text-slate-200 transition-colors hover:bg-slate-700"
+          className="lw-btn shrink-0"
         >
           Найти
         </button>
@@ -59,7 +59,7 @@ export default function ClientsView({
 
       {rows === null ? null : rows.length === 0 ? (
         <Card>
-          <p className="text-base text-slate-400">Никого не нашлось.</p>
+          <p className="text-lw-base text-lw-muted">Никого не нашлось.</p>
         </Card>
       ) : (
         <ul className="space-y-2">
@@ -69,21 +69,19 @@ export default function ClientsView({
                 type="button"
                 onClick={() => onOpen(row.lead_id)}
                 aria-current={row.lead_id === selectedId ? "true" : undefined}
-                className={`w-full rounded-2xl border p-4 text-left transition-colors ${
-                  row.lead_id === selectedId
-                    ? "border-amber-500/60 bg-slate-900"
-                    : "border-slate-800/80 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900"
+                className={`lw-card w-full p-4 text-left transition-shadow hover:shadow-lw-card-hover ${
+                  row.lead_id === selectedId ? "!border-lw-primary !bg-lw-blue-soft" : ""
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-medium text-white">{row.name}</p>
-                    <p className="mt-0.5 truncate text-sm text-slate-400">
+                    <p className="truncate text-lw-lg font-medium text-lw-ink">{row.name}</p>
+                    <p className="mt-0.5 truncate text-lw-sm text-lw-muted">
                       {row.contact || "контакт не указан"}
                       {row.company ? ` · ${row.company}` : ""}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm text-slate-400">
+                  <span className="shrink-0 text-lw-sm text-lw-muted">
                     {shortDate(row.last_intake_at)}
                   </span>
                 </div>

@@ -26,7 +26,7 @@ export default function ActionButton({
   const [error, setError] = useState<string | null>(null);
 
   if (state === "ok") {
-    return <p className="text-sm text-emerald-300">{done}</p>;
+    return <p className="text-lw-sm text-lw-success">{done}</p>;
   }
 
   return (
@@ -45,15 +45,11 @@ export default function ActionButton({
             setState("idle");
           }
         }}
-        className={`w-full rounded-xl px-4 py-3 text-base font-medium transition-colors disabled:opacity-60 ${
-          tone === "primary"
-            ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
-            : "bg-slate-800 text-slate-200 hover:bg-slate-700"
-        }`}
+        className={`w-full ${tone === "primary" ? "lw-btn" : "lw-btn-quiet"}`}
       >
         {state === "busy" ? busy : label}
       </button>
-      {error ? <p className="mt-1 text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-1 text-lw-sm text-lw-danger">{error}</p> : null}
     </div>
   );
 }

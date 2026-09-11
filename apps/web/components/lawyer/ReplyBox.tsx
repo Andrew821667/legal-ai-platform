@@ -27,7 +27,7 @@ export default function ReplyBox({
   const [error, setError] = useState<string | null>(null);
 
   if (state === "sent") {
-    return <p className="mt-2 text-sm text-emerald-300">Ответ отправлен клиенту.</p>;
+    return <p className="mt-2 text-lw-sm text-lw-success">Ответ отправлен клиенту.</p>;
   }
 
   return (
@@ -60,16 +60,16 @@ export default function ReplyBox({
         }}
         rows={3}
         placeholder="Ответ клиенту"
-        className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-base text-white placeholder:text-slate-400"
+        className="lw-input"
       />
       <button
         type="submit"
         disabled={state === "busy" || !text.trim()}
-        className="w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-medium text-slate-950 disabled:opacity-50"
+        className="lw-btn w-full"
       >
         {state === "busy" ? "Отправляю…" : "Ответить"}
       </button>
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="text-lw-sm text-lw-danger">{error}</p> : null}
     </form>
   );
 }

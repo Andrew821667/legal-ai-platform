@@ -6,6 +6,7 @@ import ClientCardView from "./ClientCardView";
 import FinanceView from "./FinanceView";
 import TodayView from "./TodayView";
 import ClientsView from "./ClientsView";
+import { formatRub } from "@/lib/money";
 import { lawyerFetch, telegramBackButton, useTelegramInitData } from "./useTelegram";
 import type { ClientCard, ClientRow, Finance, Today } from "./types";
 import { buildWorkspaceSearch, parseWorkspaceRoute } from "@/lib/lawyer-route";
@@ -21,6 +22,10 @@ import type { Tab, WorkspaceRoute } from "@/lib/lawyer-route";
  * history.back() закрыл бы мини-апп целиком, поэтому такая запись помечена
  * как не наша, и «назад» просто подменяет адрес на список.
  */
+function todayLabel(): string {
+  return new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+}
+
 function syncAddress(route: WorkspaceRoute, mode: "push" | "replace") {
   const url = `${window.location.pathname}${buildWorkspaceSearch(route)}`;
   const state = { pushed: mode === "push" };
@@ -102,7 +107,8 @@ export default function LawyerWorkspace() {
   useEffect(() => {
     void loadClients();
     void loadToday();
-  }, [loadClients, loadToday]);
+    void loadFinance();
+  }, [loadClients, loadToday, loadFinance]);
 
   // При каждом переходе на «Задачи» — свежие данные, а не то, что было при
   // первом заходе в раздел.
@@ -205,12 +211,34 @@ export default function LawyerWorkspace() {
 
   const list = (
     <div>
-      <header className="mb-4">
-        <p className="text-sm uppercase tracking-widest text-slate-400">AI Verdict</p>
-        <h1 className="text-2xl font-semibold text-white">Рабочее место</h1>
+      {/* Шапка как в «Судебных делах»: день, крупный заголовок и четыре
+          числа, ради которых экран и открывают между встречами. */}
+      <header className="lw-hero mb-4 p-5">
+        <p className="lw-eyebrow">{todayLabel()}</p>
+        <h1 className="mt-1 text-lw-3xl font-extrabold tracking-tight text-lw-ink">Рабочее место</h1>
+        <p className="mt-2 text-lw-base text-lw-muted">
+          {pendingCount
+            ? `Ждут вашего ответа: ${pendingCount}. Ниже — клиенты, задачи и деньги практики.`
+            : "Ничего не ждёт вашего ответа. Ниже — клиенты, задачи и деньги практики."}
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
+          {(
+            [
+              [clients?.length ?? "—", "клиентов"],
+              [pendingCount ?? 0, "ждут ответа"],
+              [finance?.in_pipeline.count ?? "—", "договоров у клиентов"],
+              [finance ? formatRub(finance.signed_this_month.minor) : "—", "подписано в этом месяце"],
+            ] as [React.ReactNode, string][]
+          ).map(([value, caption]) => (
+            <div key={caption} className="rounded-2xl border border-lw-border bg-white/80 px-4 py-3">
+              <p className="text-lw-xl font-extrabold tabular-nums text-lw-ink">{value}</p>
+              <p className="mt-0.5 text-lw-sm text-lw-muted">{caption}</p>
+            </div>
+          ))}
+        </div>
       </header>
 
-      <nav className="mb-4 flex gap-1 rounded-xl bg-slate-900/70 p-1" role="tablist">
+      <nav className="mb-4 flex gap-2" role="tablist">
         {(
           [
             ["clients", "Клиенты", clients?.length],
@@ -224,15 +252,21 @@ export default function LawyerWorkspace() {
             role="tab"
             aria-selected={tab === key}
             onClick={() => selectTab(key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium transition-colors ${
-              tab === key ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"
+            className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-lw-base font-semibold transition-colors ${
+              tab === key
+                ? "bg-lw-primary text-white shadow-lw-card"
+                : "lw-card text-lw-ink hover:bg-lw-blue-soft"
             }`}
           >
             {title}
             {count ? (
               <span
-                className={`rounded-full px-1.5 text-sm ${
-                  key === "today" ? "bg-amber-500 text-slate-950" : "bg-slate-700 text-slate-300"
+                className={`rounded-full px-2 text-lw-sm font-bold ${
+                  tab === key
+                    ? "bg-white/20 text-white"
+                    : key === "today"
+                      ? "bg-lw-danger-soft text-lw-danger"
+                      : "bg-lw-primary-soft text-lw-primary"
                 }`}
               >
                 {count}
@@ -243,7 +277,7 @@ export default function LawyerWorkspace() {
       </nav>
 
       {error ? (
-        <div className="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-base text-rose-200">
+        <div className="rounded-lg border border-lw-danger/30 bg-lw-danger-soft p-3 text-lw-base text-lw-danger">
           {error}
           <button
             type="button"
@@ -257,7 +291,7 @@ export default function LawyerWorkspace() {
         </div>
       ) : null}
 
-      {loading && !error && !card ? <p className="text-base text-slate-400">Загружаю…</p> : null}
+      {loading && !error && !card ? <p className="text-lw-base text-lw-muted">Загружаю…</p> : null}
 
       {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
       {!error && tab === "finance" && finance ? (
@@ -294,9 +328,9 @@ export default function LawyerWorkspace() {
             initData={initData}
           />
         ) : (
-          <div className="mt-16 rounded-2xl border border-dashed border-slate-800 p-10 text-center">
-            <p className="text-lg font-medium text-slate-300">Карточка клиента откроется здесь</p>
-            <p className="mt-1 text-base text-slate-400">Выберите клиента, задачу или договор слева.</p>
+          <div className="mt-16 rounded-3xl border border-dashed border-lw-border-strong p-10 text-center">
+            <p className="text-lw-lg font-semibold text-lw-ink">Карточка клиента откроется здесь</p>
+            <p className="mt-1 text-lw-base text-lw-muted">Выберите клиента, задачу или договор слева.</p>
           </div>
         )}
       </div>

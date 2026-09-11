@@ -36,26 +36,26 @@ export default function DocumentRow({
   const url = `/api/lawyer/documents/${doc.document_id}`;
 
   return (
-    <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+    <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-lw-sm">
       {inTelegram ? (
-        <span className="min-w-0 truncate text-slate-200">{doc.file_name || "без имени"}</span>
+        <span className="min-w-0 truncate text-lw-ink">{doc.file_name || "без имени"}</span>
       ) : (
         <a
           href={url}
           target="_blank"
           rel="noopener"
-          className="min-w-0 truncate text-slate-100 underline underline-offset-2 hover:text-white"
+          className="min-w-0 truncate text-lw-ink underline underline-offset-2 hover:text-lw-primary"
         >
           {doc.file_name || "без имени"}
         </a>
       )}
-      <span className="flex shrink-0 items-baseline gap-2 text-slate-400">
+      <span className="flex shrink-0 items-baseline gap-2 text-lw-muted">
         {fileSize(doc.file_size) ? <span>{fileSize(doc.file_size)}</span> : null}
         <span>{shortDate(doc.created_at)}</span>
-        {doc.nda_signed_at_upload ? null : <span className="text-amber-200">без NDA</span>}
+        {doc.nda_signed_at_upload ? null : <span className="text-lw-warning">без NDA</span>}
         {inTelegram ? (
           state === "sent" ? (
-            <span className="text-emerald-300">в чате</span>
+            <span className="text-lw-success">в чате</span>
           ) : (
             <button
               type="button"
@@ -71,14 +71,14 @@ export default function DocumentRow({
                   setState("idle");
                 }
               }}
-              className="text-slate-300 underline underline-offset-2 hover:text-white disabled:opacity-60"
+              className="text-lw-ink underline underline-offset-2 hover:text-lw-primary disabled:opacity-60"
             >
               {state === "busy" ? "пересылаю…" : "в чат"}
             </button>
           )
         ) : null}
       </span>
-      {error ? <span className="w-full text-rose-300">{error}</span> : null}
+      {error ? <span className="w-full text-lw-danger">{error}</span> : null}
     </li>
   );
 }

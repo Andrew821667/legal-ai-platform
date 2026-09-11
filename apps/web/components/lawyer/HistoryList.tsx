@@ -74,7 +74,7 @@ export default function HistoryList({ leadId, initData }: { leadId: string; init
 
   return (
     <details
-      className="rounded-2xl border border-slate-800/60 bg-slate-900/30 p-3"
+      className="lw-card p-4"
       onToggle={(event) => {
         if (!event.currentTarget.open || history || busy) return;
         setBusy(true);
@@ -85,28 +85,28 @@ export default function HistoryList({ leadId, initData }: { leadId: string; init
           .finally(() => setBusy(false));
       }}
     >
-      <summary className="cursor-pointer text-base font-semibold uppercase tracking-wide text-slate-300">
+      <summary className="lw-eyebrow cursor-pointer">
         История
       </summary>
-      {busy ? <p className="mt-2 text-sm text-slate-400">Загружаю…</p> : null}
-      {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
+      {busy ? <p className="mt-2 text-lw-sm text-lw-muted">Загружаю…</p> : null}
+      {error ? <p className="mt-2 text-lw-sm text-lw-danger">{error}</p> : null}
       {history && history.items.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-400">Записей пока нет.</p>
+        <p className="mt-2 text-lw-sm text-lw-muted">Записей пока нет.</p>
       ) : null}
       {history && history.items.length > 0 ? (
         <ol className="mt-3 space-y-2">
           {history.items.map((item, index) => {
             const extra = explain(item);
             return (
-              <li key={index} className="flex gap-3 text-sm">
-                <span className="w-24 shrink-0 tabular-nums text-slate-400">{when(item.at)}</span>
-                <span className="min-w-0 text-slate-200">
+              <li key={index} className="flex gap-3 text-lw-sm">
+                <span className="w-24 shrink-0 tabular-nums text-lw-muted">{when(item.at)}</span>
+                <span className="min-w-0 text-lw-ink">
                   {label(HISTORY, item.action)}
                   {item.agreement_number ? (
-                    <span className="text-slate-400"> · № {item.agreement_number}</span>
+                    <span className="text-lw-muted"> · № {item.agreement_number}</span>
                   ) : null}
                   {extra.length ? (
-                    <span className="block text-slate-400">{extra.join(" · ")}</span>
+                    <span className="block text-lw-muted">{extra.join(" · ")}</span>
                   ) : null}
                 </span>
               </li>
