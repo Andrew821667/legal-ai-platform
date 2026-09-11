@@ -4,6 +4,7 @@ import ActionButton from "./ActionButton";
 import AgreementForm from "./AgreementForm";
 import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
+import DocumentRow from "./DocumentRow";
 import DocumentText from "./DocumentText";
 import HistoryList from "./HistoryList";
 import NoteBox from "./NoteBox";
@@ -449,17 +450,9 @@ function Intake({
           <p className="mb-2 text-sm uppercase tracking-wide text-slate-400">
             Документы · {item.documents.length}
           </p>
-          <ul className="space-y-1">
-            {item.documents.map((doc, index) => (
-              <li key={index} className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate text-slate-200">
-                  {doc.file_name || "без имени"}
-                </span>
-                <span className="shrink-0 text-sm text-slate-400">
-                  {shortDate(doc.created_at)}
-                  {doc.nda_signed_at_upload ? "" : " · без NDA"}
-                </span>
-              </li>
+          <ul className="space-y-1.5">
+            {item.documents.map((doc) => (
+              <DocumentRow key={doc.document_id} doc={doc} initData={initData} />
             ))}
           </ul>
         </div>

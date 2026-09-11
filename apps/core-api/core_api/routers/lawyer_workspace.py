@@ -502,6 +502,7 @@ def client_card(
         ).scalars().all():
             documents.setdefault(row.intake_id, []).append(
                 {
+                    "document_id": str(row.id),
                     "telegram_file_id": row.telegram_file_id,
                     "file_name": row.file_name,
                     "file_size": row.file_size,
@@ -866,4 +867,34 @@ def client_history(
             }
             for row in rows
         ],
+    }
+
+
+@router.get("/documents/{document_id}")
+def document_meta(
+    document_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Где лежит присланный клиентом файл.
+
+    Сам файл живёт в Telegram: здесь хранится только его идентификатор, а
+    достать байты может лишь бот своим токеном. Веб-слой берёт отсюда
+    идентификатор по номеру документа, а не принимает его от браузера: так
+    файл можно получить только для документа, который есть в базе.
+    """
+    _ = identity
+    row = db.get(IntakeDocument, document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    intake = db.get(LegalIntake, row.intake_id)
+    return {
+        "document_id": str(row.id),
+        "intake_id": str(row.intake_id),
+        "lead_id": str(intake.lead_id) if intake else None,
+        "telegram_file_id": row.telegram_file_id,
+        "file_name": row.file_name,
+        "file_size": row.file_size,
+        "mime_type": row.mime_type,
+        "created_at": _iso(row.created_at),
     }
