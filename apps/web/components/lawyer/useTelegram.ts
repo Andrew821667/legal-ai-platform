@@ -57,6 +57,15 @@ export function useTelegramInitData(): { initData: string; ready: boolean } {
   return { initData, ready };
 }
 
+/** Ошибка запроса с кодом: 401 значит «нет входа», и экран должен это отличать. */
+export class LawyerFetchError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export async function lawyerFetch<T>(path: string, initData: string): Promise<T> {
   const response = await fetch(path, {
     headers: { "x-telegram-init-data": initData },
@@ -64,7 +73,7 @@ export async function lawyerFetch<T>(path: string, initData: string): Promise<T>
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body?.detail || `Ошибка ${response.status}`);
+    throw new LawyerFetchError(body?.detail || `Ошибка ${response.status}`, response.status);
   }
   return body as T;
 }

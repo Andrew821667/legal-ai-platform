@@ -5,16 +5,14 @@ from urllib.parse import quote
 
 from telegram import InlineKeyboardMarkup, WebAppInfo
 
+import lawyer_session_link
 from config import get_config
 from telegram_ui import inline_button as InlineKeyboardButton
 from telegram_ui import reply_button as KeyboardButton
 
-# Меню кнопок.
-#
-# Текстовая кнопка оставлена запасным вариантом: build_client_reply_menu ниже
-# заменяет её на web_app-кнопку мини-аппа, если адрес настроен (а он настроен
-# по умолчанию). Пустой CLIENT_MINIAPP_URL — единственный случай, когда эти
-# списки используются как есть.
+# Меню кнопок — старые списки, оставлены ради импорта из handlers.
+# Действующие клавиатуры собирают build_client_reply_menu и
+# build_admin_reply_menu ниже.
 MAIN_MENU = [
     [KeyboardButton("🧭 Рабочий стол")],
 ]
@@ -223,22 +221,21 @@ def workspace_row(lead_id: str | None):
     return [[button]] if button else []
 
 
+CLIENT_MINIAPP_BUTTON_TEXT = "📱 Мини-апп"
+
+
 def client_miniapp_button():
-    """Кнопка мини-аппа для постоянной клавиатуры.
+    """Кнопка мини-аппа для постоянной клавиатуры — текстовая, нарочно.
 
-    Раньше "🧭 Рабочий стол" была обычной текстовой кнопкой: нажатие слало
-    сообщение, а роутер по тексту открывал inline-меню. Мини-апп открывается
-    сразу, без прохождения через отправку и разбор текста, — тот же выигрыш,
-    что дала web_app-кнопка рабочего места юриста.
-
-    Запасной вариант — старая текстовая кнопка: этот ряд клавиатуры не может
-    остаться пустым, в отличие от необязательных кнопок вроде рабочего места
-    юриста или перехода в бота дел.
+    Была web_app-кнопкой, чтобы открывать мини-апп в одно касание. Но Mini
+    App, запущенный кнопкой reply-клавиатуры, получает пустой initData — так
+    устроен Telegram, это в документации WebAppInitData, — и клиент внутри
+    оказывался никем: профиль, заявка, любой личный запрос отвечали 401.
+    Текстовая кнопка шлёт сообщение, бот отвечает inline-кнопкой, и уже она
+    открывает мини-апп с полноценным входом. На одно касание длиннее — зато
+    работает.
     """
-    url = getattr(get_config(), "CLIENT_MINIAPP_URL", "")
-    if not url:
-        return KeyboardButton("🧭 Рабочий стол")
-    return KeyboardButton("📱 Мини-апп", web_app=WebAppInfo(url=url))
+    return KeyboardButton(CLIENT_MINIAPP_BUTTON_TEXT)
 
 
 def build_client_reply_menu():
@@ -246,20 +243,54 @@ def build_client_reply_menu():
     return [[client_miniapp_button()]]
 
 
+def client_miniapp_inline_row():
+    """Inline-кнопка клиентского мини-аппа — ответ на текстовую кнопку.
+
+    Из inline-кнопки Mini App получает подписанный initData с пользователем,
+    в отличие от кнопки reply-клавиатуры. Пустой ряд, если адрес не задан:
+    кнопка, ведущая в никуда, хуже её отсутствия.
+    """
+    url = getattr(get_config(), "CLIENT_MINIAPP_URL", "")
+    if not url:
+        return []
+    return [[InlineKeyboardButton("📱 Открыть мини-апп", web_app=WebAppInfo(url=url))]]
+
+
+def lawyer_workspace_keyboard_url() -> str:
+    """Адрес для кнопки reply-клавиатуры — с токеном входа.
+
+    Mini App, запущенный кнопкой reply-клавиатуры, получает пустой initData
+    (документация WebAppInitData: «It is empty if the Mini App was launched
+    from a keyboard button»). Из inline-кнопки — с подписью, и там вход
+    работал; из нижней — рабочее место не знало, кто пришёл. Поэтому нижняя
+    кнопка ведёт на /lawyer/login с тем же подписанным токеном, что и
+    «Ссылка для Safari»: вход по куке, initData не нужен. Токен выпускается
+    заново при каждой отправке клавиатуры — на /start и /admin.
+
+    Без секрета — голый адрес: рабочее место тогда объяснит, что делать.
+    """
+    config = get_config()
+    url = getattr(config, "LAWYER_WORKSPACE_URL", "")
+    login = lawyer_session_link.build_login_url(
+        getattr(config, "ADMIN_TELEGRAM_ID", 0) or 0,
+        workspace_url=url,
+        secret=getattr(config, "LAWYER_SESSION_SECRET", ""),
+    )
+    return login or url
+
+
 def build_admin_reply_menu():
     """Постоянная клавиатура владельца — то, что видно под полем ввода всегда.
 
-    Одна кнопка, и только она: там, где у клиента стоит «Рабочий стол», у
+    Одна кнопка, и только она: там, где у клиента стоит «Мини-апп», у
     владельца — рабочее пространство. Одиночную кнопку Telegram растягивает
-    на всю ширину, а клавиатура в один ряд ничего не закрывает — второй ряд с
-    клиентским мини-аппом закрывал, а владельцу он не нужен.
+    на всю ширину, а клавиатура в один ряд ничего не закрывает.
 
     Без адреса — клиентская клавиатура: ряд не может остаться пустым.
     """
-    url = getattr(get_config(), "LAWYER_WORKSPACE_URL", "")
-    if not url:
+    if not getattr(get_config(), "LAWYER_WORKSPACE_URL", ""):
         return build_client_reply_menu()
-    return [[KeyboardButton("🗂 Рабочее пространство", web_app=WebAppInfo(url=url))]]
+    return [[KeyboardButton("🗂 Рабочее пространство", web_app=WebAppInfo(url=lawyer_workspace_keyboard_url()))]]
 
 
 def case_management_button():

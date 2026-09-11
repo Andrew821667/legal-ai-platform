@@ -20,11 +20,18 @@ export async function GET(request: NextRequest) {
     allowedIds: allowedLawyerIds(),
   });
 
-  if (!result.ok) {
-    return NextResponse.json({ detail: result.detail }, { status: result.status });
-  }
-
   const origin = publicOrigin(request.headers, request.nextUrl.host);
+
+  if (!result.ok) {
+    if (result.status === 500) {
+      return NextResponse.json({ detail: result.detail }, { status: result.status });
+    }
+    // Сюда приходят и из нижней кнопки Telegram: голый JSON в WebView
+    // нечитаем. Рабочее место покажет, что делать, — обычно отправить /admin,
+    // чтобы кнопка обновила токен.
+    const reason = result.status === 403 ? "denied" : "stale";
+    return NextResponse.redirect(new URL(`/lawyer?login=${reason}`, origin));
+  }
   const response = NextResponse.redirect(new URL("/lawyer", origin));
   response.cookies.set(LAWYER_SESSION_COOKIE, token, {
     httpOnly: true,
