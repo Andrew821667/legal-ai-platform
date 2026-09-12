@@ -99,9 +99,10 @@ export async function lawyerAction<T>(
   path: string,
   initData: string,
   payload?: unknown,
+  method: "POST" | "DELETE" = "POST",
 ): Promise<T> {
   const response = await fetch(path, {
-    method: "POST",
+    method,
     headers: {
       "x-telegram-init-data": initData,
       ...(payload === undefined ? {} : { "content-type": "application/json" }),

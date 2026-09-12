@@ -374,6 +374,7 @@ export default function LawyerWorkspace() {
             card={card}
             onBack={closeCard}
             onChanged={() => void refreshAfterAction(card.lead_id)}
+            onOpenClient={showClient}
             loading={loading}
             initData={initData}
             insideTelegram={insideTelegram}
