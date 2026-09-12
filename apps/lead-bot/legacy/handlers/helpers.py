@@ -213,11 +213,18 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
                 )
         core_snapshot = admin_interface.admin_interface.get_lead_snapshot_by_legacy_id(lead_id) or {}
         lead = {**legacy_lead, **core_snapshot}
+        # Telegram-аккаунт — тоже контакт: по @имени или идентификатору с
+        # человеком можно связаться. Раньше здесь ждали только почту или
+        # телефон, и лиды из бота без них — в том числе те, кто нажал «Личное
+        # обращение», — не уведомлялись никогда: фоновая задача находила их
+        # каждую минуту и каждую минуту пропускала.
         has_contact = bool(
             lead.get("email")
             or lead.get("phone")
             or lead_data.get("email")
             or lead_data.get("phone")
+            or bridge_user_data.get("username")
+            or bridge_user_data.get("telegram_id")
         )
         if not has_contact:
             logger.info(
@@ -239,18 +246,22 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         }.get(temperature, '❓')
 
         # Получаем telegram username
-        username = user_data.get('username')
+        username = bridge_user_data.get('username')
         username_str = f"@{username}" if username else "нет"
-        telegram_id = user_data.get('telegram_id') or user_data.get('id')
+        telegram_id = bridge_user_data.get('telegram_id') or user_data.get('telegram_id') or user_data.get('id')
 
         # ЗАГОЛОВОК: НОВЫЙ ИЛИ ОБНОВЛЕНИЕ
         header = f"{temperature_emoji} 🔄 ОБНОВЛЕНИЕ ЛИДА!\n\n" if is_update else f"{temperature_emoji} НОВЫЙ ЛИД!\n\n"
         
+        # Дата обращения — уведомление может прийти с опозданием, и тогда
+        # «новый лид» без даты вводит в заблуждение.
+        created_at = str(legacy_lead.get("created_at") or "")[:16]
         notification_message = (
             header +
             f"👤 Имя: {lead.get('name') or 'Не указано'}\n"
             f"📱 Telegram: {username_str} (ID: {telegram_id})\n"
-            f"🏢 Компания: {lead.get('company') or 'Не указана'}\n"
+            + (f"📅 Обращение: {created_at}\n" if created_at else "")
+            + f"🏢 Компания: {lead.get('company') or 'Не указана'}\n"
             f"📧 Email: {lead.get('email') or 'Не указан'}\n"
             f"📞 Телефон: {lead.get('phone') or 'Не указан'}\n\n"
         )

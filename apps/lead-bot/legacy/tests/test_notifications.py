@@ -90,7 +90,69 @@ async def test_notify_admin_new_lead_skips_same_origin_chat(monkeypatch: pytest.
 
 
 @pytest.mark.anyio
-async def test_notify_admin_new_lead_requires_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_notify_admin_new_lead_treats_telegram_account_as_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Лид из бота без почты и телефона всё равно доставляется: по @имени
+    или идентификатору с человеком можно связаться. Раньше такие лиды — в
+    том числе нажавшие «Личное обращение» — не уведомлялись никогда."""
+    sent: list[tuple[int, str]] = []
+    marked: list[int] = []
+
+    monkeypatch.setattr(
+        helpers.database.db,
+        "get_lead_by_id",
+        lambda lead_id: {
+            "id": lead_id,
+            "temperature": "warm",
+            "pain_point": "Хочу обсудить задачу лично",
+            "created_at": "2026-09-06 11:08:02",
+        },
+    )
+    monkeypatch.setattr(helpers.database.db, "get_user_by_id", lambda user_id: None)
+    monkeypatch.setattr(helpers.database.db, "create_notification", lambda *args, **kwargs: None)
+    monkeypatch.setattr(helpers.database.db, "mark_lead_notification_sent", lambda lead_id: marked.append(lead_id))
+    monkeypatch.setattr(
+        helpers.admin_interface.admin_interface,
+        "get_lead_snapshot_by_legacy_id",
+        lambda lead_id: {},
+    )
+    monkeypatch.setattr(helpers.core_api_bridge, "enabled", False)
+    monkeypatch.setattr(helpers.config, "LEADS_CHAT_ID", 777777)
+    monkeypatch.setattr(helpers.config, "ADMIN_TELEGRAM_ID", 888888)
+    monkeypatch.setattr(helpers.config, "SMTP_USER", "")
+    monkeypatch.setattr(helpers.config, "SMTP_PASSWORD", "")
+
+    class _FakeBot:
+        async def send_message(self, chat_id, text):
+            sent.append((chat_id, text))
+            return SimpleNamespace()
+
+    context = SimpleNamespace(bot=_FakeBot())
+
+    await helpers.notify_admin_new_lead(
+        context=context,
+        lead_id=23,
+        lead_data={"temperature": "warm", "pain_point": "Хочу обсудить задачу лично"},
+        user_data={
+            "id": 228,
+            "telegram_id": 1027422466,
+            "username": "UstimovDmitriy",
+            "first_name": "Dmitry",
+        },
+    )
+
+    # Уходит и в чат лидов, и владельцу.
+    assert sorted(chat_id for chat_id, _ in sent) == [777777, 888888]
+    text = sent[0][1]
+    assert "@UstimovDmitriy" in text
+    assert "1027422466" in text
+    # Дата обращения — уведомление могло задержаться, и «новый лид» без неё вводит в заблуждение.
+    assert "Обращение: 2026-09-06 11:08" in text
+    assert marked == [23]
+
+
+@pytest.mark.anyio
+async def test_notify_admin_new_lead_still_requires_some_contact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Совсем без контакта — ни почты, ни телефона, ни Telegram — уведомлять не о ком."""
     sent_targets: list[int] = []
     marked: list[int] = []
 
@@ -124,12 +186,7 @@ async def test_notify_admin_new_lead_requires_contact(monkeypatch: pytest.Monkey
         context=context,
         lead_id=8,
         lead_data={"temperature": "cold", "pain_point": "Ничего не понял"},
-        user_data={
-            "id": 1,
-            "telegram_id": 321681061,
-            "username": "LegalAI_Popov_Andrew",
-            "first_name": "Andrew",
-        },
+        user_data={"id": 1, "first_name": "Аноним"},
     )
 
     assert sent_targets == []
