@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from shared.schemas import (
     ContractJobCreateBase,
     EventCreateBase,
@@ -24,6 +24,8 @@ from core_api.models import (
     LegalIntakeStatus,
     LegalUrgency,
     PaymentProvider,
+    Practice,
+    PRACTICE_CATEGORIES,
     PaymentTransactionStatus,
     PostFeedbackSource,
     ScheduledPostStatus,
@@ -205,6 +207,11 @@ class LegalIntakeCreate(BaseModel):
     company: str | None = Field(default=None, max_length=255)
     client_type: LegalClientType = LegalClientType.unknown
     legal_area: LegalArea = LegalArea.other
+    # Направление практики. По умолчанию — право: так вели себя все
+    # существующие точки входа, и для них ничего не меняется.
+    practice: Practice = Practice.legal
+    # Категория для инженерной и гибридной практики; у права — legal_area.
+    category: str | None = Field(default=None, max_length=64)
     description: str = Field(min_length=20, max_length=4000)
     urgency: LegalUrgency = LegalUrgency.no_deadline
     deadline: str | None = Field(default=None, max_length=255)
@@ -219,6 +226,21 @@ class LegalIntakeCreate(BaseModel):
     utm_campaign: str | None = Field(default=None, max_length=255)
     utm_content: str | None = Field(default=None, max_length=255)
     utm_term: str | None = Field(default=None, max_length=255)
+
+
+    @model_validator(mode="after")
+    def _category_matches_practice(self) -> "LegalIntakeCreate":
+        allowed = PRACTICE_CATEGORIES.get(self.practice)
+        if allowed is None:
+            # Право: категория — legal_area, отдельное поле должно быть пустым.
+            if self.category:
+                raise ValueError("category is not used for legal practice; use legal_area")
+            return self
+        if not self.category:
+            raise ValueError(f"category is required for {self.practice.value} practice")
+        if self.category not in allowed:
+            raise ValueError(f"unknown category for {self.practice.value}: {self.category}")
+        return self
 
 
 class LegalIntakePatch(BaseModel):
@@ -236,6 +258,8 @@ class LegalIntakeOut(BaseModel):
     updated_at: datetime
     client_type: LegalClientType
     legal_area: LegalArea
+    practice: Practice = Practice.legal
+    category: str | None = None
     description: str
     urgency: LegalUrgency
     deadline: str | None

@@ -25,6 +25,7 @@ from core_api.lead_notifications import _post_telegram_message
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.models import (
+    TEMPLATE_KIND_BY_PRACTICE,
     ActorType,
     Lead,
     LeadStatus,
@@ -36,8 +37,10 @@ from core_api.models import (
     ServiceAgreementMessage,
     ServiceAgreementMessageRole,
     ServiceAgreementStatus,
+    conflict_check_blocks_agreement,
+    nda_required_for_agreement,
 )
-from core_api.service_agreement import AGREEMENT_VERSION, document_hash, render_agreement_text
+from core_api.service_agreement import agreement_version, document_hash, render_agreement_text
 
 router = APIRouter(prefix="/api/v1/service-agreements", tags=["service-agreements"])
 
@@ -234,6 +237,7 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "authority_basis": item.authority_basis,
         "version": item.document_version,
         "hash": item.document_hash,
+        "template_kind": item.template_kind.value,
     }
     # Готовое сообщение клиенту собирается здесь, а не у каждого отправителя.
     # Бот берёт его отсюда, рабочее место — тоже: одна формулировка на всех.
@@ -291,7 +295,9 @@ def create_agreement(
     ).scalar_one_or_none()
     if intake is None:
         raise HTTPException(status_code=404, detail="Legal intake not found")
-    if intake.conflict_status.value != "clear":
+    # Проверка конфликта интересов — условие договора там, где есть право:
+    # в чисто инженерной практике она остаётся пометкой, а не воротами.
+    if conflict_check_blocks_agreement(intake.practice) and intake.conflict_status.value != "clear":
         raise HTTPException(status_code=409, detail="Conflict check must be clear")
 
     lead = db.get(Lead, intake.lead_id)
@@ -300,8 +306,12 @@ def create_agreement(
     if lead.telegram_user_id is None:
         raise HTTPException(status_code=409, detail="Client has no Telegram dialog")
     nda = _nda_for_lead(db, lead)
-    if nda is None:
+    # NDA предлагается всем; без него договор не составить только там, где
+    # клиент передаёт материалы дела. Инженерной практике без NDA договор
+    # доступен — реквизиты подписанта тогда берутся из карточки клиента.
+    if nda is None and nda_required_for_agreement(intake.practice):
         raise HTTPException(status_code=409, detail="NDA must be signed first")
+    template_kind = TEMPLATE_KIND_BY_PRACTICE[intake.practice]
 
     previous = db.execute(
         select(ServiceAgreement)
@@ -336,12 +346,12 @@ def create_agreement(
         raise HTTPException(status_code=503, detail="Operator contract details are incomplete")
 
     client = {
-        "full_name": nda.signer_full_name or lead.name or "Заказчик",
-        "contact": nda.signer_contact or lead.contact or "",
-        "org": nda.signer_org,
+        "full_name": (nda.signer_full_name if nda else None) or lead.name or "Заказчик",
+        "contact": (nda.signer_contact if nda else None) or lead.contact or "",
+        "org": (nda.signer_org if nda else None) or lead.company,
         "details_complete": False,
-        "nda_id": str(nda.id),
-        "nda_version": nda.document_version,
+        "nda_id": str(nda.id) if nda else None,
+        "nda_version": nda.document_version if nda else None,
     }
     created = _now()
     expires = created + timedelta(days=payload.expires_in_days)
@@ -363,6 +373,7 @@ def create_agreement(
         schedule=payload.schedule_text,
         price=payload.price_text,
         payment_terms=payload.payment_terms,
+        template_kind=template_kind.value,
     )
     item = ServiceAgreement(
         agreement_number=display_number,
@@ -381,8 +392,9 @@ def create_agreement(
         prepared_by_telegram_user_id=payload.prepared_by_telegram_user_id,
         operator_snapshot=operator,
         client_snapshot=client,
+        template_kind=template_kind,
         document_text=text,
-        document_version=AGREEMENT_VERSION,
+        document_version=agreement_version(template_kind.value),
         document_hash=document_hash(text),
         expires_at=expires,
         client_telegram_user_id=lead.telegram_user_id,
@@ -579,6 +591,7 @@ def complete_client_details(
         schedule=item.schedule_text,
         price=item.price_text,
         payment_terms=item.payment_terms,
+        template_kind=item.template_kind.value,
     )
     item.status = ServiceAgreementStatus.superseded
     revised = ServiceAgreement(
@@ -599,8 +612,9 @@ def complete_client_details(
         prepared_by_telegram_user_id=item.prepared_by_telegram_user_id,
         operator_snapshot=operator,
         client_snapshot=client,
+        template_kind=item.template_kind,
         document_text=text,
-        document_version=AGREEMENT_VERSION,
+        document_version=agreement_version(item.template_kind.value),
         document_hash=document_hash(text),
         expires_at=expires,
         sent_at=created,
