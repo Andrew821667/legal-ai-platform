@@ -52,6 +52,16 @@ export type IntakeDocumentRow = {
   created_at: string | null;
 };
 
+/** Роль ЭТОГО обращения относительно связанного — не тип связи как таковой. */
+export type IntakeLinkRow = {
+  link_id: string;
+  role: "main" | "subordinate" | "joint";
+  note: string | null;
+  linked_lead_id: string;
+  linked_client: string;
+  created_at: string | null;
+};
+
 export type IntakeCard = {
   intake_id: string;
   created_at: string | null;
@@ -69,6 +79,7 @@ export type IntakeCard = {
   outreach_blocked_reason: string | null;
   clarifications: Clarification[];
   documents: IntakeDocumentRow[];
+  links: IntakeLinkRow[];
 };
 
 export type AgreementMessage = { role: string; text: string; created_at: string | null };

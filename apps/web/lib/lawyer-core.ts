@@ -16,7 +16,7 @@ const CORE_API_ADMIN_KEY =
 // Ядро на той же машине; если оно не ответило за это время, ответит и не позже.
 const TIMEOUT_MS = 15_000;
 
-type Method = "GET" | "POST" | "PATCH";
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 async function coreCall(method: Method, path: string, payload?: unknown): Promise<NextResponse> {
   if (!CORE_API_ADMIN_KEY) {
@@ -67,4 +67,8 @@ export function corePost(path: string, payload?: unknown): Promise<NextResponse>
 
 export function corePatch(path: string, payload: unknown): Promise<NextResponse> {
   return coreCall("PATCH", path, payload);
+}
+
+export function coreDelete(path: string): Promise<NextResponse> {
+  return coreCall("DELETE", path);
 }

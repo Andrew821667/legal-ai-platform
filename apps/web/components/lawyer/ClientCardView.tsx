@@ -7,6 +7,7 @@ import DeadlineBox from "./DeadlineBox";
 import DocumentRow from "./DocumentRow";
 import DocumentText from "./DocumentText";
 import HistoryList from "./HistoryList";
+import IntakeLinks from "./IntakeLinks";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import RichText from "./RichText";
@@ -86,6 +87,7 @@ export default function ClientCardView({
   card,
   onBack,
   onChanged,
+  onOpenClient,
   loading,
   initData,
   insideTelegram,
@@ -93,6 +95,7 @@ export default function ClientCardView({
   card: ClientCard;
   onBack: () => void;
   onChanged: () => void;
+  onOpenClient: (leadId: string) => void;
   loading: boolean;
   initData: string;
   insideTelegram: boolean;
@@ -230,6 +233,8 @@ export default function ClientCardView({
                 hasDialog={card.telegram_user_id !== null}
                 ownProgress={card.intakes.length > 1}
                 insideTelegram={insideTelegram}
+                currentLeadId={card.lead_id}
+                onOpenClient={onOpenClient}
               />
             ))}
           </div>
@@ -379,6 +384,8 @@ function Intake({
   hasDialog,
   ownProgress,
   insideTelegram,
+  currentLeadId,
+  onOpenClient,
 }: {
   item: IntakeCard;
   initData: string;
@@ -388,6 +395,8 @@ function Intake({
   hasDialog: boolean;
   ownProgress: boolean;
   insideTelegram: boolean;
+  currentLeadId: string;
+  onOpenClient: (leadId: string) => void;
 }) {
   const conflictBlocks = item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
@@ -522,6 +531,15 @@ function Intake({
       />
 
       <NoteBox intakeId={item.intake_id} initialNote={item.internal_note} initData={initData} />
+
+      <IntakeLinks
+        intakeId={item.intake_id}
+        currentLeadId={currentLeadId}
+        links={item.links}
+        initData={initData}
+        onOpen={onOpenClient}
+        onChanged={onChanged}
+      />
     </Card>
   );
 }

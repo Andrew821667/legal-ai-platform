@@ -106,6 +106,13 @@ class ConflictCheckStatus(str, enum.Enum):
     conflict = "conflict"
 
 
+class IntakeLinkType(str, enum.Enum):
+    # Это обращение — второстепенное, дело другого клиента (linked_intake_id) основное.
+    subordinate = "subordinate"
+    # Оба обращения рассматриваются как одно дело, без старшинства.
+    joint = "joint"
+
+
 class SpecialConsultationOrderSource(str, enum.Enum):
     lead_bot = "lead_bot"
     web = "web"
@@ -592,6 +599,49 @@ class LegalIntake(Base):
         Index("ix_legal_intakes_status_created", "status", "created_at"),
         Index("ix_legal_intakes_urgency_created", "urgency", "created_at"),
         Index("ix_legal_intakes_area", "legal_area"),
+    )
+
+
+class IntakeLink(Base):
+    """Связь между обращениями двух разных клиентов по одному фактическому делу.
+
+    Найдено вживую: один клиент упоминал бывшего супруга другого клиента как
+    противоположную сторону в том же имущественном споре, а поле проверки
+    конфликта у обоих обращений заполнялось независимо — юрист узнавал о
+    связи только по памяти. Строка здесь — чистая пометка для контекста:
+    договоры, NDA и документы каждого обращения остаются полностью
+    раздельными, это не объединение дел в одно, а перекрёстная ссылка.
+
+    Направление хранится (intake_id → linked_intake_id), но для отображения
+    строка видна с обеих сторон — из обращения на любом конце связи. Для
+    joint направление не несёт смысла, для subordinate linked_intake_id —
+    основное дело, intake_id — второстепенное.
+    """
+
+    __tablename__ = "intake_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("legal_intakes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    linked_intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("legal_intakes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    link_type: Mapped[IntakeLinkType] = mapped_column(
+        Enum(IntakeLinkType, name="intake_link_type_enum"),
+        nullable=False,
+    )
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    __table_args__ = (
+        Index("ix_intake_links_intake", "intake_id"),
+        Index("ix_intake_links_linked_intake", "linked_intake_id"),
     )
 
 

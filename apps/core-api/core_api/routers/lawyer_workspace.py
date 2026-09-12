@@ -31,6 +31,8 @@ from core_api.models import (
     AuditLog,
     IntakeClarification,
     IntakeDocument,
+    IntakeLink,
+    IntakeLinkType,
     Lead,
     LegalIntake,
     LegalIntakeStatus,
@@ -101,6 +103,61 @@ def _stage_for(*, nda_signed: bool, agreement_status: str | None) -> str:
     if nda_signed:
         return "Готовим условия"
     return "Первичное обращение"
+
+
+def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
+    """Обращения других клиентов, связанные с этим по одному фактическому делу.
+
+    Связь хранится направленной (intake_id → linked_intake_id), но видна с
+    любого конца — юрист открывает и то, и другое обращение, и не обязан
+    помнить, кто на какой стороне строки. "role" уже посчитана относительно
+    intake_id, который передан сюда: у второстепенного обращения — свой
+    role, у основного — свой.
+    """
+    rows = db.execute(
+        select(IntakeLink).where(
+            or_(IntakeLink.intake_id == intake_id, IntakeLink.linked_intake_id == intake_id)
+        )
+    ).scalars().all()
+    if not rows:
+        return []
+
+    partner_intake_ids = {
+        (row.linked_intake_id if row.intake_id == intake_id else row.intake_id) for row in rows
+    }
+    partner_leads = dict(
+        db.execute(
+            select(LegalIntake.id, LegalIntake.lead_id).where(LegalIntake.id.in_(partner_intake_ids))
+        ).all()
+    )
+    leads_by_id = {
+        lead.id: lead
+        for lead in db.execute(
+            select(Lead).where(Lead.id.in_(partner_leads.values()))
+        ).scalars().all()
+    } if partner_leads else {}
+
+    result: list[dict] = []
+    for row in rows:
+        partner_intake_id = row.linked_intake_id if row.intake_id == intake_id else row.intake_id
+        partner_lead_id = partner_leads.get(partner_intake_id)
+        if partner_lead_id is None:
+            continue
+        if row.link_type == IntakeLinkType.joint:
+            role = "joint"
+        else:
+            role = "subordinate" if row.intake_id == intake_id else "main"
+        result.append(
+            {
+                "link_id": str(row.id),
+                "role": role,
+                "note": row.note,
+                "linked_lead_id": str(partner_lead_id),
+                "linked_client": _lead_title(leads_by_id.get(partner_lead_id)),
+                "created_at": _iso(row.created_at),
+            }
+        )
+    return result
 
 
 @router.get("/today")
@@ -625,6 +682,7 @@ def client_card(
                 "outreach_blocked_reason": item.outreach_blocked_reason,
                 "clarifications": clarifications.get(item.id, []),
                 "documents": documents.get(item.id, []),
+                "links": _intake_links_for(db, item.id),
             }
             for item in intakes
         ],
@@ -946,3 +1004,120 @@ def document_meta(
         "mime_type": row.mime_type,
         "created_at": _iso(row.created_at),
     }
+
+
+class IntakeLinkCreate(BaseModel):
+    linked_lead_id: uuid.UUID
+    # Роль обращения из URL относительно связываемого — не тип связи как
+    # таковой: "main"/"subordinate" описывают одну и ту же связь с разных
+    # концов, а хранится она всегда как subordinate → main (см. IntakeLink).
+    role: str
+    note: str | None = Field(default=None, max_length=500)
+
+
+_INTAKE_LINK_ROLES = {"main", "subordinate", "joint"}
+
+
+@router.post("/intakes/{intake_id}/links")
+def create_intake_link(
+    intake_id: uuid.UUID,
+    payload: IntakeLinkCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Пометить обращение как связанное с делом другого клиента.
+
+    Найдено вживую: два обращения оказались одним и тем же имущественным
+    спором с двух сторон, а проверка конфликта у каждого шла независимо.
+    Связь — только пометка для контекста: договоры, NDA и документы каждого
+    обращения остаются раздельными, это не слияние дел в одно.
+    """
+    intake = db.get(LegalIntake, intake_id)
+    if intake is None:
+        raise HTTPException(status_code=404, detail="Intake not found")
+
+    if payload.role not in _INTAKE_LINK_ROLES:
+        raise HTTPException(status_code=400, detail="Неизвестная роль связи")
+
+    linked_intake = db.execute(
+        select(LegalIntake).where(LegalIntake.lead_id == payload.linked_lead_id)
+    ).scalar_one_or_none()
+    if linked_intake is None:
+        raise HTTPException(status_code=404, detail="У указанного клиента нет обращения")
+    if linked_intake.id == intake_id:
+        raise HTTPException(status_code=400, detail="Нельзя связать обращение само с собой")
+
+    existing = db.execute(
+        select(IntakeLink).where(
+            or_(
+                and_(
+                    IntakeLink.intake_id == intake_id,
+                    IntakeLink.linked_intake_id == linked_intake.id,
+                ),
+                and_(
+                    IntakeLink.intake_id == linked_intake.id,
+                    IntakeLink.linked_intake_id == intake_id,
+                ),
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409, detail="Эти обращения уже связаны — сначала снимите старую связь"
+        )
+
+    # role="main" переворачивает пару: обращение из URL становится основным,
+    # значит подчинённым (первым в строке) хранится связываемое.
+    if payload.role == "main":
+        row_intake_id, row_linked_intake_id = linked_intake.id, intake_id
+        link_type = IntakeLinkType.subordinate
+    elif payload.role == "subordinate":
+        row_intake_id, row_linked_intake_id = intake_id, linked_intake.id
+        link_type = IntakeLinkType.subordinate
+    else:
+        row_intake_id, row_linked_intake_id = intake_id, linked_intake.id
+        link_type = IntakeLinkType.joint
+
+    link = IntakeLink(
+        intake_id=row_intake_id,
+        linked_intake_id=row_linked_intake_id,
+        link_type=link_type,
+        note=(payload.note or "").strip() or None,
+    )
+    db.add(link)
+    db.flush()
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="intake_link.create",
+        target_type="legal_intake",
+        target_id=intake_id,
+        details={"linked_intake_id": str(linked_intake.id), "role": payload.role},
+    )
+    db.commit()
+    return {"link_id": str(link.id)}
+
+
+@router.delete("/intakes/links/{link_id}")
+def delete_intake_link(
+    link_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Снять связь. Обе стороны равноправны — годится id связи с любого конца."""
+    link = db.get(IntakeLink, link_id)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="intake_link.delete",
+        target_type="legal_intake",
+        target_id=link.intake_id,
+        details={"linked_intake_id": str(link.linked_intake_id), "link_type": link.link_type.value},
+    )
+    db.delete(link)
+    db.commit()
+    return {"ok": True}
