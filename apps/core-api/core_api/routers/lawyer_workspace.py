@@ -502,11 +502,17 @@ def clients(
     # но фильтру на экране проще работать с массивом сразу, не переделывая
     # его в день, когда это ограничение снимут.
     areas: dict[uuid.UUID, list[str]] = {}
+    practices: dict[uuid.UUID, list[str]] = {}
     if lead_ids:
-        for lead_id, area in db.execute(
-            select(LegalIntake.lead_id, LegalIntake.legal_area).where(LegalIntake.lead_id.in_(lead_ids))
+        for lead_id, area, practice in db.execute(
+            select(LegalIntake.lead_id, LegalIntake.legal_area, LegalIntake.practice).where(
+                LegalIntake.lead_id.in_(lead_ids)
+            )
         ).all():
             areas.setdefault(lead_id, []).append(area.value)
+            bucket = practices.setdefault(lead_id, [])
+            if practice.value not in bucket:
+                bucket.append(practice.value)
 
     # Что сейчас происходит по клиенту — одной строкой. Без неё список
     # выглядит одинаковым для того, кто ждёт договора, и того, кто уже
@@ -528,6 +534,7 @@ def clients(
             ),
             "waiting_on_me": lead.id in awaiting_me,
             "legal_areas": areas.get(lead.id, []),
+            "practices": practices.get(lead.id, []),
             "amount_minor": amounts.get(lead.id),
         }
         for lead, count, last_at in rows
@@ -669,6 +676,8 @@ def client_card(
                 "intake_id": str(item.id),
                 "created_at": _iso(item.created_at),
                 "legal_area": item.legal_area.value,
+                "practice": item.practice.value,
+                "category": item.category,
                 "client_type": item.client_type.value,
                 "urgency": item.urgency.value,
                 "deadline": item.deadline,
@@ -694,6 +703,7 @@ def client_card(
                 "intake_id": str(item.intake_id) if item.intake_id else None,
                 "number": item.agreement_number,
                 "status": item.status.value,
+                "template_kind": item.template_kind.value,
                 "revision": item.revision,
                 "subject": item.subject,
                 "price_text": item.price_text,

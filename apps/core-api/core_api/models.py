@@ -68,6 +68,68 @@ class LegalClientType(str, enum.Enum):
     unknown = "unknown"
 
 
+class Practice(str, enum.Enum):
+    """Направление практики, по которому идёт обращение.
+
+    Механика — обращение, NDA, договор, акт — одна на всех; практика решает
+    категории на входе, нужна ли проверка конфликта как условие договора и
+    какой шаблон текста у договора. Гибрид — автоматизация юридической
+    функции: инженерный проект с юридической составляющей, поэтому по
+    проверке конфликта он ближе к праву, по договору — к разработке.
+    """
+
+    legal = "legal"
+    engineering = "engineering"
+    hybrid = "hybrid"
+
+
+# Категории обращения по практикам. Для права категория — legal_area (свой
+# enum, менять не стали); для остальных — строка из этого списка: набор
+# будет меняться чаще, чем хочется делать миграции.
+PRACTICE_CATEGORIES: dict[Practice, tuple[str, ...]] = {
+    Practice.engineering: (
+        "telegram_bot",
+        "website",
+        "miniapp",
+        "internal_tool",
+        "ai_module",
+        "integration",
+        "other",
+    ),
+    Practice.hybrid: (
+        "contracts_flow",
+        "claims_flow",
+        "compliance",
+        "document_flow",
+        "staff_consulting",
+        "other",
+    ),
+}
+
+
+def conflict_check_blocks_agreement(practice: "Practice") -> bool:
+    """Проверка конфликта интересов — условие договора только там, где есть право."""
+    return practice in (Practice.legal, Practice.hybrid)
+
+
+def nda_required_for_agreement(practice: "Practice") -> bool:
+    """NDA предлагается всем; условием договора остаётся только для права и гибрида."""
+    return practice in (Practice.legal, Practice.hybrid)
+
+
+class AgreementTemplateKind(str, enum.Enum):
+    legal_services = "legal_services"
+    software_development = "software_development"
+    legal_automation = "legal_automation"
+
+
+TEMPLATE_KIND_BY_PRACTICE: dict[Practice, AgreementTemplateKind] = {
+    Practice.legal: AgreementTemplateKind.legal_services,
+    Practice.engineering: AgreementTemplateKind.software_development,
+    Practice.hybrid: AgreementTemplateKind.legal_automation,
+}
+
+
 class LegalArea(str, enum.Enum):
     contracts = "contracts"
     disputes = "disputes"
@@ -415,6 +477,15 @@ class ServiceAgreement(Base):
     prepared_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     operator_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     client_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Какой шаблон текста у этого договора — по практике обращения на момент
+    # создания. Хранится, а не вычисляется: практику можно поменять позже,
+    # а подписанный текст меняться не должен.
+    template_kind: Mapped[AgreementTemplateKind] = mapped_column(
+        Enum(AgreementTemplateKind, name="agreement_template_kind_enum"),
+        nullable=False,
+        default=AgreementTemplateKind.legal_services,
+        server_default="legal_services",
+    )
     document_text: Mapped[str] = mapped_column(Text, nullable=False)
     document_version: Mapped[str] = mapped_column(String(32), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -560,6 +631,15 @@ class LegalIntake(Base):
         nullable=False,
         default=LegalArea.other,
     )
+    practice: Mapped[Practice] = mapped_column(
+        Enum(Practice, name="practice_enum"),
+        nullable=False,
+        default=Practice.legal,
+        server_default="legal",
+    )
+    # Категория для инженерной и гибридной практики (см. PRACTICE_CATEGORIES);
+    # у права категория живёт в legal_area, здесь пусто.
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     urgency: Mapped[LegalUrgency] = mapped_column(
         Enum(LegalUrgency, name="legal_urgency_enum"),
@@ -599,6 +679,7 @@ class LegalIntake(Base):
         Index("ix_legal_intakes_status_created", "status", "created_at"),
         Index("ix_legal_intakes_urgency_created", "urgency", "created_at"),
         Index("ix_legal_intakes_area", "legal_area"),
+        Index("ix_legal_intakes_practice", "practice"),
     )
 
 

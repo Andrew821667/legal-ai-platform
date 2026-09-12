@@ -52,6 +52,8 @@ def _payload(item: LegalIntake, lead: Lead) -> LegalIntakeOut:
         updated_at=item.updated_at,
         client_type=item.client_type,
         legal_area=item.legal_area,
+        practice=item.practice,
+        category=item.category,
         description=item.description,
         urgency=item.urgency,
         deadline=item.deadline,
@@ -99,7 +101,11 @@ def create_legal_intake(
         company=payload.company.strip() if payload.company else None,
         segment=_segment_for(payload.client_type),
         status=LeadStatus.new,
-        service_category=f"legal_help:{payload.legal_area.value}",
+        service_category=(
+            f"legal_help:{payload.legal_area.value}"
+            if payload.practice.value == "legal"
+            else f"{payload.practice.value}:{payload.category}"
+        ),
         specific_need=payload.description.strip(),
         urgency=payload.urgency.value,
         conversation_stage="legal_intake",
@@ -118,6 +124,8 @@ def create_legal_intake(
         lead_id=lead.id,
         client_type=payload.client_type,
         legal_area=payload.legal_area,
+        practice=payload.practice,
+        category=payload.category,
         description=payload.description.strip(),
         urgency=payload.urgency,
         deadline=payload.deadline.strip() if payload.deadline else None,
@@ -136,6 +144,8 @@ def create_legal_intake(
         details={
             "client_type": item.client_type.value,
             "legal_area": item.legal_area.value,
+            "practice": item.practice.value,
+            "category": item.category,
             "urgency": item.urgency.value,
             "source": lead.source.value,
         },
@@ -274,6 +284,8 @@ def list_intakes_pending_outreach(
             "name": lead.name,
             "client_type": item.client_type.value,
             "legal_area": item.legal_area.value,
+            "practice": item.practice.value,
+            "category": item.category,
             "urgency": item.urgency.value,
             "description": item.description,
             "created_at": item.created_at.isoformat() if item.created_at else None,
