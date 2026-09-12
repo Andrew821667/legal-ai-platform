@@ -5,9 +5,22 @@ API_BASE="${CORE_API_URL:-http://localhost:8000}"
 API_KEY_ADMIN="${API_KEY_ADMIN:?API_KEY_ADMIN is required}"
 ALERT_BOT_TOKEN="${ALERT_BOT_TOKEN:-}"
 ALERT_CHAT_ID="${ALERT_CHAT_ID:-}"
-ALERT_STATE_FILE="${ALERT_STATE_FILE:-/tmp/legal-ai-alert-state.json}"
+# Состояние оповещений держим рядом с логами, а не в /tmp: macOS вычищает
+# /tmp по расписанию, а потерянное состояние означает, что все затихшие
+# тревоги зазвучат заново — включая те, что давно разобраны.
+ALERT_STATE_DIR="${ALERT_STATE_DIR:-$HOME/Library/Application Support/legal-ai}"
+ALERT_STATE_FILE="${ALERT_STATE_FILE:-${ALERT_STATE_DIR}/alert-state.json}"
 ALERT_COOLDOWN_SECONDS="${ALERT_COOLDOWN_SECONDS:-1800}"
 SLA_ALERTS_ENABLED="${SLA_ALERTS_ENABLED:-1}"
+mkdir -p "$(dirname "${ALERT_STATE_FILE}")" 2>/dev/null || true
+
+# Разовый перенос состояния из прежнего места. Без него затихшие тревоги
+# начались бы с чистого листа: человек, видевший сигнал, не получил бы
+# сообщения о снятии и остался бы в неведении, разобрано ли.
+_LEGACY_ALERT_STATE="/tmp/legal-ai-alert-state.json"
+if [ -f "${_LEGACY_ALERT_STATE}" ] && [ ! -f "${ALERT_STATE_FILE}" ]; then
+  mv "${_LEGACY_ALERT_STATE}" "${ALERT_STATE_FILE}" 2>/dev/null || true
+fi
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DOCKER_BIN="${DOCKER_BIN:-$(command -v docker || true)}"
 COMPOSE_BIN="${COMPOSE_BIN:-$(command -v docker-compose || true)}"
@@ -50,6 +63,29 @@ api_get() {
   curl -fsS -H "X-API-Key: ${API_KEY_ADMIN}" "${url}"
 }
 
+# То же, но с повторами.
+#
+# Проверка идёт раз в 10 минут, а деплой пересоздаёт контейнеры и на несколько
+# секунд оставляет core-api недоступным. Одиночный запрос попадал в это окно и
+# слал тревогу на штатную операцию — оповещения после такого перестают читать.
+#
+# Три попытки с паузой покрывают перезапуск и при этом не скрывают настоящий
+# отказ: если сервис действительно лёг, он не ответит и через полминуты.
+api_get_retry() {
+  local url="$1"
+  local attempts="${2:-3}"
+  local pause="${3:-10}"
+  local i=1
+  while [ "$i" -le "$attempts" ]; do
+    if api_get "$url"; then
+      return 0
+    fi
+    [ "$i" -lt "$attempts" ] && sleep "$pause"
+    i=$((i + 1))
+  done
+  return 1
+}
+
 _state_get_ts() {
   local key="$1"
   python3 - "$ALERT_STATE_FILE" "$key" <<'PY'
@@ -87,6 +123,49 @@ with open(tmp_path, "w", encoding="utf-8") as fh:
     json.dump(data, fh)
 os.replace(tmp_path, path)
 PY
+}
+
+_state_clear() {
+  local key="$1"
+  python3 - "$ALERT_STATE_FILE" "$key" <<'_STATEPY_'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2]
+if not os.path.exists(path):
+    raise SystemExit(0)
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh) or {}
+except Exception:
+    raise SystemExit(0)
+if key not in data:
+    raise SystemExit(0)
+del data[key]
+tmp_path = f"{path}.tmp"
+with open(tmp_path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh)
+os.replace(tmp_path, path)
+_STATEPY_
+}
+
+# Сообщает, что тревога снята, и забывает о ней.
+#
+# Без этого последнее, что остаётся у человека в переписке, — сигнал тревоги,
+# даже когда причина давно устранена. Тогда каждое оповещение приходится
+# перепроверять вручную, и смысл оповещений теряется.
+resolve_alert() {
+  local key="$1"
+  local text="$2"
+  local last_ts
+  last_ts="$(_state_get_ts "$key")"
+  [ "${last_ts}" -gt 0 ] || return 0
+  if [ -n "$ALERT_BOT_TOKEN" ] && [ -n "$ALERT_CHAT_ID" ]; then
+    curl -fsS --max-time 20 \
+      --resolve "api.telegram.org:443:${TELEGRAM_API_HOST_IP}" \
+      "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${ALERT_CHAT_ID}" \
+      --data-urlencode "text=${text}" >/dev/null || return 0
+  fi
+  _state_clear "$key"
 }
 
 send_alert_once() {
@@ -228,10 +307,11 @@ recover_telegram_network() {
 }
 
 # 1) Базовый health
-if ! api_get "${API_BASE}/health/detailed" >/dev/null; then
+if ! api_get_retry "${API_BASE}/health/detailed" >/dev/null; then
   send_alert_once "health_detailed_failed" "🔴 AI Verdict Platform: health check failed!"
   exit 1
 fi
+resolve_alert "health_detailed_failed" "🟢 AI Verdict Platform: health check снова проходит."
 
 # 1.1) Telegram API должен проходить полноценный TLS-handshake из контейнера.
 if ! telegram_tls_check >/dev/null; then
@@ -329,9 +409,21 @@ else
 fi
 
 # 5) SLA: есть просроченные публикации (due queue)
-DUE_COUNT="$(api_get "${API_BASE}/api/v1/scheduled-posts?due=true&limit=100" | jq -r 'length')"
+DUE_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?due=true&limit=100")"
+DUE_COUNT="$(printf '%s' "${DUE_JSON}" | jq -r 'length')"
 if [ "${DUE_COUNT}" -gt "${DUE_POSTS_ALERT_THRESHOLD}" ]; then
+  # Одно число не говорит ничего: по нему нельзя понять, застряла ли свежая
+  # публикация или это давно закрытый материал. Называем заголовки и время,
+  # чтобы решение принималось без похода в базу.
+  DUE_DETAILS="$(
+    printf '%s' "${DUE_JSON}" | jq -r '.[:5][] | "• \(.title // "без заголовка" | .[0:60]) — на \(.publish_at // "?" | .[0:16])"'
+  )"
   send_alert_once \
     "due_posts_threshold_exceeded" \
-    "⚠️ Просроченных публикаций в очереди: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD})."
+    "⚠️ Просроченных публикаций в очереди: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD}).
+${DUE_DETAILS}"
+else
+  resolve_alert \
+    "due_posts_threshold_exceeded" \
+    "🟢 Просроченных публикаций в очереди не осталось."
 fi
