@@ -91,6 +91,28 @@ def _press(update, context, action: str):
     return nda.handle_callback(update, context)
 
 
+def _admin_intake(monkeypatch: pytest.MonkeyPatch, *, status: str = "received", agreements=None) -> None:
+    """Состояние обращения, которое видит развилка «договор или без него»."""
+    monkeypatch.setattr(
+        nda.admin_interface.admin_interface,
+        "get_legal_intake",
+        lambda intake_id: {"status": status},
+    )
+    monkeypatch.setattr(
+        nda.admin_interface.admin_interface,
+        "list_service_agreements_for_intake",
+        lambda intake_id: agreements if agreements is not None else [],
+    )
+
+
+def _button_by_callback(notice: dict, callback_data: str):
+    for row in notice["reply_markup"].inline_keyboard:
+        for button in row:
+            if button.callback_data == callback_data:
+                return button
+    return None
+
+
 # --- проверки формулировок и разбора ввода -------------------------------
 
 
@@ -218,6 +240,7 @@ async def test_menu_recovers_case_from_core_api(update, replies, monkeypatch) ->
 @pytest.mark.anyio
 async def test_full_path_collects_details_and_signs(update, context, replies, monkeypatch) -> None:
     calls = _bridge(monkeypatch, status={"signed": False})
+    _admin_intake(monkeypatch)
 
     await nda.open_signing(update, context)
     await _press(update, context, "begin")
@@ -245,6 +268,63 @@ async def test_full_path_collects_details_and_signs(update, context, replies, mo
     assert first.web_app.url.endswith("/lawyer?client=lead-1")
     # Состояние сценария убрано — повторные сообщения в него не попадут.
     assert nda.STAGE_KEY not in context.user_data
+
+
+@pytest.mark.anyio
+async def test_signed_notice_offers_the_fork_right_away(update, context, replies, monkeypatch) -> None:
+    """Развилка «договор или без него» — сразу в уведомлении, не только внутри карточки."""
+    _bridge(monkeypatch, status={"signed": False})
+    _admin_intake(monkeypatch, status="received", agreements=[])
+
+    await nda.open_signing(update, context)
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "ivan@example.ru")
+    await nda.handle_message(update, context, "от себя")
+    await _press(update, context, "confirm")
+
+    notice = context.bot.messages[0]
+    without_agreement = _button_by_callback(
+        notice, "sa_a:none:22222222-2222-2222-2222-222222222222"
+    )
+    assert without_agreement is not None
+    assert without_agreement.text == "Работать без соглашения"
+    assert "заключить соглашение" in notice["text"]
+    assert "продолжить без него" in notice["text"]
+
+
+@pytest.mark.anyio
+async def test_fork_is_hidden_once_an_agreement_exists(update, context, replies, monkeypatch) -> None:
+    """Если договор уже составлен, «без соглашения» не предлагаем — поздно."""
+    _bridge(monkeypatch, status={"signed": False})
+    _admin_intake(monkeypatch, status="received", agreements=[{"id": "agr-1", "status": "draft"}])
+
+    await nda.open_signing(update, context)
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "ivan@example.ru")
+    await nda.handle_message(update, context, "от себя")
+    await _press(update, context, "confirm")
+
+    notice = context.bot.messages[0]
+    assert _button_by_callback(notice, "sa_a:none:22222222-2222-2222-2222-222222222222") is None
+
+
+@pytest.mark.anyio
+async def test_fork_is_hidden_for_a_closed_intake(update, context, replies, monkeypatch) -> None:
+    """Закрытое обращение не предлагает работать без соглашения — там уже нечем."""
+    _bridge(monkeypatch, status={"signed": False})
+    _admin_intake(monkeypatch, status="closed", agreements=[])
+
+    await nda.open_signing(update, context)
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "ivan@example.ru")
+    await nda.handle_message(update, context, "от себя")
+    await _press(update, context, "confirm")
+
+    notice = context.bot.messages[0]
+    assert _button_by_callback(notice, "sa_a:none:22222222-2222-2222-2222-222222222222") is None
 
 
 @pytest.mark.anyio

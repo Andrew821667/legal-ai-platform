@@ -25,6 +25,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram_ui import inline_button as InlineKeyboardButton
 
+import admin_interface
 import database
 import utils
 from config import get_config
@@ -73,15 +74,40 @@ def confirm_markup() -> InlineKeyboardMarkup:
     )
 
 
+async def _offer_without_agreement(intake_id: str | None) -> bool:
+    """Развилка «договор или без него» видна сразу здесь, а не только внутри
+    карточки обращения, где кнопку было нужно найти среди прочих.
+
+    Условие то же, что решает её видимость там же (_show_intake): нет ни
+    одного договора и обращение ещё не закрыто. Проверка конфликта интересов
+    остаётся обязательным первым шагом в обоих случаях — эта развилка её не
+    обходит, а лишь предлагает второй путь после неё.
+    """
+    if not intake_id:
+        return False
+    intake, agreements = await asyncio.gather(
+        asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, intake_id),
+        asyncio.to_thread(
+            admin_interface.admin_interface.list_service_agreements_for_intake, intake_id
+        ),
+    )
+    return bool(intake) and not agreements and intake.get("status") != "closed"
+
+
 async def _notify_admin_signed(
     bot, *, intake_id: str | None, signer_name: str, lead_id: str | None = None
 ) -> bool:
     callback = f"sa_a:i:{intake_id}" if intake_id else "sa_a:menu"
+    rows = [*workspace_row(lead_id), [InlineKeyboardButton("Открыть обращение", callback_data=callback)]]
+    if await _offer_without_agreement(intake_id):
+        rows.append(
+            [InlineKeyboardButton("Работать без соглашения", callback_data=f"sa_a:none:{intake_id}")]
+        )
     text = (
         "Клиент подписал NDA.\n\n"
         f"Клиент: {signer_name}\n"
-        "Следующий шаг: провести проверку конфликта интересов, "
-        "затем подготовить соглашение об оказании юридической помощи."
+        "Следующий шаг: провести проверку конфликта интересов. После неё — "
+        "заключить соглашение об оказании юридической помощи или продолжить без него."
     )
     try:
         await utils.safe_send_message(
@@ -89,12 +115,7 @@ async def _notify_admin_signed(
             action="nda_admin_signed",
             chat_id=config.ADMIN_TELEGRAM_ID,
             text=text,
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    *workspace_row(lead_id),
-                    [InlineKeyboardButton("Открыть обращение", callback_data=callback)],
-                ]
-            ),
+            reply_markup=InlineKeyboardMarkup(rows),
         )
         return True
     except TelegramError as exc:
