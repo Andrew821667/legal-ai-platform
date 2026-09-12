@@ -140,6 +140,37 @@ export const HISTORY: Record<string, string> = {
   "service_agreement.amount": "Сумма к учёту изменена",
 };
 
+/** Направление практики. */
+export const PRACTICE: Record<string, string> = {
+  legal: "Юридическая",
+  engineering: "Инженерная",
+  hybrid: "Автоматизация юрфункции",
+};
+
+/** Категория обращения для инженерной и гибридной практики; у права — AREA. */
+export const PRACTICE_CATEGORY: Record<string, string> = {
+  telegram_bot: "Telegram-бот",
+  website: "Сайт",
+  miniapp: "Mini App",
+  internal_tool: "Внутренняя программа",
+  ai_module: "AI-модуль",
+  integration: "Интеграция с CRM/1С/ЭДО",
+  contracts_flow: "Договорная работа",
+  claims_flow: "Претензии и споры",
+  compliance: "Комплаенс",
+  document_flow: "Документооборот",
+  staff_consulting: "Консультирование сотрудников",
+  other: "Другое",
+};
+
+/** Заголовок обращения: область права — для права, категория — для остальных практик. */
+export function intakeTitle(item: { practice?: string; legal_area: string; category?: string | null }): string {
+  if (item.practice && item.practice !== "legal") {
+    return label(PRACTICE_CATEGORY, item.category || "other");
+  }
+  return label(AREA, item.legal_area);
+}
+
 /** Откуда пришёл клиент. */
 export const SOURCE: Record<string, string> = {
   telegram_bot: "Telegram-бот",

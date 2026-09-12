@@ -3,10 +3,16 @@
 import { useState } from "react";
 
 import { Card, Pill } from "./ui";
-import { AREA, label, shortDate } from "./labels";
+import { AREA, PRACTICE, label, shortDate } from "./labels";
 import type { ClientRow } from "./types";
 import { formatRub } from "@/lib/money";
-import { CLIENT_FILTERS, CLIENT_SORTS, availableAreas, groupClients } from "@/lib/lawyer-clients";
+import {
+  CLIENT_FILTERS,
+  CLIENT_SORTS,
+  availableAreas,
+  availablePractices,
+  groupClients,
+} from "@/lib/lawyer-clients";
 import type { ClientFilter, ClientSort } from "@/lib/lawyer-clients";
 import { EXTERNAL_LINKS } from "@/lib/links";
 
@@ -55,9 +61,11 @@ export default function ClientsView({
   const [term, setTerm] = useState("");
   const [filter, setFilter] = useState<ClientFilter>("all");
   const [areas, setAreas] = useState<string[]>([]);
+  const [practice, setPractice] = useState<string | null>(null);
   const [sort, setSort] = useState<ClientSort>("recent");
   const areaOptions = rows ? availableAreas(rows) : [];
-  const groups = rows ? groupClients(rows, filter, { areas, sort }) : [];
+  const practiceOptions = rows ? availablePractices(rows) : [];
+  const groups = rows ? groupClients(rows, filter, { areas, sort, practice }) : [];
   const shown = groups.reduce((sum, group) => sum + group.rows.length, 0);
 
   const toggleArea = (area: string) => {
@@ -102,6 +110,28 @@ export default function ClientsView({
               }`}
             >
               {item.title}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Практики — только когда их в списке больше одной: пока все дела
+          юридические, переключатель ничего не переключает. */}
+      {practiceOptions.length > 1 ? (
+        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Практика">
+          {[null, ...practiceOptions].map((key) => (
+            <button
+              key={key ?? "all"}
+              type="button"
+              aria-pressed={practice === key}
+              onClick={() => setPractice(key)}
+              className={`rounded-full px-3 py-1.5 text-lw-sm font-semibold transition-colors ${
+                practice === key
+                  ? "bg-lw-ink text-white"
+                  : "bg-white text-lw-ink ring-1 ring-lw-border hover:bg-lw-blue-soft"
+              }`}
+            >
+              {key === null ? "Все практики" : label(PRACTICE, key)}
             </button>
           ))}
         </div>
@@ -197,6 +227,13 @@ export default function ClientsView({
                       {row.waiting_on_me ? <Pill tone="alert">Ждёт ответа</Pill> : null}
                       {row.nda_signed ? null : <Pill tone="warn">без NDA</Pill>}
                       {row.intakes > 1 ? <Pill>{row.intakes} обращения</Pill> : null}
+                      {(row.practices || [])
+                        .filter((p) => p !== "legal")
+                        .map((p) => (
+                          <Pill key={p} tone="mute">
+                            {label(PRACTICE, p)}
+                          </Pill>
+                        ))}
                       {row.legal_areas.map((area) => (
                         <Pill key={area} tone="mute">
                           {label(AREA, area)}

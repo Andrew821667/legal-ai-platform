@@ -255,6 +255,13 @@ async def process_pending_start_payload(
 
             await prompt_legal_help_client_type(message, context)
             return True
+        if payload in {"engineering_help", "hybrid_help"}:
+            from .engineering_help import prompt_category
+
+            await prompt_category(
+                message, context, "engineering" if payload == "engineering_help" else "hybrid"
+            )
+            return True
         return await handle_contract_start_payload(
             message=message,
             context=context,

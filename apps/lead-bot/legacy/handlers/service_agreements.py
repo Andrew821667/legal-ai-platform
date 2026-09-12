@@ -279,8 +279,18 @@ async def _show_intake(message, intake_id: str) -> None:
                 admin_interface.admin_interface.list_work_acts_for_agreement,
                 str(latest["id"]),
             )
+    practice = str(intake.get("practice") or "legal")
+    practice_line = ""
+    if practice != "legal":
+        from handlers.engineering_help import CATEGORIES_BY_PRACTICE, PRACTICE_TITLE
+
+        category = str(intake.get("category") or "other")
+        title = PRACTICE_TITLE.get(practice, practice)
+        category_title = CATEGORIES_BY_PRACTICE.get(practice, {}).get(category, category)
+        practice_line = f"Практика: {title} · {category_title}\n"
     text = (
         f"Обращение: {intake.get('lead_name') or 'Без имени'}\n"
+        f"{practice_line}"
         f"Контакт: {intake.get('lead_contact') or 'не указан'}\n"
         f"Компания: {intake.get('lead_company') or 'нет'}\n"
         f"Статус: {intake.get('status')}\n"
@@ -322,7 +332,16 @@ async def _show_intake(message, intake_id: str) -> None:
         rows.append(
             [InlineKeyboardButton("Попросить подписать NDA", callback_data=f"sa_a:nda:{intake_id}")]
         )
-    if intake.get("conflict_status") == "clear" and (nda or {}).get("signed"):
+    # Условия договора по практике — те же, что проверяет ядро: проверка
+    # конфликта и NDA обязательны для права и гибрида; инженерной практике
+    # договор доступен сразу, NDA ей только предлагается.
+    agreement_gated = practice in ("legal", "hybrid")
+    agreement_ready = (
+        intake.get("conflict_status") == "clear" and (nda or {}).get("signed")
+        if agreement_gated
+        else True
+    )
+    if agreement_ready:
         rows.append(
             [InlineKeyboardButton("Подготовить договор", callback_data=f"sa_a:new:{intake_id}")]
         )
@@ -751,7 +770,12 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
             context.bot,
             action="agreement_nda_invite",
             chat_id=target,
-            text="Перед согласованием условий юридической помощи подпишите, пожалуйста, NDA.",
+            text=(
+                "Перед согласованием условий юридической помощи подпишите, пожалуйста, NDA."
+                if str(intake.get("practice") or "legal") != "engineering"
+                else "Перед согласованием условий работы предлагаем подписать NDA: так материалы "
+                "о ваших процессах и системах будут защищены письменно."
+            ),
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -958,7 +982,7 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         if not rows:
             await utils.safe_reply_text(
                 query.message,
-                "У вас пока нет договоров с юридической практикой.",
+                "У вас пока нет договоров с AI Verdict.",
                 action="agreement_client_empty",
             )
             return

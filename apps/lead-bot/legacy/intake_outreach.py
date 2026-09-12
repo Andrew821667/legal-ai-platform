@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import intake_dialog
 from intake_dialog import AREA_GENITIVE, normalize_area
 
 # Имя помощника. В core-api оно берётся из настроек; здесь достаточно
@@ -29,6 +30,39 @@ _CLIENT_GREETING = {
 }
 
 
+def dialog_key(intake: dict) -> str:
+    """Практика для инженерной и гибридной, область права — для права."""
+    return intake_dialog.dialog_key(intake)
+
+
+def _build_practice_outreach(intake: dict, dialog: intake_dialog.PracticeDialog, greeting: str) -> str:
+    """Первое сообщение для инженерной и гибридной практики.
+
+    Тот же ассистент, та же честность про ИИ — но без «юрист уже смотрит»:
+    задачу смотрит команда, и обещать юриста там, где его не будет, нельзя.
+    """
+    return "\n".join(
+        [
+            greeting,
+            "",
+            f"Меня зовут {ASSISTANT_NAME}, я ИИ-помощник команды AI Verdict. "
+            f"Ваше обращение по вопросам {dialog.genitive} получено, {dialog.who} его уже смотрит."
+            if dialog.who == "команда"
+            else f"Меня зовут {ASSISTANT_NAME}, я ИИ-помощник команды AI Verdict. "
+            f"Ваше обращение по вопросам {dialog.genitive} получено, {dialog.who} его уже смотрят.",
+            "",
+            "Чтобы предложение было предметным — со сроком и стоимостью, — полезно "
+            "заранее разобраться, как задача устроена сейчас.",
+            "",
+            "Моя работа — собрать предварительные сведения: уточню, как процесс идёт "
+            "сегодня, какие системы задействованы и кто будет пользоваться результатом. "
+            "Это займёт несколько минут.",
+            "",
+            "Начнём? Если удобнее сразу с человеком — просто напишите об этом.",
+        ]
+    )
+
+
 def build_outreach_message(intake: dict) -> str:
     """Собирает первое сообщение клиенту.
 
@@ -36,13 +70,18 @@ def build_outreach_message(intake: dict) -> str:
     и так знает, что написал, а дословный повтор выглядит машинным.
     """
     name = str(intake.get("name") or "").strip()
-    area = AREA_GENITIVE[normalize_area(intake.get("legal_area"))]
     client_type = str(intake.get("client_type") or "unknown")
     urgent = str(intake.get("urgency") or "") == "urgent"
 
     greeting = _CLIENT_GREETING.get(client_type, "Здравствуйте!")
     if name:
         greeting = f"{greeting.rstrip('!')}, {name}!"
+
+    practice = intake_dialog.practice_dialog(dialog_key(intake))
+    if practice is not None:
+        return _build_practice_outreach(intake, practice, greeting)
+
+    area = AREA_GENITIVE[normalize_area(intake.get("legal_area"))]
 
     lines = [
         greeting,

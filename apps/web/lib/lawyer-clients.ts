@@ -14,6 +14,7 @@ export type ClientLike = {
   waiting_on_me: boolean;
   nda_signed: boolean;
   legal_areas: string[];
+  practices?: string[];
   amount_minor: number | null;
 };
 
@@ -68,6 +69,19 @@ export function availableAreas(rows: ClientLike[]): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([area]) => area);
 }
 
+/** Практики, которые реально встречаются в списке; чипы нужны, только если их больше одной. */
+export function availablePractices(rows: ClientLike[]): string[] {
+  const order = ["legal", "engineering", "hybrid"];
+  const seen = new Set<string>();
+  for (const row of rows) for (const p of row.practices || ["legal"]) seen.add(p);
+  return order.filter((p) => seen.has(p));
+}
+
+export function matchesPractice(row: ClientLike, practice: string | null): boolean {
+  if (!practice) return true;
+  return (row.practices || ["legal"]).includes(practice);
+}
+
 export type ClientSort = "recent" | "amount_desc";
 
 export const CLIENT_SORTS: { key: ClientSort; title: string }[] = [
@@ -91,13 +105,14 @@ function sortRows<T extends ClientLike>(rows: T[], sort: ClientSort): T[] {
 export function groupClients<T extends ClientLike>(
   rows: T[],
   filter: ClientFilter = "all",
-  options: { areas?: string[]; sort?: ClientSort } = {},
+  options: { areas?: string[]; sort?: ClientSort; practice?: string | null } = {},
 ): { key: ClientGroupKey; title: string; hint: string; rows: T[] }[] {
   const areas = options.areas || [];
   const sort = options.sort || "recent";
+  const practice = options.practice || null;
   const buckets = new Map<ClientGroupKey, T[]>();
   for (const row of rows) {
-    if (!matchesFilter(row, filter) || !matchesAreas(row, areas)) continue;
+    if (!matchesFilter(row, filter) || !matchesAreas(row, areas) || !matchesPractice(row, practice)) continue;
     const key = clientGroup(row);
     buckets.set(key, [...(buckets.get(key) || []), row]);
   }

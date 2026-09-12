@@ -382,6 +382,8 @@ def today(
                         "lead_id": str(i.lead_id),
                         "client": _lead_title(lead),
                         "legal_area": i.legal_area.value,
+                        "practice": i.practice.value,
+                        "category": i.category,
                         "status": i.status.value,
                         "deadline_at": _iso(i.deadline_at),
                         "days_left": _days_until(i.deadline_at),
@@ -399,6 +401,8 @@ def today(
                         "lead_id": str(i.lead_id),
                         "client": _lead_title(lead),
                         "legal_area": i.legal_area.value,
+                        "practice": i.practice.value,
+                        "category": i.category,
                         "status": i.status.value,
                         "urgency": i.urgency.value,
                         "created_at": _iso(i.created_at),
@@ -509,7 +513,11 @@ def clients(
                 LegalIntake.lead_id.in_(lead_ids)
             )
         ).all():
-            areas.setdefault(lead_id, []).append(area.value)
+            # Область права есть только у права: у инженерного обращения в
+            # legal_area лежит служебное «other», и в фильтр по областям оно
+            # попадать не должно.
+            if practice.value == "legal":
+                areas.setdefault(lead_id, []).append(area.value)
             bucket = practices.setdefault(lead_id, [])
             if practice.value not in bucket:
                 bucket.append(practice.value)

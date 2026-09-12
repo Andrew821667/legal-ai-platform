@@ -10,6 +10,8 @@ export type TodayItem = {
   reason?: string | null;
   status?: string;
   legal_area?: string;
+  practice?: string;
+  category?: string | null;
   urgency?: string;
   days_waiting?: number | null;
   expires_at?: string | null;
@@ -38,6 +40,7 @@ export type ClientRow = {
   nda_signed: boolean;
   agreement_status: string | null;
   legal_areas: string[];
+  practices: string[];
   amount_minor: number | null;
 };
 
@@ -66,6 +69,8 @@ export type IntakeCard = {
   intake_id: string;
   created_at: string | null;
   legal_area: string;
+  practice: "legal" | "engineering" | "hybrid";
+  category: string | null;
   client_type: string;
   urgency: string;
   deadline: string | null;
@@ -89,6 +94,7 @@ export type AgreementCard = {
   intake_id: string | null;
   number: string;
   status: string;
+  template_kind: "legal_services" | "software_development" | "legal_automation";
   revision: number;
   subject: string;
   price_text: string;
