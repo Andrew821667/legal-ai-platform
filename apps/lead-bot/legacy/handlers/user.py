@@ -67,6 +67,7 @@ from .intake_dialog import (
     handle_intake_dialog_message,
 )
 from .legal_help import maybe_handle_legal_help_message
+from .engineering_help import maybe_handle_message as maybe_handle_engineering_help_message
 from .nda_signing import handle_message as handle_nda_message
 from .service_agreements import handle_message as handle_service_agreement_message
 from .work_acts import handle_message as handle_work_act_message
@@ -219,6 +220,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if await maybe_handle_legal_help_message(
+            update=update,
+            context=context,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+        ):
+            return
+
+        if await maybe_handle_engineering_help_message(
             update=update,
             context=context,
             message_text=message_text,

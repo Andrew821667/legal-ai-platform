@@ -25,7 +25,7 @@ const blocks = [
     label: "Отдельное направление",
     title: "Инженерная практика",
     description: "Боты, сайты, Mini App, личные кабинеты, внутренние программы, AI-модули и интеграции рассматривает профильная команда разработки.",
-    href: ROUTES.engineering,
+    href: ROUTES.miniAppEngineeringHelp,
     action: MINIAPP_ACTIONS.openSolutionsRoadmap,
   },
 ];

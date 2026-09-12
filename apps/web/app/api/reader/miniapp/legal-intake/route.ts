@@ -18,6 +18,13 @@ const legalAreas = new Set([
   "real_estate", "it_ip_data", "family_inheritance", "debt_bankruptcy", "other",
 ]);
 const urgencyLevels = new Set(["urgent", "high", "normal", "no_deadline"]);
+// Практика и её категории — те же ключи, что PRACTICE_CATEGORIES в ядре;
+// окончательная проверка там, здесь отсекаем мусор до похода в ядро.
+const practices = new Set(["legal", "engineering", "hybrid"]);
+const practiceCategories: Record<string, Set<string>> = {
+  engineering: new Set(["telegram_bot", "website", "miniapp", "internal_tool", "ai_module", "integration", "other"]),
+  hybrid: new Set(["contracts_flow", "claims_flow", "compliance", "document_flow", "staff_consulting", "other"]),
+};
 
 type IntakeBody = {
   telegram_user_id?: number | string;
@@ -26,6 +33,8 @@ type IntakeBody = {
   company?: string;
   client_type?: string;
   legal_area?: string;
+  practice?: string;
+  category?: string;
   description?: string;
   urgency?: string;
   deadline?: string;
@@ -87,6 +96,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Telegram user mismatch" }, { status: 403 });
   }
 
+  const practice = choice(payload.practice, practices, "legal");
+  const category =
+    practice === "legal"
+      ? undefined
+      : choice(payload.category, practiceCategories[practice], "other");
+
   const consentAt = new Date().toISOString();
   const contactKey = crypto.createHash("sha256").update(contact.toLowerCase()).digest("hex").slice(0, 16);
   const idempotencyKey = `miniapp-legal-${telegramUserId}-${contactKey}-${Date.now()}`;
@@ -127,12 +142,14 @@ export async function POST(request: NextRequest) {
       contact,
       company: clean(payload.company, 255),
       client_type: choice(payload.client_type, clientTypes, "unknown"),
-      legal_area: choice(payload.legal_area, legalAreas, "other"),
+      legal_area: practice === "legal" ? choice(payload.legal_area, legalAreas, "other") : "other",
+      practice,
+      ...(category ? { category } : {}),
       description,
       urgency: choice(payload.urgency, urgencyLevels, "no_deadline"),
       deadline: clean(payload.deadline, 255),
       region: clean(payload.region, 255),
-      source_context: "miniapp_legal_help",
+      source_context: practice === "legal" ? "miniapp_legal_help" : `miniapp_${practice}_help`,
       consent_accepted: true,
       consent_version: "miniapp_legal_intake_v1",
       consent_at: consentAt,
@@ -152,6 +169,9 @@ export async function POST(request: NextRequest) {
     ok: true,
     intake_id: data.id,
     status: data.status,
-    message: "Обращение принято. Юрист свяжется с вами после первичного рассмотрения.",
+    message:
+      practice === "legal"
+        ? "Обращение принято. Юрист свяжется с вами после первичного рассмотрения."
+        : "Задача принята. Команда изучит описание и свяжется с вами, чтобы уточнить детали, сроки и стоимость.",
   });
 }

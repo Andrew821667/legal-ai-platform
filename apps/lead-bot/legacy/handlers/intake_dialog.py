@@ -318,13 +318,15 @@ async def _handoff(
     early: bool,
     user_id: int | None,
 ) -> None:
-    """Завершает диалог и передаёт материалы юристу."""
+    """Завершает диалог и передаёт материалы юристу — или команде, если практика не право."""
+    area = context.user_data.get(AREA_KEY)
     if early:
-        text = intake_dialog.build_early_handoff()
+        text = intake_dialog.build_early_handoff(area)
     else:
         text = intake_dialog.build_handoff(
             documents_count=int(context.user_data.get(DOCS_COUNT_KEY) or 0),
             answered_count=len(context.user_data.get(ANSWERED_KEY) or []),
+            area=area,
         )
     _finish(context, user_id)
     await utils.safe_reply_text(message, text, action="intake_dialog_handoff")

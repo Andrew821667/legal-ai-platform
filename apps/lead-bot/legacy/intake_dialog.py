@@ -289,13 +289,109 @@ _HANDOFF_WORDS = ("юрист", "адвокат")
 _SHORT_MESSAGE_CHARS = 40
 
 
+@dataclass(frozen=True)
+class PracticeDialog:
+    """Диалог для практики, где вопрос не про право.
+
+    Инженерная и гибридная практика идут по тому же сценарию — вопросы,
+    ориентация, NDA, материалы, передача, — но спрашивают о процессе и
+    системах, а не о стадии спора, и передают задачу команде, а не юристу.
+    Отдельный слой, а не ключи в словарях областей права: те словари
+    обязаны совпадать с LegalArea в ядре, и тест это охраняет.
+    """
+
+    label: str
+    genitive: str
+    who: str  # кто получит материалы — в именительном падеже
+    who_dative: str
+    questions: tuple[Question, ...]
+    documents: tuple[str, ...]
+    orientation: str
+    follow_up: str  # «… посмотрит материалы и свяжется с вами»
+
+
+PRACTICE_DIALOGS: dict[str, PracticeDialog] = {
+    "engineering": PracticeDialog(
+        label="Инженерная задача",
+        genitive="инженерной задачи",
+        who="команда",
+        who_dative="команде",
+        questions=(
+            Question("process", "Как эта задача решается сейчас — вручную, в таблице, в другой системе? Опишите в двух словах."),
+            Question("systems", "Какие системы уже используются и с чем нужно связать результат: CRM, 1С, ЭДО, сайт, мессенджеры?"),
+            Question("users", "Кто будет этим пользоваться и сколько человек: сотрудники, клиенты, вы сами? Есть ли срок?"),
+        ),
+        documents=(
+            "техническое задание или описание, если оно есть",
+            "примеры файлов, с которыми работает процесс: таблицы, шаблоны, выгрузки",
+            "скриншоты или схема того, как это устроено сейчас",
+        ),
+        orientation=(
+            "Спасибо — этого достаточно, чтобы команда начала предметно.\n\n"
+            "Дальше инженеры посмотрят задачу и текущий процесс, предложат, как её "
+            "решить, и оценят срок и стоимость. Если техническое задание ещё не "
+            "написано — составим его вместе, это часть работы."
+        ),
+        follow_up="Команда посмотрит материалы и свяжется с вами.",
+    ),
+    "hybrid": PracticeDialog(
+        label="Автоматизация юридической функции",
+        genitive="автоматизации юридической функции",
+        who="юристы и инженеры",
+        who_dative="юристам и инженерам",
+        questions=(
+            Question("process", "Как этот процесс идёт сейчас: кто в нём участвует и на каком шаге теряется время?"),
+            Question("volume", "Какой объём: сколько договоров, претензий или обращений в месяц проходит через процесс?"),
+            Question("systems", "Где сейчас живут документы и данные: 1С, ЭДО, CRM, почта, папки? С чем нужно связать результат?"),
+        ),
+        documents=(
+            "описание процесса или регламент, если он есть",
+            "примеры документов, которые в нём ходят: договоры, претензии, заявки",
+            "выгрузки или таблицы, по которым процесс ведётся сейчас",
+        ),
+        orientation=(
+            "Спасибо — этого достаточно, чтобы команда начала предметно.\n\n"
+            "Дальше юристы разберут процесс и правила, по которым он должен идти, "
+            "а инженеры — как его автоматизировать и с чем связать. Предложение "
+            "будет с этапами: сначала анализ и регламент, потом система."
+        ),
+        follow_up="Юристы и инженеры посмотрят материалы и свяжутся с вами.",
+    ),
+}
+
+
+def dialog_key(intake: dict) -> str:
+    """Ключ диалога: практика для инженерной и гибридной, область права — для права."""
+    practice = str(intake.get("practice") or "legal")
+    if practice in PRACTICE_DIALOGS:
+        return practice
+    return str(intake.get("legal_area") or "other")
+
+
+def practice_dialog(area: str | None) -> PracticeDialog | None:
+    return PRACTICE_DIALOGS.get(str(area or ""))
+
+
+def who_receives(area: str | None, *, dative: bool = False) -> str:
+    """«Юрист» или «команда» — кому уходят материалы."""
+    dialog = practice_dialog(area)
+    if dialog is None:
+        return "юристу" if dative else "юрист"
+    return dialog.who_dative if dative else dialog.who
+
+
 def normalize_area(area: str | None) -> str:
     """Приводит область права к известной, чтобы неизвестное значение не роняло диалог."""
     value = str(area or "other").strip()
+    if value in PRACTICE_DIALOGS:
+        return value
     return value if value in QUESTIONS else "other"
 
 
 def questions_for(area: str | None) -> tuple[Question, ...]:
+    dialog = practice_dialog(area)
+    if dialog is not None:
+        return dialog.questions
     return QUESTIONS[normalize_area(area)]
 
 
@@ -330,6 +426,13 @@ def build_orientation(area: str | None, answers: object = None) -> str:
     области: «семья и наследство» — это два разных разговора, и путать их
     хуже, чем не уточнять вовсе.
     """
+    dialog = practice_dialog(area)
+    if dialog is not None:
+        lines = [dialog.orientation, "", "Пригодятся:"]
+        lines.extend(f"• {item}" for item in dialog.documents)
+        lines.extend(["", "Если чего-то нет — не страшно, это не мешает начать."])
+        return "\n".join(lines)
+
     key = normalize_area(area)
     lines = [
         "Спасибо — этого достаточно, чтобы юрист начал предметно.",
@@ -384,14 +487,15 @@ def build_document_request(area: str | None, *, nda_signed: bool) -> str:
                 "",
             ]
         )
+    what = "материалы" if practice_dialog(area) else "документы"
     lines.extend(
         [
-            "Присылайте документы сюда файлами — по одному или сразу несколькими.",
+            f"Присылайте {what} сюда файлами — по одному или сразу несколькими.",
             "",
-            "Подойдут PDF, Word, фотографии — читаемая фотография документа тоже "
+            "Подойдут PDF, Word, таблицы, фотографии — читаемая фотография документа тоже "
             "годится, специально сканировать не нужно.",
             "",
-            "Когда закончите, напишите «готово» — я передам всё юристу.",
+            f"Когда закончите, напишите «готово» — я передам всё {who_receives(area, dative=True)}.",
         ]
     )
     return "\n".join(lines)
@@ -406,9 +510,10 @@ def build_document_accepted(*, count: int, nda_signed: bool) -> str:
     return f"{line}\n\nЕсли есть ещё — присылайте. Закончили — напишите «готово»."
 
 
-def build_handoff(*, documents_count: int, answered_count: int) -> str:
-    """Завершение диалога и передача юристу."""
-    lines = ["Всё передал юристу."]
+def build_handoff(*, documents_count: int, answered_count: int, area: str | None = None) -> str:
+    """Завершение диалога и передача юристу — или команде, если практика не право."""
+    who = who_receives(area, dative=True)
+    lines = [f"Всё передал {who}."]
 
     collected: list[str] = []
     if answered_count:
@@ -418,10 +523,12 @@ def build_handoff(*, documents_count: int, answered_count: int) -> str:
     if collected:
         lines.append(f"В карточке обращения: описание ситуации, {' и '.join(collected)}.")
 
+    dialog = practice_dialog(area)
+    follow_up = dialog.follow_up if dialog else "Юрист посмотрит материалы и свяжется с вами."
     lines.extend(
         [
             "",
-            "Юрист посмотрит материалы и свяжется с вами. Если удобнее обсудить "
+            f"{follow_up} Если удобнее обсудить "
             "голосом — напишите, договоримся о звонке.",
             "",
             "Если вспомните что-то важное, просто напишите сюда — добавлю к обращению.",
@@ -430,13 +537,14 @@ def build_handoff(*, documents_count: int, answered_count: int) -> str:
     return "\n".join(lines)
 
 
-def build_early_handoff() -> str:
+def build_early_handoff(area: str | None = None) -> str:
     """Ответ на просьбу передать дело юристу прямо сейчас."""
+    who = who_receives(area, dative=True)
     return "\n".join(
         [
-            "Конечно, передаю юристу.",
+            f"Конечно, передаю {who}.",
             "",
-            "Он посмотрит ваше обращение и свяжется с вами. Если удобнее "
+            "Ваше обращение посмотрят и свяжутся с вами. Если удобнее "
             "голосом — напишите, договоримся о звонке.",
         ]
     )

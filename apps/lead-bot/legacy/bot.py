@@ -84,6 +84,7 @@ from handlers.contract_analysis import (
 )
 from handlers.intake_dialog import start_dialog as start_intake_dialog
 from handlers.legal_help import handle_legal_help_callback
+from handlers.engineering_help import handle_callback as handle_engineering_help_callback
 from handlers.nda_signing import handle_callback as handle_nda_callback
 from handlers.service_agreements import handle_admin_callback as handle_service_agreement_admin_callback
 from handlers.service_agreements import handle_client_callback as handle_service_agreement_client_callback
@@ -802,6 +803,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_open_web_callback(update, context)
         elif data == "legal_help_start" or data.startswith("legal_client:"):
             await handle_legal_help_callback(update, context)
+        elif data.startswith(("eng_help_start:", "eng_cat:", "eng_client:")):
+            await handle_engineering_help_callback(update, context)
         elif data == "menu_contract_ai":
             await handle_business_menu_callback(update, context)
         elif data.startswith("menu_"):
@@ -955,7 +958,9 @@ async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 context.application.user_data[int(telegram_user_id)],
                 intake_id=intake_id,
                 lead_id=intake.get("lead_id"),
-                legal_area=intake.get("legal_area"),
+                # Для инженерной и гибридной практики ключ диалога — практика,
+                # а не область права: у них свои вопросы и свой адресат.
+                legal_area=intake_outreach.dialog_key(intake),
                 telegram_user_id=int(telegram_user_id),
             )
             logger.info("Intake outreach sent for %s", intake_id)

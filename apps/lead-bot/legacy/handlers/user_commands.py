@@ -170,6 +170,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{consent_text}\n\n"
                     "После подтверждения вы сможете одним сообщением описать ситуацию для юриста."
                 )
+            elif start_payload in {"engineering_help", "hybrid_help"}:
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения вы сможете одним сообщением описать задачу для команды."
+                )
             await utils.safe_reply_html(
                 update.message,
                 consent_text,

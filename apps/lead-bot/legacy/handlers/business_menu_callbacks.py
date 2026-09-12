@@ -125,6 +125,12 @@ async def handle_business_menu_callback(update: Update, context: ContextTypes.DE
             if callback_data in {"menu_services", "menu_prices", "menu_help"}
             else state.menu_markup
         )
+        # Под описанием инженерной практики — вход в обращение, а не только
+        # просьба оставить контакт: дальше задача идёт по общему циклу.
+        if callback_data == "menu_custom_development":
+            from .engineering_help import with_start_buttons
+
+            reply_markup = with_start_buttons(reply_markup)
         await responder.send_html(
             response_text,
             reply_markup,
