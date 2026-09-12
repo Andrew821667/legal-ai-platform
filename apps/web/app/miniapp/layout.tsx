@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import Script from "next/script";
 import MiniAppStateProvider from "@/components/miniapp/MiniAppStateProvider";
 import MiniAppDeepLinkSync from "@/components/miniapp/MiniAppDeepLinkSync";
 import MiniAppTopBar from "@/components/miniapp/MiniAppTopBar";
@@ -21,6 +22,10 @@ export const metadata: Metadata = {
 export default function MiniAppLayout({ children }: { children: React.ReactNode }) {
   return (
     <MiniAppStateProvider>
+      {/* Telegram не подставляет window.Telegram.WebApp сам — это делает его
+          скрипт, читая initData из адреса. Без него формы внутри Telegram
+          считали, что открыты в обычном браузере, и отправлять было нечем. */}
+      <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       <main className={`${isLightOpsTheme ? "miniapp-light-ops" : ""} min-h-screen bg-slate-900 text-slate-100`}>
         <Suspense fallback={null}>
           <MiniAppDeepLinkSync />

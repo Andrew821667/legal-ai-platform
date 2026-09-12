@@ -2,7 +2,7 @@
 
 import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
-import { AGREEMENT_STATUS, AREA, OUTREACH_REASON, days, label, shortDate, shortDay } from "./labels";
+import { AGREEMENT_STATUS, OUTREACH_REASON, days, intakeTitle, label, shortDate, shortDay } from "./labels";
 import type { Today, TodayItem, TodaySection } from "./types";
 
 /**
@@ -25,9 +25,9 @@ function itemLine(section: TodaySection, item: TodayItem): string {
     case "expiring":
       return `${item.subject} — действует до ${shortDate(item.expires_at)}`;
     case "deadline_soon":
-      return `${label(AREA, item.legal_area)} — до ${shortDay(item.deadline_at)}`;
+      return `${intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category })} — до ${shortDay(item.deadline_at)}`;
     case "no_agreement":
-      return label(AREA, item.legal_area);
+      return intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category });
     default:
       return "";
   }

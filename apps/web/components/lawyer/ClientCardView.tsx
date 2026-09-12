@@ -16,14 +16,15 @@ import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
 import { lawyerAction } from "./useTelegram";
 import {
   AGREEMENT_STATUS,
-  AREA,
   CLIENT_TYPE,
   CONFLICT,
   CONFLICT_EXPLAINED,
   INTAKE_STATUS,
   OUTREACH_REASON,
+  PRACTICE,
   SOURCE,
   URGENCY,
+  intakeTitle,
   label,
   shortDate,
   shortDay,
@@ -66,6 +67,9 @@ const CONFLICT_RANK: Record<string, number> = { clear: 0, unchecked: 1, potentia
 function worstConflict(intakes: IntakeCard[]): string | null {
   let worst: string | null = null;
   for (const item of intakes) {
+    // У инженерного обращения непроверенный конфликт — не тревога: проверка
+    // там не условие договора. Отмеченный конфликт показываем всегда.
+    if (item.practice === "engineering" && item.conflict_status === "unchecked") continue;
     if ((CONFLICT_RANK[item.conflict_status] ?? 0) > (CONFLICT_RANK[worst ?? "clear"] ?? 0)) {
       worst = item.conflict_status;
     }
@@ -398,7 +402,12 @@ function Intake({
   currentLeadId: string;
   onOpenClient: (leadId: string) => void;
 }) {
-  const conflictBlocks = item.conflict_status !== "clear";
+  // Условия договора по практике — те же, что проверяет ядро: проверка
+  // конфликта и NDA обязательны для права и гибрида; инженерной практике
+  // договор доступен сразу, NDA ей только предлагается. Пометка о конфликте
+  // у инженерного обращения остаётся, но не запирает договор.
+  const gated = item.practice !== "engineering";
+  const conflictBlocks = gated && item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
 
   // Условия ядра: подписанный договор не переписывают, а остальное оно
@@ -408,7 +417,7 @@ function Intake({
   const openAgreement = agreements.some((a) => a.status !== "superseded" && a.status !== "signed");
   const blocker = conflictBlocks
     ? null // о проверке конфликта рядом уже сказано подробно
-    : !ndaSigned
+    : gated && !ndaSigned
       ? "Договор нельзя составить, пока клиент не подписал соглашение о конфиденциальности."
       : !hasDialog
         ? "У клиента нет диалога в Telegram — отправить договор будет некуда."
@@ -423,10 +432,15 @@ function Intake({
 
   return (
     <Card>
-      <p className="text-lw-lg font-bold text-lw-ink">{label(AREA, item.legal_area)}</p>
+      <p className="text-lw-lg font-bold text-lw-ink">{intakeTitle(item)}</p>
       <div className="mt-2 flex flex-wrap gap-2">
+        {item.practice !== "legal" ? <Pill tone="mute">{label(PRACTICE, item.practice)}</Pill> : null}
         <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
-        <Pill tone={conflictTone(item.conflict_status)}>{label(CONFLICT, item.conflict_status)}</Pill>
+        {/* У инженерного обращения проверка конфликта — пометка, а не условие;
+            непроверенную не показываем, чтобы не читалась как преграда. */}
+        {gated || item.conflict_status !== "unchecked" ? (
+          <Pill tone={conflictTone(item.conflict_status)}>{label(CONFLICT, item.conflict_status)}</Pill>
+        ) : null}
       </div>
 
       <div className="mt-1 flex flex-wrap gap-x-3 text-lw-sm text-lw-muted">
