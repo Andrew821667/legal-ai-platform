@@ -441,23 +441,34 @@ def clients(
     )
     term = (search or "").strip()
     if term:
-        pattern = f"%{term}%"
+        # PostgreSQL installations with the C locale do not case-fold
+        # Cyrillic in ILIKE. Include common user-entered variants explicitly.
+        patterns = {f"%{value}%" for value in (term, term.capitalize(), term.upper())}
         query = query.where(
             or_(
-                Lead.name.ilike(pattern),
-                Lead.contact.ilike(pattern),
-                Lead.company.ilike(pattern),
+                *(column.ilike(pattern) for column in (Lead.name, Lead.contact, Lead.company) for pattern in patterns)
             )
         )
 
     rows = db.execute(query).all()
     lead_ids = [lead.id for lead, _, _ in rows]
 
-    signed_nda = set(
-        db.execute(
-            select(NdaSignature.lead_id).where(NdaSignature.lead_id.in_(lead_ids))
-        ).scalars().all()
-    ) if lead_ids else set()
+    signed_nda: set[uuid.UUID] = set()
+    leads_by_telegram: dict[int, set[uuid.UUID]] = {}
+    for lead, _, _ in rows:
+        if lead.telegram_user_id is not None:
+            leads_by_telegram.setdefault(lead.telegram_user_id, set()).add(lead.id)
+    if lead_ids:
+        checks = [NdaSignature.lead_id.in_(lead_ids)]
+        if leads_by_telegram:
+            checks.append(NdaSignature.telegram_user_id.in_(leads_by_telegram))
+        for nda_lead_id, telegram_user_id in db.execute(
+            select(NdaSignature.lead_id, NdaSignature.telegram_user_id).where(or_(*checks))
+        ).all():
+            if nda_lead_id in lead_ids:
+                signed_nda.add(nda_lead_id)
+            if telegram_user_id is not None:
+                signed_nda.update(leads_by_telegram.get(telegram_user_id, set()))
 
     # Клиенты, чей последний вопрос остался без ответа.
     awaiting_me: set[uuid.UUID] = set()
@@ -501,10 +512,7 @@ def clients(
             if amount_minor is not None and status in _MONEY_STATUSES:
                 amounts[lead_id] = amounts.get(lead_id, 0) + int(amount_minor)
 
-    # Область права по клиенту. Список, а не одно значение: на
-    # legal_intakes.lead_id стоит unique — сейчас у лида ровно один intake, —
-    # но фильтру на экране проще работать с массивом сразу, не переделывая
-    # его в день, когда это ограничение снимут.
+    # Один клиент может вести несколько дел в разных практиках.
     areas: dict[uuid.UUID, list[str]] = {}
     practices: dict[uuid.UUID, list[str]] = {}
     if lead_ids:
@@ -517,7 +525,9 @@ def clients(
             # legal_area лежит служебное «other», и в фильтр по областям оно
             # попадать не должно.
             if practice.value == "legal":
-                areas.setdefault(lead_id, []).append(area.value)
+                bucket = areas.setdefault(lead_id, [])
+                if area.value not in bucket:
+                    bucket.append(area.value)
             bucket = practices.setdefault(lead_id, [])
             if practice.value not in bucket:
                 bucket.append(practice.value)
@@ -604,8 +614,14 @@ def client_card(
                 }
             )
 
+    nda_checks = [NdaSignature.lead_id == lead_id]
+    if lead.telegram_user_id is not None:
+        nda_checks.append(NdaSignature.telegram_user_id == lead.telegram_user_id)
     nda = db.execute(
-        select(NdaSignature).where(NdaSignature.lead_id == lead_id)
+        select(NdaSignature)
+        .where(or_(*nda_checks))
+        .order_by(NdaSignature.signed_at.desc())
+        .limit(1)
     ).scalar_one_or_none()
 
     agreements = db.execute(
@@ -1025,6 +1041,7 @@ def document_meta(
 
 
 class IntakeLinkCreate(BaseModel):
+    linked_intake_id: uuid.UUID | None = None
     linked_lead_id: uuid.UUID
     # Роль обращения из URL относительно связываемого — не тип связи как
     # таковой: "main"/"subordinate" описывают одну и ту же связь с разных
@@ -1057,9 +1074,13 @@ def create_intake_link(
     if payload.role not in _INTAKE_LINK_ROLES:
         raise HTTPException(status_code=400, detail="Неизвестная роль связи")
 
-    linked_intake = db.execute(
-        select(LegalIntake).where(LegalIntake.lead_id == payload.linked_lead_id)
-    ).scalar_one_or_none()
+    query = select(LegalIntake).where(LegalIntake.lead_id == payload.linked_lead_id)
+    if payload.linked_intake_id:
+        query = query.where(LegalIntake.id == payload.linked_intake_id)
+    matches = db.scalars(query.limit(2)).all()
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="У клиента несколько обращений: выберите конкретное дело")
+    linked_intake = matches[0] if matches else None
     if linked_intake is None:
         raise HTTPException(status_code=404, detail="У указанного клиента нет обращения")
     if linked_intake.id == intake_id:

@@ -25,6 +25,7 @@ from telegram import (
     BotCommandScopeChat,
     BotCommandScopeDefault,
     MenuButtonDefault,
+    InlineKeyboardMarkup,
     Update,
 )
 from telegram.error import Forbidden, TelegramError
@@ -40,6 +41,7 @@ from telegram.ext import (
 )
 
 import core_api_bridge
+import admin_interface
 import database
 import content
 import intake_outreach
@@ -92,6 +94,7 @@ from handlers.work_acts import handle_admin_callback as handle_work_act_admin_ca
 from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
+from telegram_ui import inline_button as InlineKeyboardButton
 from handlers.user import (
     ai_policy_command,
     consent_status_command,
@@ -904,6 +907,40 @@ async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Error in pending leads job: %s", error, exc_info=True)
 
 
+async def client_notice_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Доставляет владельцу действия клиентов из Mini App с подтверждением."""
+    try:
+        notices = await asyncio.to_thread(
+            admin_interface.admin_interface.claim_client_notices
+        )
+    except Exception as error:
+        logger.warning("Client notices fetch failed: %s", type(error).__name__)
+        return
+    for notice in notices:
+        notice_id = notice.get("id")
+        claim_token = notice.get("claim_token")
+        if not notice_id or not claim_token:
+            continue
+        markup = None
+        if callback_data := notice.get("callback_data"):
+            markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Открыть действие", callback_data=callback_data)]]
+            )
+        try:
+            await context.bot.send_message(
+                chat_id=config.ADMIN_TELEGRAM_ID,
+                text=str(notice.get("text") or "Новое действие клиента"),
+                reply_markup=markup,
+            )
+            await asyncio.to_thread(
+                admin_interface.admin_interface.acknowledge_client_notice,
+                notice_id,
+                claim_token,
+            )
+        except Exception as error:
+            logger.warning("Client notice delivery failed: %s", type(error).__name__)
+
+
 async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Пишет клиенту от лица команды через несколько минут после обращения.
 
@@ -1191,6 +1228,14 @@ def build_application() -> Application:
                 config.INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS,
                 config.INTAKE_OUTREACH_BATCH_SIZE,
             )
+
+        application.job_queue.run_repeating(
+            client_notice_job,
+            interval=config.CLIENT_NOTICE_CHECK_INTERVAL_SECONDS,
+            first=10,
+            name="client_notices",
+            job_kwargs={"coalesce": True, "max_instances": 1, "misfire_grace_time": 120},
+        )
 
         application.job_queue.run_repeating(
             cleanup_conversations_job,

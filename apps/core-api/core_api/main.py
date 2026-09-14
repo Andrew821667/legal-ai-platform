@@ -10,26 +10,28 @@ from fastapi.responses import JSONResponse
 from core_api.alerts import send_telegram_alert
 from core_api.config import get_settings
 from core_api.logging_config import setup_logging
-from core_api.sentry_init import init_sentry
 from core_api.routers import (
     admin,
     automation_controls,
+    client_notices,
+    client_portal,
     contract_ai_bridge,
     contract_jobs,
     events,
     health,
-    legal_intakes,
+    lawyer_workspace,
     leads,
+    legal_intakes,
     nda,
     reader,
     scheduled_posts,
     service_agreements,
     special_consultations,
     users,
-    workers,
-    lawyer_workspace,
     work_acts,
+    workers,
 )
+from core_api.sentry_init import init_sentry
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -65,6 +67,8 @@ app.include_router(special_consultations.router)
 app.include_router(service_agreements.router)
 app.include_router(lawyer_workspace.router)
 app.include_router(work_acts.router)
+app.include_router(client_notices.router)
+app.include_router(client_portal.router)
 app.include_router(workers.router)
 app.include_router(admin.router)
 

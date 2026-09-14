@@ -519,6 +519,14 @@ body {
   background-color: #fef2f2 !important;
 }
 
+.miniapp-light-ops [class*="text-red-"] {
+  color: #991b1b !important;
+}
+
+.miniapp-light-ops [class*="text-emerald-"] {
+  color: #047857 !important;
+}
+
 .miniapp-light-ops .miniapp-action-info {
   background-color: #2563eb !important;
   border-color: #bfdbfe !important;

@@ -402,10 +402,7 @@ function Intake({
   currentLeadId: string;
   onOpenClient: (leadId: string) => void;
 }) {
-  // Условия договора по практике — те же, что проверяет ядро: проверка
-  // конфликта и NDA обязательны для права и гибрида; инженерной практике
-  // договор доступен сразу, NDA ей только предлагается. Пометка о конфликте
-  // у инженерного обращения остаётся, но не запирает договор.
+  // NDA обязателен всем, проверка конфликта блокирует право и гибрид.
   const gated = item.practice !== "engineering";
   const conflictBlocks = gated && item.conflict_status !== "clear";
   const severe = item.conflict_status === "conflict";
@@ -417,7 +414,7 @@ function Intake({
   const openAgreement = agreements.some((a) => a.status !== "superseded" && a.status !== "signed");
   const blocker = conflictBlocks
     ? null // о проверке конфликта рядом уже сказано подробно
-    : gated && !ndaSigned
+    : !ndaSigned
       ? "Договор нельзя составить, пока клиент не подписал соглашение о конфиденциальности."
       : !hasDialog
         ? "У клиента нет диалога в Telegram — отправить договор будет некуда."

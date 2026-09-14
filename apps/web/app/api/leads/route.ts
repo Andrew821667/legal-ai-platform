@@ -30,6 +30,7 @@ interface LeadRequestBody {
   segment?: LeadSegment;
   message?: string;
   offer?: LeadOffer;
+  practice?: "legal" | "engineering" | "hybrid";
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -96,6 +97,14 @@ export async function POST(request: NextRequest) {
   const message = clean(payload.message, 4000);
   const offer = toOffer(payload.offer);
   const segment = toSegment(payload.segment);
+  const isCase = offer === "consultation" || offer === "unknown";
+  const practice = payload.practice || "hybrid";
+  if (isCase && !["legal", "engineering", "hybrid"].includes(practice)) {
+    return NextResponse.json({ detail: "Выберите направление задачи." }, { status: 400 });
+  }
+  if (isCase && (!message || message.length < 20)) {
+    return NextResponse.json({ detail: "Кратко опишите задачу, не менее 20 символов." }, { status: 400 });
+  }
   const turnstileToken = clean(payload.turnstile_token, 2048) || "";
 
   if (!contact) {
@@ -206,15 +215,29 @@ export async function POST(request: NextRequest) {
     utm_term: utmTerm,
   };
 
-  const response = await fetch(`${CORE_API_URL}/api/v1/leads`, {
+  const casePayload = {
+    ...corePayload,
+    notes: corePayload.notes.slice(0, 4000),
+    practice,
+    category: practice === "legal" ? null : "other",
+    legal_area: "other",
+    client_type: segment === "entrepreneur" ? "entrepreneur" : segment === "other" ? "unknown" : "company",
+    description: message,
+    source_context: (landingPage || "/").slice(0, 255),
+    consent_accepted: true,
+    consent_version: "website_pdn_transborder_v1",
+    consent_at: consentAt,
+  };
+  const response = await fetch(`${CORE_API_URL}/api/v1/${isCase ? "legal-intakes" : "leads"}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": CORE_API_BOT_KEY,
       "Idempotency-Key": leadProtection.idempotencyKey,
     },
-    body: JSON.stringify(corePayload),
+    body: JSON.stringify(isCase ? casePayload : corePayload),
     cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
 
   const raw = await response.text();
@@ -227,7 +250,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
-      lead_id: data.id,
+      lead_id: isCase ? data.lead_id : data.id,
+      intake_id: isCase ? data.id : undefined,
       status: data.status,
       message: "Заявка принята. Мы свяжемся с вами в ближайшее время.",
     },

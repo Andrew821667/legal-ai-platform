@@ -135,6 +135,8 @@ class LeadCreate(LeadCreateBase):
     source: LeadSource
     segment: LeadSegment | None = None
     status: LeadStatus = LeadStatus.new
+    last_message_at: datetime | None = None
+    notification_sent: bool | None = None
 
 
 class LeadPatch(BaseModel):
@@ -159,6 +161,8 @@ class LeadPatch(BaseModel):
     lead_magnet_type: str | None = None
     lead_magnet_delivered: bool | None = None
     notes: str | None = None
+    last_message_at: datetime | None = None
+    notification_sent: bool | None = None
 
 
 class LeadOut(BaseModel):
@@ -195,13 +199,16 @@ class LeadOut(BaseModel):
     utm_campaign: str | None
     utm_content: str | None
     utm_term: str | None
+    last_message_at: datetime | None = None
+    notification_sent: bool = False
+    notification_sent_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
 
 class LegalIntakeCreate(BaseModel):
     source: LeadSource
-    telegram_user_id: int | None = None
+    telegram_user_id: int | None = Field(default=None, gt=0)
     name: str | None = Field(default=None, max_length=120)
     contact: str = Field(min_length=3, max_length=255)
     company: str | None = Field(default=None, max_length=255)
@@ -249,6 +256,7 @@ class LegalIntakePatch(BaseModel):
     deadline_at: datetime | None = None
     assigned_to: str | None = Field(default=None, max_length=255)
     internal_note: str | None = Field(default=None, max_length=4000)
+    without_agreement: bool | None = None
 
 
 class LegalIntakeOut(BaseModel):
@@ -270,6 +278,7 @@ class LegalIntakeOut(BaseModel):
     conflict_status: ConflictCheckStatus
     assigned_to: str | None
     internal_note: str | None
+    without_agreement: bool = False
     lead_name: str | None
     lead_contact: str | None
     lead_company: str | None

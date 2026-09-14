@@ -129,8 +129,7 @@ def _create_agreement(client: TestClient, key: str, intake_id: str):
     )
 
 
-def test_engineering_agreement_needs_neither_nda_nor_conflict_check(monkeypatch) -> None:
-    """Инженерной практике не нужны ни NDA, ни проверка конфликта как условие договора."""
+def test_engineering_agreement_requires_nda_but_not_conflict_check(monkeypatch) -> None:
     from core_api.routers import service_agreements as api
 
     monkeypatch.setattr(api, "get_settings", lambda: _OPERATOR)
@@ -140,13 +139,23 @@ def test_engineering_agreement_needs_neither_nda_nor_conflict_check(monkeypatch)
     client = TestClient(app)
     try:
         created = _create_agreement(client, key, seeded["intake_id"])
+        assert created.status_code == 409, created.text
+        assert "NDA" in created.json()["detail"]
+        with SessionLocal() as db:
+            db.add(NdaSignature(
+                lead_id=seeded["lead_id"], telegram_user_id=seeded["telegram_id"],
+                signer_full_name="Пётр Петров", signer_contact="test@example.ru",
+                signer_org="ООО Ромашка", document_version="test", document_hash="a" * 64,
+                document_text="Test NDA",
+            ))
+            db.commit()
+        created = _create_agreement(client, key, seeded["intake_id"])
         assert created.status_code == 201, created.text
         agreement = created.json()
         assert agreement["template_kind"] == "software_development"
         assert agreement["text"].startswith("ДОГОВОР НА РАЗРАБОТКУ ПРОГРАММНОГО ОБЕСПЕЧЕНИЯ")
         assert "статья 1296" in agreement["text"]
         assert agreement["version"] == "2026-09-12.1"
-        # Реквизиты подписанта — из карточки клиента, NDA нет.
         assert agreement["client_name"] == "Пётр Петров"
         assert agreement["client_org"] == "ООО Ромашка"
     finally:
@@ -290,7 +299,7 @@ def test_workspace_shows_practice_on_card_and_list(monkeypatch) -> None:
     monkeypatch.setattr(api, "get_settings", lambda: _OPERATOR)
     names = [f"pytest.practice.ws.{uuid4().hex}"]
     key = _key(Scope.admin, names[0])
-    seeded = _seed(practice=Practice.engineering, conflict=ConflictCheckStatus.unchecked, nda=False, category="ai_module")
+    seeded = _seed(practice=Practice.engineering, conflict=ConflictCheckStatus.unchecked, nda=True, category="ai_module")
     client = TestClient(app)
     try:
         assert _create_agreement(client, key, seeded["intake_id"]).status_code == 201

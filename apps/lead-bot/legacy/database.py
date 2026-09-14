@@ -9,8 +9,6 @@ import sqlite3
 import time
 import urllib.parse
 import urllib.request
-from typing import Dict, Optional
-
 import database_facade
 import database_schema
 from config import get_config
@@ -157,6 +155,8 @@ class Database(database_facade.DatabaseFacadeMixin):
     def _map_core_lead(row: dict) -> dict:
         return {
             "core_lead_id": row.get("id"),
+            "legacy_lead_id": row.get("legacy_lead_id"),
+            "telegram_user_id": row.get("telegram_user_id"),
             "created_at": row.get("created_at"),
             "updated_at": row.get("updated_at"),
             "name": row.get("name"),
@@ -177,6 +177,9 @@ class Database(database_facade.DatabaseFacadeMixin):
             "lead_magnet_type": row.get("lead_magnet_type"),
             "lead_magnet_delivered": bool(row.get("lead_magnet_delivered")),
             "notes": row.get("notes"),
+            "last_message_at": row.get("last_message_at"),
+            "notification_sent": bool(row.get("notification_sent")),
+            "notification_sent_at": row.get("notification_sent_at"),
         }
 
     def _merge_user_row_with_core(self, local_user: dict | None) -> dict | None:

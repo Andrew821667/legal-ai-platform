@@ -113,8 +113,8 @@ def conflict_check_blocks_agreement(practice: "Practice") -> bool:
 
 
 def nda_required_for_agreement(practice: "Practice") -> bool:
-    """NDA предлагается всем; условием договора остаётся только для права и гибрида."""
-    return practice in (Practice.legal, Practice.hybrid)
+    """Конфиденциальность обязательна для обеих практик и их пересечения."""
+    return True
 
 
 class AgreementTemplateKind(str, enum.Enum):
@@ -344,6 +344,11 @@ class Lead(Base):
     utm_campaign: Mapped[str | None] = mapped_column(String(255), nullable=True)
     utm_content: Mapped[str | None] = mapped_column(String(255), nullable=True)
     utm_term: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notification_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    notification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
@@ -360,6 +365,7 @@ class Lead(Base):
         ),
         Index("ix_leads_status", "status"),
         Index("ix_leads_temperature", "temperature"),
+        Index("ix_leads_pending_notification", "notification_sent", "last_message_at"),
     )
 
 
@@ -542,6 +548,19 @@ class ServiceAgreementMessage(Base):
     __table_args__ = (Index("ix_service_agreement_messages_agreement", "agreement_id", "created_at"),)
 
 
+class ClientNotice(Base):
+    __tablename__ = "client_notices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    callback_data: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    claim_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class WorkActStatus(str, enum.Enum):
     draft = "draft"
     sent = "sent"
@@ -599,6 +618,17 @@ class WorkAct(Base):
     paid_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # Необязательная заметка юриста при подтверждении: «пришло на СБП 11.09».
     paid_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    document_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    document_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_by_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    acceptance_callback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    objection_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    objected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     __table_args__ = (
         Index("ix_work_acts_agreement", "agreement_id", "created_at"),
@@ -615,7 +645,6 @@ class LegalIntake(Base):
         UUID(as_uuid=True),
         ForeignKey("leads.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -665,6 +694,9 @@ class LegalIntake(Base):
     )
     assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
     internal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    without_agreement: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     # Первое обращение к клиенту от лица команды. Отметка о времени нужна,
     # чтобы фоновая задача не написала одному человеку дважды: она разбирает
     # обращения пачками и может перезапуститься на середине.
@@ -676,6 +708,7 @@ class LegalIntake(Base):
     outreach_blocked_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
+        Index("ix_legal_intakes_lead_created", "lead_id", "created_at"),
         Index("ix_legal_intakes_status_created", "status", "created_at"),
         Index("ix_legal_intakes_urgency_created", "urgency", "created_at"),
         Index("ix_legal_intakes_area", "legal_area"),

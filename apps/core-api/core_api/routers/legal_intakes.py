@@ -4,15 +4,15 @@ import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api.intake_assistant import next_turn
 from core_api.idempotency import cached_response, store_response
+from core_api.intake_assistant import next_turn
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
@@ -25,7 +25,10 @@ from core_api.models import (
     LegalIntake,
     LegalIntakeStatus,
     Scope,
+    ServiceAgreement,
+    conflict_check_blocks_agreement,
 )
+from core_api.routers.nda import _signature_for_lead
 from core_api.schemas import (
     LegalIntakeCreate,
     LegalIntakeOut,
@@ -64,6 +67,7 @@ def _payload(item: LegalIntake, lead: Lead) -> LegalIntakeOut:
         conflict_status=item.conflict_status,
         assigned_to=item.assigned_to,
         internal_note=item.internal_note,
+        without_agreement=item.without_agreement,
         lead_name=lead.name,
         lead_contact=lead.contact,
         lead_company=lead.company,
@@ -83,6 +87,9 @@ def create_legal_intake(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> LegalIntakeOut | JSONResponse:
     if idempotency_key:
+        db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(
+            f"legal-intake-request:{idempotency_key}", 0
+        ))))
         cached = cached_response(db, idempotency_key, namespace="legal_intakes.create")
         if cached:
             cached_status, cached_body = cached
@@ -93,7 +100,19 @@ def create_legal_intake(
         f"\nconsent_at={payload.consent_at.isoformat()}"
     )
     notes = consent_note if not payload.notes else f"{consent_note}\n{payload.notes}"
-    lead = Lead(
+    existing = None
+    if payload.telegram_user_id is not None:
+        db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(
+            f"legal-intake-client:{payload.telegram_user_id}", 0
+        ))))
+        # Only a verified channel identity may connect a new case to a client.
+        # Historical duplicates are not merged or assigned by name/contact.
+        matches = db.scalars(select(Lead).where(
+            Lead.telegram_user_id == payload.telegram_user_id
+        ).order_by(Lead.created_at).limit(2)).all()
+        if len(matches) == 1:
+            existing = matches[0]
+    lead = existing or Lead(
         source=payload.source,
         telegram_user_id=payload.telegram_user_id,
         name=payload.name.strip() if payload.name else None,
@@ -148,9 +167,11 @@ def create_legal_intake(
             "category": item.category,
             "urgency": item.urgency.value,
             "source": lead.source.value,
+            "consent_version": payload.consent_version,
+            "consent_at": payload.consent_at.isoformat(),
         },
     )
-    db.commit()
+    db.flush()
     db.refresh(lead)
     db.refresh(item)
 
@@ -163,6 +184,8 @@ def create_legal_intake(
             result.model_dump(mode="json"),
             namespace="legal_intakes.create",
         )
+    else:
+        db.commit()
     background_tasks.add_task(notify_new_legal_intake, item.id)
     return result
 
@@ -210,19 +233,36 @@ def update_legal_intake(
         select(LegalIntake, Lead)
         .join(Lead, Lead.id == LegalIntake.lead_id)
         .where(LegalIntake.id == intake_id)
+        .with_for_update()
     ).one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Legal intake not found")
     item, lead = row
     updates = payload.model_dump(exclude_unset=True)
+    if "without_agreement" in updates:
+        if updates["without_agreement"] is None:
+            raise HTTPException(status_code=422, detail="without_agreement must be boolean")
+        if updates["without_agreement"]:
+            if item.status in (LegalIntakeStatus.closed, LegalIntakeStatus.declined):
+                raise HTTPException(status_code=409, detail="Reopen the case explicitly first")
+            if db.scalar(select(ServiceAgreement.id).where(ServiceAgreement.intake_id == item.id).limit(1)):
+                raise HTTPException(status_code=409, detail="Case already has an agreement")
+            if _signature_for_lead(db, lead) is None:
+                raise HTTPException(status_code=409, detail="NDA must be signed first")
+            conflict = updates.get("conflict_status") or item.conflict_status
+            if conflict_check_blocks_agreement(item.practice) and conflict.value != "clear":
+                raise HTTPException(status_code=409, detail="Conflict check must be clear first")
+            updates["status"] = LegalIntakeStatus.accepted
     for key, value in updates.items():
         setattr(item, key, value)
 
-    if item.status == LegalIntakeStatus.proposal_sent:
-        lead.status = LeadStatus.proposal
-    elif item.status == LegalIntakeStatus.accepted:
+    db.flush()
+    case_statuses = set(db.scalars(select(LegalIntake.status).where(LegalIntake.lead_id == lead.id)))
+    if LegalIntakeStatus.accepted in case_statuses:
         lead.status = LeadStatus.won
-    elif item.status == LegalIntakeStatus.declined:
+    elif LegalIntakeStatus.proposal_sent in case_statuses:
+        lead.status = LeadStatus.proposal
+    elif case_statuses == {LegalIntakeStatus.declined}:
         lead.status = LeadStatus.lost
     elif item.status in {LegalIntakeStatus.needs_clarification, LegalIntakeStatus.conflict_check}:
         lead.status = LeadStatus.qualified
@@ -415,6 +455,12 @@ def record_document(
     if item is None:
         raise HTTPException(status_code=404, detail="Legal intake not found")
 
+    lead = db.get(Lead, item.lead_id)
+    if lead is None or _signature_for_lead(db, lead) is None:
+        raise HTTPException(status_code=409, detail="NDA must be signed before uploading documents")
+    if payload.get("telegram_user_id") is not None and payload["telegram_user_id"] != lead.telegram_user_id:
+        raise HTTPException(status_code=404, detail="Legal intake not found")
+
     file_id = str(payload.get("telegram_file_id") or "").strip()[:255]
     if not file_id:
         raise HTTPException(status_code=422, detail="telegram_file_id is required")
@@ -426,7 +472,7 @@ def record_document(
         file_name=(str(payload.get("file_name") or "").strip() or None),
         file_size=int(file_size) if isinstance(file_size, int) else None,
         mime_type=(str(payload.get("mime_type") or "").strip() or None),
-        nda_signed_at_upload=bool(payload.get("nda_signed_at_upload")),
+        nda_signed_at_upload=True,
     )
     db.add(row)
     write_audit(

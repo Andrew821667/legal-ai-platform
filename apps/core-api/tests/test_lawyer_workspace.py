@@ -429,6 +429,72 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
         _cleanup(names, seeded["lead_id"])
 
 
+def test_nda_follows_verified_telegram_identity_across_historical_leads() -> None:
+    """Старый дубль лида не заставляет повторно подписывать NDA."""
+    client = TestClient(app)
+    names = ["pytest.workspace.nda.identity"]
+    key = _key(names[0])
+    db = SessionLocal()
+    try:
+        original = Lead(
+            name="Клиент до объединения",
+            contact="@same_client",
+            telegram_user_id=919191,
+            source=LeadSource.telegram_bot,
+        )
+        current = Lead(
+            name="Клиент после объединения",
+            contact="@same_client",
+            telegram_user_id=919191,
+            source=LeadSource.telegram_bot,
+        )
+        db.add_all([original, current])
+        db.flush()
+        db.add(
+            NdaSignature(
+                lead_id=original.id,
+                telegram_user_id=919191,
+                signer_full_name="Подтверждённый клиент",
+                document_version="v1",
+                document_hash="n" * 64,
+            )
+        )
+        db.add(
+            LegalIntake(
+                lead_id=current.id,
+                description="Новое обращение того же клиента.",
+                status=LegalIntakeStatus.scope_preparation,
+            )
+        )
+        db.commit()
+        lead_ids = [original.id, current.id]
+        current_id = str(current.id)
+    finally:
+        db.close()
+
+    try:
+        rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
+        row = next(item for item in rows if item["lead_id"] == current_id)
+        assert row["nda_signed"] is True
+        assert row["stage"] == "Готовим условия"
+
+        card = client.get(
+            f"/api/v1/lawyer/clients/{current_id}", headers={"X-API-Key": key}
+        ).json()
+        assert card["nda"]["signer_full_name"] == "Подтверждённый клиент"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(NdaSignature).where(NdaSignature.lead_id.in_(lead_ids)))
+            db.execute(delete(LegalIntake).where(LegalIntake.lead_id.in_(lead_ids)))
+            db.execute(delete(Lead).where(Lead.id.in_(lead_ids)))
+            db.execute(delete(ApiKey).where(ApiKey.name.in_(names)))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
 def test_client_card_lists_acts_under_their_agreement() -> None:
     """Акт — под тем договором, по которому выставлен, не общим списком."""
     client = TestClient(app)
@@ -823,11 +889,9 @@ def test_client_list_carries_area_and_amount_for_filters() -> None:
 
     Сумма — только подписанное и то, что у клиента на руках: черновик ещё не
     деньги, отклонённый — уже не деньги, и оба не должны попасть в сумму. У
-    intake ровно один на лида (unique constraint на legal_intakes.lead_id —
-    повторное обращение того же человека заводит новый Lead, не второй
-    intake), поэтому область здесь одна; сумма же складывается по всем
-    договорам лида, которых может быть несколько — черновик и подписанная
-    редакция разом.
+    У одного лида теперь может быть несколько обращений, поэтому список
+    возвращает все уникальные области. Сумма складывается по договорам лида,
+    которых также может быть несколько — черновик и подписанная редакция разом.
     """
     client = TestClient(app)
     names = ["pytest.workspace.list.area"]

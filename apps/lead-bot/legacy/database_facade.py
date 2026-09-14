@@ -4,6 +4,7 @@ to narrower database domain modules.
 """
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional
 
 import database_chat_state
@@ -19,6 +20,7 @@ import database_users
 from config import get_config
 
 config = get_config()
+logger = logging.getLogger(__name__)
 
 _USERS_COLUMNS = frozenset({
     "telegram_id", "username", "first_name", "last_name",
@@ -654,12 +656,31 @@ class DatabaseFacadeMixin:
             user_id=user_id,
         )
 
+    def get_local_lead_by_id(self, lead_id: int) -> Optional[Dict]:
+        """Return one SQLite lead without reading core-api."""
+        return database_leads.get_local_lead_by_id(
+            self.get_connection,
+            lead_id=lead_id,
+        )
+
     def mark_lead_notification_sent(self, lead_id: int):
-        """Помечаем что уведомление о лиде отправлено"""
+        """Persist delivery locally and in the core working record."""
         database_leads.mark_lead_notification_sent(
             self.get_connection,
             lead_id=lead_id,
         )
+        try:
+            from core_api_bridge import core_api_bridge
+
+            if not core_api_bridge.enabled:
+                return
+            lead = self.get_local_lead_by_id(lead_id)
+            core_id = (lead or {}).get("core_lead_id")
+            if core_id and core_api_bridge.mark_lead_notification_sent(core_id):
+                return
+            self._sync_lead_to_core(lead_id)
+        except Exception as error:
+            logger.warning("Failed to mark core lead %s as notified: %s", lead_id, error)
 
     def get_lead_by_id(self, lead_id: int) -> Optional[Dict]:
         """Получение лида по lead_id"""
@@ -701,10 +722,52 @@ class DatabaseFacadeMixin:
         - Уведомление еще не отправлено
         - Лид теплый или горячий (или есть ключевые данные)
         """
-        return database_leads.get_leads_ready_for_notification(
+        local_rows = database_leads.get_leads_ready_for_notification(
             self.get_connection,
             idle_minutes=idle_minutes,
         )
+        if not (config.CORE_API_SYNC_ENABLED and config.CORE_API_URL and config.API_KEY_BOT):
+            return local_rows
+
+        # Bring legacy-only rows into the working store before reading its queue.
+        for row in local_rows:
+            if row.get("id"):
+                self._sync_lead_to_core(row["id"])
+
+        core_rows = self._core_get_json(
+            "/api/v1/leads/notifications/pending",
+            {
+                "idle_minutes": idle_minutes,
+                "source_filter": "telegram_bot",
+                "limit": config.PENDING_LEADS_JOB_MAX_BATCH,
+            },
+        )
+        if not isinstance(core_rows, list):
+            logger.warning("Core lead notification queue is unavailable; delivery is deferred")
+            return []
+
+        ready: list[dict] = []
+        for core_row in core_rows:
+            legacy_id = core_row.get("legacy_lead_id")
+            if not legacy_id:
+                logger.warning("Core Telegram lead %s has no legacy id", core_row.get("id"))
+                continue
+            local = self.get_local_lead_by_id(int(legacy_id))
+            if not local:
+                logger.warning("Core lead %s has no local dialog state", core_row.get("id"))
+                continue
+            if local.get("notification_sent"):
+                self._sync_lead_to_core(int(legacy_id))
+                continue
+            local.update(
+                {
+                    key: value
+                    for key, value in self._map_core_lead(core_row).items()
+                    if value is not None
+                }
+            )
+            ready.append(local)
+        return ready
 
     def update_lead_last_message_time(self, user_id: int):
         """Обновление времени последнего сообщения лида"""

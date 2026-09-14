@@ -102,6 +102,23 @@ def test_clarifications_and_documents_reach_the_case_file() -> None:
         )
         assert answer.status_code == 200, answer.text
 
+        db = SessionLocal()
+        try:
+            lead_id = db.scalar(select(LegalIntake.lead_id).where(LegalIntake.id == intake_id))
+            db.add(NdaSignature(
+                lead_id=lead_id,
+                telegram_user_id=5150,
+                signer_full_name="Пётр Иванов",
+                signer_contact="@petr",
+                document_version=NDA_VERSION,
+                document_hash="a" * 64,
+                document_text="Тестовая редакция NDA",
+                channel="telegram_bot",
+            ))
+            db.commit()
+        finally:
+            db.close()
+
         document = client.post(
             f"/api/v1/legal-intakes/{intake_id}/documents",
             headers={"X-API-Key": bot_key},
@@ -124,9 +141,9 @@ def test_clarifications_and_documents_reach_the_case_file() -> None:
         assert len(body["clarifications"]) == 1
         assert body["clarifications"][0]["answer_text"] == "Как работник"
         assert len(body["documents"]) == 1
-        # Отметка о соглашении на момент передачи — юрист должен видеть,
-        # в каких условиях документ был получен.
-        assert body["documents"][0]["nda_signed_at_upload"] is False
+        # Клиентский флаг не считается доказательством: сервер проверяет
+        # подпись сам и фиксирует фактическое состояние.
+        assert body["documents"][0]["nda_signed_at_upload"] is True
 
         # Обращение, по которому пошли ответы, перестаёт быть просто принятым.
         card = client.get(

@@ -1,25 +1,21 @@
-"""Акт выполненных работ по уже подписанному договору.
-
-Отдельно от service_agreements.py: договор описывает условия и подписывается
-обеими сторонами, акт — что по ним фактически сделано и сколько к оплате,
-проще и без двустороннего подтверждения. «Оплачено» юрист отмечает сам:
-самозанятый без ИП не может подключить эквайринг и проверять зачисления
-банковским API — деньги в любом случае идёт переводом, а видит их только он.
-"""
+"""Акт с отдельными подтверждениями приёмки и поступления оплаты."""
 
 from __future__ import annotations
 
+import hashlib
+import html
 import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.lead_notifications import _post_telegram_message
@@ -87,6 +83,14 @@ def _payload(item: WorkAct) -> dict:
         "claimed_paid_at": _iso(item.claimed_paid_at),
         "paid_at": _iso(item.paid_at),
         "paid_note": item.paid_note,
+        "document_hash": item.document_hash,
+        "document_version": item.document_version,
+        "viewed_at": _iso(item.viewed_at),
+        "accepted_at": _iso(item.accepted_at),
+        "objected_at": _iso(item.objected_at),
+        "objection_text": item.objection_text,
+        "cancelled_at": _iso(item.cancelled_at),
+        "cancel_reason": item.cancel_reason,
     }
 
 
@@ -118,11 +122,10 @@ class ActCreate(BaseModel):
 @router.post("", status_code=201)
 def create_act(
     payload: ActCreate,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Заводит акт по подписанному договору — только по нему: выставлять
-    счёт за работу, которую клиент ещё не принял, нечем обосновать."""
+    """Исполнитель фиксирует результат по подписанному договору."""
     agreement = db.get(ServiceAgreement, payload.agreement_id)
     if agreement is None:
         raise HTTPException(status_code=404, detail="Agreement not found")
@@ -138,7 +141,11 @@ def create_act(
         currency=agreement.currency,
         prepared_by_telegram_user_id=payload.prepared_by_telegram_user_id,
     )
+    if not item.description_text:
+        raise HTTPException(status_code=422, detail="Describe completed work")
+    _freeze_document(item, agreement)
     db.add(item)
+    db.flush()
     _audit(db, identity, item, "work_act.create")
     db.commit()
     db.refresh(item)
@@ -164,31 +171,58 @@ def list_by_agreement(
     return [_payload(row) for row in rows]
 
 
-def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
-    settings = get_settings()
-    lines = [
-        f"Акт выполненных работ № {item.act_number}",
+def _freeze_document(item: WorkAct, agreement: ServiceAgreement) -> None:
+    if item.document_hash:
+        return
+    item.document_version = "2026-09-13.1"
+    item.document_text = "\n".join([
+        f"АКТ ВЫПОЛНЕННЫХ РАБОТ № {item.act_number}",
         f"К договору № {agreement.agreement_number}",
+        f"Исполнитель: {(agreement.operator_snapshot or {}).get('name') or 'Исполнитель по договору'}",
+        f"Заказчик: {(agreement.client_snapshot or {}).get('full_name') or 'Заказчик по договору'}",
+        "", item.description_text, "",
+        f"Стоимость работ: {_format_rub(item.amount_minor)}",
+        "Приёмка работы и подтверждение оплаты фиксируются отдельно.",
+    ])
+    item.document_hash = hashlib.sha256(item.document_text.encode("utf-8")).hexdigest()
+
+
+def payment_details() -> dict:
+    settings = get_settings()
+    phone = settings.lawyer_payment_sbp_phone
+    if not phone:
+        return {}
+    return {"phone": phone, "bank": settings.lawyer_payment_bank,
+            "recipient": settings.lawyer_payment_recipient}
+
+
+def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
+    lines = [
+        f"Акт выполненных работ № {html.escape(item.act_number)}",
+        f"К договору № {html.escape(agreement.agreement_number)}",
         "",
-        item.description_text,
+        html.escape(item.description_text[:700]) + ("…" if len(item.description_text) > 700 else ""),
         "",
         f"К оплате: {_format_rub(item.amount_minor)}",
     ]
-    details = []
-    if settings.lawyer_payment_card_number:
-        details.append(f"Карта: <code>{settings.lawyer_payment_card_number}</code>")
-    if settings.lawyer_payment_sbp_phone:
-        details.append(f"СБП (тел.): <code>{settings.lawyer_payment_sbp_phone}</code>")
+    payment = payment_details()
+    details = [f"Телефон для перевода: <code>{html.escape(payment['phone'])}</code>"] if payment else []
+    for label, key in (("Банк", "bank"), ("Получатель", "recipient")):
+        if payment.get(key):
+            details.append(f"{label}: {html.escape(payment[key])}")
     if details:
         # Реквизиты в <code> — Telegram копирует такой текст по тапу, без
         # выделения вручную.
         lines += ["", "Оплата:"] + details
-    return "\n".join(lines)
+    return "\n".join(lines + ["", "Откройте полный акт, чтобы принять работу или оставить замечания."])
 
 
 def _act_markup(act_id: str) -> str:
     return json.dumps(
-        {"inline_keyboard": [[{"text": "Я оплатил(а)", "callback_data": f"act_c:claim:{act_id}"}]]},
+        {"inline_keyboard": [
+            [{"text": "Открыть акт", "callback_data": f"act_c:open:{act_id}"}],
+            [{"text": "Я оплатил(а)", "callback_data": f"act_c:claim:{act_id}"}],
+        ]},
         ensure_ascii=False,
     )
 
@@ -196,7 +230,7 @@ def _act_markup(act_id: str) -> str:
 @router.post("/{act_id}/send")
 def send_act(
     act_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Отправляет акт клиенту и отмечает отправку.
@@ -206,11 +240,12 @@ def send_act(
     каждый по-своему.
     """
     item = _get(db, act_id, lock=True)
-    if item.status != WorkActStatus.draft:
+    if item.status != WorkActStatus.draft or item.cancelled_at:
         raise HTTPException(status_code=409, detail="Act is not a draft")
     agreement = db.get(ServiceAgreement, item.agreement_id)
     if agreement is None or not agreement.client_telegram_user_id:
         raise HTTPException(status_code=409, detail="Client has no Telegram")
+    _freeze_document(item, agreement)
 
     token = _client_bot_token()
     if not token:
@@ -242,6 +277,7 @@ def send_act(
 
 class ClaimPaid(BaseModel):
     telegram_user_id: int = Field(gt=0)
+    channel: str = Field(default="telegram_bot", pattern=r"^(telegram_bot|miniapp)$")
 
 
 @router.post("/{act_id}/claim-paid")
@@ -259,13 +295,19 @@ def claim_paid(
         # Тот же id акта не должен уходить в paid по чужому клику — даже
         # заявление о нём принимаем только от адресата.
         raise HTTPException(status_code=403, detail="Not the client of this act")
-    if item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
+    if item.cancelled_at or item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid, WorkActStatus.paid):
         raise HTTPException(status_code=409, detail="Act is not awaiting payment")
     if item.status == WorkActStatus.sent:
         item.status = WorkActStatus.claimed_paid
         item.claimed_paid_at = _now()
         db.add(item)
         _audit(db, identity, item, "work_act.claim_paid")
+        if payload.channel == "miniapp":
+            queue_notice(
+                db,
+                f"work-act:{item.id}:claimed-paid",
+                f"Клиент сообщил об оплате акта № {item.act_number}. Проверьте поступление.",
+            )
         db.commit()
         db.refresh(item)
     return _payload(item)
@@ -280,13 +322,13 @@ class MarkPaid(BaseModel):
 def mark_paid(
     act_id: uuid.UUID,
     payload: MarkPaid,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Юрист подтверждает получение денег — из sent (сразу, без клика
     клиента) или из claimed_paid (клиент уже заявил)."""
     item = _get(db, act_id, lock=True)
-    if item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
+    if item.cancelled_at or item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
         raise HTTPException(status_code=409, detail="Act is not awaiting payment")
     item.status = WorkActStatus.paid
     item.paid_at = _now()
@@ -296,4 +338,118 @@ def mark_paid(
     _audit(db, identity, item, "work_act.paid", {"note": item.paid_note} if item.paid_note else None)
     db.commit()
     db.refresh(item)
+    return _payload(item)
+
+
+def _assert_client(db: Session, item: WorkAct, telegram_user_id: int) -> None:
+    agreement = db.get(ServiceAgreement, item.agreement_id)
+    if agreement is None or agreement.client_telegram_user_id != telegram_user_id:
+        raise HTTPException(status_code=404, detail="Act not found")
+    if item.status == WorkActStatus.draft:
+        raise HTTPException(status_code=404, detail="Act not found")
+
+
+class ActClientAction(BaseModel):
+    telegram_user_id: int = Field(gt=0)
+    document_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    callback_id: str = Field(min_length=1, max_length=255)
+    text: str | None = Field(default=None, max_length=4000)
+    channel: str = Field(default="telegram_bot", pattern=r"^(telegram_bot|miniapp)$")
+
+
+@router.get("/{act_id}/document")
+def act_document(
+    act_id: uuid.UUID,
+    telegram_user_id: int = Query(gt=0),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    item = _get(db, act_id)
+    _assert_client(db, item, telegram_user_id)
+    return {**_payload(item), "text": item.document_text, "payment": payment_details()}
+
+
+@router.post("/{act_id}/client/{action}")
+def client_action(
+    act_id: uuid.UUID,
+    action: str,
+    payload: ActClientAction,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    item = _get(db, act_id, lock=True)
+    _assert_client(db, item, payload.telegram_user_id)
+    if item.cancelled_at or not item.document_hash or item.document_hash != payload.document_hash:
+        raise HTTPException(status_code=409, detail="Act is unavailable or document changed")
+    if action == "viewed":
+        if item.viewed_at:
+            return _payload(item)
+        item.viewed_at = _now()
+    elif action in ("accept", "object"):
+        if not item.viewed_at:
+            raise HTTPException(status_code=409, detail="Read the act first")
+        if item.accepted_at:
+            if action == "accept":
+                return _payload(item)
+            raise HTTPException(status_code=409, detail="Act already accepted; contact the operator")
+        if action == "accept":
+            if item.objected_at:
+                raise HTTPException(status_code=409, detail="Resolve objections and issue a new act first")
+            item.accepted_at = _now()
+            item.accepted_by_telegram_user_id = payload.telegram_user_id
+            item.acceptance_callback_id = payload.callback_id
+            if payload.channel == "miniapp":
+                queue_notice(
+                    db,
+                    f"work-act:{item.id}:accepted",
+                    f"Клиент принял работу по акту № {item.act_number}.",
+                )
+        else:
+            text = (payload.text or "").strip()
+            if not text:
+                raise HTTPException(status_code=422, detail="Describe objections")
+            if item.objected_at:
+                if text == item.objection_text:
+                    return _payload(item)
+                raise HTTPException(status_code=409, detail="Objections already recorded; contact the operator")
+            item.objection_text = text
+            item.objected_at = _now()
+            if payload.channel == "miniapp":
+                queue_notice(
+                    db,
+                    f"work-act:{item.id}:objected",
+                    f"Клиент оставил замечания к акту № {item.act_number}:\n{text}",
+                    f"act_a:cancel:{item.id}",
+                )
+    else:
+        raise HTTPException(status_code=404, detail="Unknown act action")
+    _audit(db, identity, item, f"work_act.{action}", {
+        "telegram_user_id": payload.telegram_user_id, "document_hash": item.document_hash,
+        "callback_id": payload.callback_id,
+    })
+    db.commit()
+    db.refresh(item)
+    return _payload(item)
+
+
+class ActCancel(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+@router.post("/{act_id}/cancel")
+def cancel_act(
+    act_id: uuid.UUID,
+    payload: ActCancel,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    item = _get(db, act_id, lock=True)
+    if item.accepted_at or item.status in (WorkActStatus.claimed_paid, WorkActStatus.paid):
+        raise HTTPException(status_code=409, detail="Accepted or paid act cannot be cancelled")
+    if not item.cancelled_at:
+        item.cancelled_at = _now()
+        item.cancel_reason = payload.reason.strip()
+        _audit(db, identity, item, "work_act.cancel")
+        db.commit()
+        db.refresh(item)
     return _payload(item)

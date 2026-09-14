@@ -332,14 +332,9 @@ async def _show_intake(message, intake_id: str) -> None:
         rows.append(
             [InlineKeyboardButton("Попросить подписать NDA", callback_data=f"sa_a:nda:{intake_id}")]
         )
-    # Условия договора по практике — те же, что проверяет ядро: проверка
-    # конфликта и NDA обязательны для права и гибрида; инженерной практике
-    # договор доступен сразу, NDA ей только предлагается.
     agreement_gated = practice in ("legal", "hybrid")
-    agreement_ready = (
-        intake.get("conflict_status") == "clear" and (nda or {}).get("signed")
-        if agreement_gated
-        else True
+    agreement_ready = (nda or {}).get("signed") and (
+        not agreement_gated or intake.get("conflict_status") == "clear"
     )
     if agreement_ready:
         rows.append(
@@ -357,7 +352,7 @@ async def _show_intake(message, intake_id: str) -> None:
         rows.append(
             [InlineKeyboardButton("Выставить акт", callback_data=f"act_a:new:{latest['id']}")]
         )
-    if not latest and intake.get("status") != "closed":
+    if not latest and agreement_ready and not intake.get("without_agreement") and intake.get("status") not in ("closed", "declined"):
         rows.append(
             [
                 InlineKeyboardButton(
@@ -796,7 +791,7 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if action == "none" and len(parts) == 3:
         await utils.safe_reply_text(
             query.message,
-            "Закрыть обращение без заключения договора/соглашения?",
+            "Вести это обращение без отдельного договора/соглашения? Оно останется в работе.",
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -851,12 +846,12 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         updated = await asyncio.to_thread(
             admin_interface.admin_interface.update_legal_intake,
             intake_id,
-            {"status": "closed", "internal_note": note},
+            {"without_agreement": True, "internal_note": note},
         )
         if not updated:
             await utils.safe_reply_text(
                 query.message,
-                "Не удалось закрыть обращение.",
+                "Не удалось включить работу без соглашения. Проверьте NDA и конфликт интересов.",
                 reply_markup=_admin_back(),
                 action="agreement_without_update_failed",
             )
@@ -865,7 +860,10 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     if action == "new" and len(parts) == 3:
         intake = await asyncio.to_thread(admin_interface.admin_interface.get_legal_intake, parts[2])
-        if not intake or intake.get("conflict_status") != "clear":
+        if not intake or (
+            intake.get("practice", "legal") != "engineering"
+            and intake.get("conflict_status") != "clear"
+        ):
             await utils.safe_reply_text(
                 query.message,
                 "Сначала завершите проверку конфликта интересов.",

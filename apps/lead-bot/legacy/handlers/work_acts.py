@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from decimal import Decimal, InvalidOperation
 
 import admin_interface
 import utils
@@ -56,12 +57,13 @@ def _rub_to_minor(text: str) -> int | None:
         text.replace(" ", "").replace("\xa0", "").replace(",", ".").replace("₽", "").replace("руб.", "").replace("руб", "")
     )
     try:
-        value = float(cleaned)
-    except ValueError:
+        value = Decimal(cleaned)
+    except InvalidOperation:
         return None
-    if value < 0:
+    if not value.is_finite() or value < 0 or value > 10**11:
         return None
-    return round(value * 100)
+    minor = value * 100
+    return int(minor) if minor == minor.to_integral_value() else None
 
 
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -138,6 +140,9 @@ async def _finish_wizard(message, context: ContextTypes.DEFAULT_TYPE, data: dict
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
     """Обрабатывает шаги мастера. False — сообщение не наше, пусть идёт дальше."""
+    state = context.user_data.get(STATE_KEY)
+    if state in ("act_objection", "act_cancel"):
+        return await _handle_note(update, context, text, state)
     if context.user_data.get(STATE_KEY) != "act_wizard":
         return False
     message = update.effective_message
@@ -251,6 +256,12 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
+    if action == "cancel":
+        context.user_data[STATE_KEY] = "act_cancel"
+        context.user_data[DATA_KEY] = {"act_id": item_id}
+        await utils.safe_reply_text(query.message, "Почему отзываете акт? Напишите причину или /cancel.", action="work_act_cancel_reason")
+        return
+
     if action == "paid":
         act = await asyncio.to_thread(
             admin_interface.admin_interface.mark_work_act_paid,
@@ -280,6 +291,46 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
     parts = (query.data or "").split(":")
     action = parts[1] if len(parts) > 1 else ""
     act_id = parts[2] if len(parts) > 2 else ""
+    if action in ("open", "accept", "object"):
+        act = await asyncio.to_thread(
+            admin_interface.admin_interface.get_work_act_document, act_id, telegram_user_id=user.id,
+        )
+        if not act or not act.get("text") or act.get("cancelled_at"):
+            await utils.safe_reply_text(query.message, "Этот акт недоступен. Свяжитесь с исполнителем.", action="work_act_unavailable")
+            return
+        payload = {"telegram_user_id": user.id, "document_hash": act["document_hash"],
+                   "callback_id": str(query.id)}
+        if action == "open":
+            text = act["text"]
+            for offset in range(0, len(text), 3500):
+                await context.bot.send_message(chat_id=user.id, text=text[offset:offset + 3500])
+            viewed = await asyncio.to_thread(
+                admin_interface.admin_interface.work_act_client_action, act_id, "viewed", payload,
+            )
+            if not viewed:
+                await utils.safe_reply_text(query.message, "Не удалось подтвердить просмотр. Откройте акт повторно.", action="work_act_view_failed")
+                return
+            rows = [] if act.get("accepted_at") or act.get("objected_at") else [
+                [InlineKeyboardButton("Принимаю работу", callback_data=f"act_c:accept:{act_id}")],
+                [InlineKeyboardButton("Есть замечания", callback_data=f"act_c:object:{act_id}")],
+            ]
+            await utils.safe_reply_text(query.message,
+                "Работа принята." if act.get("accepted_at") else "Замечания переданы исполнителю." if act.get("objected_at") else "Решение по акту:",
+                reply_markup=InlineKeyboardMarkup(rows), action="work_act_read")
+        elif action == "object":
+            context.user_data[STATE_KEY] = "act_objection"
+            context.user_data[DATA_KEY] = {"act_id": act_id, **payload}
+            await utils.safe_reply_text(query.message, "Напишите замечания к работе одним сообщением или /cancel.", action="work_act_objections_prompt")
+        else:
+            result = await asyncio.to_thread(
+                admin_interface.admin_interface.work_act_client_action, act_id, "accept", payload,
+            )
+            await utils.safe_reply_text(query.message,
+                "Приёмка работы зафиксирована." if result else "Не удалось принять акт. Сначала откройте полный текст; при наличии замечаний нужна новая редакция.",
+                action="work_act_accept")
+            if result:
+                await _notify_admin(context.bot, f"Клиент принял работу по акту № {act['act_number']}.", _act_admin_markup(act_id))
+        return
     if action != "claim":
         return
 
@@ -306,3 +357,37 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         f"{format_rub(act['amount_minor'])}. Проверьте зачисление.",
         _act_admin_markup(act["id"]),
     )
+
+
+async def _handle_note(update, context, text: str, state: str) -> bool:
+    user, message = update.effective_user, update.effective_message
+    if not user or not message:
+        return False
+    if state == "act_cancel" and user.id != config.ADMIN_TELEGRAM_ID:
+        _clear(context)
+        return False
+    value = (text or "").strip()
+    if value.lower() in ("/cancel", "отмена"):
+        _clear(context)
+        await utils.safe_reply_text(message, "Действие отменено.", action="work_act_note_cancel")
+        return True
+    limit = 1000 if state == "act_cancel" else 4000
+    if not 3 <= len(value) <= limit:
+        await utils.safe_reply_text(message, f"Нужно от 3 до {limit} символов.", action="work_act_note_length")
+        return True
+    data = dict(context.user_data.get(DATA_KEY) or {})
+    if state == "act_cancel":
+        result = await asyncio.to_thread(admin_interface.admin_interface.cancel_work_act, data["act_id"], value)
+    else:
+        result = await asyncio.to_thread(admin_interface.admin_interface.work_act_client_action,
+            data["act_id"], "object", {"telegram_user_id": user.id, "document_hash": data["document_hash"],
+            "callback_id": f"message:{message.message_id}", "text": value})
+    if not result:
+        await utils.safe_reply_text(message, "Не удалось сохранить. Попробуйте ещё раз или свяжитесь с исполнителем.", action="work_act_note_failed")
+        return True
+    _clear(context)
+    await utils.safe_reply_text(message, "Акт отозван." if state == "act_cancel" else "Замечания сохранены и переданы исполнителю.", action="work_act_note_saved")
+    if state == "act_objection":
+        await _notify_admin(context.bot, f"Замечания к акту № {result['act_number']}:\n{value[:3000]}",
+            InlineKeyboardMarkup([[InlineKeyboardButton("Отозвать акт", callback_data=f"act_a:cancel:{result['id']}")]]))
+    return True

@@ -182,6 +182,8 @@ class CoreApiBridge:
             "lead_magnet_type": lead.get("lead_magnet_type"),
             "lead_magnet_delivered": bool(lead.get("lead_magnet_delivered")),
             "notes": _build_notes(lead),
+            "last_message_at": lead.get("last_message_at"),
+            "notification_sent": bool(lead.get("notification_sent")),
         }
         result = self._post(
             "/api/v1/leads",
@@ -192,6 +194,13 @@ class CoreApiBridge:
         if core_id:
             logger.info("Legacy lead %s mirrored to core-api as %s", lead.get("id"), core_id)
         return core_id
+
+    def mark_lead_notification_sent(self, core_lead_id: str) -> bool:
+        return self._post(
+            f"/api/v1/leads/{core_lead_id}/notification-sent",
+            {},
+            idempotency_key=f"lead-notified:{core_lead_id}",
+        ) is not None
 
     def create_legal_intake(
         self,

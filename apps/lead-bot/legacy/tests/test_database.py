@@ -139,6 +139,87 @@ def test_create_lead(test_db):
     assert lead['temperature'] == 'hot'
 
 
+def test_pending_leads_are_read_from_core_working_queue(test_db, monkeypatch):
+    import database as database_module
+
+    user_id = test_db.create_or_update_user(
+        telegram_id=321001,
+        username="pending",
+        first_name="Pending",
+    )
+    lead_id = test_db.create_or_update_lead(
+        user_id,
+        {
+            "name": "Pending Lead",
+            "temperature": "warm",
+            "pain_point": "Нужна автоматизация",
+        },
+    )
+    test_db.update_lead_last_message_time(user_id)
+    conn = test_db.get_connection()
+    conn.execute(
+        "UPDATE leads SET last_message_at = datetime('now', '-10 minutes') WHERE id = ?",
+        (lead_id,),
+    )
+    conn.commit()
+    conn.close()
+    calls = []
+
+    monkeypatch.setattr(database_module.config, "CORE_API_SYNC_ENABLED", True)
+    monkeypatch.setattr(database_module.config, "CORE_API_URL", "http://core-api.test")
+    monkeypatch.setattr(database_module.config, "API_KEY_BOT", "fake-core-key")
+    monkeypatch.setattr(test_db, "_sync_lead_to_core", lambda value: calls.append(value))
+    monkeypatch.setattr(
+        test_db,
+        "_core_get_json",
+        lambda path, params: [{
+            "id": "11111111-1111-1111-1111-111111111111",
+            "legacy_lead_id": lead_id,
+            "telegram_user_id": 321001,
+            "name": "Core Pending Lead",
+            "temperature": "hot",
+            "last_message_at": "2026-09-13T10:00:00Z",
+            "notification_sent": False,
+        }] if path == "/api/v1/leads/notifications/pending"
+        and params["source_filter"] == "telegram_bot" else None,
+    )
+
+    rows = test_db.get_leads_ready_for_notification(idle_minutes=1)
+
+    assert calls == [lead_id]
+    assert len(rows) == 1
+    assert rows[0]["id"] == lead_id
+    assert rows[0]["core_lead_id"] == "11111111-1111-1111-1111-111111111111"
+    assert rows[0]["name"] == "Core Pending Lead"
+    assert rows[0]["temperature"] == "hot"
+
+
+def test_pending_lead_delivery_waits_when_core_queue_is_unavailable(test_db, monkeypatch):
+    import database as database_module
+
+    user_id = test_db.create_or_update_user(telegram_id=321002, first_name="Deferred")
+    lead_id = test_db.create_or_update_lead(
+        user_id,
+        {"name": "Deferred Lead", "temperature": "warm", "pain_point": "Есть задача"},
+    )
+    test_db.update_lead_last_message_time(user_id)
+    conn = test_db.get_connection()
+    conn.execute(
+        "UPDATE leads SET last_message_at = datetime('now', '-10 minutes') WHERE id = ?",
+        (lead_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(database_module.config, "CORE_API_SYNC_ENABLED", True)
+    monkeypatch.setattr(database_module.config, "CORE_API_URL", "http://core-api.test")
+    monkeypatch.setattr(database_module.config, "API_KEY_BOT", "fake-core-key")
+    monkeypatch.setattr(test_db, "_sync_lead_to_core", lambda _value: None)
+    monkeypatch.setattr(test_db, "_core_get_json", lambda _path, _params: None)
+
+    assert test_db.get_leads_ready_for_notification(idle_minutes=1) == []
+
+
 def test_get_statistics(test_db):
     """Проверка получения статистики"""
     # Создаем тестовые данные

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_notices import queue_notice
 from core_api.client_proposal import (
     build_proposal_markup,
     build_proposal_text,
@@ -21,9 +22,9 @@ from core_api.client_proposal import (
     build_summary,
 )
 from core_api.config import get_settings
-from core_api.lead_notifications import _post_telegram_message
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
+from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     TEMPLATE_KIND_BY_PRACTICE,
     ActorType,
@@ -77,6 +78,7 @@ class ClientAction(BaseModel):
     document_hash: str = Field(min_length=64, max_length=64)
     message_id: int | None = None
     callback_id: str = Field(min_length=1, max_length=255)
+    channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
 
 class AgreementSign(ClientAction):
@@ -89,6 +91,7 @@ class AgreementDecline(BaseModel):
     telegram_user_id: int
     reason: str | None = Field(default=None, max_length=1000)
     callback_id: str = Field(min_length=1, max_length=255)
+    channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
 
 class AgreementClientDetails(BaseModel):
@@ -103,6 +106,7 @@ class AgreementClientDetails(BaseModel):
     ogrn: str | None = Field(default=None, max_length=15)
     position: str | None = Field(default=None, min_length=2, max_length=255)
     authority_basis: str | None = Field(default=None, min_length=2, max_length=500)
+    channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
     @model_validator(mode="after")
     def validate_party_details(self) -> AgreementClientDetails:
@@ -138,6 +142,7 @@ class AgreementClientDetails(BaseModel):
 class AgreementMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     telegram_user_id: int | None = None
+    channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
 
 def _now() -> datetime:
@@ -306,9 +311,8 @@ def create_agreement(
     if lead.telegram_user_id is None:
         raise HTTPException(status_code=409, detail="Client has no Telegram dialog")
     nda = _nda_for_lead(db, lead)
-    # NDA предлагается всем; без него договор не составить только там, где
-    # клиент передаёт материалы дела. Инженерной практике без NDA договор
-    # доступен — реквизиты подписанта тогда берутся из карточки клиента.
+    # NDA подтверждает личность и фиксирует режим материалов до договора.
+    # Поэтому он обязателен для любой практики платформы.
     if nda is None and nda_required_for_agreement(intake.practice):
         raise HTTPException(status_code=409, detail="NDA must be signed first")
     template_kind = TEMPLATE_KIND_BY_PRACTICE[intake.practice]
@@ -692,6 +696,12 @@ def sign_agreement(
     if item.lead_id and (lead := db.get(Lead, item.lead_id)):
         lead.status = LeadStatus.won
     _audit(db, identity, item, "service_agreement.sign", {"version": item.document_version})
+    if payload.channel == "miniapp":
+        queue_notice(
+            db,
+            f"agreement:{item.id}:signed",
+            f"Клиент подписал договор № {item.agreement_number} в кабинете.",
+        )
     db.commit()
     return {**_payload(item), "already_signed": False}
 
@@ -714,6 +724,13 @@ def decline_agreement(
     if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
         intake.status = LegalIntakeStatus.scope_preparation
     _audit(db, identity, item, "service_agreement.decline")
+    if payload.channel == "miniapp":
+        queue_notice(
+            db,
+            f"agreement:{item.id}:declined",
+            f"Клиент отклонил договор № {item.agreement_number}."
+            + (f" Причина: {item.decline_reason}" if item.decline_reason else ""),
+        )
     db.commit()
     return _payload(item)
 
@@ -740,6 +757,12 @@ def add_question(
     db.add(msg)
     db.flush()
     _audit(db, identity, item, "service_agreement.question")
+    if payload.channel == "miniapp":
+        queue_notice(
+            db,
+            f"agreement:{item.id}:question:{msg.id}",
+            f"Новый вопрос клиента по договору № {item.agreement_number}:\n{msg.text}",
+        )
     db.commit()
     return {"id": str(msg.id), "created_at": msg.created_at.isoformat() if msg.created_at else None}
 

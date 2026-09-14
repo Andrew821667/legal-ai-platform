@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from core_api.auth import cache
@@ -127,7 +128,8 @@ def test_create_list_update_and_idempotency() -> None:
             json={"deadline_at": "2026-09-17T23:59:59Z"},
         )
         assert dated.status_code == 200, dated.text
-        assert dated.json()["deadline_at"].startswith("2026-09-17T23:59:59")
+        expected = datetime(2026, 9, 17, 23, 59, 59, tzinfo=timezone.utc)
+        assert datetime.fromisoformat(dated.json()["deadline_at"]) == expected
         db = SessionLocal()
         try:
             row = db.execute(
@@ -137,7 +139,7 @@ def test_create_list_update_and_idempotency() -> None:
                 .order_by(AuditLog.created_at.desc())
             ).scalars().first()
             assert row is not None
-            assert row.details["deadline_at"].startswith("2026-09-17T23:59:59")
+            assert datetime.fromisoformat(row.details["deadline_at"]) == expected
         finally:
             db.close()
     finally:

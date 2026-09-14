@@ -253,7 +253,7 @@ def client_miniapp_inline_row():
     url = getattr(get_config(), "CLIENT_MINIAPP_URL", "")
     if not url:
         return []
-    return [[InlineKeyboardButton("📱 Открыть мини-апп", web_app=WebAppInfo(url=url))]]
+    return [[InlineKeyboardButton("📱 Открыть мини-апп и мои дела", web_app=WebAppInfo(url=url))]]
 
 
 def lawyer_workspace_keyboard_url() -> str:

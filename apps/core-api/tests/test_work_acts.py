@@ -12,6 +12,7 @@ from core_api.db import SessionLocal
 from core_api.main import app
 from core_api.models import (
     ApiKey,
+    ClientNotice,
     Lead,
     LeadSource,
     Scope,
@@ -153,7 +154,6 @@ def test_create_act_on_a_signed_agreement() -> None:
 def test_send_delivers_text_with_payment_details(sent, monkeypatch) -> None:
     from core_api import config as config_module
 
-    monkeypatch.setattr(config_module.get_settings(), "lawyer_payment_card_number", "2200 1234 5678 9010", raising=False)
     monkeypatch.setattr(config_module.get_settings(), "lawyer_payment_sbp_phone", "+7 900 000-00-00", raising=False)
 
     client = TestClient(app)
@@ -171,9 +171,102 @@ def test_send_delivers_text_with_payment_details(sent, monkeypatch) -> None:
         assert sent[0]["parse_mode"] == "HTML"
         assert act["act_number"] in sent[0]["text"]
         assert "80 000" in sent[0]["text"]
-        assert "<code>2200 1234 5678 9010</code>" in sent[0]["text"]
         assert "<code>+7 900 000-00-00</code>" in sent[0]["text"]
         assert f"act_c:claim:{act['id']}" in sent[0]["markup"]
+        assert f"act_c:open:{act['id']}" in sent[0]["markup"]
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_acceptance_is_owned_hash_bound_and_independent_of_payment(sent):
+    client = TestClient(app)
+    names = ["pytest.act.acceptance"]
+    key = _key(names[0])
+    seeded = _seed()
+    headers = {"X-API-Key": key}
+    try:
+        act = _create_act(client, key, seeded["agreement_id"], description_text="<b>Completed work</b>")
+        path = f"/api/v1/work-acts/{act['id']}"
+        body = {"telegram_user_id": 5150, "document_hash": act["document_hash"], "callback_id": "test"}
+        assert client.get(f"{path}/document?telegram_user_id=5150", headers=headers).status_code == 404
+        assert client.post(f"{path}/send", headers=headers).status_code == 200
+        assert "&lt;b&gt;Completed work&lt;/b&gt;" in sent[0]["text"]
+        assert client.get(f"{path}/document?telegram_user_id=5151", headers=headers).status_code == 404
+        assert client.post(f"{path}/client/accept", headers=headers, json=body).status_code == 409
+        assert client.post(f"{path}/client/viewed", headers=headers, json={**body, "document_hash": "0" * 64}).status_code == 409
+        assert client.post(f"{path}/client/viewed", headers=headers, json=body).status_code == 200
+        accepted = client.post(f"{path}/client/accept", headers=headers, json=body)
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["accepted_at"]
+        assert accepted.json()["status"] == "sent"
+        assert client.post(f"{path}/client/accept", headers=headers, json=body).json()["accepted_at"] == accepted.json()["accepted_at"]
+        assert client.post(f"{path}/cancel", headers=headers, json={"reason": "Mistake"}).status_code == 409
+        assert client.post(f"{path}/claim-paid", headers=headers, json={"telegram_user_id": 5150}).json()["status"] == "claimed_paid"
+        assert client.patch(f"{path}/paid", headers=headers, json={}).json()["status"] == "paid"
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_miniapp_acceptance_queues_one_operator_notice(sent) -> None:
+    client = TestClient(app)
+    names = ["pytest.act.acceptance.notice"]
+    key = _key(names[0])
+    seeded = _seed()
+    event_key = ""
+    try:
+        act = _create_act(client, key, seeded["agreement_id"])
+        event_key = f"work-act:{act['id']}:accepted"
+        path = f"/api/v1/work-acts/{act['id']}"
+        body = {
+            "telegram_user_id": 5150,
+            "document_hash": act["document_hash"],
+            "callback_id": "miniapp-test",
+            "channel": "miniapp",
+        }
+        assert client.post(f"{path}/send", headers={"X-API-Key": key}).status_code == 200
+        assert client.post(f"{path}/client/viewed", headers={"X-API-Key": key}, json=body).status_code == 200
+        assert client.post(f"{path}/client/accept", headers={"X-API-Key": key}, json=body).status_code == 200
+        assert client.post(f"{path}/client/accept", headers={"X-API-Key": key}, json=body).status_code == 200
+
+        db = SessionLocal()
+        try:
+            notices = db.execute(
+                select(ClientNotice).where(ClientNotice.event_key == event_key)
+            ).scalars().all()
+            assert len(notices) == 1
+            assert "принял работу" in notices[0].text
+        finally:
+            db.close()
+    finally:
+        if event_key:
+            db = SessionLocal()
+            try:
+                db.execute(delete(ClientNotice).where(ClientNotice.event_key == event_key))
+                db.commit()
+            finally:
+                db.close()
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_objections_do_not_accept_work_and_cancelled_act_cannot_be_paid(sent):
+    client = TestClient(app)
+    names = ["pytest.act.objection"]
+    key = _key(names[0])
+    seeded = _seed()
+    headers = {"X-API-Key": key}
+    try:
+        act = _create_act(client, key, seeded["agreement_id"])
+        path = f"/api/v1/work-acts/{act['id']}"
+        body = {"telegram_user_id": 5150, "document_hash": act["document_hash"], "callback_id": "test"}
+        client.post(f"{path}/send", headers=headers)
+        client.post(f"{path}/client/viewed", headers=headers, json=body)
+        result = client.post(f"{path}/client/object", headers=headers, json={**body, "text": "Missing result"})
+        assert result.status_code == 200, result.text
+        assert result.json()["objected_at"] and not result.json()["accepted_at"]
+        assert client.post(f"{path}/client/accept", headers=headers, json=body).status_code == 409
+        assert client.post(f"{path}/cancel", headers=headers, json={"reason": "Will issue corrected act"}).status_code == 200
+        assert client.post(f"{path}/claim-paid", headers=headers, json={"telegram_user_id": 5150}).status_code == 409
+        assert client.patch(f"{path}/paid", headers=headers, json={}).status_code == 409
     finally:
         _cleanup(names, seeded["lead_id"])
 
@@ -183,7 +276,6 @@ def test_send_without_payment_details_configured_omits_the_section(sent, monkeyp
     местом, которое обещает реквизиты и ничего не показывает."""
     from core_api import config as config_module
 
-    monkeypatch.setattr(config_module.get_settings(), "lawyer_payment_card_number", None, raising=False)
     monkeypatch.setattr(config_module.get_settings(), "lawyer_payment_sbp_phone", None, raising=False)
 
     client = TestClient(app)

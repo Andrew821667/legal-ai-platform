@@ -221,6 +221,20 @@ def get_local_lead_by_user_id(
         conn.close()
 
 
+def get_local_lead_by_id(
+    get_connection: Callable[[], sqlite3.Connection],
+    *,
+    lead_id: int,
+) -> dict | None:
+    """Return a local lead without a core-api read."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM leads WHERE id = ?", (lead_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def get_lead_by_user_id(
     get_connection: Callable[[], sqlite3.Connection],
     get_local_user_by_id: Callable[[int], dict | None],
@@ -272,18 +286,11 @@ def get_lead_by_id(
     lead_id: int,
 ) -> dict | None:
     """Return lead by internal id, merged with core-api when available."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT * FROM leads WHERE id = ?", (lead_id,))
-        row = cursor.fetchone()
-        if not row:
-            return None
-        local_lead = dict(row)
-        user = get_user_by_id(local_lead["user_id"]) if local_lead.get("user_id") else None
-        return merge_lead_row_with_core(local_lead, telegram_user_id=(user or {}).get("telegram_id"))
-    finally:
-        conn.close()
+    local_lead = get_local_lead_by_id(get_connection, lead_id=lead_id)
+    if not local_lead:
+        return None
+    user = get_user_by_id(local_lead["user_id"]) if local_lead.get("user_id") else None
+    return merge_lead_row_with_core(local_lead, telegram_user_id=(user or {}).get("telegram_id"))
 
 
 def set_core_lead_id(

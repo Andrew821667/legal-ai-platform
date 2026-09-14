@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-
-from fastapi.testclient import TestClient
-from sqlalchemy import delete
 
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
 from core_api.models import ApiKey, Event, Lead, LeadSource, LeadStatus, Scope
 from core_api.security import generate_api_key, hash_api_key
+from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
 
 def _create_api_key(scope: Scope, name: str) -> str:
@@ -211,6 +211,70 @@ def test_upsert_uses_legacy_lead_id_to_keep_separate_leads() -> None:
         finally:
             db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_pending_notification_queue_is_core_owned_and_source_filtered() -> None:
+    client = TestClient(app)
+    name = f"pytest.leads.pending.{uuid4().hex}"
+    key = _create_api_key(Scope.bot, name)
+    db = SessionLocal()
+    try:
+        telegram = Lead(
+            source=LeadSource.telegram_bot,
+            legacy_lead_id=91_001,
+            telegram_user_id=91_001,
+            name="Telegram lead",
+            contact="@pending",
+            temperature="warm",
+            pain_point="Нужна автоматизация",
+            last_message_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+            notification_sent=False,
+        )
+        website = Lead(
+            source=LeadSource.website_form,
+            name="Website lead",
+            contact="site@example.com",
+            temperature="hot",
+            pain_point="Нужна консультация",
+            last_message_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+            notification_sent=False,
+        )
+        db.add_all([telegram, website])
+        db.commit()
+        db.refresh(telegram)
+        db.refresh(website)
+        ids = [telegram.id, website.id]
+    finally:
+        db.close()
+
+    try:
+        queued = client.get(
+            "/api/v1/leads/notifications/pending?idle_minutes=5&source_filter=telegram_bot",
+            headers={"X-API-Key": key},
+        )
+        assert queued.status_code == 200
+        assert [row["id"] for row in queued.json()] == [str(ids[0])]
+
+        marked = client.post(
+            f"/api/v1/leads/{ids[0]}/notification-sent",
+            headers={"X-API-Key": key},
+            json={},
+        )
+        assert marked.status_code == 200
+        assert marked.json()["notification_sent"] is True
+        assert marked.json()["notification_sent_at"] is not None
+        assert client.get(
+            "/api/v1/leads/notifications/pending?idle_minutes=5&source_filter=telegram_bot",
+            headers={"X-API-Key": key},
+        ).json() == []
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(Lead).where(Lead.id.in_(ids)))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(name)
 
 
 def test_delete_lead_detaches_events() -> None:

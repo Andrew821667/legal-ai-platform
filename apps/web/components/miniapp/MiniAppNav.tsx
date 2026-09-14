@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Newspaper, Settings2, UserRound, Wrench } from "lucide-react";
+import { BriefcaseBusiness, Home, Newspaper, Settings2, UserRound, Wrench } from "lucide-react";
 import { ROUTES } from "@/lib/links";
 
-const tabs = [
+const baseTabs = [
   { href: ROUTES.miniApp, label: "Главная", icon: Home },
   { href: ROUTES.miniAppContent, label: "Контент", icon: Newspaper },
   { href: ROUTES.miniAppTools, label: "Инструменты", icon: Wrench },
@@ -15,13 +16,28 @@ const tabs = [
 
 export default function MiniAppNav() {
   const pathname = usePathname();
+  const [hasCases, setHasCases] = useState(false);
+  useEffect(() => {
+    const initData = window.Telegram?.WebApp?.initData || "";
+    if (!initData) return;
+    fetch("/api/client/summary", {
+      headers: { "x-telegram-init-data": initData }, cache: "no-store",
+    }).then((response) => response.ok ? response.json() : null)
+      .then((data) => setHasCases(Boolean(data?.client?.has_cases)))
+      .catch(() => undefined);
+  }, []);
+  const tabs = hasCases
+    ? baseTabs.map((tab) => tab.href === ROUTES.miniAppSolutions
+      ? { href: ROUTES.miniAppCases, label: "Мои дела", icon: BriefcaseBusiness }
+      : tab)
+    : baseTabs;
 
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-900/95 backdrop-blur"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
     >
-      <div className="mx-auto flex w-full max-w-md items-center justify-between px-3 py-2">
+      <div className="mx-auto flex w-full max-w-md items-center justify-between px-2 py-2">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
 

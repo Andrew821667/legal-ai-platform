@@ -83,7 +83,7 @@ function parseTelegramUserId(rawUser: string | null): number | null {
     return null;
   }
   const value = Number(parsed.id);
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     return null;
   }
   return value;
@@ -91,6 +91,11 @@ function parseTelegramUserId(rawUser: string | null): number | null {
 
 export function verifyTelegramWebAppInitData(initData: string, botToken: string): VerificationResult | null {
   const params = new URLSearchParams(initData);
+  const seen = new Set<string>();
+  for (const [key] of params) {
+    if (seen.has(key)) return null;
+    seen.add(key);
+  }
   const hash = (params.get("hash") || "").trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(hash)) {
     return null;
@@ -139,4 +144,3 @@ export function verifyTelegramWebAppInitDataWithAny(
   }
   return null;
 }
-

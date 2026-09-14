@@ -22,7 +22,7 @@ declare global {
 }
 
 const offerLabels: Record<LeadOffer, string> = {
-  consultation: "Бесплатная консультация",
+  consultation: "Обсудить задачу",
   checklist: "Гайд по внедрению ИИ",
   demo: "Демонстрационный разбор договора",
   sample_report: "Пример отчета по договору",
@@ -35,6 +35,8 @@ export default function LeadCaptureForm() {
   const [segment, setSegment] = useState<LeadSegment>("other");
   const [message, setMessage] = useState("");
   const [offer, setOffer] = useState<LeadOffer>("consultation");
+  const [practice, setPractice] = useState("hybrid");
+  const isCase = offer === "consultation" || offer === "unknown";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -91,6 +93,7 @@ export default function LeadCaptureForm() {
           segment,
           message,
           offer,
+          practice,
           consentAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
@@ -213,13 +216,28 @@ export default function LeadCaptureForm() {
               </label>
             </div>
 
+            {isCase ? (
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-1">Направление задачи</span>
+                <select value={practice} onChange={(e) => setPractice(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">
+                  <option value="hybrid">Автоматизация юридической работы</option>
+                  <option value="legal">Юридическая помощь</option>
+                  <option value="engineering">Разработка программ и интеграций</option>
+                </select>
+              </label>
+            ) : null}
+
             <label className="block">
               <span className="block text-sm font-medium text-slate-700 mb-1">Комментарий</span>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
-                placeholder="Кратко опишите задачу: legal-процесс, AI-сценарий, интеграция или инженерная разработка"
+                required={isCase}
+                minLength={isCase ? 20 : undefined}
+                maxLength={4000}
+                placeholder="Что нужно сделать и какой результат вы ожидаете?"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </label>

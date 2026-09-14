@@ -134,7 +134,7 @@ async def test_admin_nda_request_is_bound_to_the_core_lead(monkeypatch, replies)
 
 
 @pytest.mark.anyio
-async def test_admin_can_close_intake_without_agreement(monkeypatch, replies) -> None:
+async def test_admin_can_work_without_agreement_without_closing_intake(monkeypatch, replies) -> None:
     intake_id = "22222222-2222-2222-2222-222222222222"
     query = SimpleNamespace(
         data=f"sa_a:noneok:{intake_id}",
@@ -169,7 +169,8 @@ async def test_admin_can_close_intake_without_agreement(monkeypatch, replies) ->
 
     await flow.handle_admin_callback(update, ctx)
 
-    assert saved[0]["status"] == "closed"
+    assert saved[0]["without_agreement"] is True
+    assert "status" not in saved[0]
     assert "без заключения договора/соглашения" in saved[0]["internal_note"]
     assert shown == [intake_id]
 

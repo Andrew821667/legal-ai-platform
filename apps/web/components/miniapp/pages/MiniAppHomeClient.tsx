@@ -103,6 +103,7 @@ const quickActions = [
 export default function MiniAppHomePage() {
   const { state, ready } = useMiniAppState();
   const [liveHighlights, setLiveHighlights] = useState<HighlightCard[]>([]);
+  const [hasCases, setHasCases] = useState(false);
 
   useEffect(() => {
     if (!ready) {
@@ -148,6 +149,15 @@ export default function MiniAppHomePage() {
     };
   }, [ready, state.audience]);
 
+  useEffect(() => {
+    const initData = window.Telegram?.WebApp?.initData || "";
+    if (!initData) return;
+    fetch("/api/client/summary", { headers: { "x-telegram-init-data": initData }, cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => setHasCases(Boolean(body?.client?.has_cases)))
+      .catch(() => undefined);
+  }, []);
+
   const highlights = useMemo<HighlightCard[]>(
     () => (liveHighlights.length ? liveHighlights : fallbackHighlights[state.audience]),
     [liveHighlights, state.audience],
@@ -172,6 +182,17 @@ export default function MiniAppHomePage() {
         title="С чего хотите начать?"
         description="Можно проверить договор, описать юридическую задачу или обсудить автоматизацию и разработку."
       />
+
+      {hasCases ? (
+        <MiniTrackedLink
+          href={ROUTES.miniAppCases}
+          action={MINIAPP_ACTIONS.openAssistant}
+          meta={{ eventType: MINIAPP_EVENT_TYPES.navClick, source: MINIAPP_EVENT_SOURCES.home, screen: MINIAPP_SCREENS.home }}
+          variant="primary"
+        >
+          Мои дела, договоры и акты
+        </MiniTrackedLink>
+      ) : null}
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">
         <h2 className="text-base font-semibold text-white">Что сделать сейчас</h2>

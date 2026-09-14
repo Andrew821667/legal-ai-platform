@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ActorType, Lead, LegalIntake, NdaSignature, Scope
@@ -61,7 +62,8 @@ def _status_payload(row: NdaSignature | None) -> dict:
 
 def _intake_id_for_lead(db: Session, lead_id: uuid.UUID) -> str | None:
     intake_id = db.execute(
-        select(LegalIntake.id).where(LegalIntake.lead_id == lead_id).limit(1)
+        select(LegalIntake.id).where(LegalIntake.lead_id == lead_id)
+        .order_by(LegalIntake.created_at.desc(), LegalIntake.id.desc()).limit(1)
     ).scalar_one_or_none()
     return str(intake_id) if intake_id else None
 
@@ -209,6 +211,12 @@ def sign_nda(
         target_id=lead_id,
         details={"version": NDA_VERSION, "channel": row.channel},
     )
+    if row.channel == "miniapp":
+        queue_notice(
+            db,
+            f"nda:{row.id}:signed",
+            f"Клиент {row.signer_full_name} подписал NDA в кабинете.",
+        )
     db.commit()
     db.refresh(row)
 

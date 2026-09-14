@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Response, status
 from fastapi.responses import JSONResponse
@@ -77,6 +77,8 @@ def upsert_lead(
             utm_content=payload.utm_content,
             utm_term=payload.utm_term,
             last_activity_at=now,
+            last_message_at=payload.last_message_at,
+            notification_sent=bool(payload.notification_sent),
         )
         db.add(lead)
     else:
@@ -174,6 +176,55 @@ def leads_summary(
         stage_propose=stage_counts.get("propose", 0),
         stage_handoff=stage_counts.get("handoff", 0),
     )
+
+
+@router.get("/notifications/pending", response_model=list[LeadOut])
+def pending_lead_notifications(
+    idle_minutes: int = 5,
+    limit: int = 20,
+    source_filter: LeadSource | None = None,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> list[Lead]:
+    _ = identity
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(1, min(idle_minutes, 1440)))
+    ready = select(Lead).where(
+        Lead.last_message_at.is_not(None),
+        Lead.last_message_at <= cutoff,
+        Lead.notification_sent.is_(False),
+        (
+            Lead.temperature.in_(("warm", "hot"))
+            | (
+                Lead.name.is_not(None)
+                & (Lead.email.is_not(None) | Lead.phone.is_not(None) | Lead.contact.is_not(None))
+                & Lead.pain_point.is_not(None)
+            )
+        ),
+    )
+    if source_filter is not None:
+        ready = ready.where(Lead.source == source_filter)
+    return list(db.scalars(ready.order_by(Lead.last_message_at).limit(max(1, min(limit, 100)))))
+
+
+@router.post("/{lead_id}/notification-sent", response_model=LeadOut)
+def mark_notification_sent(
+    lead_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> Lead:
+    lead = db.scalar(select(Lead).where(Lead.id == lead_id).with_for_update())
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if not lead.notification_sent:
+        lead.notification_sent = True
+        lead.notification_sent_at = datetime.now(timezone.utc)
+        write_audit(
+            db, actor_type=ActorType.api_key, actor_id=identity.name,
+            action="lead.notification_sent", target_type="lead", target_id=lead.id,
+        )
+        db.commit()
+        db.refresh(lead)
+    return lead
 
 
 @router.get("/{lead_id}", response_model=LeadOut)

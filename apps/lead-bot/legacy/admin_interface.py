@@ -246,6 +246,37 @@ class AdminInterface:
         )
         return row if isinstance(row, dict) else None
 
+    def get_work_act_document(self, act_id: str, *, telegram_user_id: int) -> dict | None:
+        row = self._core_request_json(
+            "GET", f"/api/v1/work-acts/{act_id}/document",
+            params={"telegram_user_id": telegram_user_id},
+        )
+        return row if isinstance(row, dict) else None
+
+    def work_act_client_action(self, act_id: str, action: str, payload: dict) -> dict | None:
+        row = self._core_request_json(
+            "POST", f"/api/v1/work-acts/{act_id}/client/{action}", payload=payload,
+        )
+        return row if isinstance(row, dict) else None
+
+    def cancel_work_act(self, act_id: str, reason: str) -> dict | None:
+        row = self._core_request_json(
+            "POST", f"/api/v1/work-acts/{act_id}/cancel", payload={"reason": reason}, admin_scope=True,
+        )
+        return row if isinstance(row, dict) else None
+
+    def claim_client_notices(self) -> list[dict]:
+        rows = self._core_request_json("POST", "/api/v1/client-notices/claim")
+        return rows if isinstance(rows, list) else []
+
+    def acknowledge_client_notice(self, notice_id: str, claim_token: str) -> bool:
+        row = self._core_request_json(
+            "POST",
+            f"/api/v1/client-notices/{notice_id}/ack",
+            payload={"claim_token": claim_token},
+        )
+        return bool(isinstance(row, dict) and row.get("delivered"))
+
     def mark_work_act_paid(
         self, act_id: str, *, paid_by_telegram_user_id: int | None, note: str | None = None
     ) -> dict | None:

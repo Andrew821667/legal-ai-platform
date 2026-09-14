@@ -8,6 +8,7 @@ export interface LeadSecurityPayload {
   segment?: string;
   message?: string;
   offer?: string;
+  practice?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -172,6 +173,7 @@ export function buildLeadFingerprint(
       day: dayKey,
       contact: normalizedContact,
       offer: cleanFingerprintValue(payload.offer, 40),
+      practice: cleanFingerprintValue(payload.practice, 40),
       segment: cleanFingerprintValue(payload.segment, 40),
       name: cleanFingerprintValue(payload.name, 120),
       message: cleanFingerprintValue(payload.message, 4000),
