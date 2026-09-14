@@ -1,0 +1,18 @@
+{
+  "name": "Mini App AI Verdict",
+  "short_name": "AI Verdict",
+  "description": "Контент, инструменты, профиль и клиентские дела AI Verdict.",
+  "start_url": "/miniapp",
+  "scope": "/miniapp",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

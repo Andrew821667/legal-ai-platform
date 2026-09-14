@@ -4,6 +4,7 @@ import Script from "next/script";
 export const metadata: Metadata = {
   title: "Рабочее место юриста | AI Verdict",
   description: "Клиенты, обращения, документы и договоры практики.",
+  manifest: "/lawyer-manifest.webmanifest",
   // Раздел не для поисковиков: он показывает данные клиентов.
   robots: { index: false, follow: false, nocache: true },
   // «Добавить на экран Домой» в Safari — самостоятельный запуск без
