@@ -17,12 +17,14 @@ def test_sensitive_fields_are_redacted() -> None:
         {
             "description": "Уволили без объяснения причин",
             "signer_contact": "+79000000000",
+            "signer_identity_document": "45 01 123456",
             "username": "ryabov",
             "status": "new",
         }
     )
     assert scrubbed["description"] == "[removed]"
     assert scrubbed["signer_contact"] == "[removed]"
+    assert scrubbed["signer_identity_document"] == "[removed]"
     assert scrubbed["username"] == "[removed]"
     assert scrubbed["status"] == "new"
 
@@ -62,5 +64,8 @@ def test_dsn_present_enables_with_safe_defaults(monkeypatch) -> None:
 
 
 def test_all_known_sensitive_fields_covered() -> None:
-    required = {"description", "pain_point", "signer_contact", "contact", "username"}
+    required = {
+        "description", "pain_point", "signer_contact",
+        "signer_identity_document", "contact", "username",
+    }
     assert required <= _SENSITIVE_KEYS

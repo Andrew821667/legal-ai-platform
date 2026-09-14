@@ -1,6 +1,6 @@
 """Текст соглашения о конфиденциальности и его версионирование.
 
-Редакция утверждена владельцем практики 7 сентября 2026 года.
+Редакция утверждена владельцем практики 14 сентября 2026 года.
 
 Ключевая для механики часть — пункт о признании простой электронной подписи.
 Без явного соглашения сторон считать нажатие кнопки подписью (статья 6
@@ -22,13 +22,14 @@ from hashlib import sha256
 #
 # Пометки «черновик» здесь быть не должно: версия записывается в каждую подпись,
 # и при споре подпись под документом с таким названием выглядела бы слабо.
-NDA_VERSION = "2026-09-07.1"
+NDA_VERSION = "2026-09-14.1"
+PDN_CONSENT_VERSION = "nda-pdn-2026-09-14.1"
 
 NDA_TEXT = """СОГЛАШЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ
 
 1. Стороны
-Исполнитель — {operator_name}.
-Клиент — лицо, подписавшее настоящее соглашение в Telegram-боте Исполнителя.
+Исполнитель — {operator_identity}.
+Клиент — {client_identity}.
 
 2. Предмет
 Стороны договорились о защите сведений, которые Клиент передаёт Исполнителю в
@@ -81,9 +82,123 @@ NDA_TEXT = """СОГЛАШЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ
 Версия документа: {version}"""
 
 
-def render_nda_text(operator_name: str) -> str:
+PDN_CONSENT_TEXT = """СОГЛАСИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ
+
+Субъект персональных данных — {client_identity}.
+Оператор — {operator_identity}.
+
+1. Какие данные обрабатываются
+Фамилия, имя, отчество; контактные данные; идентификатор и имя учётной записи
+Telegram; реквизиты документа, удостоверяющего личность; сведения об
+организации и полномочиях подписанта, если применимо.
+
+2. Цели обработки
+Идентификация клиента и подписанта; связь по обращению; заключение и исполнение
+соглашения о конфиденциальности и договора об оказании юридической помощи;
+подтверждение совершённых сторонами юридически значимых действий; выполнение
+обязанностей, установленных законодательством Российской Федерации.
+
+3. Действия с персональными данными
+Сбор, запись, систематизация, накопление, хранение, уточнение, извлечение,
+использование, предоставление уполномоченным лицам оператора, блокирование,
+удаление и уничтожение. Обработка выполняется автоматизированным и
+неавтоматизированным способами.
+
+4. Ограничения передачи
+Реквизиты документа, удостоверяющего личность, не передаются системам
+искусственного интеллекта, веб-аналитике и рекламным системам. Доступ к ним
+получают только лица, которым эти данные нужны для оформления документов и
+работы по обращению. При выборе Telegram сведения проходят через этот сервис;
+остальная обработка выполняется в инфраструктуре оператора и привлечённых им
+поставщиков размещения данных с обязательством конфиденциальности.
+
+5. Срок действия и отзыв
+Согласие действует до достижения указанных целей и окончания обязательных
+сроков хранения документов. Его можно отозвать по адресу
+{privacy_contact_email}. После отзыва обработка прекращается, а данные
+удаляются, если их дальнейшее хранение не требуется по закону или для защиты
+прав оператора и клиента. Политика обработки персональных данных:
+https://ai-verdict.ru/privacy.
+
+6. Подтверждение
+Нажатие отдельной кнопки «Даю согласие на обработку ПД» является
+самостоятельным подтверждением настоящего согласия. Оператор фиксирует дату,
+учётную запись, версию и контрольную сумму текста согласия.
+
+Версия согласия: {version}"""
+
+
+def _operator_identity(operator_name: str, operator_inn: str) -> str:
+    name = operator_name.strip() or "Исполнитель"
+    inn = operator_inn.strip()
+    return f"{name}, ИНН {inn}" if inn else name
+
+
+def _client_identity(
+    signer_full_name: str,
+    signer_contact: str,
+    signer_identity_document: str,
+    signer_org: str,
+) -> str:
+    name = signer_full_name.strip()
+    if not name:
+        return (
+            "лицо, которое укажет свои ФИО, контактные и паспортные данные "
+            "непосредственно перед подписанием"
+        )
+    person = name
+    if signer_identity_document.strip():
+        person += ", реквизиты документа, удостоверяющего личность, предоставлены отдельно"
+    if signer_contact.strip():
+        person += f", контакт: {signer_contact.strip()}"
+    org = signer_org.strip()
+    return f"{org}; подписант — {person}" if org else person
+
+
+def render_nda_text(
+    operator_name: str,
+    operator_inn: str = "",
+    *,
+    signer_full_name: str = "",
+    signer_contact: str = "",
+    signer_identity_document: str = "",
+    signer_org: str = "",
+) -> str:
     """Возвращает текст соглашения с подставленными реквизитами."""
-    return NDA_TEXT.format(operator_name=operator_name or "Исполнитель", version=NDA_VERSION)
+    return NDA_TEXT.format(
+        operator_identity=_operator_identity(operator_name, operator_inn),
+        client_identity=_client_identity(
+            signer_full_name,
+            signer_contact,
+            signer_identity_document,
+            signer_org,
+        ),
+        version=NDA_VERSION,
+    )
+
+
+def render_pdn_consent_text(
+    operator_name: str,
+    operator_inn: str = "",
+    *,
+    privacy_contact_email: str = "privacy@ai-verdict.ru",
+    signer_full_name: str = "",
+    signer_contact: str = "",
+    signer_identity_document: str = "",
+    signer_org: str = "",
+) -> str:
+    """Возвращает отдельное согласие на обработку данных подписанта."""
+    return PDN_CONSENT_TEXT.format(
+        operator_identity=_operator_identity(operator_name, operator_inn),
+        client_identity=_client_identity(
+            signer_full_name,
+            signer_contact,
+            signer_identity_document,
+            signer_org,
+        ),
+        privacy_contact_email=privacy_contact_email.strip() or "privacy@ai-verdict.ru",
+        version=PDN_CONSENT_VERSION,
+    )
 
 
 def document_hash(text: str) -> str:

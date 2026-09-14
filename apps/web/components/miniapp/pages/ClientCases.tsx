@@ -24,7 +24,7 @@ type Act = {
 };
 type Summary = {
   client: { lead_id?: string | null; name?: string | null; has_cases: boolean };
-  nda: { signed: boolean; signed_at?: string | null; signer_full_name?: string | null };
+  nda: { signed: boolean; signed_at?: string | null; signer_full_name?: string | null; pdn_consent_at?: string | null };
   cases: Case[]; agreements: Agreement[]; acts: Act[];
 };
 type Doc = {
@@ -129,7 +129,7 @@ export default function ClientCases() {
 
     <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
       <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-emerald-400" /><h3 className="font-semibold text-white">Конфиденциальность</h3></div>
-      <p className="mt-2 text-sm text-slate-300">{data.nda.signed ? `NDA подписано${data.nda.signer_full_name ? `: ${data.nda.signer_full_name}` : ""}.` : "Перед документами и договором нужно подписать NDA."}</p>
+      <p className="mt-2 text-sm text-slate-300">{data.nda.signed ? `NDA подписано${data.nda.signer_full_name ? `: ${data.nda.signer_full_name}` : ""}.${data.nda.pdn_consent_at ? " Отдельное согласие на обработку ПД зафиксировано." : ""}` : "Перед документами и договором нужно отдельно дать согласие на обработку ПД и подписать NDA."}</p>
       {!data.nda.signed && data.client.lead_id ? <div className="mt-3"><Button onClick={() => run(async () => {
         const item = await request<Doc>("/api/client/nda"); setDoc({ ...item, id: data.client.lead_id!, status: "unsigned" }); setDocKind("nda");
       })}>Прочитать NDA</Button></div> : null}
@@ -169,11 +169,77 @@ function Question({ id, busy, run }: { id: string; busy: boolean; run: (fn: () =
 }
 
 function DocumentPanel({ kind, doc, note, setNote, busy, close, run }: { kind: "nda" | "agreement" | "act"; doc: Doc; note: string; setNote: (v: string) => void; busy: boolean; close: () => void; run: (fn: () => Promise<unknown>) => Promise<void> }) {
-  const signNda = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.currentTarget).entries()); void run(async () => { await request("/api/client/nda", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lead_id: doc.id, document_hash: doc.hash, ...body }) }); close(); }); };
   const act = (action: string, extra = {}) => run(async () => { await request(`/api/client/${kind === "act" ? "acts" : "agreements"}/${doc.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, document_hash: doc.document_hash || doc.hash, ...extra }) }); close(); });
   const actOpen = kind === "act" && !doc.cancelled_at;
   const canAccept = actOpen && !doc.accepted_at && !doc.objected_at;
   const canObject = canAccept;
   const canClaimPaid = actOpen && !doc.status.includes("paid");
-  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95 p-4"><div className="mx-auto max-w-md pb-12"><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "nda" ? <form onSubmit={signNda} className="mt-5 space-y-2">{[["signer_full_name","ФИО полностью"],["signer_contact","Телефон или email"],["signer_org","Организация, если есть"]].map(([name,label], index) => <input key={name} name={name} required={index < 2} placeholder={label} className="w-full rounded bg-slate-800 p-3 text-sm"/>)}<button disabled={busy} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950">Подписать NDA</button></form> : kind === "agreement" ? <div className="mt-5 space-y-3">{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>Подписать договор</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</div></div>;
+  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95 p-4"><div className="mx-auto max-w-md pb-12"><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div>{kind === "nda" ? <NdaSigningPanel doc={doc} busy={busy} close={close} run={run}/> : <><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "agreement" ? <div className="mt-5 space-y-3">{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>Подписать договор</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</>}</div></div>;
+}
+
+type NdaDetails = {
+  signer_full_name: string;
+  signer_contact: string;
+  signer_identity_document: string;
+  signer_org?: string;
+};
+
+function NdaSigningPanel({ doc, busy, close, run }: { doc: Doc; busy: boolean; close: () => void; run: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const [step, setStep] = useState<"details" | "consent" | "nda">("details");
+  const [details, setDetails] = useState<NdaDetails | null>(null);
+  const [shown, setShown] = useState<Doc>(doc);
+  const [consentId, setConsentId] = useState("");
+  const [checked, setChecked] = useState(false);
+
+  const post = <T,>(body: Record<string, unknown>) => request<T>("/api/client/nda", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const previewConsent = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = Object.fromEntries(form.entries()) as NdaDetails;
+    void run(async () => {
+      const preview = await post<Doc>({ action: "consent-preview", ...next });
+      setDetails(next); setShown(preview); setChecked(false); setStep("consent");
+    });
+  };
+
+  const acceptConsent = () => {
+    if (!details) return;
+    void run(async () => {
+      const accepted = await post<{ consent_id: string }>({
+        action: "consent-accept", lead_id: doc.id, document_hash: shown.hash,
+        pdn_consent_accepted: true, ...details,
+      });
+      const preview = await post<Doc>({
+        action: "nda-preview", lead_id: doc.id, pdn_consent_id: accepted.consent_id,
+      });
+      setConsentId(accepted.consent_id); setShown(preview); setStep("nda");
+    });
+  };
+
+  const sign = () => void run(async () => {
+    await post({ action: "sign", lead_id: doc.id, pdn_consent_id: consentId, document_hash: shown.hash });
+    close();
+  });
+
+  return <div>
+    <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{shown.text}</pre>
+    {step === "details" ? <form onSubmit={previewConsent} className="mt-5 space-y-2">
+      <input name="signer_full_name" required placeholder="ФИО полностью" autoComplete="name" className="w-full rounded bg-slate-800 p-3 text-sm"/>
+      <input name="signer_contact" required placeholder="Телефон или email" autoComplete="email" className="w-full rounded bg-slate-800 p-3 text-sm"/>
+      <textarea name="signer_identity_document" required maxLength={500} placeholder="Паспорт: серия, номер, кем и когда выдан" autoComplete="off" className="min-h-24 w-full rounded bg-slate-800 p-3 text-sm"/>
+      <input name="signer_org" placeholder="Организация, если есть" autoComplete="organization" className="w-full rounded bg-slate-800 p-3 text-sm"/>
+      <p className="text-xs leading-5 text-slate-400">Паспортные данные не передаются ИИ, веб-аналитике и рекламным системам.</p>
+      <button disabled={busy} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950">Перейти к согласию</button>
+    </form> : null}
+    {step === "consent" ? <div className="mt-5 space-y-3 border-t border-slate-700 pt-4">
+      <label className="flex items-start gap-3 text-sm leading-5 text-slate-200"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} className="mt-1 h-4 w-4"/><span>Я прочитал(а) отдельное согласие и даю согласие на обработку указанных персональных данных. <a href="/privacy" target="_blank" className="text-amber-300 underline">Политика обработки ПД</a></span></label>
+      <button type="button" disabled={busy || !checked} onClick={acceptConsent} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950 disabled:opacity-50">Даю согласие на обработку ПД</button>
+    </div> : null}
+    {step === "nda" ? <div className="mt-5 space-y-3 border-t border-slate-700 pt-4"><p className="text-sm leading-5 text-emerald-300">Согласие на обработку ПД зафиксировано отдельно. Теперь можно подписать NDA.</p><button type="button" disabled={busy} onClick={sign} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950">Подписать NDA</button></div> : null}
+  </div>;
 }

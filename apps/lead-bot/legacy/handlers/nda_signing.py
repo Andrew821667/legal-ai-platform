@@ -4,15 +4,9 @@
 диалога. Держать две реализации было бы приглашением к расхождению — правки в
 одной тихо не доезжали бы в другую.
 
-Почему клиент вводит данные сам. Аккаунт Telegram подтверждает канал, но не
-личность: за подписью, состоящей из одного telegram_user_id, при споре пришлось
-бы доказывать, кто за ним стоял. Введённые своей рукой ФИО и контакт эту дыру
-закрывают — не полностью, но соразмерно этапу первичной консультации. Просить
-паспортные данные ради полноты значило бы убить простоту, ради которой всё
-затевалось.
-
-Три вопроса — сознательный предел. Больше похоже на анкету и отпугивает на
-шаге, где человек ещё только решает, доверять ли нам.
+Аккаунт Telegram подтверждает канал, но не личность. Поэтому клиент сам вводит
+ФИО, контакт и реквизиты документа. Согласие на обработку этих данных и NDA
+подтверждаются отдельными кнопками и сохраняются как разные документы.
 """
 
 from __future__ import annotations
@@ -39,10 +33,13 @@ STAGE_KEY = "nda_flow_stage"
 DATA_KEY = "nda_flow_data"
 LEAD_KEY = "nda_flow_lead_id"
 HASH_KEY = "nda_flow_hash"
+CONSENT_HASH_KEY = "nda_flow_consent_hash"
+CONSENT_ID_KEY = "nda_flow_consent_id"
 RETURN_KEY = "nda_flow_return"
 
 STAGE_NAME = "await_name"
 STAGE_CONTACT = "await_contact"
+STAGE_IDENTITY = "await_identity_document"
 STAGE_ORG = "await_org"
 
 # Куда вернуться после подписания.
@@ -64,11 +61,20 @@ def intro_markup() -> InlineKeyboardMarkup:
     )
 
 
+def consent_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Даю согласие на обработку ПД", callback_data="nda:consent")],
+            [InlineKeyboardButton("Исправить", callback_data="nda:begin")],
+            [InlineKeyboardButton("Отмена", callback_data="nda:cancel")],
+        ]
+    )
+
+
 def confirm_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("Подписать", callback_data="nda:confirm")],
-            [InlineKeyboardButton("Исправить", callback_data="nda:begin")],
+            [InlineKeyboardButton("Подписать NDA", callback_data="nda:confirm")],
             [InlineKeyboardButton("Отмена", callback_data="nda:cancel")],
         ]
     )
@@ -151,9 +157,9 @@ def build_intro(*, signed: bool, status: dict | None) -> str:
             "Оно письменно закрепляет, что мы не раскрываем полученное от вас "
             "и используем материалы только для вашего вопроса.",
             "",
-            "Подписание займёт минуту: понадобятся ваши ФИО и контакт — без них "
-            "подпись не имеет силы. Мы зафиксируем дату и текст, который вы "
-            "видели.",
+            "Для подписания понадобятся ФИО, контакт и реквизиты документа, "
+            "удостоверяющего личность. Сначала вы отдельно подтвердите согласие "
+            "на обработку этих данных, затем подпишете NDA.",
             "",
             "Подписывается один раз и действует на все ваши обращения.",
         ]
@@ -166,15 +172,16 @@ def build_summary(data: dict) -> str:
         "",
         f"ФИО: {data.get('signer_full_name', '')}",
         f"Контакт: {data.get('signer_contact', '')}",
+        "Документ: реквизиты указаны",
     ]
     org = data.get("signer_org")
     lines.append(f"Организация: {org}" if org else "Подписывает: от себя лично")
     lines.extend(
         [
             "",
-            "Нажимая «Подписать», вы соглашаетесь с текстом соглашения. "
-            "Это простая электронная подпись: мы сохраним дату, ваши данные "
-            "и контрольную сумму документа.",
+            "Согласие на обработку персональных данных уже зафиксировано "
+            "отдельно. Нажатие «Подписать NDA» — простая электронная подпись: "
+            "мы сохраним дату, учётную запись и контрольную сумму документа.",
         ]
     )
     return "\n".join(lines)
@@ -199,6 +206,13 @@ def looks_like_contact(text: str) -> bool:
     return len(digits) >= 10
 
 
+def looks_like_identity_document(text: str) -> bool:
+    """Мягкая проверка реквизитов российского или иностранного документа."""
+    value = (text or "").strip()
+    significant = [char for char in value if char.isalnum()]
+    return len(value) >= 12 and len(significant) >= 8
+
+
 def is_signing_for_self(text: str) -> bool:
     lowered = (text or "").strip().lower()
     return not lowered or any(lowered.startswith(m) for m in _SELF_MARKERS)
@@ -209,7 +223,7 @@ def is_active(context: ContextTypes.DEFAULT_TYPE) -> bool:
 
 
 def _reset(context: ContextTypes.DEFAULT_TYPE) -> None:
-    for key in (STAGE_KEY, DATA_KEY, HASH_KEY):
+    for key in (STAGE_KEY, DATA_KEY, HASH_KEY, CONSENT_HASH_KEY, CONSENT_ID_KEY):
         context.user_data.pop(key, None)
 
 
@@ -377,6 +391,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
         context.user_data[STAGE_KEY] = STAGE_NAME
         context.user_data[DATA_KEY] = {}
+        context.user_data.pop(CONSENT_HASH_KEY, None)
+        context.user_data.pop(CONSENT_ID_KEY, None)
         await utils.safe_reply_text(
             message,
             "Как вас зовут? Укажите фамилию, имя и отчество полностью — "
@@ -387,6 +403,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if action == "confirm":
         await _sign(update, context, message)
+        return
+
+    if action == "consent":
+        await _accept_consent(update, context, message)
         return
 
 
@@ -434,7 +454,30 @@ async def handle_message(
             return True
         data["signer_contact"] = text[:255]
         context.user_data[DATA_KEY] = data
+        context.user_data[STAGE_KEY] = STAGE_IDENTITY
+        await utils.safe_reply_text(
+            message,
+            "Укажите реквизиты документа, удостоверяющего личность: серию и "
+            "номер, кем и когда выдан. Эти сведения не передаются ИИ и аналитике.",
+            action="nda_ask_identity_document",
+        )
+        return True
+
+    if stage == STAGE_IDENTITY:
+        if not looks_like_identity_document(text):
+            await utils.safe_reply_text(
+                message,
+                "Нужны полные реквизиты документа: серия и номер, кем и когда выдан.",
+                action="nda_identity_document_invalid",
+            )
+            return True
+        data["signer_identity_document"] = text[:500]
+        context.user_data[DATA_KEY] = data
         context.user_data[STAGE_KEY] = STAGE_ORG
+        try:
+            await message.delete()
+        except (TelegramError, AttributeError):
+            pass
         await utils.safe_reply_text(
             message,
             "Подписываете от себя или от компании?\n\n"
@@ -447,17 +490,99 @@ async def handle_message(
     if stage == STAGE_ORG:
         if not is_signing_for_self(text):
             data["signer_org"] = text[:500]
+        preview = await asyncio.to_thread(
+            core_api_bridge.preview_nda_pdn_consent,
+            signer_full_name=data.get("signer_full_name", ""),
+            signer_contact=data.get("signer_contact", ""),
+            signer_identity_document=data.get("signer_identity_document", ""),
+            signer_org=data.get("signer_org"),
+        )
+        if not isinstance(preview, dict) or not preview.get("text") or not preview.get("hash"):
+            await utils.safe_reply_text(
+                message,
+                "Не удалось подготовить согласие. Попробуйте отправить ответ ещё раз чуть позже.",
+                action="nda_consent_preview_failed",
+            )
+            return True
         context.user_data[DATA_KEY] = data
+        context.user_data[CONSENT_HASH_KEY] = preview["hash"]
         context.user_data.pop(STAGE_KEY, None)
         await utils.safe_reply_text(
             message,
-            build_summary(data),
-            reply_markup=confirm_markup(),
-            action="nda_summary",
+            str(preview["text"])[:4000],
+            action="nda_consent_text",
+        )
+        await utils.safe_reply_text(
+            message,
+            "Согласие оформляется отдельно от NDA. Проверьте текст и подтвердите его отдельной кнопкой.",
+            reply_markup=consent_markup(),
+            action="nda_consent_confirm",
         )
         return True
 
     return False
+
+
+async def _accept_consent(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> None:
+    """Фиксирует отдельное согласие и только затем показывает точный NDA."""
+    data = dict(context.user_data.get(DATA_KEY) or {})
+    lead_id = context.user_data.get(LEAD_KEY)
+    consent_hash = context.user_data.get(CONSENT_HASH_KEY)
+    user = update.effective_user
+    required = ("signer_full_name", "signer_contact", "signer_identity_document")
+    if not lead_id or not consent_hash or not all(data.get(key) for key in required):
+        await utils.safe_reply_text(
+            message,
+            "Не хватает данных для согласия. Начните заполнение заново.",
+            reply_markup=intro_markup(),
+            action="nda_consent_incomplete",
+        )
+        return
+
+    result = await asyncio.to_thread(
+        core_api_bridge.accept_nda_pdn_consent,
+        lead_id=str(lead_id),
+        telegram_user_id=getattr(user, "id", None),
+        telegram_username=getattr(user, "username", None),
+        document_hash=str(consent_hash),
+        signer_full_name=data["signer_full_name"],
+        signer_contact=data["signer_contact"],
+        signer_identity_document=data["signer_identity_document"],
+        signer_org=data.get("signer_org"),
+    )
+    consent_id = result.get("consent_id") if isinstance(result, dict) else None
+    if not consent_id:
+        await utils.safe_reply_text(
+            message,
+            "Не удалось зафиксировать согласие. Попробуйте ещё раз чуть позже.",
+            reply_markup=consent_markup(),
+            action="nda_consent_failed",
+        )
+        return
+
+    preview = await asyncio.to_thread(
+        core_api_bridge.preview_nda_document,
+        lead_id=str(lead_id),
+        pdn_consent_id=str(consent_id),
+        telegram_user_id=getattr(user, "id", None),
+    )
+    if not isinstance(preview, dict) or not preview.get("text") or not preview.get("hash"):
+        await utils.safe_reply_text(
+            message,
+            "Согласие сохранено, но NDA сейчас не открылось. Вернитесь к подписанию чуть позже.",
+            action="nda_preview_after_consent_failed",
+        )
+        return
+
+    context.user_data[CONSENT_ID_KEY] = str(consent_id)
+    context.user_data[HASH_KEY] = preview["hash"]
+    await utils.safe_reply_text(message, str(preview["text"])[:4000], action="nda_signed_text")
+    await utils.safe_reply_text(
+        message,
+        build_summary(data),
+        reply_markup=confirm_markup(),
+        action="nda_summary",
+    )
 
 
 async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> None:
@@ -466,7 +591,8 @@ async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> 
     lead_id = context.user_data.get(LEAD_KEY)
     user = update.effective_user
 
-    if not lead_id or not data.get("signer_full_name") or not data.get("signer_contact"):
+    consent_id = context.user_data.get(CONSENT_ID_KEY)
+    if not lead_id or not consent_id or not data.get("signer_identity_document"):
         await utils.safe_reply_text(
             message,
             "Не хватает данных для подписания. Начнём заново?",
@@ -477,11 +603,13 @@ async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> 
 
     document_hash = context.user_data.get(HASH_KEY)
     if not document_hash:
-        # Подписывают, не открыв текст. Хеш всё равно нужен: подпись должна
-        # относиться к конкретной редакции, а не к «документу вообще».
-        document = await asyncio.to_thread(core_api_bridge.get_nda_document)
-        if isinstance(document, dict):
-            document_hash = document.get("hash")
+        await utils.safe_reply_text(
+            message,
+            "Не удалось подтвердить редакцию NDA. Откройте подписание заново.",
+            reply_markup=intro_markup(),
+            action="nda_hash_missing",
+        )
+        return
 
     result = await asyncio.to_thread(
         core_api_bridge.sign_nda,
@@ -490,9 +618,7 @@ async def _sign(update: Update, context: ContextTypes.DEFAULT_TYPE, message) -> 
         telegram_username=getattr(user, "username", None),
         signer_name=getattr(user, "full_name", None),
         document_hash=str(document_hash or ""),
-        signer_full_name=data["signer_full_name"],
-        signer_contact=data["signer_contact"],
-        signer_org=data.get("signer_org"),
+        pdn_consent_id=str(consent_id),
     )
 
     if not isinstance(result, dict) or not result.get("signed"):

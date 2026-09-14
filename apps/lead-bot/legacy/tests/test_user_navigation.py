@@ -8,6 +8,17 @@ from handlers import user as user_handlers
 from handlers import user_routing
 
 
+def test_passport_step_never_puts_message_in_log_preview() -> None:
+    raw = "45 01 123456, выдан ОВД города Москвы 01.02.2010"
+    preview = user_handlers._message_preview(
+        raw,
+        {user_handlers.NDA_STAGE_KEY: user_handlers.NDA_STAGE_IDENTITY},
+    )
+
+    assert preview == "[identity document removed]"
+    assert "123456" not in preview
+
+
 @pytest.mark.anyio
 async def test_workspace_button_bypasses_forced_welcome(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, bool] = {"menu": False, "welcome": False}

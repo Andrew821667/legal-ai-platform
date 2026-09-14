@@ -69,6 +69,20 @@ def _bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
             },
         )
 
+    def _preview_consent(**kwargs):
+        calls["consent_preview"] = kwargs
+        return overrides.get(
+            "consent_preview", {"text": "текст отдельного согласия", "hash": "consent-hash"}
+        )
+
+    def _accept_consent(**kwargs):
+        calls["consent_accept"] = kwargs
+        return overrides.get("consent_result", {"accepted": True, "consent_id": "consent-1"})
+
+    def _preview_nda(**kwargs):
+        calls["nda_preview"] = kwargs
+        return overrides.get("nda_preview", {"text": "персональный NDA", "hash": "nda-hash"})
+
     monkeypatch.setattr(nda.core_api_bridge, "get_nda_status", _status)
     monkeypatch.setattr(
         nda.core_api_bridge,
@@ -81,6 +95,9 @@ def _bridge(monkeypatch: pytest.MonkeyPatch, **overrides) -> dict:
         lambda: overrides.get("document", {"text": "текст соглашения", "hash": "abc"}),
     )
     monkeypatch.setattr(nda.core_api_bridge, "sign_nda", _sign)
+    monkeypatch.setattr(nda.core_api_bridge, "preview_nda_pdn_consent", _preview_consent)
+    monkeypatch.setattr(nda.core_api_bridge, "accept_nda_pdn_consent", _accept_consent)
+    monkeypatch.setattr(nda.core_api_bridge, "preview_nda_document", _preview_nda)
     return calls
 
 
@@ -89,6 +106,17 @@ def _press(update, context, action: str):
         data=f"nda:{action}", message=update.effective_message
     )
     return nda.handle_callback(update, context)
+
+
+async def _complete_form(update, context, *, org: str = "от себя") -> None:
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "+7 900 123-45-67")
+    await nda.handle_message(
+        update, context, "45 01 123456, выдан ОВД города Москвы 01.02.2010"
+    )
+    await nda.handle_message(update, context, org)
+    await _press(update, context, "consent")
 
 
 def _admin_intake(monkeypatch: pytest.MonkeyPatch, *, status: str = "received", agreements=None) -> None:
@@ -132,6 +160,15 @@ def test_contact_accepts_phone_or_email() -> None:
     assert not nda.looks_like_contact("12345")
 
 
+def test_identity_document_needs_meaningful_details() -> None:
+    assert nda.looks_like_identity_document(
+        "45 01 123456, выдан ОВД города Москвы 01.02.2010"
+    )
+    assert nda.looks_like_identity_document("Passport AB1234567 issued 2020-01-01")
+    assert not nda.looks_like_identity_document("12345")
+    assert not nda.looks_like_identity_document("потом")
+
+
 def test_signing_for_self_is_recognised() -> None:
     for answer in ("от себя", "От себя лично", "физлицо", "нет", "-", ""):
         assert nda.is_signing_for_self(answer), answer
@@ -142,8 +179,8 @@ def test_intro_explains_what_will_be_recorded() -> None:
     text = nda.build_intro(signed=False, status=None)
     assert "ФИО" in text
     assert "контакт" in text.lower()
-    # Обещание простоты должно оставаться честным.
-    assert "минуту" in text
+    assert "реквизиты документа" in text
+    assert "отдельно подтвердите согласие" in text
 
 
 def test_intro_for_signed_shows_who_signed() -> None:
@@ -243,16 +280,16 @@ async def test_full_path_collects_details_and_signs(update, context, replies, mo
     _admin_intake(monkeypatch)
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "+7 900 123-45-67")
-    await nda.handle_message(update, context, 'ООО "Ромашка", ИНН 7701234567')
+    await _complete_form(update, context, org='ООО "Ромашка", ИНН 7701234567')
     await _press(update, context, "confirm")
 
     signed = calls["sign"]
-    assert signed["signer_full_name"] == "Иванов Иван Иванович"
-    assert signed["signer_contact"] == "+7 900 123-45-67"
-    assert "Ромашка" in signed["signer_org"]
+    accepted = calls["consent_accept"]
+    assert accepted["signer_full_name"] == "Иванов Иван Иванович"
+    assert accepted["signer_contact"] == "+7 900 123-45-67"
+    assert accepted["signer_identity_document"].startswith("45 01")
+    assert "Ромашка" in accepted["signer_org"]
+    assert signed["pdn_consent_id"] == "consent-1"
     assert signed["telegram_user_id"] == 42
     assert "подписано" in replies[-1].lower()
     assert len(context.bot.messages) == 1
@@ -277,10 +314,7 @@ async def test_signed_notice_offers_the_fork_right_away(update, context, replies
     _admin_intake(monkeypatch, status="received", agreements=[])
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
     notice = context.bot.messages[0]
@@ -300,10 +334,7 @@ async def test_fork_is_hidden_once_an_agreement_exists(update, context, replies,
     _admin_intake(monkeypatch, status="received", agreements=[{"id": "agr-1", "status": "draft"}])
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
     notice = context.bot.messages[0]
@@ -317,10 +348,7 @@ async def test_fork_is_hidden_for_a_closed_intake(update, context, replies, monk
     _admin_intake(monkeypatch, status="closed", agreements=[])
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
     notice = context.bot.messages[0]
@@ -342,10 +370,7 @@ async def test_repeated_signature_does_not_notify_admin(
     )
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
     assert context.bot.messages == []
@@ -358,13 +383,10 @@ async def test_signing_for_self_leaves_organization_empty(
     calls = _bridge(monkeypatch, status={"signed": False})
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
-    assert calls["sign"]["signer_org"] is None
+    assert calls["consent_accept"]["signer_org"] is None
 
 
 @pytest.mark.anyio
@@ -394,6 +416,22 @@ async def test_bad_contact_is_asked_again(update, context, replies, monkeypatch)
 
 
 @pytest.mark.anyio
+async def test_bad_identity_document_is_asked_again(
+    update, context, replies, monkeypatch
+) -> None:
+    _bridge(monkeypatch, status={"signed": False})
+
+    await nda.open_signing(update, context)
+    await _press(update, context, "begin")
+    await nda.handle_message(update, context, "Иванов Иван Иванович")
+    await nda.handle_message(update, context, "ivan@example.ru")
+    await nda.handle_message(update, context, "12345")
+
+    assert context.user_data[nda.STAGE_KEY] == nda.STAGE_IDENTITY
+    assert "полные реквизиты" in replies[-1].lower()
+
+
+@pytest.mark.anyio
 async def test_reading_the_text_records_its_checksum(
     update, context, replies, monkeypatch
 ) -> None:
@@ -404,13 +442,10 @@ async def test_reading_the_text_records_its_checksum(
     await _press(update, context, "text")
     assert context.user_data[nda.HASH_KEY] == "abc"
 
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
-    assert calls["sign"]["document_hash"] == "abc"
+    assert calls["sign"]["document_hash"] == "nda-hash"
 
 
 @pytest.mark.anyio
@@ -433,10 +468,7 @@ async def test_failed_signing_does_not_leave_the_client_guessing(
     _bridge(monkeypatch, status={"signed": False}, sign_result=None)
 
     await nda.open_signing(update, context)
-    await _press(update, context, "begin")
-    await nda.handle_message(update, context, "Иванов Иван Иванович")
-    await nda.handle_message(update, context, "ivan@example.ru")
-    await nda.handle_message(update, context, "от себя")
+    await _complete_form(update, context)
     await _press(update, context, "confirm")
 
     assert "не удалось" in replies[-1].lower()

@@ -340,6 +340,71 @@ class CoreApiBridge:
         result = self._get("/api/v1/nda/document")
         return result if isinstance(result, dict) else None
 
+    def preview_nda_pdn_consent(
+        self,
+        *,
+        signer_full_name: str,
+        signer_contact: str,
+        signer_identity_document: str,
+        signer_org: str | None = None,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            "/api/v1/nda/personal-data-consent/preview",
+            {
+                "signer_full_name": signer_full_name,
+                "signer_contact": signer_contact,
+                "signer_identity_document": signer_identity_document,
+                "signer_org": signer_org,
+            },
+            idempotency_key=f"nda-pdn-preview:{time.time_ns()}",
+        )
+
+    def accept_nda_pdn_consent(
+        self,
+        *,
+        lead_id: str,
+        telegram_user_id: int | None,
+        telegram_username: str | None,
+        document_hash: str,
+        signer_full_name: str,
+        signer_contact: str,
+        signer_identity_document: str,
+        signer_org: str | None = None,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            "/api/v1/nda/personal-data-consent/accept",
+            {
+                "lead_id": lead_id,
+                "telegram_user_id": telegram_user_id,
+                "telegram_username": telegram_username,
+                "document_hash": document_hash,
+                "pdn_consent_accepted": True,
+                "signer_full_name": signer_full_name,
+                "signer_contact": signer_contact,
+                "signer_identity_document": signer_identity_document,
+                "signer_org": signer_org,
+                "channel": "telegram_bot",
+            },
+            idempotency_key=f"nda-pdn-consent:{lead_id}:{time.time_ns()}",
+        )
+
+    def preview_nda_document(
+        self,
+        *,
+        lead_id: str,
+        pdn_consent_id: str,
+        telegram_user_id: int | None,
+    ) -> dict[str, Any] | None:
+        return self._post(
+            "/api/v1/nda/document/preview",
+            {
+                "lead_id": lead_id,
+                "pdn_consent_id": pdn_consent_id,
+                "telegram_user_id": telegram_user_id,
+            },
+            idempotency_key=f"nda-preview:{lead_id}:{time.time_ns()}",
+        )
+
     def get_nda_status(
         self,
         lead_id: str,
@@ -368,9 +433,7 @@ class CoreApiBridge:
         telegram_username: str | None,
         signer_name: str | None,
         document_hash: str,
-        signer_full_name: str,
-        signer_contact: str,
-        signer_org: str | None = None,
+        pdn_consent_id: str,
     ) -> dict[str, Any] | None:
         """Фиксирует подписание соглашения простой электронной подписью.
 
@@ -387,9 +450,7 @@ class CoreApiBridge:
                 "telegram_username": telegram_username,
                 "signer_name": signer_name,
                 "document_hash": document_hash,
-                "signer_full_name": signer_full_name,
-                "signer_contact": signer_contact,
-                "signer_org": signer_org,
+                "pdn_consent_id": pdn_consent_id,
             },
             idempotency_key=f"nda-sign:{lead_id}",
         )

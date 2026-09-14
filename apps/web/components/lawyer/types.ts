@@ -149,6 +149,10 @@ export type ClientCard = {
     signer_full_name: string | null;
     signer_contact: string | null;
     signer_org: string | null;
+    identity_document_provided: boolean;
+    pdn_consent_at: string | null;
+    pdn_consent_version: string | null;
+    pdn_consent_id: string | null;
     version: string;
     nda_id: string;
   } | null;

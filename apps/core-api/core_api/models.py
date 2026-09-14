@@ -369,6 +369,34 @@ class Lead(Base):
     )
 
 
+class NdaPersonalDataConsent(Base):
+    """Отдельное подтверждение обработки данных для NDA и договора."""
+
+    __tablename__ = "nda_personal_data_consents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+    )
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    signer_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    signer_contact: Mapped[str] = mapped_column(String(255), nullable=False)
+    signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    signer_identity_document: Mapped[str] = mapped_column(String(500), nullable=False)
+    document_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    document_text: Mapped[str] = mapped_column(Text, nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, default="telegram_bot")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_nda_pdn_consents_lead", "lead_id"),
+        Index("ix_nda_pdn_consents_accepted_at", "accepted_at"),
+    )
+
+
 class NdaSignature(Base):
     """Подписание соглашения о конфиденциальности простой электронной подписью.
 
@@ -399,14 +427,20 @@ class NdaSignature(Base):
     #
     # Аккаунт Telegram подтверждает канал, но не личность: при споре по одному
     # telegram_user_id пришлось бы доказывать, кто за ним стоял. Введённые
-    # своей рукой ФИО и контакт эту дыру закрывают — не полностью, но
-    # соразмерно этапу первичной консультации.
+    # своей рукой ФИО, контакт и реквизиты документа связывают подпись с
+    # конкретным человеком.
     #
     # Организация заполняется, когда подписывают от лица компании: тогда
     # обязательства принимает она, а не человек за клавиатурой.
     signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    signer_identity_document: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    pdn_consent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nda_personal_data_consents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # Что подписано: версия и хеш текста, который клиент видел на экране.
     document_version: Mapped[str] = mapped_column(String(32), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(64), nullable=False)

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
@@ -21,8 +22,21 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api.models import ActorType, Lead, LegalIntake, NdaSignature, Scope
-from core_api.nda_document import NDA_VERSION, document_hash, render_nda_text
+from core_api.models import (
+    ActorType,
+    Lead,
+    LegalIntake,
+    NdaPersonalDataConsent,
+    NdaSignature,
+    Scope,
+)
+from core_api.nda_document import (
+    NDA_VERSION,
+    PDN_CONSENT_VERSION,
+    document_hash,
+    render_nda_text,
+    render_pdn_consent_text,
+)
 
 router = APIRouter(prefix="/api/v1/nda", tags=["nda"])
 
@@ -46,9 +60,10 @@ def _assert_telegram_owner(lead: Lead, telegram_user_id: int | None) -> None:
         raise HTTPException(status_code=404, detail="Lead not found")
 
 
-def _status_payload(row: NdaSignature | None) -> dict:
+def _status_payload(db: Session, row: NdaSignature | None) -> dict:
     if row is None:
         return {"signed": False}
+    consent = db.get(NdaPersonalDataConsent, row.pdn_consent_id) if row.pdn_consent_id else None
     return {
         "signed": True,
         "signed_at": row.signed_at.isoformat() if row.signed_at else None,
@@ -57,7 +72,95 @@ def _status_payload(row: NdaSignature | None) -> dict:
         "signer_full_name": row.signer_full_name,
         "signer_contact": row.signer_contact,
         "signer_org": row.signer_org,
+        "pdn_consent_accepted": consent is not None and consent.revoked_at is None,
+        "pdn_consent_version": consent.document_version if consent else None,
+        "pdn_consent_at": consent.accepted_at.isoformat() if consent and consent.accepted_at else None,
     }
+
+
+def _signer_data(payload: dict) -> dict[str, str]:
+    data = {
+        "signer_full_name": str(payload.get("signer_full_name") or "").strip()[:255],
+        "signer_contact": str(payload.get("signer_contact") or "").strip()[:255],
+        "signer_identity_document": str(
+            payload.get("signer_identity_document") or ""
+        ).strip()[:500],
+        "signer_org": str(payload.get("signer_org") or "").strip()[:500],
+    }
+    if not all(data[key] for key in (
+        "signer_full_name", "signer_contact", "signer_identity_document"
+    )):
+        raise HTTPException(
+            status_code=422,
+            detail="signer_full_name, signer_contact and signer_identity_document are required",
+        )
+    return data
+
+
+def _operator_data() -> tuple[str, str, str]:
+    settings = get_settings()
+    return (
+        getattr(settings, "operator_name", "") or "Исполнитель",
+        getattr(settings, "operator_inn", ""),
+        getattr(settings, "privacy_contact_email", ""),
+    )
+
+
+def _render_nda(data: dict[str, str]) -> str:
+    operator_name, operator_inn, _ = _operator_data()
+    return render_nda_text(operator_name, operator_inn, **data)
+
+
+def _render_consent(data: dict[str, str]) -> str:
+    operator_name, operator_inn, privacy_email = _operator_data()
+    return render_pdn_consent_text(
+        operator_name,
+        operator_inn,
+        privacy_contact_email=privacy_email,
+        **data,
+    )
+
+
+def _lead_from_payload(db: Session, payload: dict) -> Lead:
+    lead_id_raw = str(payload.get("lead_id") or "").strip()
+    if not lead_id_raw:
+        raise HTTPException(status_code=400, detail="lead_id is required")
+    try:
+        lead_id = uuid.UUID(lead_id_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="lead_id must be a UUID") from exc
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+def _telegram_user_id(payload: dict, lead: Lead) -> int | None:
+    telegram_user_id = payload.get("telegram_user_id")
+    if telegram_user_id is None:
+        return None
+    try:
+        telegram_user_id = int(telegram_user_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="telegram_user_id must be an integer") from exc
+    if lead.telegram_user_id != telegram_user_id:
+        raise HTTPException(status_code=403, detail="Telegram user does not own this lead")
+    return telegram_user_id
+
+
+def _consent_from_payload(
+    db: Session, payload: dict, lead: Lead, telegram_user_id: int | None
+) -> NdaPersonalDataConsent:
+    try:
+        consent_id = uuid.UUID(str(payload.get("pdn_consent_id") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="pdn_consent_id is required") from exc
+    consent = db.get(NdaPersonalDataConsent, consent_id)
+    if consent is None or consent.lead_id != lead.id or consent.revoked_at is not None:
+        raise HTTPException(status_code=422, detail="valid personal data consent is required")
+    if telegram_user_id is not None and consent.telegram_user_id != telegram_user_id:
+        raise HTTPException(status_code=403, detail="Consent belongs to another Telegram user")
+    return consent
 
 
 def _intake_id_for_lead(db: Session, lead_id: uuid.UUID) -> str | None:
@@ -74,8 +177,119 @@ def get_nda_document(
 ) -> dict:
     """Актуальный текст соглашения с версией и контрольной суммой."""
     _ = identity
-    settings = get_settings()
-    text = render_nda_text(getattr(settings, "operator_name", "") or "Исполнитель")
+    operator_name, operator_inn, _ = _operator_data()
+    text = render_nda_text(operator_name, operator_inn)
+    return {
+        "version": NDA_VERSION,
+        "text": text,
+        "hash": document_hash(text),
+    }
+
+
+@router.post("/personal-data-consent/preview")
+def preview_personal_data_consent(
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+) -> dict:
+    """Точный текст отдельного согласия с введёнными клиентом данными."""
+    _ = identity
+    text = _render_consent(_signer_data(payload))
+    return {"version": PDN_CONSENT_VERSION, "text": text, "hash": document_hash(text)}
+
+
+@router.post("/personal-data-consent/accept", status_code=status.HTTP_201_CREATED)
+def accept_personal_data_consent(
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Фиксирует отдельное от NDA согласие на обработку данных."""
+    lead = _lead_from_payload(db, payload)
+    telegram_user_id = _telegram_user_id(payload, lead)
+    data = _signer_data(payload)
+    if payload.get("pdn_consent_accepted") is not True:
+        raise HTTPException(status_code=422, detail="personal data consent is required")
+
+    text = _render_consent(data)
+    current_hash = document_hash(text)
+    if str(payload.get("document_hash") or "").strip().lower() != current_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="consent changed since it was shown to the signer",
+        )
+
+    existing = db.scalar(
+        select(NdaPersonalDataConsent)
+        .where(
+            NdaPersonalDataConsent.lead_id == lead.id,
+            NdaPersonalDataConsent.document_hash == current_hash,
+            NdaPersonalDataConsent.revoked_at.is_(None),
+        )
+        .order_by(NdaPersonalDataConsent.accepted_at.desc())
+        .limit(1)
+    )
+    if existing is not None:
+        return {
+            "accepted": True,
+            "already_accepted": True,
+            "consent_id": str(existing.id),
+            "accepted_at": existing.accepted_at.isoformat() if existing.accepted_at else None,
+            "version": existing.document_version,
+        }
+
+    row = NdaPersonalDataConsent(
+        lead_id=lead.id,
+        accepted_at=datetime.now(timezone.utc),
+        telegram_user_id=telegram_user_id or lead.telegram_user_id,
+        telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
+        signer_full_name=data["signer_full_name"],
+        signer_contact=data["signer_contact"],
+        signer_org=data["signer_org"] or None,
+        signer_identity_document=data["signer_identity_document"],
+        document_version=PDN_CONSENT_VERSION,
+        document_hash=current_hash,
+        document_text=text,
+        channel=str(payload.get("channel") or "telegram_bot")[:32],
+    )
+    db.add(row)
+    db.flush()
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="nda.pdn_consent.accept",
+        target_type="lead",
+        target_id=lead.id,
+        details={"version": PDN_CONSENT_VERSION, "channel": row.channel},
+    )
+    db.commit()
+    return {
+        "accepted": True,
+        "already_accepted": False,
+        "consent_id": str(row.id),
+        "accepted_at": row.accepted_at.isoformat(),
+        "version": row.document_version,
+    }
+
+
+@router.post("/document/preview")
+def preview_nda_document(
+    payload: dict,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Персонализированная редакция NDA после отдельного согласия."""
+    _ = identity
+    lead = _lead_from_payload(db, payload)
+    telegram_user_id = _telegram_user_id(payload, lead)
+    consent = _consent_from_payload(db, payload, lead, telegram_user_id)
+    data = {
+        "signer_full_name": consent.signer_full_name,
+        "signer_contact": consent.signer_contact,
+        "signer_identity_document": consent.signer_identity_document,
+        "signer_org": consent.signer_org or "",
+    }
+    text = _render_nda(data)
     return {"version": NDA_VERSION, "text": text, "hash": document_hash(text)}
 
 
@@ -92,7 +306,7 @@ def get_nda_status(
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
     _assert_telegram_owner(lead, telegram_user_id)
-    return _status_payload(_signature_for_lead(db, lead))
+    return _status_payload(db, _signature_for_lead(db, lead))
 
 
 @router.get("/by-telegram/{telegram_user_id}")
@@ -111,7 +325,7 @@ def get_nda_context_by_telegram(
     ).scalar_one_or_none()
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
-    return {"lead_id": str(lead.id), **_status_payload(_signature_for_lead(db, lead))}
+    return {"lead_id": str(lead.id), **_status_payload(db, _signature_for_lead(db, lead))}
 
 
 @router.post("/sign", status_code=status.HTTP_201_CREATED)
@@ -125,26 +339,9 @@ def sign_nda(
     Повторное подписание не создаёт новую запись: соглашение действует на все
     обращения клиента, и вторая подпись означала бы, что первая чем-то плоха.
     """
-    lead_id_raw = str(payload.get("lead_id") or "").strip()
-    if not lead_id_raw:
-        raise HTTPException(status_code=400, detail="lead_id is required")
-    try:
-        lead_id = uuid.UUID(lead_id_raw)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="lead_id must be a UUID") from exc
-
-    lead = db.get(Lead, lead_id)
-    if lead is None:
-        raise HTTPException(status_code=404, detail="Lead not found")
-
-    telegram_user_id = payload.get("telegram_user_id")
-    if telegram_user_id is not None:
-        try:
-            telegram_user_id = int(telegram_user_id)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail="telegram_user_id must be an integer") from exc
-        if lead.telegram_user_id != telegram_user_id:
-            raise HTTPException(status_code=403, detail="Telegram user does not own this lead")
+    lead = _lead_from_payload(db, payload)
+    lead_id = lead.id
+    telegram_user_id = _telegram_user_id(payload, lead)
 
     existing = _signature_for_lead(db, lead)
     if existing is not None:
@@ -153,11 +350,18 @@ def sign_nda(
             "already_signed": True,
             "signed_at": existing.signed_at.isoformat() if existing.signed_at else None,
             "version": existing.document_version,
+            "pdn_consent_accepted": existing.pdn_consent_id is not None,
             "intake_id": _intake_id_for_lead(db, lead.id),
         }
 
-    settings = get_settings()
-    text = render_nda_text(getattr(settings, "operator_name", "") or "Исполнитель")
+    consent = _consent_from_payload(db, payload, lead, telegram_user_id)
+    data = {
+        "signer_full_name": consent.signer_full_name,
+        "signer_contact": consent.signer_contact,
+        "signer_identity_document": consent.signer_identity_document,
+        "signer_org": consent.signer_org or "",
+    }
+    text = _render_nda(data)
     current_hash = document_hash(text)
 
     # Клиент присылает контрольную сумму текста, который был у него на экране.
@@ -176,24 +380,16 @@ def sign_nda(
             detail="document changed since it was shown to the signer",
         )
 
-    # Данные подписанта обязательны: подпись, за которой стоит только
-    # идентификатор аккаунта, при споре почти ничего не доказывает.
-    full_name = str(payload.get("signer_full_name") or "").strip()
-    contact = str(payload.get("signer_contact") or "").strip()
-    if not full_name or not contact:
-        raise HTTPException(
-            status_code=422,
-            detail="signer_full_name and signer_contact are required",
-        )
-
     row = NdaSignature(
         lead_id=lead_id,
         telegram_user_id=telegram_user_id or lead.telegram_user_id,
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_name=str(payload.get("signer_name") or lead.name or "")[:255] or None,
-        signer_full_name=full_name[:255],
-        signer_contact=contact[:255],
-        signer_org=(str(payload.get("signer_org") or "").strip()[:500] or None),
+        signer_full_name=consent.signer_full_name,
+        signer_contact=consent.signer_contact,
+        signer_org=consent.signer_org,
+        signer_identity_document=consent.signer_identity_document,
+        pdn_consent_id=consent.id,
         document_version=NDA_VERSION,
         document_hash=current_hash,
         document_text=text,
@@ -209,7 +405,11 @@ def sign_nda(
         action="nda.sign",
         target_type="lead",
         target_id=lead_id,
-        details={"version": NDA_VERSION, "channel": row.channel},
+        details={
+            "version": NDA_VERSION,
+            "pdn_consent_version": consent.document_version,
+            "channel": row.channel,
+        },
     )
     if row.channel == "miniapp":
         queue_notice(
@@ -225,5 +425,6 @@ def sign_nda(
         "already_signed": False,
         "signed_at": row.signed_at.isoformat() if row.signed_at else None,
         "version": row.document_version,
+        "pdn_consent_version": consent.document_version,
         "intake_id": _intake_id_for_lead(db, lead.id),
     }

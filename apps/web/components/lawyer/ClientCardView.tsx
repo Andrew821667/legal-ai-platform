@@ -165,6 +165,18 @@ export default function ClientCardView({
               <Row label="Подписант" value={card.nda.signer_full_name} />
               <Row label="Контакт" value={card.nda.signer_contact} />
               <Row label="Организация" value={card.nda.signer_org} />
+              <Row label="Документ" value={card.nda.identity_document_provided ? "реквизиты предоставлены" : null} />
+              <Row
+                label="Согласие на обработку ПД"
+                value={card.nda.pdn_consent_at ? `дано ${shortDate(card.nda.pdn_consent_at)}` : null}
+              />
+              {card.nda.pdn_consent_id ? (
+                <DocumentText
+                  url={`/api/lawyer/nda-consents/${card.nda.pdn_consent_id}/document`}
+                  title="Отдельное согласие на обработку ПД"
+                  initData={initData}
+                />
+              ) : null}
               <DocumentText
                 url={`/api/lawyer/nda/${card.nda.nda_id}/document`}
                 title="Точный текст, который подписал клиент"

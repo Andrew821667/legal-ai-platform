@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from core_api.auth import cache
 from core_api.db import SessionLocal
@@ -17,10 +17,11 @@ from core_api.models import (
     IntakeDocument,
     Lead,
     LegalIntake,
+    NdaPersonalDataConsent,
     NdaSignature,
     Scope,
 )
-from core_api.nda_document import NDA_VERSION
+from core_api.nda_document import NDA_VERSION, PDN_CONSENT_VERSION
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
@@ -58,13 +59,15 @@ def _cleanup(api_key_names: list[str], intake_ids: list[str]) -> None:
         db.close()
 
 
-def _create_intake(client: TestClient, bot_key: str) -> str:
+def _create_intake(
+    client: TestClient, bot_key: str, *, telegram_user_id: int = 5150
+) -> str:
     response = client.post(
         "/api/v1/legal-intakes",
         headers={"X-API-Key": bot_key, "Idempotency-Key": f"dialog-{uuid4().hex}"},
         json={
             "source": "telegram_bot",
-            "telegram_user_id": 5150,
+            "telegram_user_id": telegram_user_id,
             "name": "Пётр Иванов",
             "contact": "@petr",
             "client_type": "individual",
@@ -78,6 +81,47 @@ def _create_intake(client: TestClient, bot_key: str) -> str:
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+def _consent_and_nda_preview(
+    client: TestClient, bot_key: str, lead_id: str, **overrides
+) -> tuple[dict, dict]:
+    details = {
+        "signer_full_name": "Иванов Иван Иванович",
+        "signer_contact": "+7 900 123-45-67",
+        "signer_identity_document": "45 01 123456, выдан ОВД 01.02.2010",
+        "signer_org": "",
+        **overrides,
+    }
+    preview = client.post(
+        "/api/v1/nda/personal-data-consent/preview",
+        headers={"X-API-Key": bot_key},
+        json=details,
+    )
+    assert preview.status_code == 200, preview.text
+    accepted = client.post(
+        "/api/v1/nda/personal-data-consent/accept",
+        headers={"X-API-Key": bot_key},
+        json={
+            "lead_id": lead_id,
+            "telegram_user_id": 5150,
+            "document_hash": preview.json()["hash"],
+            "pdn_consent_accepted": True,
+            **details,
+        },
+    )
+    assert accepted.status_code == 201, accepted.text
+    nda = client.post(
+        "/api/v1/nda/document/preview",
+        headers={"X-API-Key": bot_key},
+        json={
+            "lead_id": lead_id,
+            "telegram_user_id": 5150,
+            "pdn_consent_id": accepted.json()["consent_id"],
+        },
+    )
+    assert nda.status_code == 200, nda.text
+    return accepted.json(), nda.json()
 
 
 def test_clarifications_and_documents_reach_the_case_file() -> None:
@@ -247,27 +291,27 @@ def test_signature_is_refused_when_the_document_changed() -> None:
         finally:
             db.close()
 
+        accepted, nda = _consent_and_nda_preview(client, bot_key, str(lead_uuid))
         stale = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
             json={
                 "lead_id": str(lead_uuid),
                 "document_hash": "0" * 64,
-                "signer_full_name": "Иванов Иван Иванович",
-                "signer_contact": "+7 900 123-45-67",
+                "telegram_user_id": 5150,
+                "pdn_consent_id": accepted["consent_id"],
             },
         )
         assert stale.status_code == 409
 
-        document = client.get("/api/v1/nda/document", headers={"X-API-Key": bot_key}).json()
         fresh = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
             json={
                 "lead_id": str(lead_uuid),
-                "document_hash": document["hash"],
-                "signer_full_name": "Иванов Иван Иванович",
-                "signer_contact": "+7 900 123-45-67",
+                "document_hash": nda["hash"],
+                "telegram_user_id": 5150,
+                "pdn_consent_id": accepted["consent_id"],
             },
         )
         assert fresh.status_code == 201, fresh.text
@@ -421,15 +465,27 @@ def test_signature_without_signer_details_is_refused() -> None:
             db.close()
 
         for payload in (
-            {"lead_id": str(lead_uuid)},
-            {"lead_id": str(lead_uuid), "signer_full_name": "Иванов Иван"},
-            {"lead_id": str(lead_uuid), "signer_contact": "a@b.ru"},
-            {"lead_id": str(lead_uuid), "signer_full_name": "  ", "signer_contact": "  "},
+            {},
+            {"signer_full_name": "Иванов Иван"},
+            {"signer_contact": "a@b.ru"},
+            {
+                "signer_full_name": "Иванов Иван",
+                "signer_contact": "a@b.ru",
+                "signer_identity_document": "",
+            },
         ):
             response = client.post(
-                "/api/v1/nda/sign", headers={"X-API-Key": bot_key}, json=payload
+                "/api/v1/nda/personal-data-consent/preview",
+                headers={"X-API-Key": bot_key},
+                json=payload,
             )
             assert response.status_code == 422, payload
+        response = client.post(
+            "/api/v1/nda/sign",
+            headers={"X-API-Key": bot_key},
+            json={"lead_id": str(lead_uuid), "document_hash": "0" * 64},
+        )
+        assert response.status_code == 422
     finally:
         _cleanup(names, intake_ids)
 
@@ -452,19 +508,22 @@ def test_signer_details_are_returned_in_status() -> None:
         finally:
             db.close()
 
-        document = client.get(
-            "/api/v1/nda/document",
-            headers={"X-API-Key": bot_key},
-        ).json()
+        accepted, document = _consent_and_nda_preview(
+            client,
+            bot_key,
+            str(lead_uuid),
+            signer_full_name="Петров Пётр Петрович",
+            signer_contact="petr@example.ru",
+            signer_org='ООО "Ромашка", ИНН 7701234567',
+        )
         signed = client.post(
             "/api/v1/nda/sign",
             headers={"X-API-Key": bot_key},
             json={
                 "lead_id": str(lead_uuid),
-                "signer_full_name": "Петров Пётр Петрович",
-                "signer_contact": "petr@example.ru",
-                "signer_org": 'ООО "Ромашка", ИНН 7701234567',
                 "document_hash": document["hash"],
+                "telegram_user_id": 5150,
+                "pdn_consent_id": accepted["consent_id"],
             },
         )
         assert signed.status_code == 201, signed.text
@@ -476,5 +535,63 @@ def test_signer_details_are_returned_in_status() -> None:
         assert status["signer_full_name"] == "Петров Пётр Петрович"
         assert status["signer_contact"] == "petr@example.ru"
         assert "Ромашка" in status["signer_org"]
+        assert status["pdn_consent_accepted"] is True
+        assert status["pdn_consent_version"] == PDN_CONSENT_VERSION
+
+        db = SessionLocal()
+        try:
+            consent = db.get(NdaPersonalDataConsent, UUID(accepted["consent_id"]))
+            signature = db.scalar(select(NdaSignature).where(NdaSignature.lead_id == lead_uuid))
+            assert consent is not None
+            assert consent.signer_identity_document.startswith("45 01")
+            assert signature is not None and signature.pdn_consent_id == consent.id
+            assert "45 01 123456" not in signature.document_text
+        finally:
+            db.close()
+    finally:
+        _cleanup(names, intake_ids)
+
+
+def test_consent_cannot_be_reused_for_another_lead() -> None:
+    client = TestClient(app)
+    names = ["pytest.nda-consent-binding.bot"]
+    bot_key = _create_api_key(Scope.bot, names[0])
+    intake_ids: list[str] = []
+
+    try:
+        first_intake = _create_intake(client, bot_key, telegram_user_id=5150)
+        second_intake = _create_intake(client, bot_key, telegram_user_id=5151)
+        intake_ids.extend((first_intake, second_intake))
+
+        db = SessionLocal()
+        try:
+            leads = dict(db.execute(
+                select(LegalIntake.id, LegalIntake.lead_id)
+                .where(LegalIntake.id.in_((first_intake, second_intake)))
+            ).all())
+            first_lead = leads[UUID(first_intake)]
+            second_lead = leads[UUID(second_intake)]
+        finally:
+            db.close()
+
+        accepted, _ = _consent_and_nda_preview(client, bot_key, str(first_lead))
+        payload = {
+            "lead_id": str(second_lead),
+            "telegram_user_id": 5151,
+            "pdn_consent_id": accepted["consent_id"],
+        }
+        preview = client.post(
+            "/api/v1/nda/document/preview",
+            headers={"X-API-Key": bot_key},
+            json=payload,
+        )
+        signed = client.post(
+            "/api/v1/nda/sign",
+            headers={"X-API-Key": bot_key},
+            json={**payload, "document_hash": "0" * 64},
+        )
+
+        assert preview.status_code == 422
+        assert signed.status_code == 422
     finally:
         _cleanup(names, intake_ids)

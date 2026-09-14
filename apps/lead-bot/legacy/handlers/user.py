@@ -68,11 +68,21 @@ from .intake_dialog import (
 )
 from .legal_help import maybe_handle_legal_help_message
 from .engineering_help import maybe_handle_message as maybe_handle_engineering_help_message
-from .nda_signing import handle_message as handle_nda_message
+from .nda_signing import (
+    STAGE_IDENTITY as NDA_STAGE_IDENTITY,
+    STAGE_KEY as NDA_STAGE_KEY,
+    handle_message as handle_nda_message,
+)
 from .service_agreements import handle_message as handle_service_agreement_message
 from .work_acts import handle_message as handle_work_act_message
 
 logger = logging.getLogger(__name__)
+
+
+def _message_preview(message_text: str, user_data: dict) -> str:
+    if user_data.get(NDA_STAGE_KEY) == NDA_STAGE_IDENTITY:
+        return "[identity document removed]"
+    return utils.mask_sensitive_data((message_text or "[non-text]")[:120])
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик пользовательских сообщений."""
@@ -83,7 +93,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         message_text = original_message.text or ""
-        message_preview = utils.mask_sensitive_data((message_text or "[non-text]")[:120])
+        message_preview = _message_preview(message_text, context.user_data)
         logger.info("Message from user %s: %s", user.id, message_preview[:50])
 
         # Получаем или создаем пользователя

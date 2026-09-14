@@ -45,6 +45,8 @@ _SENSITIVE_KEYS = frozenset(
         "signer_full_name",
         "signer_contact",
         "signer_org",
+        "signer_identity_document",
+        "identity_document",
         "signer_name",
         "client_name",
         "client_contact",

@@ -36,6 +36,7 @@ from core_api.models import (
     Lead,
     LegalIntake,
     LegalIntakeStatus,
+    NdaPersonalDataConsent,
     NdaSignature,
     Scope,
     ServiceAgreement,
@@ -623,6 +624,11 @@ def client_card(
         .order_by(NdaSignature.signed_at.desc())
         .limit(1)
     ).scalar_one_or_none()
+    nda_consent = (
+        db.get(NdaPersonalDataConsent, nda.pdn_consent_id)
+        if nda and nda.pdn_consent_id
+        else None
+    )
 
     agreements = db.execute(
         select(ServiceAgreement)
@@ -689,6 +695,10 @@ def client_card(
                 "signer_full_name": nda.signer_full_name,
                 "signer_contact": nda.signer_contact,
                 "signer_org": nda.signer_org,
+                "identity_document_provided": bool(nda.signer_identity_document),
+                "pdn_consent_at": _iso(nda_consent.accepted_at) if nda_consent else None,
+                "pdn_consent_version": nda_consent.document_version if nda_consent else None,
+                "pdn_consent_id": str(nda_consent.id) if nda_consent else None,
                 "version": nda.document_version,
                 "nda_id": str(nda.id),
             }
@@ -802,6 +812,27 @@ def nda_document(
         "document_version": item.document_version,
         "document_hash": item.document_hash,
         "document_text": item.document_text,
+    }
+
+
+@router.get("/nda-consents/{consent_id}/document")
+def nda_consent_document(
+    consent_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Точный отдельный текст согласия на обработку персональных данных."""
+    _ = identity
+    item = db.get(NdaPersonalDataConsent, consent_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Consent not found")
+    return {
+        "consent_id": str(item.id),
+        "document_version": item.document_version,
+        "document_hash": item.document_hash,
+        "document_text": item.document_text,
+        "accepted_at": _iso(item.accepted_at),
+        "revoked_at": _iso(item.revoked_at),
     }
 
 

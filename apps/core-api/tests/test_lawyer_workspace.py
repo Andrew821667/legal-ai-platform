@@ -16,10 +16,11 @@ from core_api.main import app
 from core_api.models import (
     ApiKey,
     Lead,
+    LeadSource,
     LegalArea,
     LegalIntake,
-    LeadSource,
     LegalIntakeStatus,
+    NdaPersonalDataConsent,
     NdaSignature,
     Scope,
     ServiceAgreement,
@@ -396,11 +397,25 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
     seeded = _seed()
     db = SessionLocal()
     try:
+        consent = NdaPersonalDataConsent(
+            lead_id=seeded["lead_id"],
+            signer_full_name="Рябов Александр Алексеевич",
+            signer_contact="+79000000000",
+            signer_identity_document="45 01 123456, выдан ОВД 01.02.2010",
+            document_version="pdn-v1",
+            document_hash="p" * 64,
+            document_text="Текст согласия",
+            channel="telegram_bot",
+        )
+        db.add(consent)
+        db.flush()
         db.add(
             NdaSignature(
                 lead_id=seeded["lead_id"],
                 signer_full_name="Рябов Александр Алексеевич",
                 signer_contact="+79000000000",
+                signer_identity_document="45 01 123456, выдан ОВД 01.02.2010",
+                pdn_consent_id=consent.id,
                 document_version="v1",
                 document_hash="n" * 64,
             )
@@ -414,6 +429,16 @@ def test_client_card_gathers_everything_in_one_answer() -> None:
             f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
         ).json()
         assert card["nda"]["signer_full_name"] == "Рябов Александр Алексеевич"
+        assert card["nda"]["identity_document_provided"] is True
+        assert card["nda"]["pdn_consent_version"] == "pdn-v1"
+        assert card["nda"]["pdn_consent_id"]
+        assert "45 01 123456" not in str(card)
+        consent_document = client.get(
+            f"/api/v1/lawyer/nda-consents/{card['nda']['pdn_consent_id']}/document",
+            headers={"X-API-Key": key},
+        )
+        assert consent_document.status_code == 200
+        assert consent_document.json()["document_text"] == "Текст согласия"
         # Прямые контакты и источник отдаются отдельно, а не схлопнуты в строку.
         assert "email" in card and "phone" in card and "source" in card
         assert len(card["intakes"]) == 1

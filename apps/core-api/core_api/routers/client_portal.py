@@ -12,6 +12,7 @@ from core_api.models import (
     IntakeDocument,
     Lead,
     LegalIntake,
+    NdaPersonalDataConsent,
     NdaSignature,
     Scope,
     ServiceAgreement,
@@ -96,6 +97,11 @@ def summary(
         .order_by(NdaSignature.signed_at.desc())
         .limit(1)
     ) if lead_ids else None
+    nda_consent = (
+        db.get(NdaPersonalDataConsent, nda.pdn_consent_id)
+        if nda and nda.pdn_consent_id
+        else None
+    )
     return {
         "client": {
             "lead_id": str(leads[0].id) if leads else None,
@@ -107,6 +113,8 @@ def summary(
             "signed_at": _iso(nda.signed_at) if nda else None,
             "version": nda.document_version if nda else None,
             "signer_full_name": nda.signer_full_name if nda else None,
+            "pdn_consent_at": _iso(nda_consent.accepted_at) if nda_consent else None,
+            "pdn_consent_version": nda_consent.document_version if nda_consent else None,
         },
         "cases": [{
             "id": str(row.id), "practice": row.practice.value,

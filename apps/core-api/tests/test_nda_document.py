@@ -9,8 +9,11 @@ from __future__ import annotations
 from core_api.nda_document import (
     NDA_TEXT,
     NDA_VERSION,
+    PDN_CONSENT_TEXT,
+    PDN_CONSENT_VERSION,
     document_hash,
     render_nda_text,
+    render_pdn_consent_text,
 )
 
 
@@ -65,14 +68,14 @@ def test_operator_name_is_substituted() -> None:
     text = render_nda_text("ИП Попов А.В.")
 
     assert "ИП Попов А.В." in text
-    assert "{operator_name}" not in text
+    assert "{operator_identity}" not in text
 
 
 def test_missing_operator_name_does_not_break_document() -> None:
     text = render_nda_text("")
 
     assert "Исполнитель" in text
-    assert "{operator_name}" not in text
+    assert "{operator_identity}" not in text
 
 
 def test_version_is_embedded_in_the_text() -> None:
@@ -95,3 +98,22 @@ def test_version_is_not_marked_as_draft() -> None:
     lowered = NDA_VERSION.lower()
     for marker in ("draft", "черновик", "wip", "tmp"):
         assert marker not in lowered
+
+
+def test_personal_data_consent_is_a_separate_document() -> None:
+    nda = render_nda_text("Попов Андрей Викторович", "683302758241")
+    consent = render_pdn_consent_text(
+        "Попов Андрей Викторович",
+        "683302758241",
+        signer_full_name="Иванов Иван Иванович",
+        signer_contact="ivan@example.ru",
+        signer_identity_document="45 01 123456, выдан ОВД 01.02.2010",
+    )
+
+    assert "СОГЛАСИЕ НА ОБРАБОТКУ" not in nda
+    assert "СОГЛАСИЕ НА ОБРАБОТКУ" in consent
+    assert "отдельной кнопки" in consent
+    assert PDN_CONSENT_VERSION in consent
+    assert "683302758241" in consent
+    assert "45 01 123456" not in consent
+    assert "{version}" in PDN_CONSENT_TEXT

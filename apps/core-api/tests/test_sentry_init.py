@@ -17,6 +17,7 @@ def test_sensitive_fields_are_redacted() -> None:
             "description": "Раздел совместно нажитого имущества, квартира в ипотеке",
             "signer_full_name": "Рябов Александр Алексеевич",
             "signer_contact": "+79000000000",
+            "signer_identity_document": "45 01 123456",
             "price_text": "80 000 ₽",
             "status": "draft",  # не персональные данные — остаётся как есть
         }
@@ -24,6 +25,7 @@ def test_sensitive_fields_are_redacted() -> None:
     assert scrubbed["description"] == "[removed]"
     assert scrubbed["signer_full_name"] == "[removed]"
     assert scrubbed["signer_contact"] == "[removed]"
+    assert scrubbed["signer_identity_document"] == "[removed]"
     assert scrubbed["price_text"] == "[removed]"
     assert scrubbed["status"] == "draft"
 
@@ -118,5 +120,8 @@ def test_all_known_sensitive_fields_covered() -> None:
     """Список не пуст и содержит хотя бы обязательные поля, которые точно
     встречаются в моделях платформы — если кто-то случайно урежет список,
     тест должен упасть."""
-    required = {"description", "signer_full_name", "signer_contact", "price_text", "contact"}
+    required = {
+        "description", "signer_full_name", "signer_contact",
+        "signer_identity_document", "price_text", "contact",
+    }
     assert required <= _SENSITIVE_KEYS

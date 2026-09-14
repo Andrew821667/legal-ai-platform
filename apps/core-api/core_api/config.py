@@ -56,9 +56,9 @@ class Settings(BaseSettings):
     contract_ai_bridge_demo_link_url: str = ""
 
     # Эти значения копируются в неизменяемый экземпляр договора.
-    operator_name: str = "AI Verdict"
-    operator_status: str = ""
-    operator_inn: str = ""
+    operator_name: str = "Попов Андрей Викторович"
+    operator_status: str = "самозанятый"
+    operator_inn: str = "683302758241"
     operator_details: str = ""
     privacy_contact_email: str = "privacy@ai-verdict.ru"
 

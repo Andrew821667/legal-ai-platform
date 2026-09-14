@@ -1,12 +1,13 @@
 const FALLBACKS = {
   brand: "AI Verdict",
-  operatorName: "Попов Андрей",
+  operatorName: "Попов Андрей Викторович",
   operatorStatus: "самозанятый",
+  operatorInn: "683302758241",
   siteUrl: "https://ai-verdict.ru",
   contactEmail: "a.popov.gv@gmail.com",
   contactPhone: "+7 909 233-09-09",
   contactTelegram: "@legal_ai_helper_new_bot",
-  updatedAt: "13 июля 2026 года",
+  updatedAt: "14 сентября 2026 года",
 } as const;
 
 function normalizeText(value: string | undefined): string | undefined {
@@ -52,7 +53,7 @@ function publicSiteUrl(value: string | undefined): string {
 export const LEGAL_BRAND = FALLBACKS.brand;
 export const LEGAL_OPERATOR_NAME = envOperatorName ?? FALLBACKS.operatorName;
 export const LEGAL_OPERATOR_STATUS = envOperatorStatus ?? FALLBACKS.operatorStatus;
-export const LEGAL_OPERATOR_INN = envOperatorInn ?? "";
+export const LEGAL_OPERATOR_INN = envOperatorInn ?? FALLBACKS.operatorInn;
 export const LEGAL_OPERATOR_DETAILS = envOperatorDetails ?? "";
 export const LEGAL_SITE_URL = publicSiteUrl(envSiteUrl);
 export const LEGAL_CONTACT_EMAIL = envPrivacyContactEmail ?? FALLBACKS.contactEmail;
