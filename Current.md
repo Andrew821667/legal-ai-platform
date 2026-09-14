@@ -242,6 +242,10 @@
   стартовыми маршрутами и областями действия.
 - TypeScript, 130 security-тестов, production-сборка и локальный
   HTTP-smoke обоих манифестов прошли.
+- Коммит `05b002c` адресно развернут только в web; production-домен
+  отдаёт оба манифеста со статусом `200` и типом `application/manifest+json`.
+- Caddy, Core API, lead-bot, news-контур, assistant-api и PostgreSQL сохранили
+  прежние контейнеры и не перезапускались.
 
 ### 2026-09-14 — Клиентский цикл развернут в production
 
