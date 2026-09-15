@@ -26,6 +26,7 @@ from .markup import (
     web_open_markup as _web_open_markup,
     workspace_markup_for as _workspace_markup_for,
 )
+from .case_messages import CASE_START_PAYLOAD_RE
 from .start_payloads import (
     LEGAL_HELP_START_PAYLOAD,
     PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
@@ -171,6 +172,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 consent_text = (
                     f"{consent_text}\n\n"
                     "После подтверждения вы сможете одним сообщением описать задачу для команды."
+                )
+            elif CASE_START_PAYLOAD_RE.match(start_payload):
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения открою ваше дело, и можно будет написать по нему юристу."
                 )
             await utils.safe_reply_html(
                 update.message,

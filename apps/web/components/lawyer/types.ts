@@ -62,6 +62,12 @@ export type IntakeLinkRow = {
   note: string | null;
   linked_lead_id: string;
   linked_client: string;
+  // Какое именно дело того клиента: у клиента может быть несколько обращений.
+  linked_intake_id: string;
+  linked_practice: string;
+  linked_legal_area: string;
+  linked_category: string | null;
+  linked_intake_created_at: string | null;
   created_at: string | null;
 };
 
@@ -80,6 +86,7 @@ export type IntakeCard = {
   conflict_status: string;
   description: string;
   internal_note: string | null;
+  without_agreement: boolean;
   outreach_sent_at: string | null;
   outreach_blocked_reason: string | null;
   clarifications: Clarification[];

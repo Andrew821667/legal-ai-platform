@@ -215,6 +215,17 @@ class CoreApiBridge:
             idempotency_key=idempotency_key,
         )
 
+    def client_portal_summary(self, telegram_user_id: int) -> dict[str, Any] | None:
+        """Сводка кабинета клиента: его дела, договоры, NDA — по Telegram-аккаунту.
+
+        Тот же эндпоинт, что и у клиентского Mini App: бот не должен держать
+        собственное представление о делах клиента.
+        """
+        if not self.enabled:
+            return None
+        result = self._get(f"/api/v1/client-portal/summary?telegram_user_id={int(telegram_user_id)}")
+        return result if isinstance(result, dict) else None
+
     def list_intakes_pending_outreach(
         self,
         *,
