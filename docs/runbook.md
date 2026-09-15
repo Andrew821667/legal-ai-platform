@@ -709,13 +709,16 @@ NDA и согласия они не попадают, и в Sentry поле вы
 ```bash
 # 1. Строка в .env (дописываем, а не пересоздаём файл — иначе слетает ACL):
 ssh legalai-prod 'grep -q "^PII_ENCRYPTION_KEY=" ~/projects/legal-ai-platform/.env || printf "\nPII_ENCRYPTION_KEY=\n" >> ~/projects/legal-ai-platform/.env'
-# 2. Значение — сгенерировать на своей машине и вставить в скрытый ввод:
-python3 -c 'import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
-ssh -t legalai-prod '~/rotate-env-key.sh PII_ENCRYPTION_KEY'
+# 2. Значение генерируется на самом хосте и сразу уходит в скрипт — без
+#    буфера обмена: однажды вместо ключа туда попала команда ssh.
+ssh legalai-prod 'python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())" | ~/rotate-env-key.sh PII_ENCRYPTION_KEY'
+# 3. Показать значение один раз — скопировать в менеджер паролей:
+ssh legalai-prod 'grep "^PII_ENCRYPTION_KEY=" ~/projects/legal-ai-platform/.env'
 ```
-Дальше обычный деплой. Ключ читает только core-api; `docker compose restart`
-`.env` не перечитывает, нужен `up -d --force-recreate core-api` (как при любой
-смене секрета).
+Дальше обычный деплой: `deploy_macmini.sh` не стартует, пока в `.env` нет
+ключа правильного вида (44 знака base64url с `=` на конце). Ключ читает
+только core-api; `docker compose restart` `.env` не перечитывает, нужен
+`up -d --force-recreate core-api` (как при любой смене секрета).
 
 **Хранение ключа.** Копию положить отдельно от бэкапов базы (менеджер
 паролей, не тот же диск): потеря ключа — потеря реквизитов без возможности
