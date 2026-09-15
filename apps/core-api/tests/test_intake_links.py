@@ -10,7 +10,7 @@ from __future__ import annotations
 from core_api.auth import cache
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import ApiKey, Lead, LeadSource, LegalIntake, LegalIntakeStatus, Scope
+from core_api.models import ApiKey, Lead, LeadSource, LegalArea, LegalIntake, LegalIntakeStatus, Scope
 from core_api.security import generate_api_key, hash_api_key
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
@@ -87,6 +87,9 @@ def test_subordinate_link_shows_main_and_secondary_on_each_card() -> None:
         assert link["role"] == "subordinate"
         assert link["linked_lead_id"] == main_client["lead_id"]
         assert link["linked_client"] == "Рябов Александр"
+        assert link["linked_intake_id"] == main_client["intake_id"]
+        assert link["linked_legal_area"] == "other"
+        assert link["linked_practice"] == "legal"
         assert link["link_id"] == link_id
 
         main_card = client.get(
@@ -280,3 +283,62 @@ def test_deleting_an_unknown_link_is_not_found() -> None:
         assert response.status_code == 404
     finally:
         _cleanup(names, [])
+
+
+def test_client_with_several_cases_requires_a_specific_one() -> None:
+    """Одного клиента мало, когда у него несколько дел: без выбора — 409, с выбором — связь с этим делом."""
+    client = TestClient(app)
+    names = ["pytest.links.several"]
+    key = _key(names[0])
+    a = _client_with_intake("Крылов Пётр", "@krylov_a")
+    b = _client_with_intake("Крылова Мария", "@krylova_b")
+    db = SessionLocal()
+    try:
+        second = LegalIntake(
+            lead_id=b["lead_id"],
+            legal_area=LegalArea.real_estate,
+            description="Оспаривание сделки с квартирой.",
+            status=LegalIntakeStatus.received,
+        )
+        db.add(second)
+        db.commit()
+        second_id = str(second.id)
+    finally:
+        db.close()
+    try:
+        ambiguous = client.post(
+            f"/api/v1/lawyer/intakes/{a['intake_id']}/links",
+            json={"linked_lead_id": b["lead_id"], "role": "joint"},
+            headers={"X-API-Key": key},
+        )
+        assert ambiguous.status_code == 409, ambiguous.text
+        assert "выберите конкретное дело" in ambiguous.json()["detail"]
+
+        wrong_client = client.post(
+            f"/api/v1/lawyer/intakes/{a['intake_id']}/links",
+            json={"linked_lead_id": b["lead_id"], "linked_intake_id": a["intake_id"], "role": "joint"},
+            headers={"X-API-Key": key},
+        )
+        # Дело должно принадлежать указанному клиенту, а не любому.
+        assert wrong_client.status_code == 404, wrong_client.text
+
+        chosen = client.post(
+            f"/api/v1/lawyer/intakes/{a['intake_id']}/links",
+            json={"linked_lead_id": b["lead_id"], "linked_intake_id": second_id, "role": "joint"},
+            headers={"X-API-Key": key},
+        )
+        assert chosen.status_code == 200, chosen.text
+
+        card = client.get(f"/api/v1/lawyer/clients/{a['lead_id']}", headers={"X-API-Key": key}).json()
+        (link,) = _links_of(card)
+        assert link["linked_intake_id"] == second_id
+        assert link["linked_legal_area"] == "real_estate"
+        assert link["linked_client"] == "Крылова Мария"
+
+        # У второго клиента связь видна только на том деле, к которому она привязана.
+        other_card = client.get(f"/api/v1/lawyer/clients/{b['lead_id']}", headers={"X-API-Key": key}).json()
+        links_by_intake = {row["intake_id"]: row["links"] for row in other_card["intakes"]}
+        assert [row["linked_intake_id"] for row in links_by_intake[second_id]] == [a["intake_id"]]
+        assert links_by_intake[b["intake_id"]] == []
+    finally:
+        _cleanup(names, [a["lead_id"], b["lead_id"]])

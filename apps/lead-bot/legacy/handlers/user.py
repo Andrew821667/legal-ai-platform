@@ -61,6 +61,7 @@ from .user_routing import (
     maybe_handle_personal_mode,
     maybe_handle_static_reply_action,
 )
+from .case_messages import clear_case_context, maybe_handle_case_message
 from .start_payloads import process_pending_start_payload
 from .intake_dialog import (
     handle_intake_dialog_document,
@@ -165,6 +166,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             documents_handler=documents_command,
             reset_handler=reset_command,
         ):
+            # Ушёл в меню — значит, разговор по делу из кабинета закончен.
+            clear_case_context(context)
             return
 
         # В non-text ветке поддерживаем сценарий демо (документ + email).
@@ -227,6 +230,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if await handle_intake_dialog_message(update, context, message_text):
+            return
+
+        # Клиент пришёл из кабинета по конкретному делу: его слова — юристу с
+        # пометкой дела, а не заявка на новое обращение.
+        if await maybe_handle_case_message(
+            update=update,
+            context=context,
+            original_message=original_message,
+            message_text=message_text,
+            user=user,
+            user_data=user_data,
+        ):
             return
 
         if await maybe_handle_legal_help_message(

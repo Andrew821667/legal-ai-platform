@@ -126,23 +126,21 @@ def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
     partner_intake_ids = {
         (row.linked_intake_id if row.intake_id == intake_id else row.intake_id) for row in rows
     }
-    partner_leads = dict(
-        db.execute(
-            select(LegalIntake.id, LegalIntake.lead_id).where(LegalIntake.id.in_(partner_intake_ids))
-        ).all()
-    )
+    partner_intakes = {
+        item.id: item
+        for item in db.scalars(select(LegalIntake).where(LegalIntake.id.in_(partner_intake_ids)))
+    }
+    partner_lead_ids = {item.lead_id for item in partner_intakes.values()}
     leads_by_id = {
         lead.id: lead
-        for lead in db.execute(
-            select(Lead).where(Lead.id.in_(partner_leads.values()))
-        ).scalars().all()
-    } if partner_leads else {}
+        for lead in db.scalars(select(Lead).where(Lead.id.in_(partner_lead_ids)))
+    } if partner_lead_ids else {}
 
     result: list[dict] = []
     for row in rows:
         partner_intake_id = row.linked_intake_id if row.intake_id == intake_id else row.intake_id
-        partner_lead_id = partner_leads.get(partner_intake_id)
-        if partner_lead_id is None:
+        partner = partner_intakes.get(partner_intake_id)
+        if partner is None:
             continue
         if row.link_type == IntakeLinkType.joint:
             role = "joint"
@@ -153,8 +151,15 @@ def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
                 "link_id": str(row.id),
                 "role": role,
                 "note": row.note,
-                "linked_lead_id": str(partner_lead_id),
-                "linked_client": _lead_title(leads_by_id.get(partner_lead_id)),
+                "linked_lead_id": str(partner.lead_id),
+                "linked_client": _lead_title(leads_by_id.get(partner.lead_id)),
+                # Какое именно дело того клиента: после того как у клиента
+                # может быть несколько обращений, одного имени мало.
+                "linked_intake_id": str(partner.id),
+                "linked_practice": partner.practice.value,
+                "linked_legal_area": partner.legal_area.value,
+                "linked_category": partner.category,
+                "linked_intake_created_at": _iso(partner.created_at),
                 "created_at": _iso(row.created_at),
             }
         )
@@ -721,6 +726,7 @@ def client_card(
                 "conflict_status": item.conflict_status.value,
                 "description": item.description,
                 "internal_note": item.internal_note,
+                "without_agreement": item.without_agreement,
                 "outreach_sent_at": _iso(item.outreach_sent_at),
                 "outreach_blocked_reason": item.outreach_blocked_reason,
                 "clarifications": clarifications.get(item.id, []),

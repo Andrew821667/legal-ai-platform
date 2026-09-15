@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { intakeTitle, label, INTAKE_STATUS, shortDate } from "./labels";
 import { lawyerAction, lawyerFetch } from "./useTelegram";
-import type { ClientRow, IntakeLinkRow } from "./types";
+import type { ClientCard, ClientRow, IntakeCard, IntakeLinkRow } from "./types";
 
 /**
  * Связь с делом другого клиента — только пометка для контекста.
@@ -53,6 +54,16 @@ function LinkRow({
         >
           {link.linked_client}
         </button>
+        <span className="text-lw-muted">
+          {" "}
+          ·{" "}
+          {intakeTitle({
+            practice: link.linked_practice,
+            legal_area: link.linked_legal_area,
+            category: link.linked_category,
+          })}
+          {link.linked_intake_created_at ? ` от ${shortDate(link.linked_intake_created_at)}` : ""}
+        </span>
         {link.note ? <span className="text-lw-muted"> · {link.note}</span> : null}
       </span>
       <button
@@ -83,6 +94,10 @@ function AddLinkForm({
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<ClientRow[] | null>(null);
   const [selected, setSelected] = useState<ClientRow | null>(null);
+  // Дела выбранного клиента, когда их несколько: одного имени тогда мало,
+  // и ядро откажет (409), пока не назвать конкретное обращение.
+  const [cases, setCases] = useState<IntakeCard[] | null>(null);
+  const [caseId, setCaseId] = useState<string | null>(null);
   const [role, setRole] = useState<"subordinate" | "main" | "joint">("joint");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -112,13 +127,34 @@ function AddLinkForm({
     };
   }, [term, initData, currentLeadId]);
 
+  useEffect(() => {
+    setCases(null);
+    setCaseId(null);
+    if (!selected || selected.intakes < 2) return;
+    let cancelled = false;
+    lawyerFetch<ClientCard>(`/api/lawyer/clients/${selected.lead_id}`, initData)
+      .then((card) => {
+        if (!cancelled) setCases(card.intakes);
+      })
+      .catch(() => {
+        if (!cancelled) setCases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, initData]);
+
+  const needsCase = Boolean(selected && selected.intakes > 1);
+  const canSubmit = Boolean(selected) && (!needsCase || Boolean(caseId));
+
   const submit = async () => {
-    if (!selected) return;
+    if (!selected || !canSubmit) return;
     setBusy(true);
     setError(null);
     try {
       await lawyerAction(`/api/lawyer/intakes/${intakeId}/links`, initData, {
         linked_lead_id: selected.lead_id,
+        linked_intake_id: caseId || undefined,
         role,
         note: note.trim() || undefined,
       });
@@ -176,6 +212,43 @@ function AddLinkForm({
         </>
       )}
 
+      {selected && needsCase ? (
+        <div className="mt-2.5">
+          <p className="text-lw-sm text-lw-muted">
+            У клиента {selected.intakes} дела — с каким связать?
+          </p>
+          {cases === null ? (
+            <p className="mt-1 text-lw-sm text-lw-muted">Загружаю дела…</p>
+          ) : cases.length === 0 ? (
+            <p className="mt-1 text-lw-sm text-lw-danger">Не удалось загрузить дела клиента.</p>
+          ) : (
+            <ul className="mt-1 space-y-1" role="radiogroup" aria-label="Дело клиента">
+              {cases.map((row) => (
+                <li key={row.intake_id}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={caseId === row.intake_id}
+                    onClick={() => setCaseId(row.intake_id)}
+                    className={`w-full rounded-lg px-2 py-1.5 text-left text-lw-sm ${
+                      caseId === row.intake_id
+                        ? "bg-lw-primary text-white"
+                        : "bg-white text-lw-ink ring-1 ring-lw-border hover:bg-lw-blue-soft"
+                    }`}
+                  >
+                    {intakeTitle(row)}
+                    <span className={caseId === row.intake_id ? "" : "text-lw-muted"}>
+                      {" "}
+                      · {shortDate(row.created_at)} · {label(INTAKE_STATUS, row.status)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+
       {selected ? (
         <>
           <div className="mt-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Роль этого дела">
@@ -211,7 +284,7 @@ function AddLinkForm({
           <div className="mt-2.5 flex gap-2">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !canSubmit}
               onClick={() => void submit()}
               className="lw-btn-quiet disabled:opacity-60"
             >

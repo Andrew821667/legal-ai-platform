@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 
+import { parseIntakeLinkPayload } from "@/lib/intake-link-payload";
 import { corePost } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
@@ -10,12 +11,14 @@ import { requireLawyer } from "@/lib/lawyer-auth";
  * спором с двух сторон, а проверка конфликта у каждого шла независимо.
  * Связь — только пометка для контекста; договоры, NDA и документы каждого
  * обращения остаются раздельными.
+ *
+ * У клиента может быть несколько дел — тогда ядро требует указать конкретное
+ * (linked_intake_id), иначе отвечает 409, и форма предлагает выбрать.
  */
 
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ALLOWED_ROLES = new Set(["main", "subordinate", "joint"]);
 
 export async function POST(
   request: NextRequest,
@@ -29,24 +32,9 @@ export async function POST(
     return Response.json({ detail: "Некорректный идентификатор обращения" }, { status: 400 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as {
-    linked_lead_id?: unknown;
-    role?: unknown;
-    note?: unknown;
-  };
-  const linkedLeadId = String(body.linked_lead_id ?? "");
-  if (!UUID.test(linkedLeadId)) {
-    return Response.json({ detail: "Некорректный идентификатор клиента" }, { status: 400 });
+  const parsed = parseIntakeLinkPayload(await request.json().catch(() => ({})));
+  if (!parsed.ok) {
+    return Response.json({ detail: parsed.error }, { status: 400 });
   }
-  const role = String(body.role ?? "");
-  if (!ALLOWED_ROLES.has(role)) {
-    return Response.json({ detail: "Неизвестная роль связи" }, { status: 400 });
-  }
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : undefined;
-
-  return corePost(`/api/v1/lawyer/intakes/${intakeId}/links`, {
-    linked_lead_id: linkedLeadId,
-    role,
-    ...(note ? { note } : {}),
-  });
+  return corePost(`/api/v1/lawyer/intakes/${intakeId}/links`, parsed.payload);
 }
