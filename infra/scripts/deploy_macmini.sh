@@ -59,6 +59,16 @@ fi
 
 cd "$APP_DIR"
 
+# Миграция 0032 шифрует паспортные данные ключом из .env и без ключа
+# останавливается — а вместе с ней и запуск core-api (alembic идёт перед
+# uvicorn). Проверяем до того, как трогать контейнеры: не начать деплой
+# лучше, чем уронить ядро. Как завести ключ — docs/runbook.md,
+# «Шифрование паспортных данных».
+if ! grep -Eq '^PII_ENCRYPTION_KEY=[^[:space:]]+' "$ENV_FILE"; then
+  echo "PII_ENCRYPTION_KEY не задан в $ENV_FILE — деплой остановлен до того, как что-то пересоздано." >&2
+  exit 1
+fi
+
 compose=(docker compose -p compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 if [ -z "$COMPOSE_BUILD_MODE" ]; then

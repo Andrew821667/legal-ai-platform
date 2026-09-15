@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core_api.db import Base
+from core_api.pii import EncryptedText
 
 
 class Scope(str, enum.Enum):
@@ -384,7 +385,9 @@ class NdaPersonalDataConsent(Base):
     signer_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_contact: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    signer_identity_document: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Зашифровано на уровне приложения (см. core_api.pii): в базе и бэкапах —
+    # только токен, читается расшифрованным там, где столбец запрошен.
+    signer_identity_document: Mapped[str] = mapped_column(EncryptedText(), nullable=False)
     document_version: Mapped[str] = mapped_column(String(100), nullable=False)
     document_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     document_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -435,7 +438,7 @@ class NdaSignature(Base):
     signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    signer_identity_document: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    signer_identity_document: Mapped[str | None] = mapped_column(EncryptedText(), nullable=True)
     pdn_consent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("nda_personal_data_consents.id", ondelete="SET NULL"),

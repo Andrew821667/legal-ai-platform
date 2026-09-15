@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
@@ -43,6 +44,15 @@ init_sentry()
 
 app = FastAPI(title="AI Verdict Core API", version="1.0.0")
 app.state.started_at = datetime.now(timezone.utc)
+
+# Без ключа реквизиты документа подписанта записать нельзя — подписание NDA
+# ответит 500. Сервис не падает целиком (остальное ядро ключа не требует),
+# но об этом должно быть громко сказано в логе при старте, а не выясняться
+# на первом клиенте.
+if not os.getenv("PII_ENCRYPTION_KEY", "").strip():
+    logging.getLogger(__name__).error(
+        "PII_ENCRYPTION_KEY is not set: NDA signing and personal-data consent will fail until it is"
+    )
 
 origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(

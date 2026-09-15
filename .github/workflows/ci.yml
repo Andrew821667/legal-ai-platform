@@ -181,7 +181,14 @@ jobs:
 
   deploy-macmini:
     needs: [build-and-push]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_MACMINI_DEPLOY == 'true'
+    # «[skip deploy]» в сообщении коммита придерживает только выкатку: тесты,
+    # сборка и образы по SHA остаются, и коммит можно развернуть адресно
+    # уже проверенным. «[skip ci]» для этого не годится — он выключает и
+    # проверки, и образы, и на проде остаётся непрослеживаемый «:local».
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && vars.ENABLE_MACMINI_DEPLOY == 'true'
+      && !contains(github.event.head_commit.message, '[skip deploy]')
     runs-on: ubuntu-latest
     # Два мержа подряд запускали два деплоя на один и тот же хост
     # одновременно: они пересоздавали контейнеры наперегонки, зависимость
