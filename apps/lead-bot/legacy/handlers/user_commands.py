@@ -17,7 +17,6 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from .markup import (
     documents_markup as _documents_markup,
-    main_menu_hint as _main_menu_hint,
     main_menu_markup as _main_menu_markup,
     pdn_consent_markup as _pdn_consent_markup,
     profile_panel_markup as _profile_panel_markup,
@@ -123,7 +122,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_profile = database.db.get_user_offer_profile(user_id)
         consent_state = database.db.get_user_consent_state(user_id)
         needs_pdn_consent = _should_require_pdn_consent(user.id == config.ADMIN_TELEGRAM_ID, consent_state)
-        start_markup = _start_markup_for(lead=lead, selected_profile=selected_profile)
+        start_markup = _start_markup_for(
+            lead=lead,
+            selected_profile=selected_profile,
+            is_admin=user.id == config.ADMIN_TELEGRAM_ID,
+        )
 
         if not start_payload and not needs_pdn_consent:
             await utils.safe_reply_html(
@@ -138,12 +141,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 action="start_entry",
             )
             logger.info("Start entry sent on /start for user %s", user.id)
-            await utils.safe_reply_text(
-                update.message,
-                _main_menu_hint(user.id),
-                reply_markup=_main_menu_markup(user.id),
-                action="start_bottom_menu",
-            )
 
         user_data = database.db.get_local_user_by_id(user_id)
         if user_data and not needs_pdn_consent:

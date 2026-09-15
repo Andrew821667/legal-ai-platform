@@ -206,9 +206,11 @@ function getStorePath(): string {
 
 function loadStoredComments(): AiLawComment[] {
   const filePath = getStorePath();
-  if (!existsSync(filePath)) return [];
+  if (!existsSync(/*turbopackIgnore: true*/ filePath)) return [];
   try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8")) as Partial<EditorialStore>;
+    const parsed = JSON.parse(
+      readFileSync(/*turbopackIgnore: true*/ filePath, "utf-8"),
+    ) as Partial<EditorialStore>;
     if (!Array.isArray(parsed.comments)) return [];
     return parsed.comments.slice(0, MAX_COMMENTS).map(normalizeAiLawComment);
   } catch (error) {

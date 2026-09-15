@@ -26,6 +26,8 @@ from .constants import (
     build_quick_nav_menu,
     build_start_inline_menu,
     build_workspace_inline_menu,
+    client_miniapp_inline_row,
+    lawyer_workspace_button,
 )
 
 config = get_config()
@@ -115,15 +117,21 @@ def workspace_markup_for(
 def start_markup_for(
     lead: dict | None = None,
     selected_profile: str | None = None,
+    *,
+    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        build_start_inline_menu(
-            content.offer_profile_cta_label(
-                lead=lead,
-                selected_profile=selected_profile,
-            )
+    rows = build_start_inline_menu(
+        content.offer_profile_cta_label(
+            lead=lead,
+            selected_profile=selected_profile,
         )
     )
+    if is_admin:
+        if button := lawyer_workspace_button():
+            rows.insert(0, [button])
+    elif miniapp_rows := client_miniapp_inline_row():
+        rows[:0] = miniapp_rows
+    return InlineKeyboardMarkup(rows)
 
 
 def quick_nav_markup() -> InlineKeyboardMarkup:

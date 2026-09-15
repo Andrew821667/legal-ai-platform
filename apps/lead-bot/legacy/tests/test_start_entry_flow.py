@@ -54,15 +54,12 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     assert "Инженерная практика" in messages[0][0]
     assert messages[0][1] is not None
 
-    # Постоянная клавиатура приходит вместе с /start — раньше она уходила
-    # только по «Отмене» и правке профиля, и кнопки внизу у многих не было.
-    from telegram import ReplyKeyboardMarkup
-
-    assert len(bottom) == 1
-    assert isinstance(bottom[0][1], ReplyKeyboardMarkup)
-    # Второе сообщение — только ради клавиатуры (Telegram не прикрепит её к
-    # сообщению с inline-кнопками); текст здесь — иконка, не подсказка.
-    assert bottom[0][0].strip()
+    assert bottom == []
+    assert any(
+        button.web_app is not None
+        for row in messages[0][1].inline_keyboard
+        for button in row
+    )
 
 
 @pytest.mark.anyio
@@ -92,3 +89,19 @@ async def test_start_command_sends_only_consent_to_new_user(monkeypatch: pytest.
     assert len(messages) == 1
     assert "соглас" in messages[0][0].lower()
     assert messages[0][1] is not None
+
+
+def test_start_markup_opens_lawyer_workspace_for_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    from handlers import constants
+
+    monkeypatch.setattr(
+        constants.get_config(),
+        "LAWYER_WORKSPACE_URL",
+        "https://example.ru/lawyer",
+        raising=False,
+    )
+
+    markup = user_commands._start_markup_for(is_admin=True)
+
+    buttons = [button for row in markup.inline_keyboard for button in row]
+    assert buttons[0].web_app.url == "https://example.ru/lawyer"

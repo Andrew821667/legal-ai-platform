@@ -84,11 +84,11 @@ function ensureStoreDirectory(filePath: string): void {
 
 function loadStore(): AdminSecurityStore {
   const filePath = getStorePath();
-  if (!existsSync(filePath)) {
+  if (!existsSync(/*turbopackIgnore: true*/ filePath)) {
     return createEmptyStore();
   }
 
-  const raw = readFileSync(filePath, "utf-8");
+  const raw = readFileSync(/*turbopackIgnore: true*/ filePath, "utf-8");
   const parsed = JSON.parse(raw) as Partial<AdminSecurityStore> | null;
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Admin security store is corrupted");
