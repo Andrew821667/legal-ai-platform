@@ -59,6 +59,18 @@ fi
 
 cd "$APP_DIR"
 
+# Миграция 0032 шифрует паспортные данные ключом из .env и без ключа
+# останавливается — а вместе с ней и запуск core-api (alembic идёт перед
+# uvicorn). Проверяем до того, как трогать контейнеры: не начать деплой
+# лучше, чем уронить ядро. Проверяется и формат: ключ Fernet — это ровно
+# 44 знака base64url с «=» на конце, а в поле уже однажды попадала не та
+# строка из буфера обмена. Как завести ключ — docs/runbook.md,
+# «Шифрование паспортных данных».
+if ! grep -Eq '^PII_ENCRYPTION_KEY=[A-Za-z0-9_-]{43}=$' "$ENV_FILE"; then
+  echo "PII_ENCRYPTION_KEY в $ENV_FILE не задан или не похож на ключ Fernet (44 знака base64url) — деплой остановлен до того, как что-то пересоздано." >&2
+  exit 1
+fi
+
 compose=(docker compose -p compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 if [ -z "$COMPOSE_BUILD_MODE" ]; then
