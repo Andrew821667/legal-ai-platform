@@ -860,6 +860,23 @@ async def business_message_router(update: Update, context: ContextTypes.DEFAULT_
     await message_router(update, context)
 
 
+async def lead_handover_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Переносит старые лиды из SQLite в ядро — один раз, но с повторами.
+
+    Лиды теперь живут только в ядре; строки старой таблицы нужно довести до
+    него и больше не трогать. Повтор каждые десять минут — на случай, если
+    при старте ядро ещё поднималось: перенос идемпотентен, перенесённые
+    строки пропускаются.
+    """
+    try:
+        summary = await asyncio.to_thread(database.db.handover_leads_to_core)
+    except Exception as error:
+        logger.warning("Lead handover job failed: %s", type(error).__name__)
+        return
+    if summary.get("failed"):
+        logger.warning("Lead handover left %s rows behind; will retry", summary["failed"])
+
+
 async def check_pending_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Проверка лидов, где диалог затих, и отправка уведомлений админу.
@@ -1191,6 +1208,13 @@ def build_application() -> Application:
     application.add_error_handler(error_handler)
 
     if application.job_queue is not None:
+        application.job_queue.run_repeating(
+            lead_handover_job,
+            interval=600,
+            first=5,
+            name="lead_handover",
+            job_kwargs={"coalesce": True, "max_instances": 1},
+        )
         first_run_delay = min(30, max(1, config.PENDING_LEADS_CHECK_INTERVAL_SECONDS // 2))
         application.job_queue.run_repeating(
             check_pending_leads_job,

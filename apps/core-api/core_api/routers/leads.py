@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, update
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
@@ -14,7 +15,7 @@ from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.lead_notifications import notify_new_lead
 from core_api.models import ActorType, ContractJob, Event, Lead, LeadSource, LeadStatus, Scope
-from core_api.schemas import LeadCreate, LeadOut, LeadPatch, LeadStatsOut
+from core_api.schemas import LEAD_UPSERT_FLAGS, LeadCreate, LeadOut, LeadPatch, LeadStatsOut, LegacySequenceHandover
 
 router = APIRouter(prefix="/api/v1/leads", tags=["leads"])
 
@@ -36,15 +37,34 @@ def upsert_lead(
     lead = None
     if payload.legacy_lead_id is not None:
         lead = db.execute(select(Lead).where(Lead.legacy_lead_id == payload.legacy_lead_id).limit(1)).scalar_one_or_none()
+        if lead is None and payload.claim_unlinked and payload.telegram_user_id is not None:
+            # Перенос из SQLite бота: лид этого аккаунта уже есть в ядре (его
+            # завело обращение), но номера у него нет — присваиваем, а не
+            # заводим второго человека с теми же данными.
+            lead = db.execute(
+                select(Lead)
+                .where(Lead.telegram_user_id == payload.telegram_user_id, Lead.legacy_lead_id.is_(None))
+                .order_by(Lead.created_at)
+                .limit(1)
+            ).scalar_one_or_none()
+    elif payload.force_new:
+        lead = None
     elif payload.telegram_user_id is not None:
+        # Последний лид аккаунта: у постоянного клиента их несколько, и
+        # обновлять надо текущий разговор, а не первый попавшийся.
         lead = db.execute(
-            select(Lead).where(Lead.telegram_user_id == payload.telegram_user_id).limit(1)
+            select(Lead)
+            .where(Lead.telegram_user_id == payload.telegram_user_id)
+            .order_by(Lead.created_at.desc())
+            .limit(1)
         ).scalar_one_or_none()
     elif payload.contact:
         lead = db.execute(select(Lead).where(Lead.contact == payload.contact).limit(1)).scalar_one_or_none()
     now = datetime.now(timezone.utc)
 
     is_new_lead = lead is None
+    if lead is None and payload.update_only:
+        raise HTTPException(status_code=404, detail="Lead not found")
     if lead is None:
         lead = Lead(
             source=payload.source,
@@ -79,10 +99,17 @@ def upsert_lead(
             last_activity_at=now,
             last_message_at=payload.last_message_at,
             notification_sent=bool(payload.notification_sent),
+            team_size=payload.team_size,
+            contracts_per_month=payload.contracts_per_month,
         )
+        if payload.created_at is not None:
+            lead.created_at = payload.created_at
         db.add(lead)
     else:
-        payload_data = payload.model_dump(exclude_none=True)
+        # Только то, что прислали явно: бот обновляет лид по одному полю
+        # (время последнего сообщения, шаг воронки), и значения по умолчанию
+        # схемы — status=new, cta_shown=False — не должны затирать живые.
+        payload_data = payload.model_dump(exclude_unset=True, exclude_none=True, exclude=LEAD_UPSERT_FLAGS)
         for key, value in payload_data.items():
             setattr(lead, key, value)
         lead.last_activity_at = now
@@ -115,6 +142,7 @@ def list_leads(
     telegram_user_id: int | None = None,
     legacy_lead_id: int | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[Lead]:
     _ = identity
     capped_limit = max(1, min(limit, 500))
@@ -129,8 +157,35 @@ def list_leads(
         query = query.where(Lead.telegram_user_id == telegram_user_id)
     if legacy_lead_id is not None:
         query = query.where(Lead.legacy_lead_id == legacy_lead_id)
-    query = query.order_by(Lead.created_at.desc()).limit(capped_limit)
+    query = query.order_by(Lead.created_at.desc()).offset(max(0, offset)).limit(capped_limit)
     return list(db.execute(query).scalars().all())
+
+
+@router.post("/legacy-sequence", response_model=dict)
+def handover_legacy_sequence(
+    payload: LegacySequenceHandover,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Сдвигает счётчик номеров лидов вперёд — при переносе лидов из SQLite бота.
+
+    Номера в SQLite бота могли уйти дальше, чем известно ядру (лиды, которые
+    так и не были отражены). Бот один раз сообщает свой максимум, и новые
+    номера начинаются после него: аналитика бота хранит номера, и пересечение
+    старого с новым перепутало бы события двух разных людей. Назад счётчик
+    не двигается.
+    """
+    _ = identity
+    next_value = db.scalar(
+        sa_text(
+            "SELECT setval('lead_legacy_id_seq', "
+            "GREATEST(CASE WHEN is_called THEN last_value ELSE last_value - 1 END, :floor, 1), true) + 1 "
+            "FROM lead_legacy_id_seq"
+        ),
+        {"floor": payload.min_next - 1},
+    )
+    db.commit()
+    return {"next_legacy_lead_id": int(next_value)}
 
 
 @router.get("/stats/summary", response_model=LeadStatsOut)

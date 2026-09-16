@@ -5,6 +5,7 @@ import tempfile
 
 from database import Database
 from lead_qualifier import LeadQualifier
+from tests.fake_core import install as install_fake_core
 
 
 def test_process_lead_data_skips_new_lead_without_contact() -> None:
@@ -35,11 +36,12 @@ def test_process_lead_data_skips_new_lead_without_contact() -> None:
             os.unlink(db_path)
 
 
-def test_process_lead_data_updates_existing_contacted_lead_without_new_contact() -> None:
+def test_process_lead_data_updates_existing_contacted_lead_without_new_contact(monkeypatch) -> None:
     fd, db_path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
         db = Database(db_path)
+        install_fake_core(monkeypatch, db)
         qualifier = LeadQualifier(db)
         user_id = db.create_or_update_user(
             telegram_id=555002,

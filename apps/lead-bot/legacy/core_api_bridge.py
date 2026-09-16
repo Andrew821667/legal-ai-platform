@@ -22,40 +22,8 @@ logger = logging.getLogger(__name__)
 config = get_config()
 
 
-def _score_from_temperature(temperature: str | None) -> int | None:
-    normalized = (temperature or "").strip().lower()
-    if normalized == "hot":
-        return 90
-    if normalized == "warm":
-        return 60
-    if normalized == "cold":
-        return 30
-    return None
 
 
-def _status_from_legacy(value: str | None) -> str:
-    normalized = (value or "").strip().lower()
-    allowed = {"new", "qualified", "booked", "proposal", "won", "lost"}
-    return normalized if normalized in allowed else "new"
-
-
-def _build_contact_value(lead: dict, user_data: dict | None) -> str | None:
-    if lead.get("phone"):
-        return lead["phone"]
-    if lead.get("email"):
-        return lead["email"]
-    username = (user_data or {}).get("username")
-    if username:
-        return f"@{username}"
-    telegram_id = (user_data or {}).get("telegram_id")
-    if telegram_id:
-        return f"tg:{telegram_id}"
-    return None
-
-
-def _build_notes(lead: dict) -> str | None:
-    notes = (lead.get("notes") or "").strip()
-    return notes[:4000] if notes else None
 
 
 def _stable_sync_key(prefix: str, payload: dict[str, Any]) -> str:
@@ -153,54 +121,6 @@ class CoreApiBridge:
         except Exception as error:
             logger.warning("Core API sync error [%s]: %s", path, error)
         return None
-
-    def sync_lead(self, lead: dict, user_data: dict | None = None) -> str | None:
-        if not self.enabled:
-            return None
-
-        payload = {
-            "source": "telegram_bot",
-            "legacy_lead_id": lead.get("id"),
-            "telegram_user_id": (user_data or {}).get("telegram_id"),
-            "name": lead.get("name") or (user_data or {}).get("first_name"),
-            "contact": _build_contact_value(lead, user_data or {}),
-            "company": lead.get("company"),
-            "email": lead.get("email"),
-            "phone": lead.get("phone"),
-            "status": _status_from_legacy(lead.get("status")),
-            "score": _score_from_temperature(lead.get("temperature")),
-            "temperature": lead.get("temperature"),
-            "service_category": lead.get("service_category"),
-            "specific_need": lead.get("specific_need"),
-            "pain_point": lead.get("pain_point"),
-            "budget": lead.get("budget"),
-            "urgency": lead.get("urgency"),
-            "industry": lead.get("industry"),
-            "conversation_stage": lead.get("conversation_stage"),
-            "cta_variant": lead.get("cta_variant"),
-            "cta_shown": bool(lead.get("cta_shown")),
-            "lead_magnet_type": lead.get("lead_magnet_type"),
-            "lead_magnet_delivered": bool(lead.get("lead_magnet_delivered")),
-            "notes": _build_notes(lead),
-            "last_message_at": lead.get("last_message_at"),
-            "notification_sent": bool(lead.get("notification_sent")),
-        }
-        result = self._post(
-            "/api/v1/leads",
-            payload,
-            idempotency_key=_stable_sync_key("legacy-lead-sync", payload),
-        )
-        core_id = (result or {}).get("id")
-        if core_id:
-            logger.info("Legacy lead %s mirrored to core-api as %s", lead.get("id"), core_id)
-        return core_id
-
-    def mark_lead_notification_sent(self, core_lead_id: str) -> bool:
-        return self._post(
-            f"/api/v1/leads/{core_lead_id}/notification-sent",
-            {},
-            idempotency_key=f"lead-notified:{core_lead_id}",
-        ) is not None
 
     def create_legal_intake(
         self,

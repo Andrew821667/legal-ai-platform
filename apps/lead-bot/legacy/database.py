@@ -151,37 +151,6 @@ class Database(database_facade.DatabaseFacadeMixin):
             "last_interaction": row.get("last_interaction"),
         }
 
-    @staticmethod
-    def _map_core_lead(row: dict) -> dict:
-        return {
-            "core_lead_id": row.get("id"),
-            "legacy_lead_id": row.get("legacy_lead_id"),
-            "telegram_user_id": row.get("telegram_user_id"),
-            "created_at": row.get("created_at"),
-            "updated_at": row.get("updated_at"),
-            "name": row.get("name"),
-            "email": row.get("email"),
-            "phone": row.get("phone"),
-            "company": row.get("company"),
-            "temperature": row.get("temperature"),
-            "status": row.get("status"),
-            "service_category": row.get("service_category"),
-            "specific_need": row.get("specific_need"),
-            "pain_point": row.get("pain_point"),
-            "budget": row.get("budget"),
-            "urgency": row.get("urgency"),
-            "industry": row.get("industry"),
-            "conversation_stage": row.get("conversation_stage"),
-            "cta_variant": row.get("cta_variant"),
-            "cta_shown": bool(row.get("cta_shown")),
-            "lead_magnet_type": row.get("lead_magnet_type"),
-            "lead_magnet_delivered": bool(row.get("lead_magnet_delivered")),
-            "notes": row.get("notes"),
-            "last_message_at": row.get("last_message_at"),
-            "notification_sent": bool(row.get("notification_sent")),
-            "notification_sent_at": row.get("notification_sent_at"),
-        }
-
     def _merge_user_row_with_core(self, local_user: dict | None) -> dict | None:
         if not local_user:
             return None
@@ -194,40 +163,6 @@ class Database(database_facade.DatabaseFacadeMixin):
             merged.update({k: v for k, v in self._map_core_user(core_rows[0]).items() if v is not None})
             return merged
         return local_user
-
-    def _merge_lead_row_with_core(self, local_lead: dict | None, telegram_user_id: int | None = None) -> dict | None:
-        if not local_lead:
-            return None
-        params = {"source_filter": "telegram_bot", "limit": 1}
-        if local_lead.get("id") is not None:
-            params["legacy_lead_id"] = local_lead.get("id")
-        elif telegram_user_id is not None:
-            params["telegram_user_id"] = telegram_user_id
-        core_rows = self._core_get_json("/api/v1/leads", params)
-        if isinstance(core_rows, list) and core_rows:
-            merged = dict(local_lead)
-            merged.update({k: v for k, v in self._map_core_lead(core_rows[0]).items() if v is not None})
-            return merged
-        return local_lead
-
-    def _sync_lead_to_core(self, lead_id: int) -> None:
-        """Зеркалирует текущий lead state в core-api, не ломая legacy flow."""
-        try:
-            from core_api_bridge import core_api_bridge
-
-            if not core_api_bridge.enabled:
-                return
-
-            lead = self.get_lead_by_id(lead_id)
-            if not lead:
-                return
-
-            user = self.get_user_by_id(lead["user_id"]) if lead.get("user_id") else None
-            core_lead_id = core_api_bridge.sync_lead(lead, user)
-            if core_lead_id and lead.get("core_lead_id") != core_lead_id:
-                self.set_core_lead_id(lead_id, core_lead_id)
-        except Exception as mirror_error:
-            logger.warning("Failed to sync lead %s to core-api: %s", lead_id, mirror_error)
 
     def _sync_user_to_core(self, user_id: int) -> None:
         """Зеркалирует профиль и согласия пользователя в core-api."""

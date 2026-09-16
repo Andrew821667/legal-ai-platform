@@ -193,26 +193,23 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
             "username": user_data.get("username") or (user_row or {}).get("username"),
             "first_name": user_data.get("first_name") or (user_row or {}).get("first_name"),
         }
-        if core_api_bridge.enabled:
-            core_lead_id = core_api_bridge.sync_lead(legacy_lead, bridge_user_data)
-            if core_lead_id and legacy_lead.get("core_lead_id") != core_lead_id:
-                database.db.set_core_lead_id(lead_id, core_lead_id)
-                legacy_lead["core_lead_id"] = core_lead_id
-            if core_lead_id:
-                core_api_bridge.track_event(
-                    event_type="legacy_lead_notified",
-                    payload={
-                        "legacy_lead_id": lead_id,
-                        "is_update": is_update,
-                        "temperature": temperature,
-                        "service_category": legacy_lead.get("service_category"),
-                        "specific_need": legacy_lead.get("specific_need"),
-                    },
-                    idempotency_key=f"legacy-lead-notified-{lead_id}-{int(is_update)}",
-                    core_lead_id=core_lead_id,
-                )
-        core_snapshot = admin_interface.admin_interface.get_lead_snapshot_by_legacy_id(lead_id) or {}
-        lead = {**legacy_lead, **core_snapshot}
+        # Лид уже в ядре — это единственное место, где он живёт; зеркалить
+        # нечего, только отметить событие.
+        core_lead_id = legacy_lead.get("core_lead_id")
+        if core_api_bridge.enabled and core_lead_id:
+            core_api_bridge.track_event(
+                event_type="legacy_lead_notified",
+                payload={
+                    "legacy_lead_id": lead_id,
+                    "is_update": is_update,
+                    "temperature": temperature,
+                    "service_category": legacy_lead.get("service_category"),
+                    "specific_need": legacy_lead.get("specific_need"),
+                },
+                idempotency_key=f"legacy-lead-notified-{lead_id}-{int(is_update)}",
+                core_lead_id=core_lead_id,
+            )
+        lead = legacy_lead
         # Telegram-аккаунт — тоже контакт: по @имени или идентификатору с
         # человеком можно связаться. Раньше здесь ждали только почту или
         # телефон, и лиды из бота без них — в том числе те, кто нажал «Личное

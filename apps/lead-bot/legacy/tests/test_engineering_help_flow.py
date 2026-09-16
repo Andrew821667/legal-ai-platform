@@ -61,7 +61,7 @@ async def test_engineering_description_creates_an_intake_with_practice(monkeypat
         return {"id": "11111111-1111-1111-1111-111111111111"}
 
     monkeypatch.setattr(engineering_help.utils, "safe_reply_text", _reply)
-    monkeypatch.setattr(engineering_help.database.db, "create_new_local_lead", lambda user_id, payload: 77)
+    monkeypatch.setattr(engineering_help.database.db, "record_intake_lead", lambda user_id, core_lead_id, payload: 77)
     monkeypatch.setattr(engineering_help.database.db, "track_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(engineering_help.core_api_bridge, "create_legal_intake", _create)
 
@@ -104,7 +104,7 @@ async def test_hybrid_description_names_both_teams(monkeypatch: pytest.MonkeyPat
         replies.append(text)
 
     monkeypatch.setattr(engineering_help.utils, "safe_reply_text", _reply)
-    monkeypatch.setattr(engineering_help.database.db, "create_new_local_lead", lambda user_id, payload: 78)
+    monkeypatch.setattr(engineering_help.database.db, "record_intake_lead", lambda user_id, core_lead_id, payload: 78)
     monkeypatch.setattr(engineering_help.database.db, "track_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         engineering_help.core_api_bridge,

@@ -11,6 +11,7 @@ import database_chat_state
 import database_consent
 import database_conversations
 import database_knowledge
+import core_leads
 import database_leads
 import database_reporting
 import database_security
@@ -31,19 +32,6 @@ _USERS_COLUMNS = frozenset({
     "offer_profile_override",
     "created_at", "last_interaction",
 })
-
-_LEADS_COLUMNS = frozenset({
-    "user_id", "name", "email", "phone", "company",
-    "team_size", "contracts_per_month", "pain_point", "budget",
-    "urgency", "industry", "service_category", "specific_need",
-    "temperature", "status", "notes",
-    "core_lead_id",
-    "conversation_stage", "cta_variant", "cta_shown",
-    "lead_magnet_type", "lead_magnet_delivered",
-    "notification_sent", "last_message_at",
-    "created_at", "updated_at",
-})
-
 
 def _validate_columns(columns, allowed: frozenset, context: str) -> None:
     bad = set(columns) - allowed
@@ -466,10 +454,12 @@ class DatabaseFacadeMixin:
         Отзыв согласий + анонимизация ПД в анкете + удаление истории диалога.
         Возвращает сводку по измененным записям.
         """
+        # Лиды живут в ядре и обезличиваются там (gdpr-clear); здесь — только
+        # локальный запас на случай недоступности ядра, лидов в нём уже нет.
         return database_consent.revoke_user_consent_and_delete_data(
             self.get_connection,
             self._sync_user_to_core,
-            self._sync_lead_to_core,
+            lambda _lead_id: None,
             user_id=user_id,
         )
 
@@ -609,95 +599,67 @@ class DatabaseFacadeMixin:
         )
 
     # === LEADS ===
+    # Лиды живут только в ядре (см. core_leads). Таблица leads в SQLite
+    # больше не пишется и не читается — кроме одноразового переноса старых
+    # строк при старте (handover_leads_to_core).
+
+    @property
+    def leads(self):
+        store = getattr(self, "_lead_store", None)
+        if store is None:
+            store = core_leads.CoreLeadStore(
+                local_user_by_id=self.get_local_user_by_id,
+                local_user_by_telegram_id=self.get_local_user_by_telegram_id,
+            )
+            self._lead_store = store
+        return store
 
     def create_or_update_lead(self, user_id: int, lead_data: Dict) -> int:
-        """Создание или обновление лида"""
-        return database_leads.create_or_update_lead(
-            self.get_connection,
-            self._sync_lead_to_core,
-            _LEADS_COLUMNS,
-            user_id=user_id,
-            lead_data=lead_data,
-        )
+        """Обновляет последний лид аккаунта или заводит первый."""
+        return self.leads.create_or_update_lead(user_id, lead_data)
 
     def create_new_lead(self, user_id: int, lead_data: Dict) -> int:
-        """Принудительное создание нового лида, без merge с предыдущим."""
-        return database_leads.create_new_lead(
-            self.get_connection,
-            self._sync_lead_to_core,
-            _LEADS_COLUMNS,
-            user_id=user_id,
-            lead_data=lead_data,
-        )
+        """Новый лид, даже если у аккаунта уже есть: новое обращение — новый разговор."""
+        return self.leads.create_new_lead(user_id, lead_data)
 
     def create_new_local_lead(self, user_id: int, lead_data: Dict) -> int:
-        """Create a fallback lead without mirroring it as a generic core lead."""
-        return database_leads.create_new_lead(
-            self.get_connection,
-            lambda _lead_id: None,
-            _LEADS_COLUMNS,
-            user_id=user_id,
-            lead_data=lead_data,
-        )
+        """Оставлено для совместимости: «локальных» лидов больше нет, это новый лид в ядре."""
+        return self.leads.create_new_lead(user_id, lead_data)
+
+    def record_intake_lead(self, user_id: int, core_lead_id: Optional[str], lead_data: Dict) -> Optional[int]:
+        """Номер лида, к которому ядро привязало обращение (с дописанной квалификацией бота)."""
+        try:
+            return self.leads.record_intake_lead(user_id, core_lead_id, lead_data)
+        except core_leads.LeadStoreError as error:
+            logger.error("Lead for intake not recorded (user %s): %s", user_id, error)
+            return None
+
+    def update_lead_by_id(self, lead_id: int, lead_data: Dict) -> bool:
+        """Дописывает поля в конкретный лид (после обращения — квалификацию бота)."""
+        return self.leads.update_lead_by_id(lead_id, lead_data)
 
     def get_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
-        """Получение последнего лида по user_id"""
-        return database_leads.get_lead_by_user_id(
-            self.get_connection,
-            self.get_local_user_by_id,
-            self._merge_lead_row_with_core,
-            user_id=user_id,
-        )
+        """Последний лид аккаунта."""
+        return self.leads.get_lead_by_user_id(user_id)
 
     def get_local_lead_by_user_id(self, user_id: int) -> Optional[Dict]:
-        """Получение последнего лида по user_id без merge с core-api."""
-        return database_leads.get_local_lead_by_user_id(
-            self.get_connection,
-            user_id=user_id,
-        )
+        """То же, что get_lead_by_user_id: локальной копии больше нет."""
+        return self.leads.get_lead_by_user_id(user_id)
 
     def get_local_lead_by_id(self, lead_id: int) -> Optional[Dict]:
-        """Return one SQLite lead without reading core-api."""
-        return database_leads.get_local_lead_by_id(
-            self.get_connection,
-            lead_id=lead_id,
-        )
+        return self.leads.get_lead_by_id(lead_id)
 
     def mark_lead_notification_sent(self, lead_id: int):
-        """Persist delivery locally and in the core working record."""
-        database_leads.mark_lead_notification_sent(
-            self.get_connection,
-            lead_id=lead_id,
-        )
-        try:
-            from core_api_bridge import core_api_bridge
-
-            if not core_api_bridge.enabled:
-                return
-            lead = self.get_local_lead_by_id(lead_id)
-            core_id = (lead or {}).get("core_lead_id")
-            if core_id and core_api_bridge.mark_lead_notification_sent(core_id):
-                return
-            self._sync_lead_to_core(lead_id)
-        except Exception as error:
-            logger.warning("Failed to mark core lead %s as notified: %s", lead_id, error)
+        """Отмечает в ядре, что владелец о лиде уведомлён."""
+        if not self.leads.mark_lead_notification_sent(lead_id):
+            logger.warning("Failed to mark lead %s as notified in core-api", lead_id)
 
     def get_lead_by_id(self, lead_id: int) -> Optional[Dict]:
-        """Получение лида по lead_id"""
-        return database_leads.get_lead_by_id(
-            self.get_connection,
-            self.get_user_by_id,
-            self._merge_lead_row_with_core,
-            lead_id=lead_id,
-        )
+        return self.leads.get_lead_by_id(lead_id)
 
     def set_core_lead_id(self, lead_id: int, core_lead_id: str) -> None:
-        """Сохраняет UUID лида из core-api для legacy лида."""
-        database_leads.set_core_lead_id(
-            self.get_connection,
-            lead_id=lead_id,
-            core_lead_id=core_lead_id,
-        )
+        """Совместимость: связь номер ↔ UUID хранит само ядро."""
+        return None
 
     def get_all_leads(
         self,
@@ -706,75 +668,21 @@ class DatabaseFacadeMixin:
         limit: int = 100,
         offset: int = 0,
     ) -> List[Dict]:
-        """Получение всех лидов с фильтрами"""
-        return database_leads.get_all_leads(
-            self.get_connection,
-            temperature=temperature,
-            status=status,
-            limit=limit,
-            offset=offset,
-        )
+        return self.leads.get_all_leads(temperature=temperature, status=status, limit=limit, offset=offset)
 
     def get_leads_ready_for_notification(self, idle_minutes: int = 5) -> List[Dict]:
-        """
-        Получение лидов готовых к уведомлению:
-        - Прошло idle_minutes минут с последнего сообщения
-        - Уведомление еще не отправлено
-        - Лид теплый или горячий (или есть ключевые данные)
-        """
-        local_rows = database_leads.get_leads_ready_for_notification(
-            self.get_connection,
-            idle_minutes=idle_minutes,
+        """Очередь уведомлений владельцу — её ведёт ядро."""
+        return self.leads.get_leads_ready_for_notification(
+            idle_minutes=idle_minutes, limit=config.PENDING_LEADS_JOB_MAX_BATCH
         )
-        if not (config.CORE_API_SYNC_ENABLED and config.CORE_API_URL and config.API_KEY_BOT):
-            return local_rows
-
-        # Bring legacy-only rows into the working store before reading its queue.
-        for row in local_rows:
-            if row.get("id"):
-                self._sync_lead_to_core(row["id"])
-
-        core_rows = self._core_get_json(
-            "/api/v1/leads/notifications/pending",
-            {
-                "idle_minutes": idle_minutes,
-                "source_filter": "telegram_bot",
-                "limit": config.PENDING_LEADS_JOB_MAX_BATCH,
-            },
-        )
-        if not isinstance(core_rows, list):
-            logger.warning("Core lead notification queue is unavailable; delivery is deferred")
-            return []
-
-        ready: list[dict] = []
-        for core_row in core_rows:
-            legacy_id = core_row.get("legacy_lead_id")
-            if not legacy_id:
-                logger.warning("Core Telegram lead %s has no legacy id", core_row.get("id"))
-                continue
-            local = self.get_local_lead_by_id(int(legacy_id))
-            if not local:
-                logger.warning("Core lead %s has no local dialog state", core_row.get("id"))
-                continue
-            if local.get("notification_sent"):
-                self._sync_lead_to_core(int(legacy_id))
-                continue
-            local.update(
-                {
-                    key: value
-                    for key, value in self._map_core_lead(core_row).items()
-                    if value is not None
-                }
-            )
-            ready.append(local)
-        return ready
 
     def update_lead_last_message_time(self, user_id: int):
-        """Обновление времени последнего сообщения лида"""
-        database_leads.update_lead_last_message_time(
-            self.get_connection,
-            user_id=user_id,
-        )
+        """Отметка времени последнего сообщения — по ней ядро считает, что диалог затих."""
+        try:
+            self.leads.update_lead_last_message_time(user_id)
+        except core_leads.LeadStoreError as error:
+            # Нет лида — нечего отмечать; это не ошибка разговора.
+            logger.debug("last_message_at not updated for user %s: %s", user_id, error)
 
     def update_lead_funnel_state(
         self,
@@ -783,14 +691,12 @@ class DatabaseFacadeMixin:
         cta_variant: str = None,
         cta_shown: Optional[bool] = None,
     ) -> None:
-        """Синхронизация состояния воронки в таблице leads для последнего лида пользователя."""
-        database_leads.update_lead_funnel_state(
-            self.get_connection,
-            user_id=user_id,
-            conversation_stage=conversation_stage,
-            cta_variant=cta_variant,
-            cta_shown=cta_shown,
-        )
+        try:
+            self.leads.update_lead_funnel_state(
+                user_id, conversation_stage=conversation_stage, cta_variant=cta_variant, cta_shown=cta_shown
+            )
+        except core_leads.LeadStoreError as error:
+            logger.debug("funnel state not updated for user %s: %s", user_id, error)
 
     def update_lead_funnel_state_by_id(
         self,
@@ -799,14 +705,59 @@ class DatabaseFacadeMixin:
         cta_variant: str = None,
         cta_shown: Optional[bool] = None,
     ) -> None:
-        """Синхронизация состояния воронки для конкретного лида."""
-        database_leads.update_lead_funnel_state_by_id(
-            self.get_connection,
-            lead_id=lead_id,
-            conversation_stage=conversation_stage,
-            cta_variant=cta_variant,
-            cta_shown=cta_shown,
-        )
+        try:
+            self.leads.update_lead_funnel_state_by_id(
+                lead_id, conversation_stage=conversation_stage, cta_variant=cta_variant, cta_shown=cta_shown
+            )
+        except core_leads.LeadStoreError as error:
+            logger.debug("funnel state not updated for lead %s: %s", lead_id, error)
+
+    def handover_leads_to_core(self) -> Dict:
+        """Одноразовый перенос старых лидов из SQLite в ядро.
+
+        Строки, у которых уже есть core_lead_id, не трогаются. Остальные
+        ищутся в ядре по номеру; не найденные — присваиваются лиду того же
+        аккаунта без номера (его завело обращение) или заводятся заново с
+        датой из SQLite. В конце счётчик номеров в ядре сдвигается за
+        максимум SQLite, чтобы новые номера не пересеклись со старыми в
+        аналитике бота. Повторный запуск ничего не меняет.
+        """
+        rows = database_leads.list_local_leads(self.get_connection)
+        linked = created = failed = 0
+        for row in rows:
+            if row.get("core_lead_id"):
+                continue
+            try:
+                existing = self.leads.get_lead_by_id(int(row["id"]))
+                if existing and existing.get("core_lead_id"):
+                    core_id = str(existing["core_lead_id"])
+                    linked += 1
+                else:
+                    user = self.get_local_user_by_id(row["user_id"]) if row.get("user_id") else None
+                    core_id = self.leads.claim_or_create_from_legacy(row, (user or {}).get("telegram_id"))
+                    if not core_id:
+                        failed += 1
+                        continue
+                    created += 1
+                database_leads.set_core_lead_id(self.get_connection, lead_id=int(row["id"]), core_lead_id=core_id)
+            except core_leads.LeadStoreError as error:
+                failed += 1
+                logger.warning("Lead %s handover failed: %s", row.get("id"), error)
+        max_id = max((int(row["id"]) for row in rows), default=0)
+        next_id = None
+        # Счётчик двигаем один раз за жизнь процесса (и после каждого нового
+        # переноса): повторные вызовы ничего не меняют, но и дёргать ядро
+        # каждые десять минут незачем.
+        if max_id and (linked or created or not getattr(self, "_lead_sequence_handed_over", False)):
+            try:
+                next_id = self.leads.handover_sequence(max_id + 1)
+                self._lead_sequence_handed_over = True
+            except core_leads.LeadStoreError as error:
+                logger.warning("Lead sequence handover failed: %s", error)
+        summary = {"local": len(rows), "linked": linked, "created": created, "failed": failed, "next_id": next_id}
+        if linked or created or failed:
+            logger.info("Lead handover to core-api: %s", summary)
+        return summary
 
     def create_notification(self, lead_id: int, notification_type: str,
                             message: str) -> int:
@@ -872,8 +823,13 @@ class DatabaseFacadeMixin:
         Returns:
             Список словарей с полными диалогами и метаданными лидов
         """
+        # Лиды — из ядра; тёплые и горячие отдельно, чтобы не листать всех.
+        leads = self.leads.get_all_leads(temperature="hot", limit=limit + offset) + self.leads.get_all_leads(
+            temperature="warm", limit=limit + offset
+        )
         return database_knowledge.get_successful_conversations(
             self.get_connection,
+            leads,
             limit=limit,
             offset=offset,
         )
@@ -895,8 +851,10 @@ class DatabaseFacadeMixin:
         Returns:
             Список диалогов с метаданными
         """
+        leads = self.leads.get_all_leads(temperature=temperature, limit=500)
         return database_knowledge.get_conversations_by_category(
             self.get_connection,
+            leads,
             service_category=service_category,
             temperature=temperature,
             limit=limit,

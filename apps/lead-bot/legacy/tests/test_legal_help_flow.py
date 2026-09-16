@@ -32,10 +32,16 @@ async def test_legal_help_message_uses_dedicated_core_endpoint(monkeypatch: pyte
     def _create(payload, *, idempotency_key):
         captured["payload"] = payload
         captured["idempotency_key"] = idempotency_key
-        return {"id": "11111111-1111-1111-1111-111111111111"}
+        return {"id": "11111111-1111-1111-1111-111111111111", "lead_id": "22222222-2222-2222-2222-222222222222"}
+
+    def _record_intake_lead(user_id, core_lead_id, lead_data):
+        captured["lead_user_id"] = user_id
+        captured["core_lead_id"] = core_lead_id
+        captured["lead_data"] = lead_data
+        return 77
 
     monkeypatch.setattr(legal_help.utils, "safe_reply_text", _reply)
-    monkeypatch.setattr(legal_help.database.db, "create_new_local_lead", lambda user_id, payload: 77)
+    monkeypatch.setattr(legal_help.database.db, "record_intake_lead", _record_intake_lead)
     monkeypatch.setattr(legal_help.database.db, "track_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(legal_help.core_api_bridge, "create_legal_intake", _create)
 
@@ -67,6 +73,11 @@ async def test_legal_help_message_uses_dedicated_core_endpoint(monkeypatch: pyte
     assert captured["payload"]["client_type"] == "company"
     assert captured["payload"]["consent_accepted"] is True
     assert captured["payload"]["contact"] == "@example_user"
+    # Лид заводит обращение; бот дописывает в него свою квалификацию.
+    assert captured["lead_user_id"] == 10
+    assert captured["core_lead_id"] == "22222222-2222-2222-2222-222222222222"
+    assert captured["lead_data"]["temperature"] == "warm"
+    assert captured["lead_data"]["cta_variant"] == "legal_help"
     assert context.user_data.get(legal_help.LEGAL_HELP_MODE_KEY) is None
     assert "передано юристу" in replies[-1]
 
@@ -82,7 +93,9 @@ async def test_legal_help_keeps_local_fallback_and_notifies_admin(monkeypatch: p
         notifications.append(kwargs)
 
     monkeypatch.setattr(legal_help.utils, "safe_reply_text", _reply)
-    monkeypatch.setattr(legal_help.database.db, "create_new_local_lead", lambda user_id, payload: 88)
+    # Ядро не подтвердило обращение: лид всё же заводится отдельно (номер 88),
+    # а владелец получает текст обращения, чтобы разобрать его вручную.
+    monkeypatch.setattr(legal_help.database.db, "record_intake_lead", lambda user_id, core_lead_id, payload: 88)
     monkeypatch.setattr(legal_help.database.db, "track_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(legal_help.core_api_bridge, "create_legal_intake", lambda *args, **kwargs: None)
 
@@ -106,5 +119,6 @@ async def test_legal_help_keeps_local_fallback_and_notifies_admin(monkeypatch: p
 
     assert handled is True
     assert len(notifications) == 1
-    assert "СОХРАНЕНО В РЕЗЕРВЕ" in notifications[0]["text"]
+    assert "НЕ ДОШЛО ДО ЯДРА" in notifications[0]["text"]
     assert "tg:43" in notifications[0]["text"]
+    assert "Лид: 88" in notifications[0]["text"]
