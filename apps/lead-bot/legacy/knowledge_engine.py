@@ -21,12 +21,14 @@ class KnowledgeEngine:
     """Движок для семантического поиска похожих диалогов"""
     
     def __init__(self):
-        client_kwargs = {"api_key": config.OPENAI_API_KEY}
-        if config.OPENAI_BASE_URL:
-            client_kwargs["base_url"] = config.OPENAI_BASE_URL
-        self.client = OpenAI(**client_kwargs)
-        self.embedding_model = "text-embedding-3-small"  # Дешёвая и быстрая модель
-        logger.info("KnowledgeEngine initialized")
+        # Ключ общий (OPENAI_API_KEY), адрес — свой: эмбеддинги есть только у
+        # OpenAI, а общий OPENAI_BASE_URL с 16.09 указывает на DeepSeek (чат
+        # бота). До этой правки клиент наследовал DeepSeek-адрес и падал 404
+        # на каждом запросе эмбеддинга — RAG по диалогам был мёртв молча,
+        # ошибка ловилась и логировалась как некритичная.
+        self.client = OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.EMBEDDING_BASE_URL)
+        self.embedding_model = config.EMBEDDING_MODEL
+        logger.info("KnowledgeEngine initialized (embeddings base_url=%s)", config.EMBEDDING_BASE_URL)
     
     def get_embedding(self, text: str) -> List[float]:
         """
