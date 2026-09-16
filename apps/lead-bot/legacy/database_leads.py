@@ -55,6 +55,16 @@ def create_notification(
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        local_lead = cursor.execute(
+            "SELECT 1 FROM leads WHERE id = ?",
+            (lead_id,),
+        ).fetchone()
+        if not local_lead:
+            logger.debug(
+                "Skipping legacy notification journal for core-only lead %s",
+                lead_id,
+            )
+            return 0
         cursor.execute(
             """
             INSERT INTO admin_notifications (lead_id, notification_type, message)

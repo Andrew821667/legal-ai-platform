@@ -498,6 +498,64 @@ def test_lead_number_and_core_id_come_from_core(test_db, monkeypatch):
     assert lead["id"] == lead_id == core.leads[0]["legacy_lead_id"]
 
 
+def test_core_only_lead_does_not_break_local_analytics(test_db, monkeypatch):
+    """Core lead numbers must not be treated as SQLite foreign keys."""
+    install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(
+        telegram_id=10008,
+        username="analytics_core_lead",
+        first_name="Analytics",
+    )
+    lead_id = test_db.create_new_lead(user_id, {"name": "Core-only lead"})
+
+    event_id = test_db.track_event(
+        user_id,
+        "legal_help_submitted",
+        payload={"core_confirmed": True},
+        lead_id=lead_id,
+    )
+
+    conn = test_db.get_connection()
+    row = conn.execute(
+        "SELECT lead_id, event_type FROM analytics_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    conn.close()
+
+    assert event_id > 0
+    assert row["event_type"] == "legal_help_submitted"
+    assert row["lead_id"] is None
+
+
+def test_core_only_lead_skips_legacy_notification_journal(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(
+        telegram_id=10009,
+        username="notification_core_lead",
+        first_name="Notification",
+    )
+    lead_id = test_db.create_new_lead(user_id, {"name": "Core-only lead"})
+
+    notification_id = test_db.create_notification(lead_id, "new_lead", "sent")
+
+    conn = test_db.get_connection()
+    count = conn.execute("SELECT COUNT(*) FROM admin_notifications").fetchone()[0]
+    conn.close()
+
+    assert notification_id == 0
+    assert count == 0
+
+
+def test_local_analytics_failure_does_not_break_client_flow(test_db):
+    event_id = test_db.track_event(
+        999999,
+        "client_message",
+        payload={"source": "telegram"},
+    )
+
+    assert event_id == 0
+
+
 def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db, monkeypatch):
     """Локальный сброс: переписка, события, согласия. Лиды сбрасывает ядро (reset-new)."""
     install_fake_core(monkeypatch, test_db)

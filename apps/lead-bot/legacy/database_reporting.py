@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import time
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -23,21 +24,29 @@ def track_event(
     """Persist analytics event locally and mirror it to core-api when possible."""
     conn = get_connection()
     cursor = conn.cursor()
+    event_row_id = 0
     try:
         payload_text = json.dumps(payload or {}, ensure_ascii=False)
+        local_lead_id = None
+        if lead_id is not None:
+            local_lead = cursor.execute(
+                "SELECT 1 FROM leads WHERE id = ?",
+                (lead_id,),
+            ).fetchone()
+            if local_lead:
+                local_lead_id = lead_id
         cursor.execute(
             """
             INSERT INTO analytics_events (user_id, lead_id, event_type, event_payload)
             VALUES (?, ?, ?, ?)
             """,
-            (user_id, lead_id, event_type, payload_text),
+            (user_id, local_lead_id, event_type, payload_text),
         )
         conn.commit()
         event_row_id = cursor.lastrowid
     except Exception as error:
         logger.error("Error tracking analytics event: %s", error)
         conn.rollback()
-        raise
     finally:
         conn.close()
 
@@ -56,7 +65,11 @@ def track_event(
                 "legacy_user_id": user_id,
                 "legacy_lead_id": lead_id,
             },
-            idempotency_key=f"legacy-event-sync-{event_row_id}",
+            idempotency_key=(
+                f"legacy-event-sync-{event_row_id}"
+                if event_row_id
+                else f"legacy-event-fallback-{user_id}-{time.time_ns()}"
+            ),
             core_lead_id=core_lead_id,
         )
     except Exception as mirror_error:
