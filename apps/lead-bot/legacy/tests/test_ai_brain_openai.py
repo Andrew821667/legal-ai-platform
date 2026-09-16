@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 import ai_brain as ai_brain_module
+import prompts
 
 
 @dataclass
@@ -133,6 +134,81 @@ async def test_extract_lead_data_async_parses_fenced_json(monkeypatch: pytest.Mo
     )
     token_key = next(iter(token_kwargs))
     assert calls[0][token_key] == token_kwargs[token_key]
+
+
+@pytest.mark.anyio
+async def test_classify_intent_async_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    calls: list[dict[str, Any]] = []
+    brain.async_client = _FakeClient(
+        _FakeAsyncCompletions('{"intent": "platform_question", "confidence": 0.87}', calls)
+    )
+
+    result = await brain.classify_intent_async(
+        [{"role": "user", "message": "А сколько стоит ваша система для юротдела?"}]
+    )
+
+    assert result == {"intent": "platform_question", "confidence": 0.87}
+    assert len(calls) == 1
+    sent_messages = calls[0]["messages"]
+    assert sent_messages[0]["content"] == prompts.INTENT_ROUTER_PROMPT
+    token_kwargs = brain._completion_token_kwargs(minimum=ai_brain_module._INTENT_CLASSIFICATION_MIN_TOKENS)
+    token_key = next(iter(token_kwargs))
+    assert calls[0][token_key] == token_kwargs[token_key]
+
+
+@pytest.mark.anyio
+async def test_classify_intent_async_handles_fenced_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    brain.async_client = _FakeClient(
+        _FakeAsyncCompletions('```json\n{"intent": "browsing", "confidence": 0.6}\n```', [])
+    )
+
+    result = await brain.classify_intent_async([{"role": "user", "message": "Привет"}])
+
+    assert result == {"intent": "browsing", "confidence": 0.6}
+
+
+@pytest.mark.anyio
+async def test_classify_intent_async_returns_none_on_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+
+    class _Boom:
+        async def create(self, **kwargs):
+            raise RuntimeError("llm down")
+
+    brain.async_client = _FakeClient(_Boom())
+
+    result = await brain.classify_intent_async([{"role": "user", "message": "Привет"}])
+
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_classify_intent_async_returns_none_on_garbage_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    brain.async_client = _FakeClient(_FakeAsyncCompletions("не json совсем", []))
+
+    result = await brain.classify_intent_async([{"role": "user", "message": "Привет"}])
+
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_classify_intent_async_only_sends_recent_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Классификация — по последним репликам, а не по всей истории диалога."""
+    brain = _make_brain(monkeypatch)
+    calls: list[dict[str, Any]] = []
+    brain.async_client = _FakeClient(
+        _FakeAsyncCompletions('{"intent": "sales_conversation", "confidence": 0.9}', calls)
+    )
+
+    long_history = [{"role": "user", "message": f"сообщение {i}"} for i in range(20)]
+    await brain.classify_intent_async(long_history)
+
+    sent_text = calls[0]["messages"][1]["content"]
+    assert "сообщение 0" not in sent_text
+    assert "сообщение 19" in sent_text
 
 
 def test_lead_extraction_token_budget_has_reasoning_headroom(
