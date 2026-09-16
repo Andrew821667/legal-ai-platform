@@ -64,6 +64,8 @@ def init_database(get_connection: Callable[[], sqlite3.Connection], logger: logg
 
         cursor.execute(
             """
+            -- Лиды живут в Core API (см. core_leads). Таблица осталась ради
+            -- одноразового переноса старых строк и журнала уведомлений по номеру.
             CREATE TABLE IF NOT EXISTS leads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,

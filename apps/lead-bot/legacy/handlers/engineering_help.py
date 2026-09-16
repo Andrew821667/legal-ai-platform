@@ -241,7 +241,7 @@ def _contact_for(user: User) -> str:
 async def _notify_admin_fallback(
     context: ContextTypes.DEFAULT_TYPE,
     *,
-    lead_id: int,
+    lead_id: int | None,
     user: User,
     practice: str,
     category: str,
@@ -250,13 +250,13 @@ async def _notify_admin_fallback(
 ) -> None:
     chat_id = config.LEADS_CHAT_ID or config.ADMIN_TELEGRAM_ID
     text = (
-        f"{PRACTICE_TITLE[practice].upper()}: ОБРАЩЕНИЕ СОХРАНЕНО В РЕЗЕРВЕ\n\n"
+        f"{PRACTICE_TITLE[practice].upper()}: ОБРАЩЕНИЕ НЕ ДОШЛО ДО ЯДРА — РАЗОБРАТЬ ВРУЧНУЮ\n\n"
         f"Задача: {CATEGORIES_BY_PRACTICE[practice].get(category, category)}\n"
         f"Клиент: {_CLIENT_TYPES.get(client_type, _CLIENT_TYPES['unknown'])}\n"
         f"Имя: {user.full_name or user.first_name or 'не указано'}\n"
         f"Контакт: {_contact_for(user)}\n\n"
         f"Описание:\n{description[:1000]}\n\n"
-        f"Локальный ID: {lead_id}"
+        f"Лид: {lead_id if lead_id else 'не записан — ядро недоступно'}"
     )
     try:
         await utils.telegram_call_with_retry(
@@ -304,7 +304,6 @@ async def maybe_handle_message(
         "cta_shown": 1,
         "notes": f"[{practice.upper()}_HELP] category={category} client_type={client_type}",
     }
-    lead_id = database.db.create_new_local_lead(user_data["id"], local_payload)
     payload = {
         "source": "telegram_bot",
         "telegram_user_id": user.id,
@@ -316,7 +315,7 @@ async def maybe_handle_message(
         "category": category,
         "description": description[:4000],
         "urgency": "no_deadline",
-        "source_context": f"legacy_lead_id={lead_id};entry=lead_bot",
+        "source_context": "entry=lead_bot",
         "consent_accepted": True,
         "consent_version": "engineering-help-v1",
         "consent_at": created_at,
@@ -326,8 +325,16 @@ async def maybe_handle_message(
         payload,
         idempotency_key=f"engineering-help-tg-{user.id}-{update.effective_message.message_id}",
     )
+    # Лид заводит само обращение; боту остаётся дописать квалификацию и
+    # взять номер (см. legal_help — тот же порядок).
+    lead_id = await asyncio.to_thread(
+        database.db.record_intake_lead,
+        user_data["id"],
+        (result or {}).get("lead_id"),
+        local_payload,
+    )
     if result is None:
-        logger.warning("Engineering intake %s saved locally because core-api did not confirm it", lead_id)
+        logger.warning("Engineering intake for user %s was not confirmed by core-api (lead %s)", user.id, lead_id)
         await _notify_admin_fallback(
             context,
             lead_id=lead_id,

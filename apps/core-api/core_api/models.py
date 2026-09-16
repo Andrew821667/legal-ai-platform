@@ -13,10 +13,13 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
+    select,
 )
 from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import UUID
@@ -350,6 +353,10 @@ class Lead(Base):
         Boolean, nullable=False, default=False, server_default=sa_text("false")
     )
     notification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Квалификация из бота: размер команды и объём договоров в месяц.
+    # Раньше жили только в SQLite бота — ядро теперь единственное место.
+    team_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    contracts_per_month: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
@@ -368,6 +375,20 @@ class Lead(Base):
         Index("ix_leads_temperature", "temperature"),
         Index("ix_leads_pending_notification", "notification_sent", "last_message_at"),
     )
+
+
+# Номер лида для бота. Раньше его выдавал SQLite бота (autoincrement), а ядро
+# лишь запоминало «legacy_lead_id». Теперь лиды живут только в ядре, и номер
+# выдаёт оно: обработчики, кнопки и аналитика бота по-прежнему держат в руках
+# небольшое целое, а не UUID. Только для лидов из Telegram: у заявок с сайта
+# такого номера никогда не было, и он им не нужен.
+LEGACY_LEAD_ID_SEQ = Sequence("lead_legacy_id_seq", metadata=Base.metadata)
+
+
+@event.listens_for(Lead, "before_insert")
+def _assign_legacy_lead_id(mapper, connection, target: Lead) -> None:
+    if target.legacy_lead_id is None and target.source == LeadSource.telegram_bot:
+        target.legacy_lead_id = connection.scalar(select(LEGACY_LEAD_ID_SEQ.next_value()))
 
 
 class NdaPersonalDataConsent(Base):

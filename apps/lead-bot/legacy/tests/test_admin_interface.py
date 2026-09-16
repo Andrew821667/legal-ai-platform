@@ -5,6 +5,7 @@ import pytest
 
 import admin_interface
 from database import Database
+from tests.fake_core import install as install_fake_core
 
 
 @pytest.fixture
@@ -18,6 +19,7 @@ def test_db():
 
 
 def test_get_user_snapshot_prefers_core_lead(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     user_id = test_db.create_or_update_user(
         telegram_id=555000111,
         username="snapshot_user",
@@ -81,6 +83,7 @@ def test_get_user_snapshot_prefers_core_lead(test_db, monkeypatch):
 
 
 def test_get_lead_snapshot_by_legacy_id_prefers_core(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     user_id = test_db.create_or_update_user(
         telegram_id=555000222,
         username="legacy_id_user",
@@ -218,7 +221,8 @@ def test_get_recent_users_and_total_prefers_core(test_db, monkeypatch):
     assert total == 42
 
 
-def test_format_leads_list_supports_offset(test_db):
+def test_format_leads_list_supports_offset(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     interface = admin_interface.AdminInterface(test_db)
 
     user_a = test_db.create_or_update_user(telegram_id=555800001, username="l1", first_name="L1")

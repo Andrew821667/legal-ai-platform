@@ -137,6 +137,29 @@ class LeadCreate(LeadCreateBase):
     status: LeadStatus = LeadStatus.new
     last_message_at: datetime | None = None
     notification_sent: bool | None = None
+    team_size: str | None = None
+    contracts_per_month: str | None = None
+    # Дата обращения при переносе старых лидов: только для новой строки,
+    # у существующей дата остаётся своя.
+    created_at: datetime | None = None
+    # Управление upsert'ом, в строку лида не попадает (см. LEAD_UPSERT_FLAGS):
+    # force_new — новый лид, даже если у этого Telegram-аккаунта уже есть;
+    # update_only — только обновить найденный, без создания (404, если нет);
+    # claim_unlinked — при переносе из SQLite бота: присвоить legacy_lead_id
+    # лиду того же аккаунта, у которого номера ещё нет, а не заводить второй.
+    force_new: bool = False
+    update_only: bool = False
+    claim_unlinked: bool = False
+
+
+LEAD_UPSERT_FLAGS = frozenset({"force_new", "update_only", "claim_unlinked", "created_at"})
+
+
+class LegacySequenceHandover(BaseModel):
+    # Следующий номер лида должен быть не меньше этого: бот при переносе
+    # сообщает максимум из своей SQLite, чтобы новые номера не пересеклись
+    # со старыми в его собственной аналитике.
+    min_next: int = Field(ge=1, le=1_000_000_000)
 
 
 class LeadPatch(BaseModel):
@@ -163,6 +186,8 @@ class LeadPatch(BaseModel):
     notes: str | None = None
     last_message_at: datetime | None = None
     notification_sent: bool | None = None
+    team_size: str | None = None
+    contracts_per_month: str | None = None
 
 
 class LeadOut(BaseModel):
@@ -202,6 +227,8 @@ class LeadOut(BaseModel):
     last_message_at: datetime | None = None
     notification_sent: bool = False
     notification_sent_at: datetime | None = None
+    team_size: str | None = None
+    contracts_per_month: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -7,6 +7,7 @@ import os
 import time
 import json
 from database import Database
+from tests.fake_core import install as install_fake_core
 
 
 @pytest.fixture
@@ -112,110 +113,58 @@ def test_cleanup_conversations_by_retention(test_db):
     assert history[0]["message"] == "Fresh message"
 
 
-def test_create_lead(test_db):
-    """Проверка создания лида"""
-    # Создаем пользователя
-    user_id = test_db.create_or_update_user(
-        telegram_id=123456789,
-        username="testuser",
-        first_name="Test"
-    )
+def test_create_lead(test_db, monkeypatch):
+    """Лид пишется в ядро и читается оттуда же; номер выдаёт ядро."""
+    core = install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(telegram_id=123456789, username="testuser", first_name="Test")
 
-    # Создаем лид
-    lead_data = {
-        'name': 'Test Lead',
-        'email': 'test@example.com',
-        'temperature': 'hot'
-    }
-    lead_id = test_db.create_or_update_lead(user_id, lead_data)
+    lead_id = test_db.create_or_update_lead(user_id, {"name": "Test Lead", "email": "test@example.com", "temperature": "hot"})
 
-    assert lead_id > 0, "Лид не создан"
-
-    # Проверяем что лид сохранен
+    assert lead_id > 0
+    assert core.leads[0]["telegram_user_id"] == 123456789
     lead = test_db.get_lead_by_user_id(user_id)
-    assert lead is not None, "Лид не найден"
-    assert lead['name'] == 'Test Lead'
-    assert lead['email'] == 'test@example.com'
-    assert lead['temperature'] == 'hot'
+    assert lead is not None
+    assert lead["id"] == lead_id
+    assert lead["user_id"] == user_id
+    assert lead["core_lead_id"] == core.leads[0]["id"]
+    assert lead["name"] == "Test Lead"
+    assert lead["email"] == "test@example.com"
+    assert lead["temperature"] == "hot"
+    # В SQLite ни одной строки лида не появилось.
+    conn = test_db.get_connection()
+    assert conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0] == 0
+    conn.close()
 
 
 def test_pending_leads_are_read_from_core_working_queue(test_db, monkeypatch):
-    import database as database_module
+    """Очередь уведомлений — в ядре: бот берёт готовые лиды оттуда с номером и UUID."""
+    from datetime import datetime, timedelta, timezone
 
-    user_id = test_db.create_or_update_user(
-        telegram_id=321001,
-        username="pending",
-        first_name="Pending",
-    )
+    core = install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(telegram_id=321001, username="pending", first_name="Pending")
     lead_id = test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Pending Lead",
-            "temperature": "warm",
-            "pain_point": "Нужна автоматизация",
-        },
+        user_id, {"name": "Pending Lead", "temperature": "warm", "pain_point": "Нужна автоматизация"}
     )
     test_db.update_lead_last_message_time(user_id)
-    conn = test_db.get_connection()
-    conn.execute(
-        "UPDATE leads SET last_message_at = datetime('now', '-10 minutes') WHERE id = ?",
-        (lead_id,),
-    )
-    conn.commit()
-    conn.close()
-    calls = []
-
-    monkeypatch.setattr(database_module.config, "CORE_API_SYNC_ENABLED", True)
-    monkeypatch.setattr(database_module.config, "CORE_API_URL", "http://core-api.test")
-    monkeypatch.setattr(database_module.config, "API_KEY_BOT", "fake-core-key")
-    monkeypatch.setattr(test_db, "_sync_lead_to_core", lambda value: calls.append(value))
-    monkeypatch.setattr(
-        test_db,
-        "_core_get_json",
-        lambda path, params: [{
-            "id": "11111111-1111-1111-1111-111111111111",
-            "legacy_lead_id": lead_id,
-            "telegram_user_id": 321001,
-            "name": "Core Pending Lead",
-            "temperature": "hot",
-            "last_message_at": "2026-09-13T10:00:00Z",
-            "notification_sent": False,
-        }] if path == "/api/v1/leads/notifications/pending"
-        and params["source_filter"] == "telegram_bot" else None,
-    )
+    assert core.leads[0]["last_message_at"] is not None
+    core.leads[0]["last_message_at"] = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
 
     rows = test_db.get_leads_ready_for_notification(idle_minutes=1)
 
-    assert calls == [lead_id]
     assert len(rows) == 1
     assert rows[0]["id"] == lead_id
-    assert rows[0]["core_lead_id"] == "11111111-1111-1111-1111-111111111111"
-    assert rows[0]["name"] == "Core Pending Lead"
-    assert rows[0]["temperature"] == "hot"
+    assert rows[0]["user_id"] == user_id
+    assert rows[0]["core_lead_id"] == core.leads[0]["id"]
+    assert rows[0]["name"] == "Pending Lead"
+
+    test_db.mark_lead_notification_sent(lead_id)
+    assert core.notified == [core.leads[0]["id"]]
+    assert test_db.get_leads_ready_for_notification(idle_minutes=1) == []
 
 
 def test_pending_lead_delivery_waits_when_core_queue_is_unavailable(test_db, monkeypatch):
-    import database as database_module
-
-    user_id = test_db.create_or_update_user(telegram_id=321002, first_name="Deferred")
-    lead_id = test_db.create_or_update_lead(
-        user_id,
-        {"name": "Deferred Lead", "temperature": "warm", "pain_point": "Есть задача"},
-    )
-    test_db.update_lead_last_message_time(user_id)
-    conn = test_db.get_connection()
-    conn.execute(
-        "UPDATE leads SET last_message_at = datetime('now', '-10 minutes') WHERE id = ?",
-        (lead_id,),
-    )
-    conn.commit()
-    conn.close()
-
-    monkeypatch.setattr(database_module.config, "CORE_API_SYNC_ENABLED", True)
-    monkeypatch.setattr(database_module.config, "CORE_API_URL", "http://core-api.test")
-    monkeypatch.setattr(database_module.config, "API_KEY_BOT", "fake-core-key")
-    monkeypatch.setattr(test_db, "_sync_lead_to_core", lambda _value: None)
-    monkeypatch.setattr(test_db, "_core_get_json", lambda _path, _params: None)
+    core = install_fake_core(monkeypatch, test_db)
+    core.down = True
 
     assert test_db.get_leads_ready_for_notification(idle_minutes=1) == []
 
@@ -423,8 +372,9 @@ def test_security_action_events_incidents_and_quarantine(test_db):
     assert test_db.get_security_quarantine_entry(telegram_user_id) is None
 
 
-def test_consent_flow_and_data_export(test_db):
+def test_consent_flow_and_data_export(test_db, monkeypatch):
     """Проверка цикла согласия/экспорта/отзыва согласия."""
+    install_fake_core(monkeypatch, test_db)
     user_id = test_db.create_or_update_user(
         telegram_id=777000111,
         username="consent_user",
@@ -455,46 +405,30 @@ def test_consent_flow_and_data_export(test_db):
     assert payload["consent"]["consent_given"] is True
     assert payload["consent"]["transborder_consent"] is True
 
+    # Локальный запас на случай недоступности ядра: согласия и переписка.
+    # Сам лид обезличивает ядро (gdpr-clear) — это его данные.
     cleanup = test_db.revoke_user_consent_and_delete_data(user_id)
     assert cleanup["users_updated"] == 1
     assert cleanup["messages_deleted"] >= 1
-
-    lead_after = test_db.get_lead_by_user_id(user_id)
-    assert lead_after["email"] is None
-    assert lead_after["phone"] is None
+    assert cleanup["leads_anonymized"] == 0
 
 
-def test_get_successful_conversations_returns_grouped_messages(test_db):
-    """RAG-выборка должна возвращать диалоги без потери сообщений."""
-    first_user_id = test_db.create_or_update_user(
-        telegram_id=10001,
-        username="rag_user_1",
-        first_name="Rag",
-    )
-    second_user_id = test_db.create_or_update_user(
-        telegram_id=10002,
-        username="rag_user_2",
-        first_name="RagTwo",
-    )
+def test_get_successful_conversations_returns_grouped_messages(test_db, monkeypatch):
+    """RAG-выборка: лиды из ядра, переписка из SQLite, ничего не теряется."""
+    install_fake_core(monkeypatch, test_db)
+    first_user_id = test_db.create_or_update_user(telegram_id=10001, username="rag_user_1", first_name="Rag")
+    second_user_id = test_db.create_or_update_user(telegram_id=10002, username="rag_user_2", first_name="RagTwo")
+    cold_user_id = test_db.create_or_update_user(telegram_id=10009, username="rag_cold", first_name="Cold")
 
     test_db.create_or_update_lead(
         first_user_id,
-        {
-            "name": "Rag User 1",
-            "temperature": "warm",
-            "service_category": "contracts",
-            "pain_point": "Долго согласуем договоры",
-        },
+        {"name": "Rag User 1", "temperature": "warm", "service_category": "contracts", "pain_point": "Долго согласуем договоры"},
     )
     test_db.create_or_update_lead(
         second_user_id,
-        {
-            "name": "Rag User 2",
-            "temperature": "hot",
-            "service_category": "claims",
-            "pain_point": "Большой поток претензий",
-        },
+        {"name": "Rag User 2", "temperature": "hot", "service_category": "claims", "pain_point": "Большой поток претензий"},
     )
+    test_db.create_or_update_lead(cold_user_id, {"name": "Cold", "temperature": "cold", "pain_point": "Просто смотрю"})
 
     test_db.add_message(first_user_id, "user", "Первое сообщение")
     test_db.add_message(first_user_id, "assistant", "Ответ ассистента")
@@ -504,16 +438,12 @@ def test_get_successful_conversations_returns_grouped_messages(test_db):
 
     assert len(result) == 2
     by_user = {item["user_id"]: item for item in result}
-    assert [msg["message"] for msg in by_user[first_user_id]["messages"]] == [
-        "Первое сообщение",
-        "Ответ ассистента",
-    ]
-    assert [msg["message"] for msg in by_user[second_user_id]["messages"]] == [
-        "Второе сообщение",
-    ]
+    assert [msg["message"] for msg in by_user[first_user_id]["messages"]] == ["Первое сообщение", "Ответ ассистента"]
+    assert [msg["message"] for msg in by_user[second_user_id]["messages"]] == ["Второе сообщение"]
 
 
-def test_get_all_leads_supports_offset_pagination(test_db):
+def test_get_all_leads_supports_offset_pagination(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     user_a = test_db.create_or_update_user(telegram_id=12001, username="l_a", first_name="A")
     user_b = test_db.create_or_update_user(telegram_id=12002, username="l_b", first_name="B")
     user_c = test_db.create_or_update_user(telegram_id=12003, username="l_c", first_name="C")
@@ -529,7 +459,8 @@ def test_get_all_leads_supports_offset_pagination(test_db):
     assert [item["id"] for item in page2] == [lead_a]
 
 
-def test_get_successful_conversations_supports_offset(test_db):
+def test_get_successful_conversations_supports_offset(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     user_a = test_db.create_or_update_user(telegram_id=13001, username="rag_a", first_name="RagA")
     user_b = test_db.create_or_update_user(telegram_id=13002, username="rag_b", first_name="RagB")
     user_c = test_db.create_or_update_user(telegram_id=13003, username="rag_c", first_name="RagC")
@@ -553,27 +484,23 @@ def test_get_successful_conversations_supports_offset(test_db):
     assert len(page1) == 2
     assert len(page2) == 1
 
-def test_set_core_lead_id_persists_mapping(test_db):
-    user_id = test_db.create_or_update_user(
-        telegram_id=10003,
-        username="core_sync_user",
-        first_name="Core",
-    )
-    lead_id = test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Core Sync",
-            "temperature": "warm",
-        },
-    )
+
+def test_lead_number_and_core_id_come_from_core(test_db, monkeypatch):
+    """Связь номер ↔ UUID хранит ядро; set_core_lead_id оставлен пустым для совместимости."""
+    core = install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(telegram_id=10003, username="core_sync_user", first_name="Core")
+    lead_id = test_db.create_or_update_lead(user_id, {"name": "Core Sync", "temperature": "warm"})
 
     test_db.set_core_lead_id(lead_id, "11111111-1111-1111-1111-111111111111")
 
     lead = test_db.get_lead_by_id(lead_id)
-    assert lead["core_lead_id"] == "11111111-1111-1111-1111-111111111111"
+    assert lead["core_lead_id"] == core.leads[0]["id"]
+    assert lead["id"] == lead_id == core.leads[0]["legacy_lead_id"]
 
 
-def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db):
+def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db, monkeypatch):
+    """Локальный сброс: переписка, события, согласия. Лиды сбрасывает ядро (reset-new)."""
+    install_fake_core(monkeypatch, test_db)
     user_id = test_db.create_or_update_user(
         telegram_id=10005,
         username="reset_user",
@@ -582,20 +509,12 @@ def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db):
     )
     test_db.grant_user_consent(user_id)
     test_db.set_user_transborder_consent(user_id, True)
-    test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Reset Candidate",
-            "email": "reset@example.com",
-            "phone": "+79001234567",
-        },
-    )
     test_db.add_message(user_id, "user", "старое сообщение")
     test_db.track_event(user_id, "stage_changed", payload={"from": "discover", "to": "diagnose"})
 
     result = test_db.reset_user_to_new_state(user_id)
     assert result["users_reset"] == 1
-    assert result["leads_deleted"] >= 1
+    assert result["leads_deleted"] == 0
     assert result["messages_deleted"] >= 1
     assert result["events_deleted"] >= 1
 
@@ -604,30 +523,23 @@ def test_reset_user_to_new_state_keeps_profile_and_clears_data(test_db):
     assert bool(user["consent_given"]) is False
     assert bool(user["transborder_consent"]) is False
     assert user["conversation_stage"] == "discover"
-    assert test_db.get_lead_by_user_id(user_id) is None
     assert test_db.get_conversation_history(user_id) == []
 
 
-def test_delete_user_completely_removes_profile_and_related_data(test_db):
+def test_delete_user_completely_removes_profile_and_related_data(test_db, monkeypatch):
+    install_fake_core(monkeypatch, test_db)
     user_id = test_db.create_or_update_user(
         telegram_id=10006,
         username="delete_user",
         first_name="Delete",
         last_name="Candidate",
     )
-    test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Delete Candidate",
-            "email": "delete@example.com",
-        },
-    )
     test_db.add_message(user_id, "user", "какой-то диалог")
     test_db.track_event(user_id, "cta_clicked", payload={"variant": "a"})
 
     result = test_db.delete_user_completely(user_id)
     assert result["users_deleted"] == 1
-    assert result["leads_deleted"] >= 1
+    assert result["leads_deleted"] == 0
     assert result["messages_deleted"] >= 1
     assert result["events_deleted"] >= 1
 
@@ -635,37 +547,25 @@ def test_delete_user_completely_removes_profile_and_related_data(test_db):
     assert test_db.get_user_by_telegram_id(10006) is None
 
 
-def test_create_or_update_lead_syncs_to_core_bridge(test_db, monkeypatch):
-    user_id = test_db.create_or_update_user(
-        telegram_id=10004,
-        username="bridge_user",
-        first_name="Bridge",
-    )
-
-    class StubBridge:
-        enabled = True
-
-        @staticmethod
-        def sync_lead(lead, user):
-            assert lead["user_id"] == user_id
-            assert user["telegram_id"] == 10004
-            return "22222222-2222-2222-2222-222222222222"
-
-    import core_api_bridge
-
-    monkeypatch.setattr(core_api_bridge, "core_api_bridge", StubBridge())
+def test_create_or_update_lead_writes_to_core_only(test_db, monkeypatch):
+    """Обновление идёт в последний лид аккаунта; новый лид — только явно."""
+    core = install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(telegram_id=10004, username="bridge_user", first_name="Bridge")
 
     lead_id = test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Bridge Lead",
-            "temperature": "warm",
-            "pain_point": "Нужен sync в core-api",
-        },
+        user_id, {"name": "Bridge Lead", "temperature": "warm", "pain_point": "Нужен sync в core-api"}
     )
+    same_id = test_db.create_or_update_lead(user_id, {"email": "bridge@example.com", "lead_temperature": "hot"})
+    assert same_id == lead_id
+    assert len(core.leads) == 1
+    assert core.leads[0]["email"] == "bridge@example.com"
+    assert core.leads[0]["temperature"] == "hot"
+    assert core.leads[0]["pain_point"] == "Нужен sync в core-api"
 
-    lead = test_db.get_lead_by_id(lead_id)
-    assert lead["core_lead_id"] == "22222222-2222-2222-2222-222222222222"
+    new_id = test_db.create_new_lead(user_id, {"name": "Второе обращение"})
+    assert new_id != lead_id
+    assert len(core.leads) == 2
+    assert test_db.get_lead_by_user_id(user_id)["id"] == new_id
 
 
 def test_create_or_update_user_syncs_to_core_bridge(test_db, monkeypatch):
@@ -735,46 +635,22 @@ def test_get_user_by_telegram_id_prefers_core_snapshot(test_db, monkeypatch):
     assert bool(user["transborder_consent"]) is True
 
 
-def test_get_lead_by_user_id_prefers_core_snapshot(test_db, monkeypatch):
-    user_id = test_db.create_or_update_user(
-        telegram_id=10007,
-        username="lead_local",
-        first_name="Lead",
-    )
-    lead_id = test_db.create_or_update_lead(
-        user_id,
-        {
-            "name": "Local Lead",
-            "company": "Local Co",
-            "temperature": "cold",
-        },
-    )
+def test_lead_reads_are_cached_briefly_and_refreshed_after_write(test_db, monkeypatch):
+    core = install_fake_core(monkeypatch, test_db)
+    user_id = test_db.create_or_update_user(telegram_id=10007, username="lead_local", first_name="Lead")
+    test_db.create_or_update_lead(user_id, {"name": "Local Lead", "company": "Local Co", "temperature": "cold"})
 
-    def _fake_core(path, params=None):
-        if path == "/api/v1/users" and params and params.get("telegram_id") == 10007:
-            return [{"telegram_id": 10007, "username": "lead_local"}]
-        if path == "/api/v1/leads" and params and params.get("legacy_lead_id") == lead_id:
-            return [
-                {
-                    "id": "core-lead-10007",
-                    "name": "Core Lead",
-                    "company": "Core Co",
-                    "temperature": "hot",
-                    "status": "qualified",
-                    "lead_magnet_delivered": True,
-                }
-            ]
-        return None
+    first = test_db.get_lead_by_user_id(user_id)
+    reads_before = len([call for call in core.calls if call[0] == "GET"])
+    second = test_db.get_lead_by_user_id(user_id)
+    reads_after = len([call for call in core.calls if call[0] == "GET"])
+    assert first == second
+    assert reads_after == reads_before  # повторное чтение — из кэша
 
-    monkeypatch.setattr(test_db, "_core_get_json", _fake_core)
-
-    lead = test_db.get_lead_by_user_id(user_id)
-
-    assert lead is not None
-    assert lead["name"] == "Core Lead"
-    assert lead["company"] == "Core Co"
-    assert lead["temperature"] == "hot"
-    assert lead["core_lead_id"] == "core-lead-10007"
+    test_db.update_lead_funnel_state(user_id, conversation_stage="qualify", cta_shown=True)
+    refreshed = test_db.get_lead_by_user_id(user_id)
+    assert refreshed["conversation_stage"] == "qualify"
+    assert refreshed["cta_shown"] == 1
 
 
 def test_core_get_json_uses_short_cache(test_db, monkeypatch):
