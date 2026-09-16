@@ -13,6 +13,7 @@ import ai_brain
 import content
 import database
 import funnel
+import intent_router
 import platform_context
 import lead_qualifier
 import prompts
@@ -51,11 +52,18 @@ async def _stream_response_text(
 
     start_generation = time.time()
     preview_enabled = config.STREAMING_PREVIEW
-    funnel_context = _append_profile_name_context(
-        funnel.build_stage_context(response_stage, cta_variant, cta_shown),
-        user_first_name,
-    )
     core_context = platform_context.build_core_context_block(user_data.get("telegram_id"))
+    intent_result = await intent_router.classify(
+        conversation_history=conversation_history,
+        has_core_context=bool(core_context),
+    )
+    if intent_result.context_override:
+        funnel_context = _append_profile_name_context(intent_result.context_override, user_first_name)
+    else:
+        funnel_context = _append_profile_name_context(
+            funnel.build_stage_context(response_stage, cta_variant, cta_shown),
+            user_first_name,
+        )
     if core_context:
         funnel_context = f"{core_context}\n\n{funnel_context}"
     async for chunk in ai_brain.ai_brain.generate_response_stream(
@@ -103,8 +111,14 @@ async def _stream_response_text(
                     logger.debug("Skipped update (rate limit): %s", error)
 
     generation_time = time.time() - start_generation
-    logger.info("Response generated in %.2fs (%s chars)", generation_time, len(full_response))
-    return full_response, sent_message
+    logger.info(
+        "Response generated in %.2fs (%s chars, intent=%s confidence=%.2f)",
+        generation_time,
+        len(full_response),
+        intent_result.intent,
+        intent_result.confidence,
+    )
+    return full_response, sent_message, intent_result
 
 
 async def _deliver_final_response(
@@ -292,7 +306,7 @@ async def process_ai_response(
             lead_data=merged_lead_data,
         )
 
-    full_response, sent_message = await _stream_response_text(
+    full_response, sent_message, intent_result = await _stream_response_text(
         original_message=original_message,
         user_data=user_data,
         user_first_name=user_data.get("first_name") or user.first_name,
@@ -302,14 +316,17 @@ async def process_ai_response(
         cta_shown=cta_shown,
     )
 
-    full_response = funnel.enforce_leadgen_response(
-        response_text=full_response,
-        stage=response_stage,
-        user_message=message_text,
-        cta_shown=cta_shown,
-        cta_variant=cta_variant,
-        lead_data=merged_lead_data,
-    )
+    if intent_result.context_override is None:
+        # Продажная воронка (или классификация не сработала/не уверена) —
+        # поведение как раньше: докручиваем диагностику/вопрос квалификации.
+        full_response = funnel.enforce_leadgen_response(
+            response_text=full_response,
+            stage=response_stage,
+            user_message=message_text,
+            cta_shown=cta_shown,
+            cta_variant=cta_variant,
+            lead_data=merged_lead_data,
+        )
     full_response = utils.format_ai_text_as_plain_symbols(full_response)
 
     await _deliver_final_response(

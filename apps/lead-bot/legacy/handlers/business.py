@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes
 from telegram_ui import normalize_button_text
 import database
 import ai_brain
+import platform_context
 import lead_qualifier
 from config import get_config
 config = get_config()
@@ -1146,6 +1147,12 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             funnel.build_stage_context(response_stage, cta_variant, cta_shown),
             message.from_user.first_name,
         )
+        # Собственный вызов помощника в business-чате — тот же блок «собеседник уже
+        # известен платформе», что и в основном боте (#377); раньше его тут не было,
+        # хотя именно здесь произошли кейсы Виктории и Рябовой.
+        core_context = platform_context.build_core_context_block(user_id)
+        if core_context:
+            funnel_context = f"{core_context}\n\n{funnel_context}"
         async for chunk in ai_brain.ai_brain.generate_response_stream(
             conversation_history,
             funnel_context=funnel_context

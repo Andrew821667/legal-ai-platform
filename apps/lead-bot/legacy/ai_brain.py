@@ -57,6 +57,7 @@ _ALLOWED_SERVICE_CATEGORIES = {
 }
 _LEAD_TEMPERATURE_RANK = {"cold": 0, "warm": 1, "hot": 2}
 _LEAD_EXTRACTION_MIN_TOKENS = 2000
+_INTENT_CLASSIFICATION_MIN_TOKENS = 200
 
 
 def _check_prompt_injection(text: str) -> bool:
@@ -328,6 +329,54 @@ class AIBrain:
             return None
         except Exception as e:
             logger.error(f"Error extracting lead data (async): {e}")
+            return None
+
+    async def classify_intent_async(self, conversation_history: List[Dict[str, str]]) -> Optional[Dict]:
+        """
+        Классифицирует намерение последнего сообщения клиента: продолжает своё дело,
+        описывает новую задачу, спрашивает про платформу или просто знакомится — в
+        отличие от продажного разговора, который ведёт стандартная воронка.
+
+        Тот же паттерн, что extract_lead_data_async, но короче: маленькая схема,
+        небольшой лимит токенов. Используется intent_router.py, который сам решает,
+        что делать при None (тихий откат к воронке).
+        """
+        response_text = ""
+        try:
+            limited_history = conversation_history[-8:] if len(conversation_history) > 8 else conversation_history
+            conversation_text = "\n".join([
+                f"{msg['role']}: "
+                f"{_sanitize_user_content_for_model(msg.get('content') or msg.get('message') or '') if msg.get('role') == 'user' else (msg.get('content') or msg.get('message') or '')}"
+                for msg in limited_history
+            ])
+
+            messages = [
+                {"role": "system", "content": prompts.INTENT_ROUTER_PROMPT},
+                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
+            ]
+
+            logger.debug("Classifying message intent")
+
+            response = await self.async_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **self._completion_token_kwargs(minimum=_INTENT_CLASSIFICATION_MIN_TOKENS),
+                temperature=0.1
+            )
+
+            response_text = response.choices[0].message.content or ""
+            data = json.loads(_strip_fenced_json(response_text))
+            if not isinstance(data, dict):
+                logger.warning("Intent classification returned non-dict JSON: %s", type(data))
+                return None
+            logger.debug("Intent classified: %s (confidence=%s)", data.get("intent"), data.get("confidence"))
+            return data
+
+        except json.JSONDecodeError as e:
+            logger.warning("Error parsing intent JSON: %s, response: %s", e, response_text[:200])
+            return None
+        except Exception as e:
+            logger.warning(f"Error classifying intent: {e}")
             return None
 
     def generate_response(
