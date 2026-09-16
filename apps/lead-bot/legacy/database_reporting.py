@@ -82,12 +82,25 @@ def get_statistics(
     get_connection: Callable[[], sqlite3.Connection],
     *,
     days: int = 30,
+    leads_provider: Callable[[], list[dict]] | None = None,
 ) -> dict:
-    """Return a compact statistics snapshot for admin/reporting."""
+    """Return a compact statistics snapshot for admin/reporting.
+
+    Лиды живут в ядре: считаем их по `leads_provider` (список словарей в
+    формате бота). Локальная таблица leads заморожена на моменте переноса и
+    без провайдера даёт устаревшие цифры — оставлена только как запасной путь.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
         stats: dict[str, int | float] = {}
+        core_leads_rows: list[dict] | None = None
+        if leads_provider is not None:
+            try:
+                core_leads_rows = list(leads_provider() or [])
+            except Exception as error:  # noqa: BLE001 — статистика не должна падать из-за ядра
+                logger.warning("Lead statistics: core unavailable, falling back to local table: %s", error)
+                core_leads_rows = None
 
         cursor.execute("SELECT COUNT(*) FROM users")
         stats["total_users"] = cursor.fetchone()[0]
@@ -101,12 +114,17 @@ def get_statistics(
         )
         stats["new_users"] = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM leads")
-        stats["total_leads"] = cursor.fetchone()[0]
+        if core_leads_rows is not None:
+            stats["total_leads"] = len(core_leads_rows)
+            for temp in ["hot", "warm", "cold"]:
+                stats[f"{temp}_leads"] = sum(1 for row in core_leads_rows if (row.get("temperature") or "") == temp)
+        else:
+            cursor.execute("SELECT COUNT(*) FROM leads")
+            stats["total_leads"] = cursor.fetchone()[0]
 
-        for temp in ["hot", "warm", "cold"]:
-            cursor.execute("SELECT COUNT(*) FROM leads WHERE temperature = ?", (temp,))
-            stats[f"{temp}_leads"] = cursor.fetchone()[0]
+            for temp in ["hot", "warm", "cold"]:
+                cursor.execute("SELECT COUNT(*) FROM leads WHERE temperature = ?", (temp,))
+                stats[f"{temp}_leads"] = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM conversations")
         stats["total_messages"] = cursor.fetchone()[0]
@@ -124,14 +142,20 @@ def get_statistics(
         result = cursor.fetchone()[0]
         stats["avg_conversation_length"] = round(result, 1) if result else 0
 
-        cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'consultation'")
-        stats["consultations"] = cursor.fetchone()[0]
+        if core_leads_rows is not None:
+            magnets = [(row.get("lead_magnet_type") or "") for row in core_leads_rows]
+            stats["consultations"] = magnets.count("consultation")
+            stats["checklists"] = magnets.count("checklist")
+            stats["demos"] = sum(1 for m in magnets if m in ("demo", "demo_analysis"))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'consultation'")
+            stats["consultations"] = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'checklist'")
-        stats["checklists"] = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type = 'checklist'")
+            stats["checklists"] = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type IN ('demo', 'demo_analysis')")
-        stats["demos"] = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM leads WHERE lead_magnet_type IN ('demo', 'demo_analysis')")
+            stats["demos"] = cursor.fetchone()[0]
 
         for stage in ["discover", "diagnose", "qualify", "propose", "handoff"]:
             cursor.execute("SELECT COUNT(*) FROM users WHERE conversation_stage = ?", (stage,))

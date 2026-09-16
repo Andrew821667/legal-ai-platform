@@ -87,7 +87,14 @@ class CoreApiBridge:
             logger.warning("Core API read error [%s]: %s", path, error)
         return None
 
-    def _post(self, path: str, payload: dict[str, Any], idempotency_key: str) -> dict[str, Any] | None:
+    def _post(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        idempotency_key: str,
+        *,
+        timeout: float | None = None,
+    ) -> dict[str, Any] | None:
         if not self.enabled:
             return None
         if self._is_recent_duplicate(idempotency_key):
@@ -106,7 +113,7 @@ class CoreApiBridge:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
                 raw = response.read().decode("utf-8")
                 self._remember_success(idempotency_key)
                 return json.loads(raw) if raw else None
@@ -262,6 +269,7 @@ class CoreApiBridge:
                 "asked_count": asked_count,
             },
             idempotency_key=f"assistant-turn:{intake_id}:{len(history)}",
+            timeout=max(self.timeout, config.CORE_API_ASSISTANT_TURN_TIMEOUT_SECONDS),
         )
 
     def get_nda_document(self) -> dict[str, Any] | None:

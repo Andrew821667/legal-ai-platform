@@ -239,11 +239,10 @@ async def handle_business_operator_handoff(
 
     _clear_business_contact_state(context)
 
-    await context.bot.send_message(
-        chat_id=message.chat.id,
-        text="Оператор передал диалог команде на консультацию. Продолжим связь в этом чате.",
-        reply_markup=_business_menu_markup(),
-        business_connection_id=message.business_connection_id,
+    await _send_operator_handoff_confirmation(
+        context,
+        message,
+        "Оператор передал диалог команде на консультацию. Продолжим связь в этом чате.",
     )
     return lead_id
 
@@ -276,13 +275,39 @@ async def _handle_personal_operator_handoff(
 
     _clear_business_contact_state(context)
 
-    await context.bot.send_message(
-        chat_id=message.chat.id,
-        text="Оператор передал диалог Андрею для личного обращения. Продолжим связь в этом чате.",
-        reply_markup=_business_menu_markup(),
-        business_connection_id=message.business_connection_id,
+    await _send_operator_handoff_confirmation(
+        context,
+        message,
+        "Оператор передал диалог Андрею для личного обращения. Продолжим связь в этом чате.",
     )
     return None
+
+
+async def _send_operator_handoff_confirmation(context, message, text: str) -> bool:
+    """Подтверждение клиенту после операторской передачи — лучший эффорт.
+
+    Telegram отвечает Business_peer_invalid, если у business-соединения нет
+    права писать в этот чат (или соединение переподключили, и в сообщении с
+    кнопкой остался старый id). Раньше исключение вылетало из обработчика уже
+    ПОСЛЕ всех побочных эффектов, callback оставался без ответа, и Telegram
+    доставлял его заново — четыре повторных «новый лид» подряд (16.09 13:20).
+    Само переключение режима/лид уже сделаны; клиенту просто не уйдёт фраза.
+    """
+    try:
+        await context.bot.send_message(
+            chat_id=message.chat.id,
+            text=text,
+            reply_markup=_business_menu_markup(),
+            business_connection_id=message.business_connection_id,
+        )
+        return True
+    except TelegramError as error:
+        logger.warning(
+            "[Business] Operator handoff done, but confirmation to chat %s not sent: %s",
+            getattr(getattr(message, "chat", None), "id", None),
+            error,
+        )
+        return False
 
 
 def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> None:
@@ -371,6 +396,46 @@ def _looks_like_plain_greeting(text: str) -> bool:
         "hi",
     )
     return any(compact.startswith(prefix) for prefix in greeting_prefixes)
+
+
+def _owner_first_name() -> str:
+    """Имя владельца из контактов — «Андрей» из «Андрей Попов»."""
+    full = (content.CONTACTS.get("manager_name") or "").strip()
+    return full.split()[0] if full else ""
+
+
+_OWNER_ADDRESS_MAX_OFFSET = 40
+
+
+def _looks_like_personal_address_to_owner(text: str) -> bool:
+    """Сообщение адресовано владельцу по имени: «Андрей, добрый день…».
+
+    Такое пишут лично, а не боту: имя в самом начале — обращение, а не
+    упоминание («мне сказал Андрей» — не оно). Кейс Виктории: «Андрей,
+    добрый день. Это Фролова Виктория, компания …» ушло в воронку как тёплый
+    лид только потому, что в подписи был телефон.
+    """
+    owner = _owner_first_name()
+    if not owner:
+        return False
+    head = (text or "").strip()[:_OWNER_ADDRESS_MAX_OFFSET]
+    if not head:
+        return False
+    # Имя владельца стоит первым или сразу после короткого приветствия и
+    # отделено обращением-запятой/восклицанием/переводом строки.
+    pattern = (
+        r"^(?:(?:здравствуйте|добрый\s+(?:день|вечер|утро)|доброе\s+утро|привет|доброго\s+времени\s+суток)[,!\s]*)?"
+        + re.escape(owner)
+        + r"(?:\s+[А-ЯЁ][а-яё]+(?:ович|евич|ич|овна|евна|ична))?"
+        + r"\s*[,!\n]"
+    )
+    return re.match(pattern, head, flags=re.IGNORECASE) is not None
+
+
+def _looks_like_bare_phone_message(text: str) -> bool:
+    """Сообщение — по сути один номер («мой номер +7…», «+7… звоните»)."""
+    rest = re.sub(r"[\d\s()+\-]", "", (text or ""))
+    return len(rest.strip()) <= 25
 
 
 def _looks_like_personal_social_message(text: str) -> bool:
@@ -610,6 +675,21 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             logger.info("[Business] Skip personal/social message for user %s", user_id)
             return
 
+        if chat_mode != "personal" and allow_lead_processing and _looks_like_personal_address_to_owner(text):
+            # Написали лично Андрею — не боту. Никакого лида, приветствия и
+            # воронки; чат — в личный режим, чтобы и следующие сообщения
+            # (документы, «прикладываю») бот не перехватывал. Владелец видит
+            # переписку сам — это его business-чат.
+            if chat_id is not None:
+                database.db.set_chat_mode(int(chat_id), "personal")
+            _clear_business_contact_state(context)
+            try:
+                database.db.track_event(user, "personal_message_detected", payload={"source": "business_owner_address"})
+            except (sqlite3.Error, KeyError) as analytics_error:
+                logger.warning("[Business] Failed to track personal_message_detected: %s", analytics_error)
+            logger.info("[Business] Personal message addressed to owner from user %s: chat switched to personal", user_id)
+            return
+
         # Обработка команды /start для бизнес-чата
         if text == "/start":
             _clear_business_contact_state(context)
@@ -805,8 +885,17 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             current_stage = funnel_state.get("conversation_stage") or "discover"
 
         # Сценарий: клиент прислал телефон в business-диалоге.
+        # Номер в свободном тексте (подпись под личным письмом, реквизиты в
+        # описании задачи) — ещё не просьба перезвонить: раньше любое сообщение
+        # с телефоном сразу становилось тёплым лидом с handoff (кейс Виктории).
+        # Автозахват — только когда бот сам ждёт контакт, прислали карточку
+        # контакта или сообщение по сути и есть один номер.
         phone_from_contact = getattr(getattr(message, "contact", None), "phone_number", None)
-        phone_candidate = phone_from_contact or _extract_phone_candidate(text)
+        phone_in_text = _extract_phone_candidate(text)
+        if phone_in_text and not (awaiting_contact or has_pending_contact or _looks_like_bare_phone_message(text)):
+            logger.info("[Business] Phone inside free text ignored for auto-handoff (user %s)", user_id)
+            phone_in_text = None
+        phone_candidate = phone_from_contact or phone_in_text
         if not phone_candidate and awaiting_contact and text:
             # Более мягкая попытка, когда пользователь уже в явном режиме "оставить контакт".
             digits = re.sub(r"\D", "", text)

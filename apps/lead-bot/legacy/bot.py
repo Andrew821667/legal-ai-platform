@@ -316,17 +316,36 @@ async def _try_handle_business_operator_callback(update: Update, context: Contex
         logger.info("Skip trusted operator callback %s with unsupported data %s", update.update_id, callback_data)
         return True
 
-    lead_id = await handle_business_operator_handoff(
-        context=context,
-        message=getattr(query, "message", None),
-        operator_user=getattr(query, "from_user", None),
-        trigger=f"callback:{callback_data}",
-        mode=mode,
-    )
+    # Callback отвечаем в любом исходе: без ответа Telegram доставляет нажатие
+    # повторно, и один клик оператора превращался в серию handoff'ов.
+    try:
+        lead_id = await handle_business_operator_handoff(
+            context=context,
+            message=getattr(query, "message", None),
+            operator_user=getattr(query, "from_user", None),
+            trigger=f"callback:{callback_data}",
+            mode=mode,
+        )
+    except Exception as error:
+        logger.error("Business operator handoff failed for update %s: %s", update.update_id, error, exc_info=True)
+        try:
+            await utils.safe_answer_callback(
+                query,
+                text=f"Не удалось выполнить передачу: {str(error)[:120]}",
+                show_alert=True,
+                action="business_operator_callback_failed",
+            )
+        except Exception as answer_error:
+            logger.warning("Failed to answer operator callback failure: %s", answer_error)
+        return True
     try:
         await utils.safe_answer_callback(
             query,
-            text="Операторский handoff отправлен",
+            text=(
+                "Чат переведён в личный режим"
+                if mode == "personal_request"
+                else "Операторский handoff отправлен"
+            ),
             show_alert=False,
             action="business_operator_callback_ok",
         )
