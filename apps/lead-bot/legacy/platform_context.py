@@ -142,6 +142,76 @@ def build_core_context_block(telegram_user_id: int | None) -> str:
     return "\n".join(lines)
 
 
+def build_full_case_details_block(telegram_user_id: int | None) -> str:
+    """Полные данные о собеседнике — для инструмента `get_full_case_details`
+    (assistant_tools.py), а не для проактивного блока промпта.
+
+    В отличие от `build_core_context_block` — без ограничения в 5 штук и без
+    обрезки описаний, плюс то, чего в кратком блоке вовсе нет: названия
+    приложенных документов, переписка по договору с юристом, сумма и статус
+    возражения по акту. Ассистент зовёт это, когда краткого блока не хватило
+    для конкретного вопроса собеседника о своём деле.
+    """
+    if not telegram_user_id or not core_api_bridge.enabled:
+        return "Данных об этом собеседнике в ядре платформы нет."
+    try:
+        summary = core_api_bridge.client_portal_summary(int(telegram_user_id))
+    except Exception as error:  # noqa: BLE001 — инструмент не должен ронять ответ
+        logger.warning("Failed to load full case details for %s: %s", telegram_user_id, error)
+        return "Не удалось загрузить данные — ядро платформы сейчас недоступно."
+    if not summary:
+        return "Данных об этом собеседнике в ядре платформы нет."
+
+    cases = summary.get("cases") or []
+    agreements = summary.get("agreements") or []
+    acts = summary.get("acts") or []
+    nda = summary.get("nda") or {}
+
+    if not cases and not agreements and not acts and not nda.get("signed"):
+        return "Данных об этом собеседнике в ядре платформы нет."
+
+    lines: list[str] = []
+
+    if nda.get("signed"):
+        lines.append(f"NDA подписан {_date(nda.get('signed_at'))} (версия {nda.get('version') or '—'}).")
+
+    for case in cases:
+        area = _label(_LEGAL_AREA_LABELS, case.get("legal_area"))
+        status = _label(_CASE_STATUS_LABELS, case.get("status"))
+        description = (case.get("description") or "").strip()
+        lines.append(f"\nОбращение от {_date(case.get('created_at'))} ({area}, статус: {status})")
+        if description:
+            lines.append(f"  Текст обращения: «{description}»")
+        documents = case.get("documents") or []
+        if documents:
+            names = ", ".join(f"{doc.get('file_name') or '—'} ({_date(doc.get('created_at'))})" for doc in documents)
+            lines.append(f"  Приложенные документы: {names}")
+
+    for agreement in agreements:
+        status = _label(_AGREEMENT_STATUS_LABELS, agreement.get("status"))
+        subject = (agreement.get("subject") or "").strip()
+        lines.append(f"\nДоговор № {agreement.get('number') or '—'} ({status})")
+        if subject:
+            lines.append(f"  Предмет: {subject}")
+        if agreement.get("price_text"):
+            lines.append(f"  Стоимость: {agreement['price_text']}")
+        for message in agreement.get("messages") or []:
+            role = "Клиент" if message.get("role") == "client" else "Юрист"
+            text = (message.get("text") or "").strip()
+            if text:
+                lines.append(f"  {role} ({_date(message.get('created_at'))}): «{text}»")
+
+    for act in acts:
+        status = _label(_ACT_STATUS_LABELS, act.get("status"))
+        lines.append(f"\nАкт № {act.get('number') or '—'} ({status})")
+        if act.get("description"):
+            lines.append(f"  Описание работ: {act['description']}")
+        if act.get("objection_text"):
+            lines.append(f"  Возражение клиента: «{act['objection_text']}»")
+
+    return "\n".join(lines).strip()
+
+
 # TODO(контекстный ассистент, п.3): сопоставление с ЧУЖИМИ обращениями по
 # фамилии/упоминанию (например, Рябова <-> Рябов) — риск конфликта интересов
 # и утечки чужих данных в промпт, нужен отдельный, более осторожный дизайн

@@ -107,3 +107,104 @@ def test_unknown_labels_fall_back_to_raw_value(monkeypatch):
     _bridge(monkeypatch, summary=summary)
     block = platform_context.build_core_context_block(1)
     assert "space_law" in block
+
+
+# ── build_full_case_details_block: инструмент get_full_case_details ────────
+# В отличие от build_core_context_block — без ограничения в 5 штук, без
+# обрезки текста, плюс документы/переписка/возражения, которых в кратком
+# блоке нет вовсе.
+
+def test_full_details_no_telegram_id_returns_message(monkeypatch):
+    _bridge(monkeypatch, summary={"cases": [{"id": "x"}]})
+    assert "нет" in platform_context.build_full_case_details_block(None)
+
+
+def test_full_details_bridge_disabled_returns_message(monkeypatch):
+    _bridge(monkeypatch, enabled=False, summary={"cases": [{"id": "x"}]})
+    assert "нет" in platform_context.build_full_case_details_block(1)
+
+
+def test_full_details_empty_summary_returns_message(monkeypatch):
+    _bridge(monkeypatch, summary={"client": {}, "nda": {"signed": False}, "cases": [], "agreements": [], "acts": []})
+    assert "нет" in platform_context.build_full_case_details_block(1)
+
+
+def test_full_details_bridge_error_is_swallowed(monkeypatch):
+    _bridge(monkeypatch, raises=RuntimeError("core-api недоступен"))
+    result = platform_context.build_full_case_details_block(1)
+    assert "не удалось" in result.lower() or "недоступн" in result.lower()
+
+
+def test_full_details_includes_untruncated_description_and_documents(monkeypatch):
+    long_description = "Раздел совместно нажитого имущества. " * 20  # длиннее лимита краткого блока
+    summary = {
+        "nda": {"signed": True, "signed_at": "2026-09-07T17:08:00", "version": "2026-09-04.1"},
+        "cases": [
+            {
+                "legal_area": "family",
+                "status": "in_progress",
+                "description": long_description,
+                "created_at": "2026-09-07T16:56:00",
+                "documents": [{"file_name": "паспорт.pdf", "created_at": "2026-09-07T17:00:00"}],
+            }
+        ],
+        "agreements": [],
+        "acts": [],
+    }
+    _bridge(monkeypatch, summary=summary)
+    block = platform_context.build_full_case_details_block(1)
+
+    assert long_description.strip() in block  # не обрезано
+    assert "паспорт.pdf" in block
+
+
+def test_full_details_includes_agreement_messages_and_price(monkeypatch):
+    summary = {
+        "nda": {"signed": False},
+        "cases": [],
+        "agreements": [
+            {
+                "number": "AV-201",
+                "status": "signed",
+                "subject": "Консультация по разделу имущества",
+                "price_text": "10 000 руб.",
+                "messages": [
+                    {"role": "client", "text": "Когда будет готово?", "created_at": "2026-09-08T10:00:00"},
+                    {"role": "lawyer", "text": "К пятнице.", "created_at": "2026-09-08T11:00:00"},
+                ],
+            }
+        ],
+        "acts": [],
+    }
+    _bridge(monkeypatch, summary=summary)
+    block = platform_context.build_full_case_details_block(1)
+
+    assert "AV-201" in block and "10 000 руб." in block
+    assert "Когда будет готово?" in block and "К пятнице." in block
+
+
+def test_full_details_includes_act_objection(monkeypatch):
+    summary = {
+        "nda": {"signed": False},
+        "cases": [],
+        "agreements": [],
+        "acts": [{"number": "ACT-9", "status": "objected", "description": "Консультация", "objection_text": "Не согласен с объёмом работ"}],
+    }
+    _bridge(monkeypatch, summary=summary)
+    block = platform_context.build_full_case_details_block(1)
+
+    assert "ACT-9" in block
+    assert "Не согласен с объёмом работ" in block
+
+
+def test_full_details_shows_all_cases_without_cap(monkeypatch):
+    cases = [
+        {"legal_area": "civil", "status": "new", "description": f"дело {i}", "created_at": "2026-09-01T00:00:00", "documents": []}
+        for i in range(8)
+    ]
+    _bridge(monkeypatch, summary={"nda": {"signed": False}, "cases": cases, "agreements": [], "acts": []})
+    block = platform_context.build_full_case_details_block(1)
+
+    for i in range(8):
+        assert f"дело {i}" in block
+    assert "…и ещё" not in block  # краткий блок так пишет, полный — нет
