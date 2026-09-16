@@ -164,8 +164,22 @@ async def handle_business_operator_handoff(
         first_name=target["first_name"],
         last_name=target["last_name"],
     )
+
     if mode == "personal_request":
-        database.db.set_chat_mode(target_chat_id, "personal")
+        # Личное обращение — не лид: оператор (Андрей) сам увидел сообщение и
+        # переключил чат, заводить лид и слать себе же «новый лид» незачем.
+        # Раньше это создавало тёплый лид в ядре, и фоновый квалификатор
+        # обрабатывал личные фразы как ответы в воронке (см. Current.md).
+        return await _handle_personal_operator_handoff(
+            context=context,
+            message=message,
+            operator_user=operator_user,
+            trigger=trigger,
+            note_text=note_text,
+            user_db_id=user_db_id,
+            target=target,
+        )
+
     existing_lead = database.db.get_lead_by_user_id(user_db_id) or {}
 
     notes_parts = []
@@ -180,10 +194,7 @@ async def handle_business_operator_handoff(
             note_text=note_text,
         )
     )
-    if mode == "consultation":
-        notes_parts.append("[CONTACT_MODE] Оператор инициировал консультацию без телефона, связь через Telegram/business")
-    else:
-        notes_parts.append("Оператор инициировал личное обращение к Андрею из business-чата")
+    notes_parts.append("[CONTACT_MODE] Оператор инициировал консультацию без телефона, связь через Telegram/business")
 
     lead_payload = {
         "name": target["first_name"],
@@ -228,19 +239,50 @@ async def handle_business_operator_handoff(
 
     _clear_business_contact_state(context)
 
-    response_text = (
-        "Оператор передал диалог команде на консультацию. "
-        "Продолжим связь в этом чате."
-        if mode == "consultation"
-        else "Оператор передал диалог Андрею для личного обращения. Продолжим связь в этом чате."
-    )
     await context.bot.send_message(
         chat_id=message.chat.id,
-        text=response_text,
+        text="Оператор передал диалог команде на консультацию. Продолжим связь в этом чате.",
         reply_markup=_business_menu_markup(),
         business_connection_id=message.business_connection_id,
     )
     return lead_id
+
+
+async def _handle_personal_operator_handoff(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    message,
+    operator_user,
+    trigger: str,
+    note_text: str,
+    user_db_id: int,
+    target: dict[str, str | int | None],
+) -> None:
+    """Личное обращение: только пометка режима чата, без лида и без CRM."""
+    database.db.set_chat_mode(int(target["telegram_id"]), "personal")
+
+    try:
+        database.db.track_event(
+            user_db_id,
+            "personal_handoff_requested",
+            payload={
+                "trigger": trigger,
+                "operator_id": getattr(operator_user, "id", None),
+                "note": note_text[:500] if note_text else None,
+            },
+        )
+    except (sqlite3.Error, KeyError) as analytics_error:
+        logger.warning(f"[Business] Failed to track personal_handoff_requested: {analytics_error}")
+
+    _clear_business_contact_state(context)
+
+    await context.bot.send_message(
+        chat_id=message.chat.id,
+        text="Оператор передал диалог Андрею для личного обращения. Продолжим связь в этом чате.",
+        reply_markup=_business_menu_markup(),
+        business_connection_id=message.business_connection_id,
+    )
+    return None
 
 
 def _persist_fasttrack_contact(user_db_id: int, first_name: str, text: str) -> None:

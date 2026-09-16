@@ -13,6 +13,7 @@ import ai_brain
 import content
 import database
 import funnel
+import platform_context
 import lead_qualifier
 import prompts
 import security
@@ -54,6 +55,9 @@ async def _stream_response_text(
         funnel.build_stage_context(response_stage, cta_variant, cta_shown),
         user_first_name,
     )
+    core_context = platform_context.build_core_context_block(user_data.get("telegram_id"))
+    if core_context:
+        funnel_context = f"{core_context}\n\n{funnel_context}"
     async for chunk in ai_brain.ai_brain.generate_response_stream(
         conversation_history,
         funnel_context=funnel_context,
