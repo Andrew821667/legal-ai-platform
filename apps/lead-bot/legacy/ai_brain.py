@@ -58,6 +58,7 @@ _ALLOWED_SERVICE_CATEGORIES = {
 _LEAD_TEMPERATURE_RANK = {"cold": 0, "warm": 1, "hot": 2}
 _LEAD_EXTRACTION_MIN_TOKENS = 2000
 _INTENT_CLASSIFICATION_MIN_TOKENS = 200
+_MAX_TOOL_ROUNDS = 4
 
 
 def _check_prompt_injection(text: str) -> bool:
@@ -217,12 +218,18 @@ class AIBrain:
         self,
         conversation_history: List[Dict[str, str]],
         funnel_context: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_executor: Optional[Any] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Генерация ответа с потоковой передачей (streaming) от OpenAI
 
         Args:
             conversation_history: История диалога в формате [{"role": "user"/"assistant", "message": "..."}]
+            tools: JSON-схемы инструментов (assistant_tools.TOOLS_SCHEMA) — без них
+                поведение не меняется вообще, даже если tool_executor передан.
+            tool_executor: async def(name: str, arguments: dict) -> str — исполняет вызов
+                инструмента и возвращает текст результата для модели.
 
         Yields:
             Части ответа ассистента по мере их генерации
@@ -249,35 +256,92 @@ class AIBrain:
             # Защита от prompt injection: напоминание модели оставаться в роли
             messages.append({"role": "system", "content": _ANTI_INJECTION_SUFFIX})
 
-            logger.debug(f"Sending streaming request to OpenAI with {len(messages)} messages")
+            active_tools = tools if (tools and tool_executor) else None
 
-            # Запрос к OpenAI с включенным streaming
-            # ВАЖНО: max_completion_tokens = лимит ТОЛЬКО на ответ (не включает prompt и историю!)
-            response = await self.async_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                **self._completion_token_kwargs(),
-                temperature=self.temperature,
-                stream=True  # Включаем потоковую передачу!
-            )
+            # Раунд — один запрос к модели. Больше одного нужен только когда модель
+            # позвала инструмент: тогда его результат дописывается в messages, и
+            # модель продолжает уже с ним. Потолок раундов — не давать модели уйти
+            # в бесконечный цикл вызовов при сбойном инструменте.
+            for round_index in range(_MAX_TOOL_ROUNDS):
+                logger.debug(
+                    f"Sending streaming request to OpenAI with {len(messages)} messages "
+                    f"(round {round_index + 1}/{_MAX_TOOL_ROUNDS}, tools={'on' if active_tools else 'off'})"
+                )
 
-            # Отдаем части ответа по мере их поступления
-            finish_reason = None
-            async for chunk in response:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                create_kwargs = dict(
+                    model=self.model,
+                    messages=messages,
+                    **self._completion_token_kwargs(),
+                    temperature=self.temperature,
+                    stream=True,
+                )
+                if active_tools:
+                    create_kwargs["tools"] = active_tools
 
-                # Проверяем причину завершения
-                if chunk.choices[0].finish_reason:
-                    finish_reason = chunk.choices[0].finish_reason
+                response = await self.async_client.chat.completions.create(**create_kwargs)
 
-            # Логируем причину завершения
-            if finish_reason == "length":
-                logger.warning("⚠️ Response was truncated due to max_tokens limit!")
-            elif finish_reason == "stop":
-                logger.info("✓ Streaming response completed normally (stop)")
+                finish_reason = None
+                tool_call_chunks: dict[int, dict[str, str]] = {}
+                async for chunk in response:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+                    for tc in (delta.tool_calls or []):
+                        slot = tool_call_chunks.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                        if tc.id:
+                            slot["id"] = tc.id
+                        if tc.function and tc.function.name:
+                            slot["name"] += tc.function.name
+                        if tc.function and tc.function.arguments:
+                            slot["arguments"] += tc.function.arguments
+                    if chunk.choices[0].finish_reason:
+                        finish_reason = chunk.choices[0].finish_reason
+
+                if finish_reason == "length":
+                    logger.warning("⚠️ Response was truncated due to max_tokens limit!")
+                elif finish_reason == "tool_calls" and tool_call_chunks:
+                    logger.info(
+                        "Model requested %s tool call(s) in round %s: %s",
+                        len(tool_call_chunks),
+                        round_index + 1,
+                        [slot["name"] for slot in tool_call_chunks.values()],
+                    )
+                    messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": slot["id"],
+                                "type": "function",
+                                "function": {"name": slot["name"], "arguments": slot["arguments"]},
+                            }
+                            for slot in tool_call_chunks.values()
+                        ],
+                    })
+                    for slot in tool_call_chunks.values():
+                        try:
+                            parsed_args = json.loads(slot["arguments"]) if slot["arguments"] else {}
+                        except json.JSONDecodeError:
+                            parsed_args = {}
+                        try:
+                            result_text = await tool_executor(slot["name"], parsed_args)
+                        except Exception as tool_error:
+                            logger.warning("Tool executor raised for %s: %s", slot["name"], tool_error)
+                            result_text = "Инструмент временно недоступен."
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": slot["id"],
+                            "content": result_text,
+                        })
+                    continue  # следующий раунд — модель отвечает уже с результатом инструмента
+                elif finish_reason == "stop":
+                    logger.info("✓ Streaming response completed normally (stop)")
+                else:
+                    logger.info(f"Streaming response completed (finish_reason: {finish_reason})")
+                break
             else:
-                logger.info(f"Streaming response completed (finish_reason: {finish_reason})")
+                logger.warning("Tool-call round limit (%s) reached without a final answer", _MAX_TOOL_ROUNDS)
+                yield "Не получилось получить ответ инструмента — уточните вопрос ещё раз."
 
         except Exception as e:
             logger.error(f"Error generating streaming response: {e}")

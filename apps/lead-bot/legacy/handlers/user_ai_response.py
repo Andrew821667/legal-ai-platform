@@ -10,6 +10,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 import ai_brain
+import assistant_tools
 import content
 import database
 import funnel
@@ -69,6 +70,8 @@ async def _stream_response_text(
     async for chunk in ai_brain.ai_brain.generate_response_stream(
         conversation_history,
         funnel_context=funnel_context,
+        tools=assistant_tools.TOOLS_SCHEMA,
+        tool_executor=assistant_tools.executor_for(user_data.get("telegram_id")),
     ):
         full_response += chunk
         chunk_buffer += chunk
