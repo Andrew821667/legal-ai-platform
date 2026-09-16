@@ -158,6 +158,13 @@ class Config:
         self.API_KEY_ADMIN: str = os.getenv('API_KEY_ADMIN', '').strip()
         self.CORE_API_SYNC_ENABLED: bool = os.getenv('CORE_API_SYNC_ENABLED', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_TIMEOUT_SECONDS: float = float(os.getenv('CORE_API_TIMEOUT_SECONDS', '5'))
+        # Реплика помощника в обращении — это LLM-вызов на стороне ядра (у него
+        # свой предел 45 с). Общие 5 с здесь не годятся: в сентябре почти
+        # половина реплик обрывалась по таймауту бота и заменялась вопросами
+        # из кода, хотя ядро ответ уже считало и оплачивало.
+        self.CORE_API_ASSISTANT_TURN_TIMEOUT_SECONDS: float = float(
+            os.getenv('CORE_API_ASSISTANT_TURN_TIMEOUT_SECONDS', '50')
+        )
         self.CORE_API_CACHE_TTL_SECONDS: float = max(
             0.0,
             float(os.getenv('CORE_API_CACHE_TTL_SECONDS', '15')),

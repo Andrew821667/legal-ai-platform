@@ -789,10 +789,11 @@ class DatabaseFacadeMixin:
         )
 
     def get_statistics(self, days: int = 30) -> Dict:
-        """Получение статистики"""
+        """Получение статистики: лиды — из ядра, остальное — локально."""
         return database_reporting.get_statistics(
             self.get_connection,
             days=days,
+            leads_provider=lambda: self.leads.get_all_leads(limit=500),
         )
 
     def get_funnel_report(self, days: int = 30) -> Dict:
