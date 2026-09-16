@@ -7,13 +7,15 @@
 #
 # Использование:  ./rotate_env_key.sh [ИМЯ_ПЕРЕМЕННОЙ]
 # По умолчанию — INTAKE_ANALYSIS_API_KEY.
+# Другой .env (например, Contract AI на том же хосте):
+#   ENV_FILE=~/projects/Contract-AI-System-/.env ./rotate_env_key.sh DEEPSEEK_API_KEY
 #
 # На боевом хосте лежит копия в ~/rotate-env-key.sh. Версия здесь —
 # источник: копия на машине переживёт не всё, а runbook на неё ссылается.
 
 set -euo pipefail
 
-ENV_FILE="$HOME/projects/legal-ai-platform/.env"
+ENV_FILE="${ENV_FILE:-$HOME/projects/legal-ai-platform/.env}"
 VAR="${1:-INTAKE_ANALYSIS_API_KEY}"
 
 [ -f "$ENV_FILE" ] || { echo "не найден $ENV_FILE"; exit 1; }
