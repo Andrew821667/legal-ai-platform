@@ -250,6 +250,16 @@ async def process_pending_start_payload(
 
     match = _READER_START_PAYLOAD_RE.match(payload)
     if not match:
+        from .case_messages import CASE_START_PAYLOAD_RE, handle_case_start_payload
+
+        case_match = CASE_START_PAYLOAD_RE.match(payload)
+        if case_match:
+            return await handle_case_start_payload(
+                message=message,
+                context=context,
+                user=user,
+                intake_id=case_match.group("intake_id"),
+            )
         if payload == LEGAL_HELP_START_PAYLOAD:
             from .legal_help import prompt_legal_help_client_type
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import ActionButton from "./ActionButton";
 import AgreementForm from "./AgreementForm";
 import AmountBox from "./AmountBox";
@@ -439,12 +441,25 @@ function Intake({
     onChanged();
   };
 
+  // Развилка после NDA: договор для дела не нужен — консультация, разовый
+  // документ. Те же условия, что проверяет ядро (иначе оно ответит 409):
+  // NDA подписан, конфликт проверен, договоров по делу ещё нет, дело живое.
+  const closed = item.status === "closed" || item.status === "declined";
+  const canWorkWithoutAgreement =
+    !item.without_agreement && agreements.length === 0 && ndaSigned && !conflictBlocks && !closed;
+  const [agreementAnyway, setAgreementAnyway] = useState(false);
+  const workWithoutAgreement = async () => {
+    await lawyerAction(`/api/lawyer/intakes/${item.intake_id}/without-agreement`, initData);
+    onChanged();
+  };
+
   return (
     <Card>
       <p className="text-lw-lg font-bold text-lw-ink">{intakeTitle(item)}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {item.practice !== "legal" ? <Pill tone="mute">{label(PRACTICE, item.practice)}</Pill> : null}
         <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
+        {item.without_agreement ? <Pill tone="mute">Без договора</Pill> : null}
         {/* У инженерного обращения проверка конфликта — пометка, а не условие;
             непроверенную не показываем, чтобы не читалась как преграда. */}
         {gated || item.conflict_status !== "unchecked" ? (
@@ -534,7 +549,18 @@ function Intake({
         </div>
       ) : null}
 
-      {signed ? null : blocker ? (
+      {signed ? null : item.without_agreement && !agreementAnyway ? (
+        <p className="mt-3 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-ink">
+          Ведётся без договора.{" "}
+          <button
+            type="button"
+            onClick={() => setAgreementAnyway(true)}
+            className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
+          >
+            Всё же составить договор
+          </button>
+        </p>
+      ) : blocker ? (
         <p className="mt-3 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-ink">{blocker}</p>
       ) : conflictBlocks ? null : (
         <AgreementForm
@@ -544,6 +570,24 @@ function Intake({
           onCreated={onChanged}
         />
       )}
+
+      {canWorkWithoutAgreement ? (
+        <div className="mt-3 rounded-xl bg-lw-cell p-3">
+          <p className="text-lw-sm text-lw-muted">
+            Договор для этого дела не нужен — консультация или разовый документ? Обращение
+            останется в работе; составить договор позже всё равно можно.
+          </p>
+          <div className="mt-2">
+            <ActionButton
+              label="Работать без договора"
+              tone="quiet"
+              busy="Отмечаю…"
+              done="Обращение в работе без договора."
+              onRun={workWithoutAgreement}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <DeadlineBox
         intakeId={item.intake_id}
