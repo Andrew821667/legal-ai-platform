@@ -59,6 +59,13 @@ class Config:
             raise ValueError("OPENAI_API_KEY не установлен в переменных окружения")
         self.OPENAI_BASE_URL: str = os.getenv('OPENAI_BASE_URL', '').strip()
 
+        # Эмбеддинги для RAG (knowledge_engine.py) — только у OpenAI, у DeepSeek
+        # нет /embeddings. OPENAI_BASE_URL выше указывает на DeepSeek (чат бота);
+        # эмбеддингам нужен свой адрес, а не общий с чатом — иначе запрос эмбеддинга
+        # уходит на DeepSeek и падает 404 на каждом сообщении (было так до 16.09).
+        self.EMBEDDING_BASE_URL: str = os.getenv('EMBEDDING_BASE_URL', 'https://api.openai.com/v1').strip()
+        self.EMBEDDING_MODEL: str = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small').strip()
+
         # Admin Telegram ID
         admin_id = os.getenv('ADMIN_TELEGRAM_ID')
         if not admin_id:

@@ -52,3 +52,28 @@ def test_log_level():
     """Проверка уровня логирования"""
     valid_log_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
     assert config.LOG_LEVEL in valid_log_levels, f"LOG_LEVEL должен быть одним из {valid_log_levels}"
+
+
+def test_embedding_settings_point_to_openai_not_deepseek():
+    """Эмбеддинги (RAG) — только у OpenAI; общий OPENAI_BASE_URL может
+    указывать на DeepSeek (чат бота), но это не должно ломать эмбеддинги."""
+    assert config.EMBEDDING_BASE_URL == "https://api.openai.com/v1"
+    assert config.EMBEDDING_MODEL == "text-embedding-3-small"
+
+
+def test_embedding_base_url_is_independent_from_openai_base_url(monkeypatch):
+    """Даже когда OPENAI_BASE_URL указывает на DeepSeek, EMBEDDING_BASE_URL
+    остаётся отдельной, дефолтной на OpenAI переменной (регрессия на 404)."""
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+    monkeypatch.delenv("EMBEDDING_BASE_URL", raising=False)
+    fresh = Config()
+    assert fresh.OPENAI_BASE_URL == "https://api.deepseek.com/v1"
+    assert fresh.EMBEDDING_BASE_URL == "https://api.openai.com/v1"
+
+
+def test_embedding_settings_are_overridable(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "custom-embedding")
+    fresh = Config()
+    assert fresh.EMBEDDING_BASE_URL == "https://example.test/v1"
+    assert fresh.EMBEDDING_MODEL == "custom-embedding"

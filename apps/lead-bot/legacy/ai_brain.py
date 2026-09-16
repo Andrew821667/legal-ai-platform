@@ -3,6 +3,7 @@ AI Brain - интеграция с OpenAI GPT + RAG
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, List, Dict, Optional, AsyncGenerator
@@ -99,6 +100,47 @@ def _strip_fenced_json(response_text: str) -> str:
         if len(lines) >= 3:
             return "\n".join(lines[1:-1]).strip()
     return normalized
+
+
+def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
+    """Похожие удачные диалоги для промпта — общий для generate_response и
+    generate_response_stream. Синхронный (клиент эмбеддингов в
+    knowledge_engine.py — блокирующий OpenAI SDK); из async-кода зовите через
+    asyncio.to_thread, иначе застрянет event loop на время сетевого вызова.
+
+    Пусто — не ошибка: нет похожих примеров, нет 60%+ схожести или сам поиск
+    не сработал (сеть, эмбеддинги) — отвечаем без RAG, как раньше.
+    """
+    try:
+        last_user_message = next(
+            (
+                msg.get("content") or msg.get("message")
+                for msg in reversed(limited_history)
+                if msg.get("role") == "user"
+            ),
+            None,
+        )
+        if not last_user_message or len(last_user_message) <= 10:
+            return ""
+
+        successful_convos = database.db.get_successful_conversations(limit=30)
+        if not successful_convos:
+            return ""
+
+        similar = knowledge_engine.knowledge_engine.find_similar_conversations(
+            query=last_user_message,
+            conversations=successful_convos,
+            top_k=2,
+            min_similarity=0.6,
+        )
+        if not similar:
+            return ""
+
+        logger.info("📚 RAG: Found %s similar conversations, adding to context", len(similar))
+        return knowledge_engine.knowledge_engine.format_similar_examples_for_prompt(similar)
+    except Exception as e:
+        logger.warning(f"RAG search failed (non-critical): {e}")
+        return ""
 
 
 def _clean_optional_string(value: Any, *, max_length: int) -> str | None:
@@ -242,6 +284,13 @@ class AIBrain:
 
             # Ограничиваем контекст последними 20 сообщениями для избежания обрывов
             limited_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
+
+            # RAG: похожие удачные диалоги — тот же поиск, что и в generate_response,
+            # но в отдельном потоке: клиент эмбеддингов синхронный, а это — async-путь,
+            # блокировать event loop сетевым вызовом на каждое сообщение нельзя.
+            rag_context = await asyncio.to_thread(_rag_context_for, limited_history)
+            if rag_context:
+                messages.append({"role": "system", "content": rag_context})
 
             for msg in limited_history:
                 content = msg.get("content") or msg.get("message") or ""
@@ -465,39 +514,9 @@ class AIBrain:
 
             # Ограничиваем контекст последними 20 сообщениями для избежания обрывов
             limited_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
-            
-            # === RAG: ИЩЕМ ПОХОЖИЕ УСПЕШНЫЕ ДИАЛОГИ ===
-            rag_context = ""
-            try:
-                # Получаем последнее сообщение клиента
-                last_user_message = next(
-                    (msg['message'] for msg in reversed(limited_history) if msg['role'] == 'user'),
-                    None
-                )
-                
-                if last_user_message and len(last_user_message) > 10:
-                    # Получаем успешные диалоги из БД
-                    successful_convos = database.db.get_successful_conversations(limit=30)
-                    
-                    if successful_convos:
-                        # Ищем похожие через семантический поиск
-                        similar = knowledge_engine.knowledge_engine.find_similar_conversations(
-                            query=last_user_message,
-                            conversations=successful_convos,
-                            top_k=2,  # Топ-2 похожих примера
-                            min_similarity=0.6  # Минимальное сходство 60%
-                        )
-                        
-                        if similar:
-                            # Форматируем примеры для промпта
-                            rag_context = knowledge_engine.knowledge_engine.format_similar_examples_for_prompt(similar)
-                            logger.info("📚 RAG: Found %s similar conversations, adding to context", len(similar))
-            
-            except Exception as e:
-                logger.warning(f"RAG search failed (non-critical): {e}")
-                # Продолжаем без RAG если что-то пошло не так
-            
-            # ДОБАВЛЯЕМ RAG КОНТЕКСТ ЕСЛИ НАШЛИ
+
+            # RAG: похожие удачные диалоги (см. _rag_context_for)
+            rag_context = _rag_context_for(limited_history)
             if rag_context:
                 messages.append({
                     "role": "system",
