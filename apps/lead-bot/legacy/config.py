@@ -149,6 +149,14 @@ class Config:
         self.ALLOW_ADMIN_TEST_LEADS: bool = os.getenv('ALLOW_ADMIN_TEST_LEADS', '1').strip().lower() in {'1', 'true', 'yes'}
         self.CORE_API_URL: str = os.getenv('CORE_API_URL', '').strip()
         self.API_KEY_BOT: str = os.getenv('API_KEY_BOT', '').strip()
+        # Снимок знаний компании (услуги/FAQ/сценарии/методология) для RAG —
+        # тот же контент, что публикует сайт, без авторизации (публичные
+        # страницы). web:3000 — служебное имя контейнера в docker-compose.
+        self.WEB_KNOWLEDGE_URL: str = os.getenv(
+            'WEB_KNOWLEDGE_URL', 'http://web:3000/api/knowledge/snapshot'
+        ).strip()
+        self.WEB_KNOWLEDGE_TIMEOUT_SECONDS: float = float(os.getenv('WEB_KNOWLEDGE_TIMEOUT_SECONDS', '5'))
+        self.WEB_KNOWLEDGE_CACHE_TTL_SECONDS: float = float(os.getenv('WEB_KNOWLEDGE_CACHE_TTL_SECONDS', '3600'))
         self.TELEGRAM_CHANNEL_URL: str = (
             os.getenv('LEAD_PUBLIC_CHANNEL_URL')
             or os.getenv('TELEGRAM_CHANNEL_URL', '')

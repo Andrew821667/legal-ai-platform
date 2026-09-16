@@ -98,8 +98,11 @@ class _FakeClient:
 
 
 def _make_brain(monkeypatch: pytest.MonkeyPatch) -> ai_brain_module.AIBrain:
-    # Изолируем тест от RAG-запросов в БД/knowledge.
+    # Изолируем тест от сетевых RAG-запросов: диалоги (БД) и база знаний
+    # компании (сайт) — без этого company_knowledge бил бы в недоступный
+    # http://web:3000 на каждый тест и ждал реальный таймаут (5с).
     monkeypatch.setattr(ai_brain_module.database.db, "get_successful_conversations", lambda limit=30: [])
+    monkeypatch.setattr(ai_brain_module.company_knowledge, "build_context", lambda query: "")
     return ai_brain_module.AIBrain()
 
 
@@ -416,3 +419,79 @@ async def test_generate_response_stream_without_rag_hits_does_not_add_system_mes
     sent_messages = calls[0]["messages"]
     assert sent_messages[0]["content"] == prompts.SYSTEM_PROMPT
     assert sent_messages[1]["role"] == "user"  # RAG-блока нет — сразу история
+
+
+# ── База знаний компании (company_knowledge.py) в потоке промпта ──────────
+
+@pytest.mark.asyncio
+async def test_company_knowledge_context_is_appended_after_rag(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    calls: list[dict[str, Any]] = []
+    brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
+
+    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history: "# Похожие удачные диалоги\nПример")
+    monkeypatch.setattr(
+        ai_brain_module,
+        "_company_knowledge_context_for",
+        lambda history: "# База знаний компании\n- Проверка договоров: ...",
+    )
+
+    async for _ in brain.generate_response_stream([{"role": "user", "message": "Сколько стоит проверка договоров?"}]):
+        pass
+
+    sent_messages = calls[0]["messages"]
+    system_blocks = [m["content"] for m in sent_messages if m["role"] == "system"]
+    rag_index = next(i for i, c in enumerate(system_blocks) if "Похожие удачные диалоги" in c)
+    knowledge_index = next(i for i, c in enumerate(system_blocks) if "База знаний компании" in c)
+    assert rag_index < knowledge_index  # RAG по диалогам — перед базой знаний, как в коде
+
+
+@pytest.mark.asyncio
+async def test_no_company_knowledge_hit_adds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    calls: list[dict[str, Any]] = []
+    brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
+    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history: "")
+    monkeypatch.setattr(ai_brain_module, "_company_knowledge_context_for", lambda history: "")
+
+    async for _ in brain.generate_response_stream([{"role": "user", "message": "Привет"}]):
+        pass
+
+    sent_messages = calls[0]["messages"]
+    assert not any("База знаний" in m["content"] for m in sent_messages if m["role"] == "system")
+
+
+def test_company_knowledge_context_helper_delegates_to_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ai_brain_module.company_knowledge, "build_context", lambda query: f"# База знаний компании\nпо запросу: {query}"
+    )
+
+    result = ai_brain_module._company_knowledge_context_for(
+        [{"role": "user", "message": "Сколько стоит проверка договоров?"}]
+    )
+
+    assert result == "# База знаний компании\nпо запросу: Сколько стоит проверка договоров?"
+
+
+def test_company_knowledge_context_helper_swallows_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(query):
+        raise RuntimeError("web unreachable")
+
+    monkeypatch.setattr(ai_brain_module.company_knowledge, "build_context", _boom)
+
+    result = ai_brain_module._company_knowledge_context_for([{"role": "user", "message": "Вопрос про сервис"}])
+
+    assert result == ""
+
+
+def test_last_user_message_finds_most_recent_user_turn():
+    history = [
+        {"role": "user", "message": "первое"},
+        {"role": "assistant", "message": "ответ"},
+        {"role": "user", "content": "второе"},
+    ]
+    assert ai_brain_module._last_user_message(history) == "второе"
+
+
+def test_last_user_message_none_when_no_user_turns():
+    assert ai_brain_module._last_user_message([{"role": "assistant", "message": "привет"}]) is None

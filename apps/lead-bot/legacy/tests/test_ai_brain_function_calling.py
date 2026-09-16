@@ -96,7 +96,11 @@ class _FakeClient:
 
 
 def _make_brain(monkeypatch: pytest.MonkeyPatch) -> ai_brain_module.AIBrain:
+    # Изолируем тест от сетевых RAG-запросов: диалоги (БД) и база знаний
+    # компании (сайт) — без этого company_knowledge бил бы в недоступный
+    # http://web:3000 на каждый тест и ждал реальный таймаут (5с).
     monkeypatch.setattr(ai_brain_module.database.db, "get_successful_conversations", lambda limit=30: [])
+    monkeypatch.setattr(ai_brain_module.company_knowledge, "build_context", lambda query: "")
     return ai_brain_module.AIBrain()
 
 
