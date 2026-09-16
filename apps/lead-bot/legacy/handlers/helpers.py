@@ -23,6 +23,7 @@ import utils
 import email_sender
 import security
 import prompts
+import name_hints
 import content
 from core_api_bridge import core_api_bridge
 
@@ -296,7 +297,25 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
         # Боль и температура
         if lead.get('pain_point'):
             notification_message += f"💭 Боль: {lead.get('pain_point')}\n\n"
-        
+
+        # Явная подсказка о связи с другим обращением — человек сам назвал
+        # фамилию в своих словах (см. name_hints.py, кейс Рябовой: «Обращался
+        # Рябов АА» в её же обращении). Лучший эффорт: не блокирует уведомление.
+        try:
+            relation_text = " ".join(
+                str(lead.get(field) or "") for field in ("pain_point", "notes", "specific_need")
+            )
+            match = name_hints.find_related_lead(
+                text=relation_text,
+                own_lead_id=lead_id,
+                own_name=lead.get("name"),
+                other_leads=database.db.get_all_leads(limit=200),
+            )
+            if match:
+                notification_message += name_hints.build_relation_flag(match) + "\n\n"
+        except Exception as relation_error:
+            logger.warning("Failed to check related leads for %s: %s", lead_id, relation_error)
+
         notification_message += f"🌡️ Температура: {temperature.upper()}"
 
         # Отправляем в Telegram с retry и fallback в личный чат админа.
