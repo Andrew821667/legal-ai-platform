@@ -7,6 +7,7 @@ import {
   recordAssistantRequest,
   trustedHostsFor,
 } from "@/lib/assistant-security";
+import { CLIENT_SESSION_COOKIE, clientSessionSecret, verifyClientSessionToken } from "@/lib/client-session";
 import { resolveLeadClientIp } from "@/lib/lead-security";
 
 const ASSISTANT_API_URL = (process.env.ASSISTANT_API_URL || "http://127.0.0.1:8080").replace(/\/+$/, "");
@@ -46,6 +47,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Залогинен в личном кабинете (/cabinet) — берём telegram_user_id из куки,
+  // не от клиента: канал внутренний (X-Assistant-Key), web_assistant_api.py
+  // доверяет этому значению как уже проверенному. Битая/просроченная кука —
+  // молча анонимный режим, не ошибка: чат продолжает работать без контекста.
+  const clientSecret = clientSessionSecret();
+  const clientSession = clientSecret
+    ? verifyClientSessionToken(request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "", clientSecret)
+    : null;
+
   try {
     const response = await fetch(`${ASSISTANT_API_URL}/chat`, {
       method: "POST",
@@ -56,6 +66,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         session_id: payload.sessionId,
         messages: payload.messages,
+        ...(clientSession ? { telegram_user_id: clientSession.telegramUserId } : {}),
       }),
       cache: "no-store",
       // 45с не хватало на многораундовые ответы (identify_returning_client

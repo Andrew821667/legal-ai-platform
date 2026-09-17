@@ -269,3 +269,139 @@ def test_chat_rejects_long_user_message(monkeypatch) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_chat_rejects_non_positive_telegram_user_id(monkeypatch) -> None:
+    monkeypatch.setenv("WEB_ASSISTANT_INTERNAL_KEY", "test-secret")
+
+    response = client.post(
+        "/chat",
+        headers={"X-Assistant-Key": "test-secret"},
+        json={
+            "session_id": "session_123",
+            "messages": [{"role": "user", "message": "Привет"}],
+            "telegram_user_id": 0,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_chat_signed_in_telegram_user_id_feeds_core_context(monkeypatch) -> None:
+    """telegram_user_id в payload (кабинет уже проверил подпись Telegram
+    Login) должен уйти в build_core_context_block напрямую — без
+    identify_returning_client и без ожидания второго сообщения."""
+    monkeypatch.setenv("WEB_ASSISTANT_INTERNAL_KEY", "test-secret")
+    monkeypatch.setattr(web_assistant_api.intent_router, "classify", _fake_classify_default)
+    captured = {}
+
+    def fake_build_core_context_block(telegram_user_id):
+        captured["telegram_user_id"] = telegram_user_id
+        return "# Собеседник уже известен платформе\nЕсть договор."
+
+    monkeypatch.setattr(web_assistant_api.platform_context, "build_core_context_block", fake_build_core_context_block)
+
+    async def fake_stream(history, funnel_context=None, tools=None, tool_executor=None):
+        captured["funnel_context"] = funnel_context
+        yield "Вот статус вашего дела."
+
+    monkeypatch.setattr(web_assistant_api.web_brain, "generate_response_stream", fake_stream)
+    response = client.post(
+        "/chat",
+        headers={"X-Assistant-Key": "test-secret"},
+        json={
+            "session_id": "session_signed_in",
+            "messages": [{"role": "user", "message": "Что с моим договором?"}],
+            "telegram_user_id": 848510279,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["telegram_user_id"] == 848510279
+    assert "Собеседник уже известен платформе" in captured["funnel_context"]
+
+
+def test_chat_signed_in_telegram_user_id_overrides_chat_session_verification(monkeypatch) -> None:
+    """Приоритет payload.telegram_user_id над _VERIFIED_SESSIONS: даже если
+    та же browser-сессия чата ранее подтвердила другой telegram_id внутри
+    диалога, вход через /cabinet должен победить — это более сильное,
+    только что полученное доверие."""
+    monkeypatch.setenv("WEB_ASSISTANT_INTERNAL_KEY", "test-secret")
+    monkeypatch.setattr(web_assistant_api.intent_router, "classify", _fake_classify_default)
+    web_assistant_api._remember_verified_session("session_override", 111)
+    captured = {}
+
+    def fake_build_core_context_block(telegram_user_id):
+        captured["telegram_user_id"] = telegram_user_id
+        return ""
+
+    monkeypatch.setattr(web_assistant_api.platform_context, "build_core_context_block", fake_build_core_context_block)
+
+    async def fake_stream(history, funnel_context=None, tools=None, tool_executor=None):
+        yield "Ответ."
+
+    monkeypatch.setattr(web_assistant_api.web_brain, "generate_response_stream", fake_stream)
+    client.post(
+        "/chat",
+        headers={"X-Assistant-Key": "test-secret"},
+        json={
+            "session_id": "session_override",
+            "messages": [{"role": "user", "message": "Привет"}],
+            "telegram_user_id": 222,
+        },
+    )
+
+    assert captured["telegram_user_id"] == 222
+
+
+def test_chat_signed_in_context_forbids_identify_tool_and_new_client_hint(monkeypatch) -> None:
+    """Текст промпта для залогиненного посетителя не должен содержать
+    инструкцию про «САМ говорит, что уже наш клиент» (это правило для
+    анонимного пути) и должен явно запрещать identify_returning_client."""
+    monkeypatch.setenv("WEB_ASSISTANT_INTERNAL_KEY", "test-secret")
+    monkeypatch.setattr(web_assistant_api.intent_router, "classify", _fake_classify_default)
+    captured = {}
+
+    async def fake_stream(history, funnel_context=None, tools=None, tool_executor=None):
+        captured["funnel_context"] = funnel_context or ""
+        yield "Ответ."
+
+    monkeypatch.setattr(web_assistant_api.web_brain, "generate_response_stream", fake_stream)
+    client.post(
+        "/chat",
+        headers={"X-Assistant-Key": "test-secret"},
+        json={
+            "session_id": "session_signed_in_context",
+            "messages": [{"role": "user", "message": "Привет"}],
+            "telegram_user_id": 848510279,
+        },
+    )
+
+    ctx = captured["funnel_context"]
+    assert "вошёл в личный кабинет сайта через Telegram" in ctx
+    assert "не вызывай identify_returning_client" in ctx
+    assert "САМ говорит, что уже наш клиент" not in ctx
+
+
+def test_chat_signed_in_does_not_remember_chat_session_verification(monkeypatch) -> None:
+    """Вход через /cabinet не должен просачиваться в _VERIFIED_SESSIONS —
+    после logout (кука кабинета стёрта) анонимные сообщения того же
+    browser-таба обязаны вернуться к обычному, неподтверждённому режиму."""
+    monkeypatch.setenv("WEB_ASSISTANT_INTERNAL_KEY", "test-secret")
+    monkeypatch.setattr(web_assistant_api.intent_router, "classify", _fake_classify_default)
+
+    async def fake_stream(history, funnel_context=None, tools=None, tool_executor=None):
+        yield "Ответ."
+
+    monkeypatch.setattr(web_assistant_api.web_brain, "generate_response_stream", fake_stream)
+    client.post(
+        "/chat",
+        headers={"X-Assistant-Key": "test-secret"},
+        json={
+            "session_id": "session_no_remember",
+            "messages": [{"role": "user", "message": "Привет"}],
+            "telegram_user_id": 848510279,
+        },
+    )
+
+    assert web_assistant_api._get_verified_telegram_id("session_no_remember") is None
