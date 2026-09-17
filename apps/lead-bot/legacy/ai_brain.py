@@ -514,6 +514,48 @@ class AIBrain:
             logger.warning(f"Error classifying intent: {e}")
             return None
 
+    async def summarize_topics_async(self, conversation_history: List[Dict[str, str]]) -> Optional[str]:
+        """
+        Короткая память тем разговора (пункт 4 плана «умный ассистент») — не
+        квалификация лида, а о чём человек вообще спрашивал, чтобы при
+        следующем обращении platform_context мог сказать «в прошлый раз вы
+        спрашивали про…». Тот же паттерн, что classify_intent_async.
+        """
+        response_text = ""
+        try:
+            limited_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
+            conversation_text = "\n".join([
+                f"{msg['role']}: "
+                f"{_sanitize_user_content_for_model(msg.get('content') or msg.get('message') or '') if msg.get('role') == 'user' else (msg.get('content') or msg.get('message') or '')}"
+                for msg in limited_history
+            ])
+
+            messages = [
+                {"role": "system", "content": prompts.TOPIC_MEMORY_PROMPT},
+                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
+            ]
+
+            response = await self.async_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **self._completion_token_kwargs(minimum=_INTENT_CLASSIFICATION_MIN_TOKENS),
+                temperature=0.2
+            )
+
+            response_text = response.choices[0].message.content or ""
+            data = json.loads(_strip_fenced_json(response_text))
+            if not isinstance(data, dict):
+                return None
+            summary = _clean_optional_string(data.get("summary"), max_length=500)
+            return summary
+
+        except json.JSONDecodeError as e:
+            logger.warning("Error parsing topic memory JSON: %s, response: %s", e, response_text[:200])
+            return None
+        except Exception as e:
+            logger.warning(f"Error summarizing topics: {e}")
+            return None
+
     def generate_response(
         self,
         conversation_history: List[Dict[str, str]],

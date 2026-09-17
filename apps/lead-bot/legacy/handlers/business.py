@@ -1151,6 +1151,9 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
         # известен платформе», что и в основном боте (#377); раньше его тут не было,
         # хотя именно здесь произошли кейсы Виктории и Рябовой.
         core_context = platform_context.build_core_context_block(user_id)
+        topic_memory_context = platform_context.build_topic_memory_block(user_id)
+        if topic_memory_context:
+            funnel_context = f"{topic_memory_context}\n\n{funnel_context}"
         if core_context:
             funnel_context = f"{core_context}\n\n{funnel_context}"
         async for chunk in ai_brain.ai_brain.generate_response_stream(
@@ -1327,6 +1330,13 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             conversation_snapshot = list(conversation_history)
 
             async def _post_response_lead_processing() -> None:
+                try:
+                    topic_summary = await ai_brain.ai_brain.summarize_topics_async(conversation_snapshot)
+                    if topic_summary:
+                        database.db.update_topic_memory(user, topic_summary)
+                except (sqlite3.Error, KeyError, ValueError, AttributeError) as memory_error:
+                    logger.warning(f"[Business] Failed to update topic memory for user {user_id}: {memory_error}")
+
                 try:
                     extracted = await ai_brain.ai_brain.extract_lead_data_async(conversation_snapshot)
                     if not extracted:

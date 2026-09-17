@@ -745,3 +745,59 @@ def test_core_get_json_uses_short_cache(test_db, monkeypatch):
 
     assert first == second
     assert calls["count"] == 1
+
+
+# ── Память тем разговора (пункт 4 «умного ассистента») ─────────────────────
+
+def test_topic_memory_schema_columns_exist(test_db):
+    """Миграция database_schema.py добавляет обе колонки на users."""
+    conn = test_db.get_connection()
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
+    conn.close()
+    assert "topic_memory_summary" in columns
+    assert "topic_memory_updated_at" in columns
+
+
+def test_get_topic_memory_is_none_before_first_update(test_db):
+    user_id = test_db.create_or_update_user(telegram_id=910001, username="u", first_name="Клиент")
+    assert test_db.get_topic_memory(user_id) is None
+
+
+def test_update_and_get_topic_memory_roundtrip(test_db):
+    user_id = test_db.create_or_update_user(telegram_id=910002, username="u", first_name="Клиент")
+
+    test_db.update_topic_memory(user_id, "Интересовался ценами на проверку договоров.")
+
+    assert test_db.get_topic_memory(user_id) == "Интересовался ценами на проверку договоров."
+
+
+def test_update_topic_memory_overwrites_previous_summary(test_db):
+    user_id = test_db.create_or_update_user(telegram_id=910003, username="u", first_name="Клиент")
+
+    test_db.update_topic_memory(user_id, "Первая тема.")
+    test_db.update_topic_memory(user_id, "Вторая тема, заменяет первую.")
+
+    assert test_db.get_topic_memory(user_id) == "Вторая тема, заменяет первую."
+
+
+def test_update_topic_memory_does_not_touch_last_interaction(test_db):
+    """Локальная память тем — не признак реальной активности пользователя."""
+    user_id = test_db.create_or_update_user(telegram_id=910004, username="u", first_name="Клиент")
+    before = test_db.get_user_by_id(user_id)["last_interaction"]
+
+    test_db.update_topic_memory(user_id, "Тема разговора.")
+
+    after = test_db.get_user_by_id(user_id)["last_interaction"]
+    assert before == after
+
+
+def test_topic_memory_is_not_in_core_sync_allowlist_path(test_db, monkeypatch):
+    """update_topic_memory — локальная операция, не должна звать core-api."""
+    user_id = test_db.create_or_update_user(telegram_id=910005, username="u", first_name="Клиент")
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("update_topic_memory не должен обращаться к core-api")
+
+    monkeypatch.setattr(test_db, "_sync_user_to_core", _fail)
+
+    test_db.update_topic_memory(user_id, "Тема разговора.")  # не должно поднять AssertionError

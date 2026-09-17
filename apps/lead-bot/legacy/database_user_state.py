@@ -327,3 +327,46 @@ def reset_user_funnel_state(
         raise
     finally:
         conn.close()
+
+
+def get_topic_memory(get_connection: Callable[[], sqlite3.Connection], *, user_id: int) -> str | None:
+    """Короткая память тем разговора — что человек уже обсуждал с ассистентом
+    раньше (пункт 4 плана «умный ассистент»). Только локально: это не
+    формальное дело в ядре и не подлежит зеркалированию в core-api."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT topic_memory_summary FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        return row["topic_memory_summary"] if row and row["topic_memory_summary"] else None
+    finally:
+        conn.close()
+
+
+def update_topic_memory(
+    get_connection: Callable[[], sqlite3.Connection],
+    *,
+    user_id: int,
+    summary: str,
+) -> None:
+    """Обновляет память тем разговора. Локальная колонка, без зеркалирования
+    в core-api (sync_user не отправляет эти поля — ядру они не нужны) и без
+    затрагивания last_interaction, чтобы не путать с реальной активностью."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE users
+            SET topic_memory_summary = ?, topic_memory_updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (summary, user_id),
+        )
+        conn.commit()
+    except Exception as error:
+        logger.error("Error updating topic memory for user %s: %s", user_id, error)
+        conn.rollback()
+        raise
+    finally:
+        conn.close()

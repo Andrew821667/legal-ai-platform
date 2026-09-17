@@ -495,3 +495,80 @@ def test_last_user_message_finds_most_recent_user_turn():
 
 def test_last_user_message_none_when_no_user_turns():
     assert ai_brain_module._last_user_message([{"role": "assistant", "message": "привет"}]) is None
+
+
+# ── Память тем разговора (summarize_topics_async) ───────────────────────────
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    calls: list[dict[str, Any]] = []
+    brain.async_client = _FakeClient(
+        _FakeAsyncCompletions('{"summary": "Интересовался ценами на проверку договоров."}', calls)
+    )
+
+    result = await brain.summarize_topics_async(
+        [{"role": "user", "message": "Сколько стоит проверка договоров?"}]
+    )
+
+    assert result == "Интересовался ценами на проверку договоров."
+    sent_messages = calls[0]["messages"]
+    assert sent_messages[0]["content"] == prompts.TOPIC_MEMORY_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_handles_null_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    brain.async_client = _FakeClient(_FakeAsyncCompletions('{"summary": null}', []))
+
+    result = await brain.summarize_topics_async([{"role": "user", "message": "Привет"}])
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_handles_fenced_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    brain.async_client = _FakeClient(
+        _FakeAsyncCompletions('```json\n{"summary": "Спрашивал про демо Contract AI."}\n```', [])
+    )
+
+    result = await brain.summarize_topics_async([{"role": "user", "message": "А есть демо?"}])
+
+    assert result == "Спрашивал про демо Contract AI."
+
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_returns_none_on_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+
+    class _Boom:
+        async def create(self, **kwargs):
+            raise RuntimeError("llm down")
+
+    brain.async_client = _FakeClient(_Boom())
+
+    result = await brain.summarize_topics_async([{"role": "user", "message": "Привет"}])
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_returns_none_on_garbage_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    brain.async_client = _FakeClient(_FakeAsyncCompletions("совсем не json", []))
+
+    result = await brain.summarize_topics_async([{"role": "user", "message": "Привет"}])
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_topics_async_trims_overly_long_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    brain = _make_brain(monkeypatch)
+    long_summary = "А" * 900
+    brain.async_client = _FakeClient(_FakeAsyncCompletions(f'{{"summary": "{long_summary}"}}', []))
+
+    result = await brain.summarize_topics_async([{"role": "user", "message": "Вопрос"}])
+
+    assert result is not None and len(result) <= 500
