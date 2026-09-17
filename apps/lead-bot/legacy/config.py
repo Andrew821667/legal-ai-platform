@@ -106,7 +106,12 @@ class Config:
             or default_ai_model_for_base_url(self.OPENAI_BASE_URL)
         )
         self.OPENAI_MODEL: str = self.AI_MODEL
-        self.MAX_TOKENS: int = int(os.getenv('MAX_TOKENS', '1000'))
+        # 1000 (старый дефолт) не хватает на deepseek-v4-pro с непустым RAG-
+        # контекстом (диалоги + база знаний компании) — 17.09 это впервые
+        # проявилось живьём, как только прокси починил эмбеддинги и оба RAG-
+        # блока стали реально попадать в промпт: ответы обрывались на
+        # полуслове или уходили в пустой reply (finish_reason="length").
+        self.MAX_TOKENS: int = int(os.getenv('MAX_TOKENS', '4000'))
         self.MAX_COMPLETION_TOKENS: int = int(os.getenv('MAX_COMPLETION_TOKENS', str(self.MAX_TOKENS)))
         self.TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
         self.MAX_HISTORY_MESSAGES: int = int(os.getenv('MAX_HISTORY_MESSAGES', '10'))
