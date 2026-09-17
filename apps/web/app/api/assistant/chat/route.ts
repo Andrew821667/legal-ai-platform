@@ -63,7 +63,11 @@ export async function POST(request: NextRequest) {
         messages: payload.messages,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(45_000),
+      // 45с не хватало на многораундовые ответы (identify_returning_client
+      // + get_full_case_details + финальный ответ у reasoning-модели) — с
+      // одним таким сценарием поймали 504 живьём 17.09. Держим синхронно с
+      // asyncio.timeout в web_assistant_api.py (тот — 120с, этот — с запасом).
+      signal: AbortSignal.timeout(125_000),
     });
 
     if (!response.ok) {
