@@ -9,6 +9,7 @@ import logging
 import json
 import math
 from typing import List, Dict, Optional, Tuple
+import httpx
 from openai import OpenAI
 from config import get_config
 
@@ -26,7 +27,17 @@ class KnowledgeEngine:
         # бота). До этой правки клиент наследовал DeepSeek-адрес и падал 404
         # на каждом запросе эмбеддинга — RAG по диалогам был мёртв молча,
         # ошибка ловилась и логировалась как некритичная.
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.EMBEDDING_BASE_URL)
+        #
+        # С прод-хоста (Mac mini, российский IP) OpenAI отвечает 403
+        # unsupported_country_region_territory без прокси — EMBEDDING_PROXY_URL
+        # заворачивает клиент через локальный xray, у которого выход в нужный
+        # регион (пусто = без прокси, как раньше, для дев-окружений).
+        http_client = httpx.Client(proxy=config.EMBEDDING_PROXY_URL) if config.EMBEDDING_PROXY_URL else None
+        self.client = OpenAI(
+            api_key=config.OPENAI_API_KEY,
+            base_url=config.EMBEDDING_BASE_URL,
+            http_client=http_client,
+        )
         self.embedding_model = config.EMBEDDING_MODEL
         logger.info("KnowledgeEngine initialized (embeddings base_url=%s)", config.EMBEDDING_BASE_URL)
     

@@ -77,3 +77,21 @@ def test_embedding_settings_are_overridable(monkeypatch):
     fresh = Config()
     assert fresh.EMBEDDING_BASE_URL == "https://example.test/v1"
     assert fresh.EMBEDDING_MODEL == "custom-embedding"
+
+
+def test_embedding_proxy_url_defaults_to_empty(monkeypatch):
+    monkeypatch.delenv("LEGAL_AI_HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("LEGAL_AI_HTTP_PROXY", raising=False)
+    assert Config().EMBEDDING_PROXY_URL == ""
+
+
+def test_embedding_proxy_url_prefers_https_over_http(monkeypatch):
+    monkeypatch.setenv("LEGAL_AI_HTTPS_PROXY", "http://host.docker.internal:11808")
+    monkeypatch.setenv("LEGAL_AI_HTTP_PROXY", "http://host.docker.internal:14809")
+    assert Config().EMBEDDING_PROXY_URL == "http://host.docker.internal:11808"
+
+
+def test_embedding_proxy_url_falls_back_to_http(monkeypatch):
+    monkeypatch.delenv("LEGAL_AI_HTTPS_PROXY", raising=False)
+    monkeypatch.setenv("LEGAL_AI_HTTP_PROXY", "http://host.docker.internal:11808")
+    assert Config().EMBEDDING_PROXY_URL == "http://host.docker.internal:11808"
