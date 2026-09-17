@@ -65,6 +65,14 @@ class Config:
         # уходит на DeepSeek и падает 404 на каждом сообщении (было так до 16.09).
         self.EMBEDDING_BASE_URL: str = os.getenv('EMBEDDING_BASE_URL', 'https://api.openai.com/v1').strip()
         self.EMBEDDING_MODEL: str = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small').strip()
+        # OpenAI блокирует запросы с российских IP (403
+        # unsupported_country_region_territory) — с хоста прод-сервера
+        # эмбеддинги без прокси не проходят вообще. LEGAL_AI_HTTP(S)_PROXY уже
+        # заведены в .env, но раньше нигде не читались клиентом эмбеддингов.
+        self.EMBEDDING_PROXY_URL: str = (
+            os.getenv('LEGAL_AI_HTTPS_PROXY', '').strip()
+            or os.getenv('LEGAL_AI_HTTP_PROXY', '').strip()
+        )
 
         # Admin Telegram ID
         admin_id = os.getenv('ADMIN_TELEGRAM_ID')
