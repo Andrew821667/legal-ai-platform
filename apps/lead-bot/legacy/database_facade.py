@@ -30,6 +30,7 @@ _USERS_COLUMNS = frozenset({
     "marketing_consent", "marketing_consent_date",
     "conversation_stage", "cta_variant", "cta_shown", "cta_shown_at",
     "offer_profile_override",
+    "topic_memory_summary", "topic_memory_updated_at",
     "created_at", "last_interaction",
 })
 
@@ -492,6 +493,15 @@ class DatabaseFacadeMixin:
             self.get_lead_by_user_id,
             user_id=user_id,
         )
+
+    def get_topic_memory(self, user_id: int) -> Optional[str]:
+        """Короткая память тем разговора (пункт 4 «умного ассистента») — что
+        человек уже обсуждал с ассистентом, независимо от формальных дел в ядре."""
+        return database_user_state.get_topic_memory(self.get_connection, user_id=user_id)
+
+    def update_topic_memory(self, user_id: int, summary: str) -> None:
+        """Обновляет память тем разговора. Только локально, без core-api."""
+        database_user_state.update_topic_memory(self.get_connection, user_id=user_id, summary=summary)
 
     def update_user_fields(self, user_id: int, fields: Dict[str, str]) -> bool:
         """Обновление полей профиля пользователя."""

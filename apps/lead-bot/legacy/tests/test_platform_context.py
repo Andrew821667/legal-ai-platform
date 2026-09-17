@@ -208,3 +208,59 @@ def test_full_details_shows_all_cases_without_cap(monkeypatch):
     for i in range(8):
         assert f"дело {i}" in block
     assert "…и ещё" not in block  # краткий блок так пишет, полный — нет
+
+
+# ── build_topic_memory_block: пункт 4 «умного ассистента» ──────────────────
+# В отличие от build_core_context_block — не зависит от ядра/формальных дел,
+# работает по локальной памяти тем разговора (database.db.get_topic_memory).
+
+def test_topic_memory_no_telegram_id_returns_empty(monkeypatch):
+    assert platform_context.build_topic_memory_block(None) == ""
+
+
+def test_topic_memory_unknown_user_returns_empty(monkeypatch):
+    monkeypatch.setattr(platform_context.database.db, "get_user_by_telegram_id", lambda tg: None)
+    assert platform_context.build_topic_memory_block(12345) == ""
+
+
+def test_topic_memory_no_summary_yet_returns_empty(monkeypatch):
+    monkeypatch.setattr(platform_context.database.db, "get_user_by_telegram_id", lambda tg: {"id": 7})
+    monkeypatch.setattr(platform_context.database.db, "get_topic_memory", lambda user_id: None)
+    assert platform_context.build_topic_memory_block(12345) == ""
+
+
+def test_topic_memory_present_renders_block(monkeypatch):
+    monkeypatch.setattr(platform_context.database.db, "get_user_by_telegram_id", lambda tg: {"id": 7})
+    monkeypatch.setattr(
+        platform_context.database.db,
+        "get_topic_memory",
+        lambda user_id: "Интересовался ценами на проверку договоров.",
+    )
+
+    block = platform_context.build_topic_memory_block(12345)
+
+    assert "# Прошлые темы разговора" in block
+    assert "Интересовался ценами на проверку договоров." in block
+
+
+def test_topic_memory_lookup_error_is_swallowed(monkeypatch):
+    def _boom(tg):
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr(platform_context.database.db, "get_user_by_telegram_id", _boom)
+
+    assert platform_context.build_topic_memory_block(12345) == ""
+
+
+def test_topic_memory_works_without_any_core_case_data(monkeypatch):
+    """Ключевое отличие от build_core_context_block: применимо и без единого
+    формального обращения в ядре — например, для тех, кто только спрашивал
+    про платформу, но никогда не оставлял заявку."""
+    monkeypatch.setattr(platform_context.database.db, "get_user_by_telegram_id", lambda tg: {"id": 42})
+    monkeypatch.setattr(
+        platform_context.database.db, "get_topic_memory", lambda user_id: "Спрашивал, что делает AI Verdict."
+    )
+    _bridge(monkeypatch, summary=None)  # в ядре про этого человека вообще ничего нет
+
+    assert platform_context.build_core_context_block(12345) == ""  # ядро — пусто
+    assert "AI Verdict" in platform_context.build_topic_memory_block(12345)  # память тем — есть

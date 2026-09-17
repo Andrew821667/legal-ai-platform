@@ -54,6 +54,7 @@ async def _stream_response_text(
     start_generation = time.time()
     preview_enabled = config.STREAMING_PREVIEW
     core_context = platform_context.build_core_context_block(user_data.get("telegram_id"))
+    topic_memory_context = platform_context.build_topic_memory_block(user_data.get("telegram_id"))
     intent_result = await intent_router.classify(
         conversation_history=conversation_history,
         has_core_context=bool(core_context),
@@ -65,6 +66,8 @@ async def _stream_response_text(
             funnel.build_stage_context(response_stage, cta_variant, cta_shown),
             user_first_name,
         )
+    if topic_memory_context:
+        funnel_context = f"{topic_memory_context}\n\n{funnel_context}"
     if core_context:
         funnel_context = f"{core_context}\n\n{funnel_context}"
     async for chunk in ai_brain.ai_brain.generate_response_stream(
@@ -202,6 +205,23 @@ def _track_tokens(*, user_id: int, message_text: str, full_response: str) -> Non
         system_tokens,
         total_tokens,
     )
+
+
+def _schedule_topic_memory_update(*, user_data: dict, conversation_history: list[dict]) -> None:
+    """Обновляет память тем разговора в фоне (пункт 4 «умного ассистента») —
+    независимо от того, стал ли разговор лидом: применимо и к platform_question,
+    browsing и любому другому не-продажному интенту, для которых лид не заводится."""
+    user_db_id = user_data["id"]
+
+    async def _update_topic_memory() -> None:
+        try:
+            summary = await ai_brain.ai_brain.summarize_topics_async(list(conversation_history))
+            if summary:
+                database.db.update_topic_memory(user_db_id, summary)
+        except (sqlite3.Error, KeyError, ValueError, AttributeError) as error:
+            logger.warning("Failed to update topic memory for user %s: %s", user_db_id, error)
+
+    asyncio.create_task(_update_topic_memory())
 
 
 def _schedule_post_response_lead_processing(
@@ -417,3 +437,4 @@ async def process_ai_response(
         cta_was_shown=cta_shown,
         next_stage=next_stage,
     )
+    _schedule_topic_memory_update(user_data=user_data, conversation_history=conversation_history)

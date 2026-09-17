@@ -133,3 +133,84 @@ async def test_intent_override_replaces_stage_context(monkeypatch):
     assert intent_result.intent == "platform_question"
     assert captured["funnel_context"].startswith("# Вопрос о платформе")
     assert "Текущий этап" not in captured["funnel_context"]
+
+
+@pytest.mark.asyncio
+async def test_topic_memory_context_is_prepended_before_core_context(monkeypatch):
+    monkeypatch.setattr(user_ai_response.config, "STREAMING_PREVIEW", False)
+    monkeypatch.setattr(
+        user_ai_response.platform_context,
+        "build_core_context_block",
+        lambda telegram_id: "# Собеседник уже известен платформе\nNDA подписан.",
+    )
+    monkeypatch.setattr(
+        user_ai_response.platform_context,
+        "build_topic_memory_block",
+        lambda telegram_id: "# Прошлые темы разговора\nСпрашивал про цены.",
+    )
+    _stub_sales_intent(monkeypatch)
+
+    captured = {}
+
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+        captured["funnel_context"] = funnel_context
+        yield "Привет"
+
+    monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "generate_response_stream", _fake_stream)
+
+    async def _send_action(**kwargs):
+        return None
+
+    original_message = SimpleNamespace(chat=SimpleNamespace(send_action=_send_action))
+    user_data = {"telegram_id": 1, "first_name": "Клиент"}
+
+    await user_ai_response._stream_response_text(
+        original_message=original_message,
+        user_data=user_data,
+        user_first_name="Клиент",
+        conversation_history=[],
+        response_stage="discover",
+        cta_variant="A",
+        cta_shown=False,
+    )
+
+    context = captured["funnel_context"]
+    core_index = context.index("Собеседник уже известен платформе")
+    topic_index = context.index("Прошлые темы разговора")
+    stage_index = context.index("Текущий этап: discover.")
+    # Порядок: формальный контекст ядра, затем память тем, затем стадия воронки.
+    assert core_index < topic_index < stage_index
+
+
+@pytest.mark.asyncio
+async def test_no_topic_memory_leaves_funnel_context_unchanged(monkeypatch):
+    monkeypatch.setattr(user_ai_response.config, "STREAMING_PREVIEW", False)
+    monkeypatch.setattr(user_ai_response.platform_context, "build_core_context_block", lambda telegram_id: "")
+    monkeypatch.setattr(user_ai_response.platform_context, "build_topic_memory_block", lambda telegram_id: "")
+    _stub_sales_intent(monkeypatch)
+
+    captured = {}
+
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+        captured["funnel_context"] = funnel_context
+        yield "Привет"
+
+    monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "generate_response_stream", _fake_stream)
+
+    async def _send_action(**kwargs):
+        return None
+
+    original_message = SimpleNamespace(chat=SimpleNamespace(send_action=_send_action))
+    user_data = {"telegram_id": 1, "first_name": "Клиент"}
+
+    await user_ai_response._stream_response_text(
+        original_message=original_message,
+        user_data=user_data,
+        user_first_name="Клиент",
+        conversation_history=[],
+        response_stage="discover",
+        cta_variant="A",
+        cta_shown=False,
+    )
+
+    assert captured["funnel_context"].startswith("Текущий этап: discover.")

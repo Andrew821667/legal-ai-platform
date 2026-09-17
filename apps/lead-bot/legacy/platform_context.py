@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import database
 from core_api_bridge import core_api_bridge
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,32 @@ def build_core_context_block(telegram_user_id: int | None) -> str:
         lines.append(f"  …и ещё {len(acts) - _MAX_ACTS} акт(ов).")
 
     return "\n".join(lines)
+
+
+def build_topic_memory_block(telegram_user_id: int | None) -> str:
+    """Что человек уже обсуждал с ассистентом раньше — пункт 4 плана «умный
+    ассистент». В отличие от build_core_context_block, не зависит от ядра и
+    формальных дел: работает и для тех, у кого никогда не было ни обращения,
+    ни NDA, но кто уже не раз что-то спрашивал у ассистента (например, узнавал
+    про платформу, но не оставил заявку).
+    """
+    if not telegram_user_id:
+        return ""
+    try:
+        user = database.db.get_user_by_telegram_id(int(telegram_user_id))
+        if not user:
+            return ""
+        summary = database.db.get_topic_memory(user["id"])
+    except Exception as error:  # noqa: BLE001 — блок необязателен, ответ важнее
+        logger.warning("Failed to load topic memory for %s: %s", telegram_user_id, error)
+        return ""
+    if not summary:
+        return ""
+    return (
+        "# Прошлые темы разговора\n"
+        f"Ранее в переписке с ассистентом человек уже поднимал: {summary}\n"
+        "Учитывай это как контекст, но не пересказывай дословно, если это не по теме сейчас."
+    )
 
 
 def build_full_case_details_block(telegram_user_id: int | None) -> str:

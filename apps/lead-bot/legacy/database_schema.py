@@ -394,6 +394,18 @@ def init_database(get_connection: Callable[[], sqlite3.Connection], logger: logg
             cursor.execute("ALTER TABLE users ADD COLUMN offer_profile_override TEXT")
             logger.info("Added offer_profile_override column to users table")
 
+        # Пункт 4 плана «умный ассистент» — короткая память тем разговора:
+        # не формальное дело в ядре (для него есть platform_context.py), а
+        # то, о чём человек уже спрашивал ассистента раньше. Работает даже
+        # для тех, у кого никогда не было оформленного обращения.
+        if "topic_memory_summary" not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN topic_memory_summary TEXT")
+            logger.info("Added topic_memory_summary column to users table")
+
+        if "topic_memory_updated_at" not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN topic_memory_updated_at TIMESTAMP")
+            logger.info("Added topic_memory_updated_at column to users table")
+
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS chat_states (
