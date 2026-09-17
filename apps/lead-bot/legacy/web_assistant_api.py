@@ -11,6 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 import ai_brain
+import intent_router
 
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,16 @@ async def chat(
 
     try:
         async with asyncio.timeout(40):
-            async for part in web_brain.generate_response_stream(history, funnel_context=WEB_CONTEXT):
+            # has_core_context=False всегда: у анонимного посетителя сайта нет
+            # telegram_user_id, сопоставлять его с делом в ядре не с чем — это
+            # заодно не даёт intent_router отдать continuing_own_matter (он
+            # сам откатывается к дефолту без core-контекста, см. _context_for).
+            intent_result = await intent_router.classify(
+                conversation_history=history,
+                has_core_context=False,
+            )
+            funnel_context = intent_result.context_override or WEB_CONTEXT
+            async for part in web_brain.generate_response_stream(history, funnel_context=funnel_context):
                 chunks.append(part)
     except TimeoutError as error:
         logger.warning("Website assistant timed out")
