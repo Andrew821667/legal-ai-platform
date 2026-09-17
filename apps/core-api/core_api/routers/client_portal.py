@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,63 @@ router = APIRouter(prefix="/api/v1/client-portal", tags=["client-portal"])
 
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def _normalize_contact(value: str) -> str:
+    """Телефон в любом формате (+7/8/пробелы/дефисы) сводим к последним 10
+    цифрам — иначе "+7 909 233-09-09" и "89092330909" не совпадут при
+    буквальном сравнении. Email — просто lower+strip."""
+    stripped = value.strip().lower()
+    digits = "".join(ch for ch in stripped if ch.isdigit())
+    if "@" not in stripped and len(digits) >= 10:
+        return digits[-10:]
+    return stripped
+
+
+class VerifyReturningClientRequest(BaseModel):
+    contact: str = Field(min_length=3, max_length=255)
+    agreement_number: str = Field(min_length=1, max_length=64)
+
+
+@router.post("/verify")
+def verify_returning_client(
+    payload: VerifyReturningClientRequest,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Веб-ассистент (анонимный посетитель сайта) заявляет, что уже клиент, и
+    называет контакт + номер договора. Проверяем ОБА, а не только контакт —
+    голого совпадения по телефону/email недостаточно (посторонний мог его
+    узнать), а номер договора — то, что знает только реальная сторона.
+
+    Лидам без договора (только обращение) это не помогает — намеренно:
+    у LegalIntake нет пользовательского номера для надёжной сверки, а
+    approximate-match по описанию задачи — слишком слабая защита.
+    """
+    _ = identity
+    agreement = db.scalar(
+        select(ServiceAgreement).where(
+            ServiceAgreement.agreement_number == payload.agreement_number.strip()
+        )
+    )
+    if agreement is None or agreement.client_telegram_user_id is None:
+        return {"verified": False}
+
+    telegram_user_id = agreement.client_telegram_user_id
+    leads = db.scalars(
+        select(Lead).where(Lead.telegram_user_id == telegram_user_id)
+    ).all()
+    normalized_input = _normalize_contact(payload.contact)
+    known_contacts = {
+        _normalize_contact(value)
+        for lead in leads
+        for value in (lead.phone, lead.email, lead.contact)
+        if value
+    }
+    if normalized_input not in known_contacts:
+        return {"verified": False}
+
+    return {"verified": True, "telegram_user_id": telegram_user_id}
 
 
 @router.get("/summary")
