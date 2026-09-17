@@ -95,3 +95,20 @@ def test_embedding_proxy_url_falls_back_to_http(monkeypatch):
     monkeypatch.delenv("LEGAL_AI_HTTPS_PROXY", raising=False)
     monkeypatch.setenv("LEGAL_AI_HTTP_PROXY", "http://host.docker.internal:11808")
     assert Config().EMBEDDING_PROXY_URL == "http://host.docker.internal:11808"
+
+
+def test_chat_api_key_falls_back_to_openai_key_when_unset(monkeypatch):
+    """Дев/CI: один ключ на всё, как было до разделения — не должно ломаться."""
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-shared-test-key")
+    assert Config().CHAT_API_KEY == "sk-shared-test-key"
+
+
+def test_chat_api_key_prefers_dedicated_deepseek_key(monkeypatch):
+    """Регрессия на 17.09: ротация OPENAI_API_KEY (для эмбеддингов) не должна
+    молча подменять ключ чата — у DeepSeek теперь свой слот."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-embeddings-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-chat-key")
+    fresh = Config()
+    assert fresh.CHAT_API_KEY == "sk-deepseek-chat-key"
+    assert fresh.OPENAI_API_KEY == "sk-openai-embeddings-key"
