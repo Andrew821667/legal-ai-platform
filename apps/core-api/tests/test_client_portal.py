@@ -7,6 +7,7 @@ from core_api.db import SessionLocal
 from core_api.main import app
 from core_api.models import (
     ApiKey,
+    AuditLog,
     IntakeDocument,
     Lead,
     LeadSource,
@@ -25,11 +26,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 
-def _key(name: str) -> str:
+def _key(name: str, scope: Scope = Scope.bot) -> str:
     raw = generate_api_key()
     db = SessionLocal()
     try:
-        db.add(ApiKey(key_hash=hash_api_key(raw), scope=Scope.bot, name=name, is_active=True))
+        db.add(ApiKey(key_hash=hash_api_key(raw), scope=scope, name=name, is_active=True))
         db.commit()
         cache.invalidate()
         return raw
@@ -318,6 +319,217 @@ def test_summary_rejects_non_positive_telegram_id() -> None:
     finally:
         db = SessionLocal()
         try:
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_sync_telegram_profile_fills_empty_phone_on_all_leads_of_account_only() -> None:
+    """Верифицированный номер из Telegram дозаполняет ВСЕ пустые лиды именно
+    этого telegram_user_id и не задевает лида другого аккаунта."""
+    key_name = f"pytest.client-portal.sync-phone.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        own_first = Lead(source=LeadSource.telegram_bot, telegram_user_id=73001, contact="@own1")
+        own_second = Lead(source=LeadSource.telegram_bot, telegram_user_id=73001, contact="@own2")
+        other = Lead(source=LeadSource.telegram_bot, telegram_user_id=73002, contact="@other")
+        db.add_all([own_first, own_second, other])
+        db.commit()
+        own_first_id, own_second_id, other_id = own_first.id, own_second.id, other.id
+    finally:
+        db.close()
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/telegram-profile",
+            headers={"X-API-Key": key},
+            json={"telegram_user_id": 73001, "phone": "+7 909 233-09-09", "phone_verified": True},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"telegram_user_id": 73001, "leads_matched": 2, "leads_updated": 2}
+
+        db = SessionLocal()
+        try:
+            assert db.get(Lead, own_first_id).phone == "+79092330909"
+            assert db.get(Lead, own_second_id).phone == "+79092330909"
+            assert db.get(Lead, other_id).phone is None
+            audit = db.query(AuditLog).filter(AuditLog.action == "lead.phone_from_telegram").all()
+            assert len(audit) == 1
+            assert audit[0].details["leads_updated"] == 2
+            assert audit[0].details["telegram_user_id"] == 73001
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(AuditLog).where(AuditLog.action == "lead.phone_from_telegram"))
+            db.execute(delete(Lead).where(Lead.id.in_([own_first_id, own_second_id, other_id])))
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_sync_telegram_profile_never_overwrites_existing_phone() -> None:
+    key_name = f"pytest.client-portal.sync-phone.keep.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        lead = Lead(
+            source=LeadSource.telegram_bot,
+            telegram_user_id=73101,
+            contact="@has-phone",
+            phone="+79001112233",
+        )
+        db.add(lead)
+        db.commit()
+        lead_id = lead.id
+    finally:
+        db.close()
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/telegram-profile",
+            headers={"X-API-Key": key},
+            json={"telegram_user_id": 73101, "phone": "+79995556677", "phone_verified": True},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"telegram_user_id": 73101, "leads_matched": 1, "leads_updated": 0}
+
+        db = SessionLocal()
+        try:
+            assert db.get(Lead, lead_id).phone == "+79001112233"
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(Lead).where(Lead.id == lead_id))
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_sync_telegram_profile_without_verification_is_a_noop() -> None:
+    """phone_verified=False (пользователь не дал согласие на scope phone в
+    Telegram) — номер не пишем, даже если он передан."""
+    key_name = f"pytest.client-portal.sync-phone.unverified.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        lead = Lead(source=LeadSource.telegram_bot, telegram_user_id=73201, contact="@unverified")
+        db.add(lead)
+        db.commit()
+        lead_id = lead.id
+    finally:
+        db.close()
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/telegram-profile",
+            headers={"X-API-Key": key},
+            json={"telegram_user_id": 73201, "phone": "+79001112233", "phone_verified": False},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"telegram_user_id": 73201, "leads_matched": 1, "leads_updated": 0}
+
+        db = SessionLocal()
+        try:
+            assert db.get(Lead, lead_id).phone is None
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(Lead).where(Lead.id == lead_id))
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_sync_telegram_profile_with_no_matching_leads_returns_zeroes() -> None:
+    key_name = f"pytest.client-portal.sync-phone.none.{uuid4().hex}"
+    key = _key(key_name)
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/telegram-profile",
+            headers={"X-API-Key": key},
+            json={"telegram_user_id": 73301, "phone": "+79001112233", "phone_verified": True},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"telegram_user_id": 73301, "leads_matched": 0, "leads_updated": 0}
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_sync_telegram_profile_requires_api_key_and_correct_scope() -> None:
+    no_key_response = TestClient(app).post(
+        "/api/v1/client-portal/telegram-profile",
+        json={"telegram_user_id": 1, "phone": "+79001112233", "phone_verified": True},
+    )
+    assert no_key_response.status_code == 401
+
+    key_name = f"pytest.client-portal.sync-phone.wrong-scope.{uuid4().hex}"
+    key = _key(key_name, scope=Scope.news)
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/telegram-profile",
+            headers={"X-API-Key": key},
+            json={"telegram_user_id": 1, "phone": "+79001112233", "phone_verified": True},
+        )
+        assert response.status_code == 403
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_summary_exposes_client_phone_from_leads() -> None:
+    key_name = f"pytest.client-portal.summary-phone.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        lead = Lead(
+            source=LeadSource.telegram_bot,
+            telegram_user_id=73401,
+            name="С телефоном",
+            phone="+79001234567",
+        )
+        db.add(lead)
+        db.commit()
+        lead_id = lead.id
+    finally:
+        db.close()
+
+    try:
+        response = TestClient(app).get(
+            "/api/v1/client-portal/summary?telegram_user_id=73401",
+            headers={"X-API-Key": key},
+        )
+        assert response.status_code == 200
+        assert response.json()["client"]["phone"] == "+79001234567"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(Lead).where(Lead.id == lead_id))
             db.execute(delete(ApiKey).where(ApiKey.name == key_name))
             db.commit()
             cache.invalidate()
