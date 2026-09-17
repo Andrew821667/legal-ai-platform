@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.models import (
+    ActorType,
     IntakeDocument,
     Lead,
     LegalIntake,
@@ -85,6 +87,66 @@ def verify_returning_client(
         return {"verified": False}
 
     return {"verified": True, "telegram_user_id": telegram_user_id}
+
+
+def _normalize_phone(value: str | None) -> str | None:
+    """Оставляет "+" и цифры; отбрасывает то, что после нормализации короче
+    10 цифр — обрывок номера хуже, чем пустое поле."""
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if len(digits) < 10:
+        return None
+    return f"+{digits}"
+
+
+class TelegramProfileSyncRequest(BaseModel):
+    telegram_user_id: int = Field(gt=0)
+    phone: str | None = Field(default=None, max_length=32)
+    phone_verified: bool = False
+
+
+@router.post("/telegram-profile")
+def sync_telegram_profile(
+    payload: TelegramProfileSyncRequest,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Клиент вошёл в личный кабинет на сайте через Telegram Login со scope
+    phone и дал согласие — Telegram отдал верифицированный номер. Дозаполняем
+    им ТОЛЬКО пустой Lead.phone (никогда не перезаписываем то, что уже есть:
+    источник в базе может быть точнее — например, номер, продиктованный
+    голосом юристу и уточнённый вручную).
+
+    Непроверенный или отсутствующий номер — no-op, идемпотентно: повторный
+    вызов с уже заполненными лидами просто вернёт leads_updated=0.
+    """
+    leads = db.scalars(
+        select(Lead).where(Lead.telegram_user_id == payload.telegram_user_id)
+    ).all()
+    phone = _normalize_phone(payload.phone) if payload.phone_verified else None
+    updated_ids: list = []
+    if phone:
+        for lead in leads:
+            if not (lead.phone or "").strip():
+                lead.phone = phone
+                updated_ids.append(lead.id)
+    if updated_ids:
+        write_audit(
+            db,
+            actor_type=ActorType.api_key,
+            actor_id=identity.name,
+            action="lead.phone_from_telegram",
+            target_type="lead",
+            target_id=updated_ids[0],
+            details={"leads_updated": len(updated_ids), "telegram_user_id": payload.telegram_user_id},
+        )
+        db.commit()
+    return {
+        "telegram_user_id": payload.telegram_user_id,
+        "leads_matched": len(leads),
+        "leads_updated": len(updated_ids),
+    }
 
 
 @router.get("/summary")
@@ -164,6 +226,7 @@ def summary(
         "client": {
             "lead_id": str(leads[0].id) if leads else None,
             "name": next((row.name for row in leads if row.name), None),
+            "phone": next((row.phone for row in leads if row.phone), None),
             "has_cases": bool(intakes),
         },
         "nda": {

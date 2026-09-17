@@ -1,3 +1,7 @@
+import type { NextRequest } from "next/server";
+
+import { checkSlidingWindow, commitSlidingWindowHit } from "./rate-limit.ts";
+
 export type AssistantRole = "user" | "assistant";
 
 export interface AssistantMessage {
@@ -25,16 +29,6 @@ const sessionBuckets = new Map<string, number[]>();
 function positiveInt(raw: string | undefined, fallback: number): number {
   const value = Number(raw || "");
   return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
-}
-
-function prune(store: Map<string, number[]>, key: string, now: number, windowMs: number): number[] {
-  const rows = (store.get(key) || []).filter((ts) => now - ts <= windowMs);
-  if (rows.length) {
-    store.set(key, rows);
-  } else {
-    store.delete(key);
-  }
-  return rows;
 }
 
 function cleanMessage(input: unknown): AssistantMessage {
@@ -87,19 +81,34 @@ export function recordAssistantRequest(
   const ipLimit = positiveInt(process.env.WEB_ASSISTANT_IP_MAX_REQUESTS, 30);
   const sessionLimit = positiveInt(process.env.WEB_ASSISTANT_SESSION_MAX_REQUESTS, 15);
   const windowMs = windowSeconds * 1000;
-  const ipRows = prune(ipBuckets, ip, now, windowMs);
-  const sessionRows = prune(sessionBuckets, sessionId, now, windowMs);
+  const ipCheck = checkSlidingWindow(ipBuckets, ip, ipLimit, windowMs, now);
+  const sessionCheck = checkSlidingWindow(sessionBuckets, sessionId, sessionLimit, windowMs, now);
 
-  if (ipRows.length >= ipLimit || sessionRows.length >= sessionLimit) {
-    const oldest = Math.min(ipRows[0] || now, sessionRows[0] || now);
+  // Отказ по любому из двух лимитов не должен молча расходовать другой —
+  // коммитим попытку в оба bucket'а только если оба разрешают.
+  if (!ipCheck.allowed || !sessionCheck.allowed) {
+    const oldest = Math.min(ipCheck.rows[0] ?? now, sessionCheck.rows[0] ?? now);
     return { allowed: false, retryAfter: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)) };
   }
 
-  ipRows.push(now);
-  sessionRows.push(now);
-  ipBuckets.set(ip, ipRows);
-  sessionBuckets.set(sessionId, sessionRows);
+  commitSlidingWindowHit(ipBuckets, ip, ipCheck.rows, now);
+  commitSlidingWindowHit(sessionBuckets, sessionId, sessionCheck.rows, now);
   return { allowed: true, retryAfter: 0 };
+}
+
+/**
+ * Хосты, которым доверяем как Origin запроса с этого сайта — общий список
+ * для чата ассистента, /cabinet/logout и /api/leads (cookie-путь). host из
+ * URL и заголовка Host обычно совпадают; x-forwarded-host и
+ * NEXT_PUBLIC_SITE_URL — подстраховка за Caddy и на случай несовпадения.
+ */
+export function trustedHostsFor(request: NextRequest): string[] {
+  return [
+    request.nextUrl.host,
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+    process.env.NEXT_PUBLIC_SITE_URL,
+  ].filter((value): value is string => Boolean(value));
 }
 
 export function isTrustedAssistantOrigin(origin: string | null, hosts: string | string[]): boolean {

@@ -21,9 +21,11 @@ export const ROUTES = {
   miniAppLegalHelp: "/miniapp/legal-help",
   miniAppEngineeringHelp: "/miniapp/engineering-help",
   miniAppCases: "/miniapp/cases",
+  cabinet: "/cabinet",
+  cabinetProfile: "/cabinet/profile",
 } as const;
 
-const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_ai_helper_new_bot").trim();
+export const LEAD_BOT_USERNAME = (process.env.NEXT_PUBLIC_LEAD_BOT_USERNAME || "legal_ai_helper_new_bot").trim();
 const READER_BOT_USERNAME = (process.env.NEXT_PUBLIC_READER_BOT_USERNAME || "legal_ai_news_reader_bot").trim();
 const CHANNEL_USERNAME = (process.env.NEXT_PUBLIC_CHANNEL_USERNAME || "ai_verdict").trim();
 const DEFAULT_CONTRACT_AI_SYSTEM_URL = "https://contract.ai-verdict.ru";

@@ -65,6 +65,7 @@ export default function WebAssistant() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
+  const [signedInName, setSignedInName] = useState<string | null>(null);
   const sessionId = useRef("");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -73,6 +74,24 @@ export default function WebAssistant() {
     const stored = readSession();
     sessionId.current = stored.sessionId;
     setMessages(stored.messages);
+  }, []);
+
+  // Не влияет на сам запрос к ассистенту (кука client_session уходит на
+  // сервер сама, route.ts подставляет telegram_user_id независимо от этого
+  // состояния) — только на подпись в шапке диалога, чтобы было видно, что
+  // ассистент уже видит дела вошедшего клиента.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/client/me", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { signed_in?: boolean; profile?: { first_name?: string | null } | null } | null) => {
+        const name = data?.signed_in ? data.profile?.first_name : null;
+        if (!cancelled && name) setSignedInName(name);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -173,7 +192,9 @@ export default function WebAssistant() {
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-300 bg-slate-950 px-4 text-white">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">AI Verdict</p>
-          <p className="truncate text-xs text-slate-300">Профильный ассистент</p>
+          <p className="truncate text-xs text-slate-300">
+            {signedInName ? `Вы вошли как ${signedInName} — вижу ваши дела` : "Профильный ассистент"}
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <button

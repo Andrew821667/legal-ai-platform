@@ -5,7 +5,9 @@ import {
   isTrustedAssistantOrigin,
   normalizeAssistantPayload,
   recordAssistantRequest,
+  trustedHostsFor,
 } from "@/lib/assistant-security";
+import { CLIENT_SESSION_COOKIE, clientSessionSecret, verifyClientSessionToken } from "@/lib/client-session";
 import { resolveLeadClientIp } from "@/lib/lead-security";
 
 const ASSISTANT_API_URL = (process.env.ASSISTANT_API_URL || "http://127.0.0.1:8080").replace(/\/+$/, "");
@@ -18,13 +20,7 @@ export async function POST(request: NextRequest) {
   if (!ASSISTANT_KEY) {
     return NextResponse.json({ detail: "Ассистент временно недоступен" }, { status: 503 });
   }
-  const trustedHosts = [
-    request.nextUrl.host,
-    request.headers.get("host"),
-    request.headers.get("x-forwarded-host"),
-    process.env.NEXT_PUBLIC_SITE_URL,
-  ].filter((value): value is string => Boolean(value));
-  if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHosts)) {
+  if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHostsFor(request))) {
     return NextResponse.json({ detail: "Недопустимый источник запроса" }, { status: 403 });
   }
   const contentLength = Number(request.headers.get("content-length") || "0");
@@ -51,6 +47,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Залогинен в личном кабинете (/cabinet) — берём telegram_user_id из куки,
+  // не от клиента: канал внутренний (X-Assistant-Key), web_assistant_api.py
+  // доверяет этому значению как уже проверенному. Битая/просроченная кука —
+  // молча анонимный режим, не ошибка: чат продолжает работать без контекста.
+  const clientSecret = clientSessionSecret();
+  const clientSession = clientSecret
+    ? verifyClientSessionToken(request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "", clientSecret)
+    : null;
+
   try {
     const response = await fetch(`${ASSISTANT_API_URL}/chat`, {
       method: "POST",
@@ -61,6 +66,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         session_id: payload.sessionId,
         messages: payload.messages,
+        ...(clientSession ? { telegram_user_id: clientSession.telegramUserId } : {}),
       }),
       cache: "no-store",
       // 45с не хватало на многораундовые ответы (identify_returning_client

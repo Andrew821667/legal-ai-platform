@@ -66,14 +66,20 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://www.googletagmanager.com https://telegram.org",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://mc.yandex.ru https://www.google-analytics.com https://www.googletagmanager.com",
+              // https://t.me и https://*.telegram.org — аватар профиля из
+              // Telegram Login на странице /cabinet/profile, обычный <img>.
+              "img-src 'self' data: blob: https://mc.yandex.ru https://www.google-analytics.com https://www.googletagmanager.com https://t.me https://*.telegram.org",
               "font-src 'self' data:",
               "connect-src 'self' https://mc.yandex.ru https://www.google-analytics.com https://www.googletagmanager.com",
-              "frame-src https://mc.yandex.ru",
+              // https://oauth.telegram.org — legacy-виджет входа рисует
+              // кнопку и подтверждение внутри iframe с этого источника.
+              // Обмен кода на токен идёт с сервера (route handler), CSP
+              // браузера на него не действует.
+              "frame-src https://mc.yandex.ru https://oauth.telegram.org",
               // Mini App открывается внутри клиента Telegram.
               "frame-ancestors 'self' https://web.telegram.org",
               "base-uri 'self'",
-              "form-action 'self'",
+              "form-action 'self' https://oauth.telegram.org",
               "object-src 'none'",
             ].join('; '),
           },

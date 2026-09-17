@@ -53,9 +53,14 @@ function telegramInitData() {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Вне Telegram (личный кабинет на сайте) window.Telegram не определён —
+  // initData пуст, и requireClient сам уходит на cookie-fallback. Заголовок
+  // всё равно не шлём пустым: меньше шума в запросе, и поведение не зависит
+  // от того, как requireClient трактует пустую строку.
+  const initData = telegramInitData();
   const response = await fetch(path, {
     ...init,
-    headers: { "x-telegram-init-data": telegramInitData(), ...(init?.headers || {}) },
+    headers: { ...(initData ? { "x-telegram-init-data": initData } : {}), ...(init?.headers || {}) },
     cache: "no-store",
   });
   const body = await response.json().catch(() => ({}));
@@ -74,7 +79,21 @@ function Button({ children, onClick, tone = "primary", disabled = false }: {
   </button>;
 }
 
-export default function ClientCases() {
+type ClientCasesProps = {
+  /** miniapp (по умолчанию) — внутри Telegram Mini App, тёмная тема,
+   * узкий экран. site — личный кабинет на сайте (/cabinet): светлая тема
+   * даётся оборачивающим .miniapp-light-ops в globals.css, здесь меняется
+   * только то, что зависит от отсутствия чата Telegram вокруг. */
+  variant?: "miniapp" | "site";
+  /** Рендерится вместо списка дел, когда у аккаунта ещё нет ни одного лида
+   * (новый посетитель, вошедший через Telegram) — форма «Передать задачу».
+   * Render-prop, а не голый ReactNode: форме нужно дёрнуть load() именно
+   * этого экземпляра ClientCases после успешной отправки, чтобы кабинет
+   * сам обновился и показал только что созданное обращение. */
+  emptyState?: (onCreated: () => void) => React.ReactNode;
+};
+
+export default function ClientCases({ variant = "miniapp", emptyState }: ClientCasesProps = {}) {
   const [data, setData] = useState<Summary | null>(null);
   const [doc, setDoc] = useState<Doc | null>(null);
   const [docKind, setDocKind] = useState<"nda" | "agreement" | "act" | null>(null);
@@ -87,7 +106,10 @@ export default function ClientCases() {
     try { setData(await request<Summary>("/api/client/summary")); }
     catch (e) { setError(e instanceof Error ? e.message : "Кабинет недоступен"); }
   }, []);
-  useEffect(() => { window.Telegram?.WebApp?.ready?.(); window.Telegram?.WebApp?.expand?.(); void load(); }, [load]);
+  useEffect(() => {
+    if (variant === "miniapp") { window.Telegram?.WebApp?.ready?.(); window.Telegram?.WebApp?.expand?.(); }
+    void load();
+  }, [load, variant]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError("");
@@ -116,6 +138,16 @@ export default function ClientCases() {
   if (!data && !error) return <div className="flex min-h-48 items-center justify-center text-slate-300"><RefreshCw className="h-5 w-5 animate-spin" /></div>;
   if (!data) return <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
     <p>{error}</p><div className="mt-3 flex flex-wrap gap-2"><Button tone="quiet" onClick={() => void load()}><RefreshCw className="mr-1 inline h-4 w-4"/>Повторить</Button><a href={EXTERNAL_LINKS.leadBot} className="inline-flex min-h-10 items-center px-2 font-semibold underline">Открыть бота-ассистента</a></div>
+  </section>;
+
+  if (emptyState && !data.client.lead_id) return <section className="space-y-4">
+    <header>
+      <p className="text-sm text-slate-400">Личный кабинет</p>
+      <h2 className="text-2xl font-semibold text-white">Добро пожаловать</h2>
+      <p className="mt-1 text-sm text-slate-300">Вы вошли через Telegram, но пока ни одно обращение не связано с вашим аккаунтом.</p>
+    </header>
+    {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</p> : null}
+    {emptyState(() => void load())}
   </section>;
 
   return <section className="space-y-4">
@@ -149,7 +181,7 @@ export default function ClientCases() {
 
     {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">№ {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>Открыть акт</Button></div></div>)}</div></article> : null}
 
-    {doc ? <DocumentPanel kind={docKind!} doc={doc} note={note} setNote={setNote} busy={busy} close={() => setDoc(null)} run={run} /> : null}
+    {doc ? <DocumentPanel kind={docKind!} doc={doc} note={note} setNote={setNote} busy={busy} close={() => setDoc(null)} run={run} variant={variant} /> : null}
   </section>;
 }
 
@@ -168,13 +200,17 @@ function Question({ id, busy, run }: { id: string; busy: boolean; run: (fn: () =
   return <div className="w-full space-y-2"><textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} placeholder="Вопрос по условиям" className="w-full rounded bg-slate-900 p-2 text-sm"/><Button disabled={busy || !text.trim()} onClick={() => run(async () => { await request(`/api/client/agreements/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "question", text }) }); setText(""); setOpen(false); })}>Отправить вопрос</Button></div>;
 }
 
-function DocumentPanel({ kind, doc, note, setNote, busy, close, run }: { kind: "nda" | "agreement" | "act"; doc: Doc; note: string; setNote: (v: string) => void; busy: boolean; close: () => void; run: (fn: () => Promise<unknown>) => Promise<void> }) {
+function DocumentPanel({ kind, doc, note, setNote, busy, close, run, variant }: { kind: "nda" | "agreement" | "act"; doc: Doc; note: string; setNote: (v: string) => void; busy: boolean; close: () => void; run: (fn: () => Promise<unknown>) => Promise<void>; variant: "miniapp" | "site" }) {
   const act = (action: string, extra = {}) => run(async () => { await request(`/api/client/${kind === "act" ? "acts" : "agreements"}/${doc.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, document_hash: doc.document_hash || doc.hash, ...extra }) }); close(); });
   const actOpen = kind === "act" && !doc.cancelled_at;
   const canAccept = actOpen && !doc.accepted_at && !doc.objected_at;
   const canObject = canAccept;
   const canClaimPaid = actOpen && !doc.status.includes("paid");
-  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/95 p-4"><div className="mx-auto max-w-md pb-12"><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div>{kind === "nda" ? <NdaSigningPanel doc={doc} busy={busy} close={close} run={run}/> : <><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "agreement" ? <div className="mt-5 space-y-3">{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>Подписать договор</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</>}</div></div>;
+  // На сайте панель открывается под фиксированной шапкой (z-50) — здесь
+  // нужен z-[60] и отступ сверху вместо max-w-md, рассчитанного на
+  // мобильный экран Mini App внутри Telegram.
+  const isSite = variant === "site";
+  return <div className={`fixed inset-0 ${isSite ? "z-[60]" : "z-50"} overflow-y-auto bg-slate-950/95 p-4`}><div className={`mx-auto pb-12 ${isSite ? "max-w-3xl pt-20" : "max-w-md"}`}><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div>{kind === "nda" ? <NdaSigningPanel doc={doc} busy={busy} close={close} run={run}/> : <><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "agreement" ? <div className="mt-5 space-y-3">{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>Подписать договор</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</>}</div></div>;
 }
 
 type NdaDetails = {
