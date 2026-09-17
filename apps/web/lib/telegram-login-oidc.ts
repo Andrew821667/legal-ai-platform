@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
+import { createRemoteJWKSet, customFetch, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
+import { ProxyAgent } from "undici";
 
 /**
  * Telegram Login через OpenID Connect — Authorization Code Flow + PKCE.
@@ -10,7 +11,24 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } 
  * (ES256K не поддерживает jose, в algorithms не включаем — если Telegram
  * когда-нибудь подпишет им конкретный токен, verifyIdToken его отклонит).
  * Userinfo-эндпоинта нет — весь профиль только из id_token claims.
+ *
+ * oauth.telegram.org недоступен с прод-хоста напрямую (обнаружено живьём —
+ * 17.09 такая же история была с api.openai.com): обмен кода и JWKS идут
+ * через тот же прокси, что уже использует lead-bot для OpenAI/Telegram Bot
+ * API (LEGAL_AI_HTTPS_PROXY/LEGAL_AI_HTTP_PROXY, тот же .env). undici — явная
+ * зависимость: только она даёт ProxyAgent для non-standard fetch-опции
+ * dispatcher; встроенного node:undici в образе (Node 25) нет.
  */
+
+let cachedProxyDispatcher: ProxyAgent | null | undefined;
+
+function telegramOauthProxyDispatcher(): ProxyAgent | undefined {
+  if (cachedProxyDispatcher === undefined) {
+    const proxyUrl = (process.env.LEGAL_AI_HTTPS_PROXY || process.env.LEGAL_AI_HTTP_PROXY || "").trim();
+    cachedProxyDispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : null;
+  }
+  return cachedProxyDispatcher ?? undefined;
+}
 
 const AUTHORIZATION_ENDPOINT = "https://oauth.telegram.org/auth";
 const TOKEN_ENDPOINT = "https://oauth.telegram.org/token";
@@ -97,7 +115,11 @@ export async function exchangeCode(
       },
       body: body.toString(),
       signal: AbortSignal.timeout(10_000),
-    });
+      // dispatcher — не входит в стандартный RequestInit, но undici (и
+      // построенный на нём глобальный fetch в Node) его читает; в тестах
+      // fetchImpl — фейковая функция, лишний параметр в опциях ей не мешает.
+      ...(telegramOauthProxyDispatcher() ? { dispatcher: telegramOauthProxyDispatcher() } : {}),
+    } as RequestInit);
   } catch (error) {
     throw new Error(`Telegram token endpoint unreachable: ${(error as Error).message}`);
   }
@@ -122,9 +144,16 @@ let cachedJwks: JWTVerifyGetKey | null = null;
  * чаще, чем раз в 30с (например, если атакующий шлёт токены с мусорным kid). */
 export function remoteJwks(): JWTVerifyGetKey {
   if (!cachedJwks) {
+    const dispatcher = telegramOauthProxyDispatcher();
     cachedJwks = createRemoteJWKSet(new URL(JWKS_URL), {
       cooldownDuration: 30_000,
       cacheMaxAge: 600_000,
+      ...(dispatcher
+        ? {
+            [customFetch]: (url: string, options: RequestInit) =>
+              fetch(url, { ...options, dispatcher } as RequestInit),
+          }
+        : {}),
     });
   }
   return cachedJwks;
