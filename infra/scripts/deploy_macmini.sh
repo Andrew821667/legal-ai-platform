@@ -6,6 +6,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 CORE_API_HEALTH_URL="${CORE_API_HEALTH_URL:-http://127.0.0.1:${CORE_API_PUBLISH_PORT:-8000}}"
 SKIP_PULL="${SKIP_PULL:-0}"
+SKIP_PRUNE="${SKIP_PRUNE:-0}"
 COMPOSE_BUILD_MODE="${COMPOSE_BUILD_MODE:-}"
 FORCE_RECREATE="${FORCE_RECREATE:-0}"
 
@@ -85,9 +86,14 @@ fi
 # за день без чистки виртуальный диск Docker Desktop переполнился — слои
 # перестали распаковываться, web и мини-апп клиентов упали в 500. Удаляются
 # только образы, которые не использует ни один контейнер; тома не трогаются.
-echo "Pruning unused images and build cache..."
-docker image prune -af >/dev/null 2>&1 || echo "image prune failed; continuing"
-docker builder prune -af >/dev/null 2>&1 || echo "builder prune failed; continuing"
+# SKIP_PRUNE=1 — для ручного деплоя, когда образы уже собраны локально этим же
+# запуском (docker build) и ещё не привязаны ни к одному контейнеру: без этого
+# prune стирает их же раньше, чем до них доходит `compose up`.
+if [ "$SKIP_PRUNE" != "1" ]; then
+  echo "Pruning unused images and build cache..."
+  docker image prune -af >/dev/null 2>&1 || echo "image prune failed; continuing"
+  docker builder prune -af >/dev/null 2>&1 || echo "builder prune failed; continuing"
+fi
 
 if [ "$SKIP_PULL" != "1" ]; then
   echo "Pulling production images where available..."

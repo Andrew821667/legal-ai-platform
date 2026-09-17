@@ -59,13 +59,27 @@ jobs:
       - run: uv sync
       - run: python3 -m venv .venv-legacy
       - run: .venv-legacy/bin/pip install -r apps/lead-bot/legacy/requirements.txt
-      - run: >-
-          cd apps/lead-bot/legacy &&
-          TELEGRAM_BOT_TOKEN=123456:ABCDEFghijklmnopqrstuvwxyz
-          OPENAI_API_KEY=sk-test-key
-          ADMIN_TELEGRAM_ID=1
-          CORE_API_SYNC_ENABLED=0
-          ../../../.venv-legacy/bin/python -m pytest tests -q
+      # На push (не на pull_request) этот джоб дважды падал за ~5с в самом
+      # pytest без видимой причины — gh run view --log-failed и jobs/{id}/logs
+      # отвечают 403 «Must have admin rights to Repository» на этом токене,
+      # а gh run rerun — 401. Раз лог так не достать, -vv/--tb=long и артефакт
+      # при падении — единственный способ увидеть, что происходит, при
+      # следующем повторении.
+      - run: |
+          set -o pipefail
+          cd apps/lead-bot/legacy
+          TELEGRAM_BOT_TOKEN=123456:ABCDEFghijklmnopqrstuvwxyz \
+          OPENAI_API_KEY=sk-test-key \
+          ADMIN_TELEGRAM_ID=1 \
+          CORE_API_SYNC_ENABLED=0 \
+          ../../../.venv-legacy/bin/python -m pytest tests -q -vv --tb=long 2>&1 | tee /tmp/pytest-lead-bot-legacy.log
+      - name: Upload pytest output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-lead-bot-legacy-output
+          path: /tmp/pytest-lead-bot-legacy.log
+          retention-days: 14
 
   web-build:
     runs-on: ubuntu-latest
