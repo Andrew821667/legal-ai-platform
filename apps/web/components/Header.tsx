@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { UserRound } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
 import { isLightOpsTheme } from "@/lib/visualTheme";
@@ -55,6 +56,7 @@ export default function Header() {
 
   const secondaryNavigation = [
     { name: "Главная", href: "/" },
+    { name: "Личный кабинет", href: ROUTES.cabinet },
     { name: "ИИ в юридической сфере", href: ROUTES.legalAi },
     { name: "Комментарии законодательства об ИИ", href: ROUTES.aiLaw },
     { name: "Для юристов", href: "/for-lawyers" },
@@ -124,6 +126,21 @@ export default function Header() {
               </div>
               )}
             </div>
+          </div>
+
+          {/* Личный кабинет — отдельная иконка, а не только пункт в «Еще»:
+              вход, дела, договоры и акты клиента живут не в контент-разделах
+              сайта, и найти их через выпадающее меню было бы неочевидно. */}
+          <div className="hidden xl:block">
+            <Link
+              href={ROUTES.cabinet}
+              prefetch={false}
+              title="Личный кабинет"
+              aria-label="Личный кабинет"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-slate-800 hover:text-amber-400"
+            >
+              <UserRound className="h-5 w-5" />
+            </Link>
           </div>
 
           {/* Desktop CTA Button */}
@@ -220,6 +237,15 @@ export default function Header() {
                   Открыть сервис проверки договоров →
                 </Link>
               )}
+              <Link
+                href={ROUTES.cabinet}
+                prefetch={false}
+                className="mt-2 flex items-center gap-2 px-4 py-3 text-slate-300 hover:text-amber-400 hover:bg-slate-700 rounded-lg transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <UserRound className="h-4 w-4" />
+                Личный кабинет
+              </Link>
               <div className="mt-4 border-t border-slate-700 pt-3">
                 <p className="px-4 pb-2 text-xs uppercase tracking-wide text-slate-400">Еще</p>
                 {secondaryNavigation.map((item) => (
