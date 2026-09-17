@@ -5,6 +5,7 @@ import {
   isTrustedAssistantOrigin,
   normalizeAssistantPayload,
   recordAssistantRequest,
+  trustedHostsFor,
 } from "@/lib/assistant-security";
 import { resolveLeadClientIp } from "@/lib/lead-security";
 
@@ -18,13 +19,7 @@ export async function POST(request: NextRequest) {
   if (!ASSISTANT_KEY) {
     return NextResponse.json({ detail: "Ассистент временно недоступен" }, { status: 503 });
   }
-  const trustedHosts = [
-    request.nextUrl.host,
-    request.headers.get("host"),
-    request.headers.get("x-forwarded-host"),
-    process.env.NEXT_PUBLIC_SITE_URL,
-  ].filter((value): value is string => Boolean(value));
-  if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHosts)) {
+  if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHostsFor(request))) {
     return NextResponse.json({ detail: "Недопустимый источник запроса" }, { status: 403 });
   }
   const contentLength = Number(request.headers.get("content-length") || "0");
