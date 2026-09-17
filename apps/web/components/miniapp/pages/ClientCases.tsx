@@ -86,8 +86,11 @@ type ClientCasesProps = {
    * только то, что зависит от отсутствия чата Telegram вокруг. */
   variant?: "miniapp" | "site";
   /** Рендерится вместо списка дел, когда у аккаунта ещё нет ни одного лида
-   * (новый посетитель, вошедший через Telegram) — форма «Передать задачу». */
-  emptyState?: React.ReactNode;
+   * (новый посетитель, вошедший через Telegram) — форма «Передать задачу».
+   * Render-prop, а не голый ReactNode: форме нужно дёрнуть load() именно
+   * этого экземпляра ClientCases после успешной отправки, чтобы кабинет
+   * сам обновился и показал только что созданное обращение. */
+  emptyState?: (onCreated: () => void) => React.ReactNode;
 };
 
 export default function ClientCases({ variant = "miniapp", emptyState }: ClientCasesProps = {}) {
@@ -144,7 +147,7 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
       <p className="mt-1 text-sm text-slate-300">Вы вошли через Telegram, но пока ни одно обращение не связано с вашим аккаунтом.</p>
     </header>
     {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</p> : null}
-    {emptyState}
+    {emptyState(() => void load())}
   </section>;
 
   return <section className="space-y-4">

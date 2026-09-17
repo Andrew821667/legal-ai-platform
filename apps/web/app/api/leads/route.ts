@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import { isTrustedAssistantOrigin, trustedHostsFor } from "@/lib/assistant-security";
+import { CLIENT_SESSION_COOKIE, clientSessionSecret, verifyClientSessionToken } from "@/lib/client-session";
+import { cabinetLeadFields, cabinetNoteTags, cabinetSourceContext, type CabinetLeadSession } from "@/lib/lead-cabinet";
 import {
   evaluateLeadSubmission,
   getLeadSecurityConfig,
@@ -83,6 +86,24 @@ export async function POST(request: NextRequest) {
       { detail: "CORE_API_BOT_KEY/API_KEY_BOT is not configured on web server" },
       { status: 500 },
     );
+  }
+
+  // Личный кабинет (/cabinet) шлёт эту же форму залогиненным — сервер сам
+  // достаёт telegram_user_id из куки, клиент его не передаёт (иначе можно
+  // было бы приписать заявку чужому аккаунту). Анонимная форма на обычных
+  // страницах сайта куки не имеет — session остаётся null, и весь путь ниже
+  // не меняется по сравнению с тем, что было.
+  const clientSecret = clientSessionSecret();
+  const session: CabinetLeadSession = clientSecret
+    ? verifyClientSessionToken(request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "", clientSecret)
+    : null;
+  if (session) {
+    // SameSite=Lax уже не отправляет эту куку на cross-site form-POST;
+    // Origin-проверка — независимый от браузера второй слой, применяем её
+    // только когда кука вообще есть, не трогая анонимный путь.
+    if (!isTrustedAssistantOrigin(request.headers.get("origin"), trustedHostsFor(request))) {
+      return NextResponse.json({ detail: "Недопустимый источник запроса" }, { status: 403 });
+    }
   }
 
   let payload: LeadRequestBody;
@@ -200,6 +221,7 @@ export async function POST(request: NextRequest) {
     landingPage ? `landing=${landingPage}` : undefined,
     message ? `message=${message}` : undefined,
     leadProtection.reasonCodes.length > 0 ? `security_flags=${leadProtection.reasonCodes.join(",")}` : undefined,
+    ...cabinetNoteTags(session),
   ].filter(Boolean);
 
   const corePayload = {
@@ -213,6 +235,7 @@ export async function POST(request: NextRequest) {
     utm_campaign: utmCampaign,
     utm_content: utmContent,
     utm_term: utmTerm,
+    ...cabinetLeadFields(session),
   };
 
   const casePayload = {
@@ -223,7 +246,7 @@ export async function POST(request: NextRequest) {
     legal_area: "other",
     client_type: segment === "entrepreneur" ? "entrepreneur" : segment === "other" ? "unknown" : "company",
     description: message,
-    source_context: (landingPage || "/").slice(0, 255),
+    source_context: cabinetSourceContext(session, (landingPage || "/").slice(0, 255)),
     consent_accepted: true,
     consent_version: "website_pdn_transborder_v1",
     consent_at: consentAt,

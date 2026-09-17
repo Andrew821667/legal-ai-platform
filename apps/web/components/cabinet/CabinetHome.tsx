@@ -1,12 +1,34 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import ClientCases from "@/components/miniapp/pages/ClientCases";
 
-/**
- * Тонкая обёртка вместо использования ClientCases напрямую в page.tsx —
- * здесь и только здесь в будущем (этап 5) появится emptyState для нового
- * посетителя без единого лида, без изменений в самой странице.
- */
+import CabinetIntakeForm from "./CabinetIntakeForm";
+
+type MeResponse = { signed_in: boolean; profile?: { username?: string | null } | null };
+
 export default function CabinetHome() {
-  return <ClientCases variant="site" />;
+  const [prefillContact, setPrefillContact] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/client/me", { cache: "no-store" })
+      .then((response) => (response.ok ? (response.json() as Promise<MeResponse>) : null))
+      .then((data) => {
+        const username = data?.profile?.username;
+        if (!cancelled && username) setPrefillContact(`@${username}`);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <ClientCases
+      variant="site"
+      emptyState={(onCreated) => <CabinetIntakeForm prefillContact={prefillContact} onCreated={onCreated} />}
+    />
+  );
 }
