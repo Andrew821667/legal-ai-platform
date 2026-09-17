@@ -191,6 +191,121 @@ def test_summary_isolates_client_data_and_hides_internal_fields() -> None:
             db.close()
 
 
+def test_verify_returning_client_matches_contact_and_agreement_number() -> None:
+    key_name = f"pytest.client-portal.verify.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        lead = Lead(
+            source=LeadSource.telegram_bot,
+            telegram_user_id=72001,
+            name="Постоянный клиент",
+            phone="+7 909 233-09-09",
+            email="client@example.test",
+        )
+        db.add(lead)
+        db.flush()
+        intake = LegalIntake(lead_id=lead.id, description="Дело клиента")
+        db.add(intake)
+        db.flush()
+        agreement = _agreement(
+            lead_id=lead.id,
+            intake_id=intake.id,
+            telegram_id=72001,
+            status=ServiceAgreementStatus.sent,
+        )
+        agreement.agreement_number = "P-VERIFY-001"
+        db.add(agreement)
+        db.commit()
+        lead_id = lead.id
+    finally:
+        db.close()
+
+    try:
+        client = TestClient(app)
+        # Телефон в другом формате (без +, без разделителей) — должен совпасть
+        # после нормализации до последних 10 цифр.
+        ok = client.post(
+            "/api/v1/client-portal/verify",
+            headers={"X-API-Key": key},
+            json={"contact": "89092330909", "agreement_number": "P-VERIFY-001"},
+        )
+        assert ok.status_code == 200
+        assert ok.json() == {"verified": True, "telegram_user_id": 72001}
+
+        wrong_number = client.post(
+            "/api/v1/client-portal/verify",
+            headers={"X-API-Key": key},
+            json={"contact": "89092330909", "agreement_number": "P-DOES-NOT-EXIST"},
+        )
+        assert wrong_number.json() == {"verified": False}
+
+        wrong_contact = client.post(
+            "/api/v1/client-portal/verify",
+            headers={"X-API-Key": key},
+            json={"contact": "+79990000000", "agreement_number": "P-VERIFY-001"},
+        )
+        assert wrong_contact.json() == {"verified": False}
+
+        by_email = client.post(
+            "/api/v1/client-portal/verify",
+            headers={"X-API-Key": key},
+            json={"contact": "Client@Example.TEST", "agreement_number": "P-VERIFY-001"},
+        )
+        assert by_email.json() == {"verified": True, "telegram_user_id": 72001}
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ServiceAgreement).where(ServiceAgreement.lead_id == lead_id))
+            db.execute(delete(Lead).where(Lead.id == lead_id))
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
+def test_verify_returning_client_rejects_agreement_without_telegram_link() -> None:
+    key_name = f"pytest.client-portal.verify.no-tg.{uuid4().hex}"
+    key = _key(key_name)
+    db = SessionLocal()
+    try:
+        lead = Lead(source=LeadSource.website_form, name="Заявка с сайта", phone="+79001234567")
+        db.add(lead)
+        db.flush()
+        intake = LegalIntake(lead_id=lead.id, description="Дело без телеграма")
+        db.add(intake)
+        db.flush()
+        agreement = _agreement(
+            lead_id=lead.id, intake_id=intake.id, telegram_id=0, status=ServiceAgreementStatus.sent
+        )
+        agreement.agreement_number = "P-NO-TG-001"
+        agreement.client_telegram_user_id = None
+        db.add(agreement)
+        db.commit()
+        lead_id = lead.id
+    finally:
+        db.close()
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/client-portal/verify",
+            headers={"X-API-Key": key},
+            json={"contact": "+79001234567", "agreement_number": "P-NO-TG-001"},
+        )
+        assert response.json() == {"verified": False}
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ServiceAgreement).where(ServiceAgreement.lead_id == lead_id))
+            db.execute(delete(Lead).where(Lead.id == lead_id))
+            db.execute(delete(ApiKey).where(ApiKey.name == key_name))
+            db.commit()
+            cache.invalidate()
+        finally:
+            db.close()
+
+
 def test_summary_rejects_non_positive_telegram_id() -> None:
     key_name = f"pytest.client-portal.invalid.{uuid4().hex}"
     key = _key(key_name)

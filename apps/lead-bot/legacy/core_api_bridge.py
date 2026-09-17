@@ -87,6 +87,47 @@ class CoreApiBridge:
             logger.warning("Core API read error [%s]: %s", path, error)
         return None
 
+    def _post_read(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """POST без идемпотентности — для чтения/проверки, не для создания
+        записей. В отличие от _post не дедуплицирует повторные вызовы: здесь
+        это не нужно (нет побочного эффекта на сервере) и вредно (повторная,
+        уже верная попытка после опечатки не должна «проглатываться»)."""
+        if not self.enabled:
+            return None
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(
+            url=f"{self.base_url}{path}",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json", "X-API-Key": self.api_key},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as error:
+            logger.warning("Core API read failed [%s %s]", path, error.code)
+        except Exception as error:
+            logger.warning("Core API read error [%s]: %s", path, error)
+        return None
+
+    def verify_returning_client(self, *, contact: str, agreement_number: str) -> int | None:
+        """Посетитель сайта заявляет, что уже клиент, называет контакт и номер
+        договора. Возвращает telegram_user_id ТОЛЬКО если оба совпали с одной
+        и той же записью в ядре — иначе None (в т.ч. при любой сетевой
+        ошибке: раз не подтвердили — ведём себя как с новым посетителем,
+        не роняем ответ)."""
+        if not self.enabled:
+            return None
+        result = self._post_read(
+            "/api/v1/client-portal/verify",
+            {"contact": contact, "agreement_number": agreement_number},
+        )
+        if not isinstance(result, dict) or not result.get("verified"):
+            return None
+        telegram_user_id = result.get("telegram_user_id")
+        return int(telegram_user_id) if isinstance(telegram_user_id, int) else None
+
     def _post(
         self,
         path: str,
