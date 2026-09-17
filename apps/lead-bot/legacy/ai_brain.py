@@ -12,6 +12,7 @@ from openai import AsyncOpenAI, OpenAI
 from config import get_config
 config = get_config()
 import prompts
+import company_knowledge
 import database
 import knowledge_engine
 import utils
@@ -102,6 +103,17 @@ def _strip_fenced_json(response_text: str) -> str:
     return normalized
 
 
+def _last_user_message(limited_history: List[Dict[str, str]]) -> Optional[str]:
+    return next(
+        (
+            msg.get("content") or msg.get("message")
+            for msg in reversed(limited_history)
+            if msg.get("role") == "user"
+        ),
+        None,
+    )
+
+
 def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
     """Похожие удачные диалоги для промпта — общий для generate_response и
     generate_response_stream. Синхронный (клиент эмбеддингов в
@@ -112,14 +124,7 @@ def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
     не сработал (сеть, эмбеддинги) — отвечаем без RAG, как раньше.
     """
     try:
-        last_user_message = next(
-            (
-                msg.get("content") or msg.get("message")
-                for msg in reversed(limited_history)
-                if msg.get("role") == "user"
-            ),
-            None,
-        )
+        last_user_message = _last_user_message(limited_history)
         if not last_user_message or len(last_user_message) <= 10:
             return ""
 
@@ -140,6 +145,17 @@ def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
         return knowledge_engine.knowledge_engine.format_similar_examples_for_prompt(similar)
     except Exception as e:
         logger.warning(f"RAG search failed (non-critical): {e}")
+        return ""
+
+
+def _company_knowledge_context_for(limited_history: List[Dict[str, str]]) -> str:
+    """Материалы компании (услуги, FAQ, сценарии, методология) для промпта —
+    company_knowledge.py. Тот же синхронный/asyncio.to_thread контракт, что
+    у _rag_context_for; пусто — не ошибка, отвечаем без этого блока."""
+    try:
+        return company_knowledge.build_context(_last_user_message(limited_history))
+    except Exception as e:
+        logger.warning(f"Company knowledge search failed (non-critical): {e}")
         return ""
 
 
@@ -291,6 +307,12 @@ class AIBrain:
             rag_context = await asyncio.to_thread(_rag_context_for, limited_history)
             if rag_context:
                 messages.append({"role": "system", "content": rag_context})
+
+            # База знаний компании (услуги, FAQ, сценарии, методология) —
+            # тот же asyncio.to_thread-контракт, отдельный блок промпта.
+            knowledge_context = await asyncio.to_thread(_company_knowledge_context_for, limited_history)
+            if knowledge_context:
+                messages.append({"role": "system", "content": knowledge_context})
 
             for msg in limited_history:
                 content = msg.get("content") or msg.get("message") or ""
@@ -522,7 +544,15 @@ class AIBrain:
                     "role": "system",
                     "content": rag_context
                 })
-            
+
+            # База знаний компании (услуги, FAQ, сценарии, методология)
+            knowledge_context = _company_knowledge_context_for(limited_history)
+            if knowledge_context:
+                messages.append({
+                    "role": "system",
+                    "content": knowledge_context
+                })
+
             # Добавляем историю диалога
             for msg in limited_history:
                 content = msg.get("content") or msg.get("message") or ""
