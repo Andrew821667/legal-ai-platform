@@ -17,6 +17,14 @@ import intent_router
 import platform_context
 
 
+# uvicorn настраивает свой access/error-логгер, но не root-логгер приложения —
+# без этого logger.info/warning из ai_brain.py/assistant_tools.py (тайминги,
+# tool-раунды, RAG-хиты) никуда не попадали: 17.09 поймали 504 живьём и не
+# смогли увидеть, на каком раунде застряло.
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=os.getenv("LOG_LEVEL", "INFO"),
+)
 logger = logging.getLogger(__name__)
 
 WEB_CONTEXT = """
@@ -124,9 +132,14 @@ async def chat(
     core_context = platform_context.build_core_context_block(verified_telegram_id)
     state = assistant_tools.WebSessionState(telegram_id=verified_telegram_id)
     tools = [assistant_tools.IDENTIFY_RETURNING_CLIENT_TOOL, *assistant_tools.TOOLS_SCHEMA]
+    started_at = time.monotonic()
 
+    # 40с хватало на один раунд без tool calls, но identify_returning_client
+    # (+ следом get_full_case_details) добавляют ещё раунды reasoning-модели
+    # поверх — 17.09 поймали 504 живьём именно на таком сценарии. Next.js
+    # route.ts держит свой AbortSignal.timeout синхронно на 125с.
     try:
-        async with asyncio.timeout(40):
+        async with asyncio.timeout(120):
             # has_core_context отражает состояние НА МОМЕНТ этого сообщения —
             # если человек подтвердится только внутри этого же ответа (через
             # identify_returning_client), continuing_own_matter всё равно не
@@ -147,7 +160,11 @@ async def chat(
             ):
                 chunks.append(part)
     except TimeoutError as error:
-        logger.warning("Website assistant timed out")
+        logger.warning(
+            "Website assistant timed out after %.1fs (session=%s)",
+            time.monotonic() - started_at,
+            payload.session_id,
+        )
         raise HTTPException(status_code=504, detail="Assistant timeout") from error
 
     if state.telegram_id is not None:
@@ -156,4 +173,11 @@ async def chat(
     reply = "".join(chunks).strip()
     if not reply:
         raise HTTPException(status_code=502, detail="Assistant returned an empty response")
+    logger.info(
+        "Website assistant answered in %.1fs (session=%s, verified=%s, reply_len=%d)",
+        time.monotonic() - started_at,
+        payload.session_id,
+        state.telegram_id is not None,
+        len(reply),
+    )
     return ChatResponse(reply=reply[:5000])
