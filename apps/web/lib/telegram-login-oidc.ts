@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { createRemoteJWKSet, customFetch, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
-import { ProxyAgent } from "undici";
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 
 /**
  * Telegram Login через OpenID Connect — Authorization Code Flow + PKCE.
@@ -18,6 +18,12 @@ import { ProxyAgent } from "undici";
  * API (LEGAL_AI_HTTPS_PROXY/LEGAL_AI_HTTP_PROXY, тот же .env). undici — явная
  * зависимость: только она даёт ProxyAgent для non-standard fetch-опции
  * dispatcher; встроенного node:undici в образе (Node 25) нет.
+ *
+ * fetch тоже берётся из пакета undici, а не глобальный (встроенный в Node) —
+ * смешивание ProxyAgent из отдельно установленного undici с глобальным fetch
+ * (у которого своя, немного другая версия undici внутри рантайма) даёт
+ * "invalid onRequestStart method UND_ERR_INVALID_ARG": Dispatcher — не
+ * публичный стабильный ABI между версиями. Пойманы живьём на проде 17.09.
  */
 
 let cachedProxyDispatcher: ProxyAgent | null | undefined;
@@ -88,10 +94,11 @@ export type ExchangeCodeResult = {
   expiresIn?: number;
 };
 
-/** fetchImpl инъецируется, чтобы тесты не ходили в сеть. */
+/** fetchImpl инъецируется, чтобы тесты не ходили в сеть. Дефолт — fetch
+ * пакета undici (не глобальный), см. комментарий вверху файла про ABI. */
 export async function exchangeCode(
   params: ExchangeCodeParams,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = undiciFetch as unknown as typeof fetch,
 ): Promise<ExchangeCodeResult> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -105,6 +112,7 @@ export async function exchangeCode(
     `${encodeURIComponent(params.clientId)}:${encodeURIComponent(params.clientSecret)}`,
   ).toString("base64");
 
+  const dispatcher = telegramOauthProxyDispatcher();
   let response: Response;
   try {
     response = await fetchImpl(params.tokenEndpoint ?? TOKEN_ENDPOINT, {
@@ -115,10 +123,9 @@ export async function exchangeCode(
       },
       body: body.toString(),
       signal: AbortSignal.timeout(10_000),
-      // dispatcher — не входит в стандартный RequestInit, но undici (и
-      // построенный на нём глобальный fetch в Node) его читает; в тестах
-      // fetchImpl — фейковая функция, лишний параметр в опциях ей не мешает.
-      ...(telegramOauthProxyDispatcher() ? { dispatcher: telegramOauthProxyDispatcher() } : {}),
+      // dispatcher — не входит в стандартный RequestInit, это опция undici;
+      // в тестах fetchImpl — фейковая функция, лишнее поле в опциях ей не мешает.
+      ...(dispatcher ? { dispatcher } : {}),
     } as RequestInit);
   } catch (error) {
     throw new Error(`Telegram token endpoint unreachable: ${(error as Error).message}`);
@@ -148,12 +155,11 @@ export function remoteJwks(): JWTVerifyGetKey {
     cachedJwks = createRemoteJWKSet(new URL(JWKS_URL), {
       cooldownDuration: 30_000,
       cacheMaxAge: 600_000,
-      ...(dispatcher
-        ? {
-            [customFetch]: (url: string, options: RequestInit) =>
-              fetch(url, { ...options, dispatcher } as RequestInit),
-          }
-        : {}),
+      // Всегда через undici's fetch (не глобальный) — та же причина, что у
+      // exchangeCode: dispatcher из ProxyAgent несовместим с встроенным в
+      // Node fetch. Без прокси dispatcher просто undefined.
+      [customFetch]: (url: string, options: RequestInit) =>
+        undiciFetch(url, { ...options, dispatcher } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>,
     });
   }
   return cachedJwks;
