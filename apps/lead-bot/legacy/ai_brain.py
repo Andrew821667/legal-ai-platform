@@ -246,7 +246,7 @@ class AIBrain:
     """Класс для работы с OpenAI API"""
 
     def __init__(self):
-        client_kwargs = {"api_key": config.OPENAI_API_KEY}
+        client_kwargs = {"api_key": config.CHAT_API_KEY}
         if config.OPENAI_BASE_URL:
             client_kwargs["base_url"] = config.OPENAI_BASE_URL
         client_kwargs["timeout"] = config.LLM_TIMEOUT_SECONDS

@@ -59,6 +59,15 @@ class Config:
             raise ValueError("OPENAI_API_KEY не установлен в переменных окружения")
         self.OPENAI_BASE_URL: str = os.getenv('OPENAI_BASE_URL', '').strip()
 
+        # Ключ для чата (ai_brain.py) — отдельно от OPENAI_API_KEY. Раньше
+        # это была одна и та же переменная: удобно, пока OPENAI_BASE_URL
+        # тоже указывал на OpenAI, но с переездом чата на DeepSeek ротация
+        # "ключа OpenAI" (для эмбеддингов) стала молча перезаписывать и ключ
+        # чата — 17.09 так и вышло, DeepSeek упал 401 сразу после ротации
+        # ключа эмбеддингов. DEEPSEEK_API_KEY не задан — используем
+        # OPENAI_API_KEY, как было (дев/CI, где ключ один на всё).
+        self.CHAT_API_KEY: str = os.getenv('DEEPSEEK_API_KEY', '').strip() or self.OPENAI_API_KEY
+
         # Эмбеддинги для RAG (knowledge_engine.py) — только у OpenAI, у DeepSeek
         # нет /embeddings. OPENAI_BASE_URL выше указывает на DeepSeek (чат бота);
         # эмбеддингам нужен свой адрес, а не общий с чатом — иначе запрос эмбеддинга
