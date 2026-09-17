@@ -693,6 +693,55 @@ ssh -t legalai-prod '~/rotate-env-key.sh LAWYER_SESSION_SECRET'
 секретов вендоров» выше). Все ранее выданные ссылки — включая утерянную —
 перестают работать разом.
 
+## Вход клиента в личный кабинет через Telegram (/cabinet)
+
+Тот же принцип, что у автономного входа юриста выше (stateless-кука,
+HMAC-подпись, состояние нигде не хранится), но отдельная роль и отдельный
+секрет: `CLIENT_SESSION_SECRET` **обязан** отличаться от `LAWYER_SESSION_SECRET`
+— формат токена одинаковый, совпадающий секрет означал бы, что кука клиента
+с id юриста проходит как `lawyer_session`, и наоборот (веб сам это
+проверяет при старте и отключает вход клиента с логом, если секреты
+совпали). Сессия короче, чем у юриста, — 7 дней, а не 30.
+
+Протокол входа — Telegram Login: основной режим OIDC (Authorization Code +
+PKCE через `oauth.telegram.org`), запасной — legacy iframe-виджет
+(`TELEGRAM_LOGIN_MODE=legacy`), если Login Widget недоступен в @BotFather для
+этого бота.
+
+**Регистрация у владельца бота (один раз, только он может это сделать):**
+1. `@BotFather` → `/mybots` → выбрать бота (`legal_ai_helper_new_bot`) →
+   *Bot Settings* → *Login Widget* (в новых версиях — внутри раздела Mini
+   App) → *Allowed URLs* → добавить `https://ai-verdict.ru/cabinet/callback`
+   **точно**, без завершающего слэша — редирект должен побайтно совпадать.
+   Там же выдаются **Client ID** (совпадает с числовым id бота) и **Client
+   Secret**.
+2. Резерв на случай, если Login Widget недоступен для этого бота:
+   `/setdomain` → `ai-verdict.ru` — включает legacy-виджет.
+
+**Переменные в `.env`** (строки уже есть в `.env.example`; на проде — через
+`rotate-env-key.sh`, который требует, чтобы строка `VAR=` уже существовала):
+```bash
+ssh -t legalai-prod '~/rotate-env-key.sh CLIENT_SESSION_SECRET'          # openssl rand -hex 32, вставить вручную
+ssh -t legalai-prod '~/rotate-env-key.sh TELEGRAM_OAUTH_CLIENT_SECRET'   # значение из BotFather
+```
+`TELEGRAM_OAUTH_CLIENT_ID` и `TELEGRAM_LOGIN_MODE` — не секреты, правятся
+обычным дописыванием в `.env` (truncate-in-place, не `sed -i`, см. раздел про
+ACL прод `.env`). После любого из этих изменений — `up -d --force-recreate
+web` (env_file не перечитывается на `restart`).
+
+**Потеряли `CLIENT_SESSION_SECRET` или подозреваете утечку.** Как и у
+юриста — разовой отмены одной сессии нет, меняется секрет целиком, все
+клиентские сессии разом становятся недействительными (клиент просто входит
+заново через Telegram, это не требует его участия сверх одного клика).
+core-api этот секрет не читает — используется только веб-контейнером.
+
+**Диагностика.** `?login=<reason>` в URL `/cabinet` после неудачного входа:
+`denied` (отменили согласие в Telegram), `state`/`exchange`/`token`/`profile`
+(технический сбой в OAuth-обмене — смотреть логи `web`), `ratelimit`
+(перебор `/cabinet/login` с одного IP), `misconfigured` (не заданы
+`TELEGRAM_OAUTH_CLIENT_ID`/`_SECRET`/`CLIENT_SESSION_SECRET`, либо
+`CLIENT_SESSION_SECRET` совпал с `LAWYER_SESSION_SECRET`).
+
 ## Шифрование паспортных данных (PII_ENCRYPTION_KEY)
 
 Реквизиты документа, удостоверяющего личность подписанта (NDA и согласие на
