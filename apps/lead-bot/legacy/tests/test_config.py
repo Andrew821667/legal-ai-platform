@@ -18,6 +18,17 @@ def test_openai_settings():
     """Проверка настроек OpenAI"""
     assert config.OPENAI_MODEL, "OPENAI_MODEL не должен быть пустым"
     assert config.MAX_TOKENS > 0, "MAX_TOKENS должен быть положительным"
+
+
+def test_max_tokens_default_is_enough_for_reasoning_model_with_rag(monkeypatch):
+    """Регрессия на 17.09: 1000 (старый дефолт) не хватало deepseek-v4-pro с
+    непустым RAG-контекстом — ответы обрывались (finish_reason=length) или
+    уходили пустыми. 800 в .env.example давал ту же проблему ещё быстрее."""
+    monkeypatch.delenv("MAX_TOKENS", raising=False)
+    monkeypatch.delenv("MAX_COMPLETION_TOKENS", raising=False)
+    fresh = Config()
+    assert fresh.MAX_TOKENS >= 4000
+    assert fresh.MAX_COMPLETION_TOKENS >= 4000
     assert config.MAX_COMPLETION_TOKENS > 0, "MAX_COMPLETION_TOKENS должен быть положительным"
     assert 0 <= config.TEMPERATURE <= 2, "TEMPERATURE должна быть между 0 и 2"
 
