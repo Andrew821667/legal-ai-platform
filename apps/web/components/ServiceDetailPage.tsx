@@ -49,7 +49,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
-        ...(isEngineeringPractice ? { dateModified: "2026-08-10" } : {}),
+        ...(isEngineeringPractice ? { dateModified: "2026-09-21" } : {}),
       },
       {
         "@type": "BreadcrumbList",
@@ -107,6 +107,37 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           </div>
         </section>
       )}
+
+      {service.offers?.length ? (
+        <section className="border-b border-slate-200 bg-slate-100">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Понятный первый шаг</p>
+              <h2 className="mt-2 text-3xl font-bold text-slate-900">С чего можно начать</h2>
+              <p className="mt-4 leading-7 text-slate-600">
+                Выберите небольшой самостоятельный формат. До начала работы мы подтвердим, что задача входит в
+                заявленный объём, и зафиксируем результат.
+              </p>
+            </div>
+            <div className="mt-8 grid gap-5 lg:grid-cols-3">
+              {service.offers.map((offer) => (
+                <article key={offer.title} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-xl font-semibold text-slate-900">{offer.title}</h3>
+                  <p className="mt-3 text-2xl font-bold text-amber-700">{offer.price}</p>
+                  <p className="mt-4 text-sm leading-6 text-slate-700">{offer.description}</p>
+                  <p className="mt-4 text-sm leading-6 text-slate-500">{offer.note}</p>
+                  <a
+                    href="#lead-form"
+                    className="mt-6 inline-flex justify-center rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 lg:mt-auto"
+                  >
+                    Обсудить задачу
+                  </a>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">

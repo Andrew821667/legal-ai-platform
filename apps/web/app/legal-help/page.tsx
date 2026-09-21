@@ -31,6 +31,27 @@ const areas = [
   { icon: Building2, href: "/legal-help/employment", title: "Трудовые вопросы", text: "Документы, процедуры, выплаты, увольнение и трудовые споры." },
 ];
 
+const starterOffers = [
+  {
+    title: "Консультация юриста",
+    price: "4 900 ₽",
+    text: "До 60 минут онлайн и короткий письменный план: что делать дальше, какие документы нужны и какие сроки проверить.",
+    note: "После первичного описания подтвердим, что вопрос входит в этот формат.",
+  },
+  {
+    title: "Экспресс-проверка договора",
+    price: "от 7 900 ₽",
+    text: "Проверка одного договора до 15 страниц: существенные условия, риски и перечень предлагаемых правок.",
+    note: "Срок и точную цену подтвердим после просмотра объёма и читаемости файла.",
+  },
+  {
+    title: "Претензия или ответ на претензию",
+    price: "от 9 900 ₽",
+    text: "Разберём документы и факты, сформулируем требования или возражения и подготовим документ к отправке.",
+    note: "Судебное представительство и дополнительные документы оцениваются отдельно.",
+  },
+];
+
 const legalHelpFaqItems = [
   {
     question: "Как получить юридическую помощь в AI Verdict?",
@@ -96,7 +117,7 @@ export default function LegalHelpPage() {
         "@type": "WebPage",
         "@id": canonicalUrl,
         name: "Юридические услуги для бизнеса и частных клиентов",
-        dateModified: "2026-09-01",
+        dateModified: "2026-09-21",
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
@@ -154,6 +175,35 @@ export default function LegalHelpPage() {
               согласует формат, срок и стоимость работы, а AI используется только как вспомогательный инструмент
               для структурирования информации и подготовки материалов.
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-slate-800 bg-slate-950/60">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">Понятный первый шаг</p>
+            <h2 className="mt-2 text-3xl font-semibold text-white">С чего можно начать</h2>
+            <p className="mt-4 leading-7 text-slate-300">
+              Выберите небольшую самостоятельную задачу с заранее понятным результатом. До оплаты подтвердим,
+              что обращение входит в выбранный формат.
+            </p>
+          </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-3">
+            {starterOffers.map((offer) => (
+              <article key={offer.title} className="flex h-full flex-col rounded-xl border border-slate-700 bg-slate-900 p-6">
+                <h3 className="text-xl font-semibold text-white">{offer.title}</h3>
+                <p className="mt-3 text-2xl font-semibold text-amber-300">{offer.price}</p>
+                <p className="mt-4 text-sm leading-6 text-slate-200">{offer.text}</p>
+                <p className="mt-4 text-sm leading-6 text-slate-400">{offer.note}</p>
+                <a
+                  href="#legal-help-form"
+                  className="mt-6 inline-flex justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 lg:mt-auto"
+                >
+                  Выбрать этот формат
+                </a>
+              </article>
+            ))}
           </div>
         </div>
       </section>
