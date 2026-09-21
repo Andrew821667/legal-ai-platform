@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import LeadCaptureForm from "@/components/LeadCaptureForm";
 import HeroBackdrop from "@/components/HeroBackdrop";
+import StarterOfferButton from "@/components/StarterOfferButton";
 import { LEGAL_BRAND, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import type { ServiceDetail } from "@/lib/serviceDetailData";
 
@@ -121,17 +122,17 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
             </div>
             <div className="mt-8 grid gap-5 lg:grid-cols-3">
               {service.offers.map((offer) => (
-                <article key={offer.title} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <article key={offer.id} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <h3 className="text-xl font-semibold text-slate-900">{offer.title}</h3>
                   <p className="mt-3 text-2xl font-bold text-amber-700">{offer.price}</p>
                   <p className="mt-4 text-sm leading-6 text-slate-700">{offer.description}</p>
                   <p className="mt-4 text-sm leading-6 text-slate-500">{offer.note}</p>
-                  <a
-                    href="#lead-form"
+                  <StarterOfferButton
+                    offerId={offer.id}
+                    targetId="lead-form"
+                    label="Обсудить задачу"
                     className="mt-6 inline-flex justify-center rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 lg:mt-auto"
-                  >
-                    Обсудить задачу
-                  </a>
+                  />
                 </article>
               ))}
             </div>

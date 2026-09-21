@@ -6,6 +6,11 @@ import Link from "next/link";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { getLeadAttribution, trackLeadConversion } from "@/lib/lead-attribution";
+import {
+  getStarterOffer,
+  STARTER_OFFER_EVENT,
+  type StarterOfferId,
+} from "@/lib/starter-offers";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -36,6 +41,8 @@ export default function LeadCaptureForm() {
   const [message, setMessage] = useState("");
   const [offer, setOffer] = useState<LeadOffer>("consultation");
   const [practice, setPractice] = useState("hybrid");
+  const [starterOfferId, setStarterOfferId] = useState<StarterOfferId | null>(null);
+  const selectedStarterOffer = getStarterOffer(starterOfferId, "engineering");
   const isCase = offer === "consultation" || offer === "unknown";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +61,20 @@ export default function LeadCaptureForm() {
     };
     window.addEventListener("lead_offer_selected", handler as EventListener);
     return () => window.removeEventListener("lead_offer_selected", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: CustomEvent<{ offerId: StarterOfferId }>) => {
+      const selected = getStarterOffer(event.detail?.offerId, "engineering");
+      if (!selected) return;
+      setStarterOfferId(selected.id);
+      setOffer("unknown");
+      setPractice("engineering");
+      setError("");
+      setSuccess("");
+    };
+    window.addEventListener(STARTER_OFFER_EVENT, handler as EventListener);
+    return () => window.removeEventListener(STARTER_OFFER_EVENT, handler as EventListener);
   }, []);
 
   const utm = useMemo(() => {
@@ -94,6 +115,7 @@ export default function LeadCaptureForm() {
           message,
           offer,
           practice,
+          starter_offer_id: starterOfferId,
           consentAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
@@ -113,9 +135,10 @@ export default function LeadCaptureForm() {
         }
         throw new Error(data.detail || "Не удалось отправить заявку");
       }
-      if (data.lead_id) trackLeadConversion("general", utm);
+      if (data.lead_id) trackLeadConversion("general", utm, starterOfferId || undefined);
       setSuccess(data.message || "Заявка отправлена.");
       setMessage("");
+      setStarterOfferId(null);
       setChallengeToken("");
       if (TURNSTILE_CHALLENGE_MODE !== "always") {
         setChallengeRequired(false);
@@ -140,6 +163,22 @@ export default function LeadCaptureForm() {
             или по телефону. Автоматизацию юридической функции ведут юридическая и инженерная практики вместе,
             а самостоятельную программную задачу — инженерная практика.
           </p>
+
+          {selectedStarterOffer ? (
+            <div aria-live="polite" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-slate-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Выбранный формат</p>
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-semibold">{selectedStarterOffer.title} · {selectedStarterOffer.price}</p>
+                <button
+                  type="button"
+                  onClick={() => setStarterOfferId(null)}
+                  className="self-start text-sm font-medium text-amber-800 underline underline-offset-2"
+                >
+                  Сбросить выбор
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <LegalDisclaimer variant="panel" className="mb-6" />
 
@@ -204,7 +243,10 @@ export default function LeadCaptureForm() {
                 <span className="block text-sm font-medium text-slate-700 mb-1">Тип запроса</span>
                 <select
                   value={offer}
-                  onChange={(e) => setOffer(e.target.value as LeadOffer)}
+                  onChange={(e) => {
+                    setOffer(e.target.value as LeadOffer);
+                    setStarterOfferId(null);
+                  }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 >
                   <option value="consultation">Консультация</option>
@@ -219,7 +261,10 @@ export default function LeadCaptureForm() {
             {isCase ? (
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-1">Направление задачи</span>
-                <select value={practice} onChange={(e) => setPractice(e.target.value)}
+                <select value={practice} onChange={(e) => {
+                  setPractice(e.target.value);
+                  if (e.target.value !== "engineering") setStarterOfferId(null);
+                }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">
                   <option value="hybrid">Автоматизация юридической работы</option>
                   <option value="legal">Юридическая помощь</option>

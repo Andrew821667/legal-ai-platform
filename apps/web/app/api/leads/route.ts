@@ -13,6 +13,7 @@ import {
   resolveLeadClientIp,
   verifyTurnstileToken,
 } from "@/lib/lead-security";
+import { addStarterOfferToMessage, getStarterOffer } from "@/lib/starter-offers";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -34,6 +35,7 @@ interface LeadRequestBody {
   message?: string;
   offer?: LeadOffer;
   practice?: "legal" | "engineering" | "hybrid";
+  starter_offer_id?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -116,6 +118,12 @@ export async function POST(request: NextRequest) {
   const name = clean(payload.name, 120);
   const contact = clean(payload.contact, 180);
   const message = clean(payload.message, 4000);
+  const starterOffer = getStarterOffer(payload.starter_offer_id, "engineering");
+  const messageWithOffer = addStarterOfferToMessage(
+    message || "",
+    starterOffer?.id,
+    "engineering",
+  ).slice(0, 4000);
   const offer = toOffer(payload.offer);
   const segment = toSegment(payload.segment);
   const isCase = offer === "consultation" || offer === "unknown";
@@ -212,6 +220,7 @@ export async function POST(request: NextRequest) {
   const consentAt = new Date().toISOString();
   const notesParts = [
     `offer=${offer}`,
+    starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
     "consent=accepted",
     "consent_version=website_pdn_transborder_v1",
     `consent_at=${consentAt}`,
@@ -219,7 +228,7 @@ export async function POST(request: NextRequest) {
     `ip_hash=${ipHash}`,
     `ua_hash=${userAgentHash}`,
     landingPage ? `landing=${landingPage}` : undefined,
-    message ? `message=${message}` : undefined,
+    messageWithOffer ? `message=${messageWithOffer}` : undefined,
     leadProtection.reasonCodes.length > 0 ? `security_flags=${leadProtection.reasonCodes.join(",")}` : undefined,
     ...cabinetNoteTags(session),
   ].filter(Boolean);
@@ -245,7 +254,7 @@ export async function POST(request: NextRequest) {
     category: practice === "legal" ? null : "other",
     legal_area: "other",
     client_type: segment === "entrepreneur" ? "entrepreneur" : segment === "other" ? "unknown" : "company",
-    description: message,
+    description: messageWithOffer,
     source_context: cabinetSourceContext(session, (landingPage || "/").slice(0, 255)),
     consent_accepted: true,
     consent_version: "website_pdn_transborder_v1",

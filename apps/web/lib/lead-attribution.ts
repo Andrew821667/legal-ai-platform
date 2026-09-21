@@ -1,3 +1,5 @@
+import type { StarterOffer, StarterOfferId } from "@/lib/starter-offers";
+
 export type LeadAttribution = {
   utm_source?: string;
   utm_medium?: string;
@@ -100,6 +102,7 @@ export function captureLeadAttribution(): void {
 export function trackLeadConversion(
   form: "general" | "legal_help",
   data: LeadAttribution,
+  starterOfferId?: StarterOfferId,
 ): void {
   if (typeof window === "undefined") return;
 
@@ -108,13 +111,39 @@ export function trackLeadConversion(
     landing_page: data.landing_page,
     traffic_source: data.utm_source,
     traffic_medium: data.utm_medium,
+    starter_offer_id: starterOfferId,
   };
 
   window.gtag?.("event", "generate_lead", params);
+  if (starterOfferId) {
+    window.gtag?.("event", "starter_offer_submit", params);
+  }
 
   const rawId = process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908";
   const counterId = Number(rawId);
   if (Number.isFinite(counterId)) {
     window.ym?.(counterId, "reachGoal", "lead_form_submit", params);
+    if (starterOfferId) {
+      window.ym?.(counterId, "reachGoal", "starter_offer_submit", params);
+    }
+  }
+}
+
+export function trackStarterOfferSelection(offer: StarterOffer): void {
+  if (typeof window === "undefined") return;
+
+  const params = {
+    starter_offer_id: offer.id,
+    starter_offer_title: offer.title,
+    starter_offer_practice: offer.practice,
+    starter_offer_price: offer.price,
+  };
+
+  window.gtag?.("event", "starter_offer_select", params);
+
+  const rawId = process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908";
+  const counterId = Number(rawId);
+  if (Number.isFinite(counterId)) {
+    window.ym?.(counterId, "reachGoal", "starter_offer_select", params);
   }
 }

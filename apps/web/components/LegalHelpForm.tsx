@@ -1,11 +1,16 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Send } from "lucide-react";
 
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { getLeadAttribution, trackLeadConversion } from "@/lib/lead-attribution";
+import {
+  getStarterOffer,
+  STARTER_OFFER_EVENT,
+  type StarterOfferId,
+} from "@/lib/starter-offers";
 import {
   LEGAL_AREAS,
   LEGAL_CLIENT_TYPES,
@@ -37,6 +42,8 @@ export default function LegalHelpForm({
   const [clientType, setClientType] = useState<LegalClientType>(initialClientType);
   const [area, setArea] = useState<LegalArea>(initialArea);
   const [description, setDescription] = useState("");
+  const [starterOfferId, setStarterOfferId] = useState<StarterOfferId | null>(null);
+  const selectedStarterOffer = getStarterOffer(starterOfferId, "legal");
   const [urgency, setUrgency] = useState<LegalUrgency>("no_deadline");
   const [deadline, setDeadline] = useState("");
   const [region, setRegion] = useState("");
@@ -51,6 +58,20 @@ export default function LegalHelpForm({
 
   const utm = useMemo(() => {
     return getLeadAttribution();
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: CustomEvent<{ offerId: StarterOfferId }>) => {
+      const selected = getStarterOffer(event.detail?.offerId, "legal");
+      if (!selected) return;
+      setStarterOfferId(selected.id);
+      if (selected.id === "legal_contract_review") setArea("contracts");
+      if (selected.id === "legal_claim_response") setArea("disputes");
+      setError("");
+      setSuccess("");
+    };
+    window.addEventListener(STARTER_OFFER_EVENT, handler as EventListener);
+    return () => window.removeEventListener(STARTER_OFFER_EVENT, handler as EventListener);
   }, []);
 
   const onSubmit = async (event: FormEvent) => {
@@ -87,6 +108,7 @@ export default function LegalHelpForm({
           client_type: clientType,
           legal_area: area,
           description,
+          starter_offer_id: starterOfferId,
           urgency,
           deadline: urgency === "no_deadline" ? undefined : deadline,
           region,
@@ -109,9 +131,10 @@ export default function LegalHelpForm({
         throw new Error(data.detail || "Не удалось отправить обращение.");
       }
 
-      if (data.intake_id) trackLeadConversion("legal_help", utm);
+      if (data.intake_id) trackLeadConversion("legal_help", utm, starterOfferId || undefined);
       setSuccess(data.message || "Обращение принято.");
       setDescription("");
+      setStarterOfferId(null);
       setDeadline("");
       setChallengeToken("");
       if (CHALLENGE_MODE !== "always") setChallengeRequired(false);
@@ -145,6 +168,22 @@ export default function LegalHelpForm({
               onChange={(event) => setHoneypot(event.target.value)}
             />
           </label>
+
+          {selectedStarterOffer ? (
+            <div aria-live="polite" className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-slate-100">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Выбранный формат</p>
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-semibold">{selectedStarterOffer.title} · {selectedStarterOffer.price}</p>
+                <button
+                  type="button"
+                  onClick={() => setStarterOfferId(null)}
+                  className="self-start text-sm font-medium text-amber-300 underline underline-offset-2"
+                >
+                  Сбросить выбор
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block">

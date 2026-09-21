@@ -7,7 +7,9 @@ import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
+import StarterOfferButton from "@/components/StarterOfferButton";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
+import { legalStarterOffers } from "@/lib/starter-offers";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export const metadata: Metadata = createPageMetadata({
@@ -29,27 +31,6 @@ const areas = [
   { icon: ShieldCheck, href: "/legal-help/inheritance", title: "Наследство", text: "Оформление прав, сроки, завещания, доли и наследственные споры." },
   { icon: Scale, href: "/legal-help/debt-collection", title: "Взыскание долгов", text: "Претензия, суд, расчёт задолженности и исполнительный этап." },
   { icon: Building2, href: "/legal-help/employment", title: "Трудовые вопросы", text: "Документы, процедуры, выплаты, увольнение и трудовые споры." },
-];
-
-const starterOffers = [
-  {
-    title: "Консультация юриста",
-    price: "4 900 ₽",
-    text: "До 60 минут онлайн и короткий письменный план: что делать дальше, какие документы нужны и какие сроки проверить.",
-    note: "После первичного описания подтвердим, что вопрос входит в этот формат.",
-  },
-  {
-    title: "Экспресс-проверка договора",
-    price: "от 7 900 ₽",
-    text: "Проверка одного договора до 15 страниц: существенные условия, риски и перечень предлагаемых правок.",
-    note: "Срок и точную цену подтвердим после просмотра объёма и читаемости файла.",
-  },
-  {
-    title: "Претензия или ответ на претензию",
-    price: "от 9 900 ₽",
-    text: "Разберём документы и факты, сформулируем требования или возражения и подготовим документ к отправке.",
-    note: "Судебное представительство и дополнительные документы оцениваются отдельно.",
-  },
 ];
 
 const legalHelpFaqItems = [
@@ -190,18 +171,18 @@ export default function LegalHelpPage() {
             </p>
           </div>
           <div className="mt-8 grid gap-5 lg:grid-cols-3">
-            {starterOffers.map((offer) => (
-              <article key={offer.title} className="flex h-full flex-col rounded-xl border border-slate-700 bg-slate-900 p-6">
+            {legalStarterOffers.map((offer) => (
+              <article key={offer.id} className="flex h-full flex-col rounded-xl border border-slate-700 bg-slate-900 p-6">
                 <h3 className="text-xl font-semibold text-white">{offer.title}</h3>
                 <p className="mt-3 text-2xl font-semibold text-amber-300">{offer.price}</p>
-                <p className="mt-4 text-sm leading-6 text-slate-200">{offer.text}</p>
+                <p className="mt-4 text-sm leading-6 text-slate-200">{offer.description}</p>
                 <p className="mt-4 text-sm leading-6 text-slate-400">{offer.note}</p>
-                <a
-                  href="#legal-help-form"
+                <StarterOfferButton
+                  offerId={offer.id}
+                  targetId="legal-help-form"
+                  label="Выбрать этот формат"
                   className="mt-6 inline-flex justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 lg:mt-auto"
-                >
-                  Выбрать этот формат
-                </a>
+                />
               </article>
             ))}
           </div>

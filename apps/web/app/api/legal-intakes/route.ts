@@ -10,6 +10,7 @@ import {
   resolveLeadClientIp,
   verifyTurnstileToken,
 } from "@/lib/lead-security";
+import { addStarterOfferToMessage, getStarterOffer } from "@/lib/starter-offers";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -46,6 +47,7 @@ type IntakeBody = {
   deadline?: string;
   region?: string;
   source_context?: string;
+  starter_offer_id?: string;
   consentAccepted?: boolean;
   utm_source?: string;
   utm_medium?: string;
@@ -92,11 +94,17 @@ export async function POST(request: NextRequest) {
   }
 
   const contact = clean(payload.contact, 255);
-  const description = clean(payload.description, 4000);
+  const rawDescription = clean(payload.description, 4000);
+  const starterOffer = getStarterOffer(payload.starter_offer_id, "legal");
+  const description = addStarterOfferToMessage(
+    rawDescription || "",
+    starterOffer?.id,
+    "legal",
+  ).slice(0, 4000);
   if (!contact) {
     return NextResponse.json({ detail: "Укажите контакт для связи." }, { status: 400 });
   }
-  if (!description || description.length < 20) {
+  if (!rawDescription || rawDescription.length < 20) {
     return NextResponse.json({ detail: "Опишите задачу хотя бы в нескольких предложениях." }, { status: 400 });
   }
   if (payload.consentAccepted !== true) {
@@ -141,7 +149,11 @@ export async function POST(request: NextRequest) {
   const landing = clean(payload.landing_page, 512) || request.nextUrl.pathname;
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
   const uaHash = crypto.createHash("sha256").update(userAgent).digest("hex").slice(0, 12);
-  const notes = `ip_hash=${ipHash}\nua_hash=${uaHash}`;
+  const notes = [
+    `ip_hash=${ipHash}`,
+    `ua_hash=${uaHash}`,
+    starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
+  ].filter(Boolean).join("\n");
 
   const coreResponse = await fetch(`${CORE_API_URL}/api/v1/legal-intakes`, {
     method: "POST",

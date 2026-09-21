@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildLeadAttribution } from "./lead-attribution.ts";
+import {
+  buildLeadAttribution,
+  trackLeadConversion,
+  trackStarterOfferSelection,
+} from "./lead-attribution.ts";
+import { starterOffers } from "./starter-offers.ts";
 
 test("marks a Google visit as organic and keeps the first landing page", () => {
   const data = buildLeadAttribution(
@@ -61,4 +66,39 @@ test("drops unrelated query parameters from the stored landing page", () => {
   );
 
   assert.equal(data.landing_page, "/legal-help?utm_source=yandex");
+});
+
+test("tracks selection and submission by starter offer id", () => {
+  const calls = [];
+  globalThis.window = {
+    gtag: (...args) => calls.push(["gtag", ...args]),
+    ym: (...args) => calls.push(["ym", ...args]),
+  };
+
+  try {
+    trackStarterOfferSelection(starterOffers.engineering_rag_service);
+    trackLeadConversion(
+      "general",
+      { landing_page: "/engineering", utm_source: "google", utm_medium: "organic" },
+      "engineering_rag_service",
+    );
+  } finally {
+    delete globalThis.window;
+  }
+
+  assert.ok(calls.some((call) =>
+    call[0] === "gtag" &&
+    call[2] === "starter_offer_select" &&
+    call[3].starter_offer_id === "engineering_rag_service"
+  ));
+  assert.ok(calls.some((call) =>
+    call[0] === "gtag" &&
+    call[2] === "starter_offer_submit" &&
+    call[3].starter_offer_id === "engineering_rag_service"
+  ));
+  assert.ok(calls.some((call) =>
+    call[0] === "ym" &&
+    call[3] === "starter_offer_submit" &&
+    call[4].starter_offer_id === "engineering_rag_service"
+  ));
 });
