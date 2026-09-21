@@ -4751,15 +4751,15 @@ class NewsAdminBot:
         if self._openai_client is not None:
             return self._openai_client
 
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for LLM editing")
+        if not settings.resolved_news_api_key:
+            raise RuntimeError("LLM API key is required for LLM editing")
 
         try:
             from openai import OpenAI
         except Exception as exc:
             raise RuntimeError("openai package is required for LLM editing") from exc
 
-        kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
+        kwargs: dict[str, Any] = {"api_key": settings.resolved_news_api_key}
         if settings.openai_base_url:
             kwargs["base_url"] = settings.openai_base_url
         self._openai_client = OpenAI(**kwargs)

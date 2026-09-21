@@ -522,8 +522,8 @@ def _build_practice_candidate(now_utc: datetime, selected_articles: list[Article
 def collect_generation_previews(limit: int) -> GenerationRunResult:
     if not settings.api_key_news:
         raise RuntimeError("API_KEY_NEWS is required")
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for content generation")
+    if not settings.resolved_news_api_key:
+        raise RuntimeError("LLM API key is required for content generation")
 
     top_limit = max(1, min(limit, 20))
     now_utc = datetime.now(UTC)

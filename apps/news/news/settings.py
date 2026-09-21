@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     news_helper_bot_label: str = "Ассистент AI Verdict"
     tz_name: str = "Europe/Moscow"
     openai_api_key: str = ""
+    deepseek_api_key: str = ""
     openai_base_url: str = ""
     news_model: str = "deepseek-v4-flash"
     news_thinking_enabled: bool = False
@@ -179,6 +180,13 @@ class Settings(BaseSettings):
     google_news_query_ai_singapore_en: str = '("Singapore AI" OR "enterprise AI Singapore" OR "AI governance Singapore" OR "AI policy Singapore" OR "AI platform Singapore")'
     google_news_query_ai_middle_east_en: str = '("Middle East AI" OR "UAE AI" OR "Saudi AI" OR "enterprise AI Middle East" OR "AI policy Gulf")'
     google_news_query_ai_canada_en: str = '("Canada AI" OR "Canadian AI" OR "enterprise AI Canada" OR "AI regulation Canada" OR "AI platform Canada")'
+
+    @property
+    def resolved_news_api_key(self) -> str:
+        provider = f"{self.openai_base_url} {self.news_model}".lower()
+        if "deepseek" in provider:
+            return (self.deepseek_api_key or self.openai_api_key).strip()
+        return self.openai_api_key.strip()
     google_news_lang_ru: str = "ru"
     google_news_lang_en: str = "en"
     google_news_region_ru: str = "RU"

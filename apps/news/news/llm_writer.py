@@ -491,7 +491,7 @@ _RUBRIC_LEGAL_TEMPLATE_HINTS = {
 
 class LLMNewsWriter:
     def __init__(self) -> None:
-        client_kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
+        client_kwargs: dict[str, Any] = {"api_key": settings.resolved_news_api_key}
         if settings.openai_base_url:
             client_kwargs["base_url"] = settings.openai_base_url
         try:
