@@ -49,7 +49,11 @@ def _fetch_snapshot() -> list[dict]:
 def _refresh_cache_if_stale() -> None:
     global _cache_items, _cache_embeddings, _cache_loaded_at
     now = time.monotonic()
-    if _cache_items and (now - _cache_loaded_at) < config.WEB_KNOWLEDGE_CACHE_TTL_SECONDS:
+    if (
+        _cache_items
+        and _cache_loaded_at > 0
+        and (now - _cache_loaded_at) < config.WEB_KNOWLEDGE_CACHE_TTL_SECONDS
+    ):
         return
 
     try:
