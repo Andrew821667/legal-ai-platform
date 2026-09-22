@@ -17,7 +17,7 @@ type SitemapPage = {
 export const dynamic = "force-dynamic";
 
 const marketingUpdatedAt = "2026-07-15";
-const practiceUpdatedAt = "2026-08-05";
+const practiceUpdatedAt = "2026-09-22";
 const legalAiUpdatedAt = "2026-08-13";
 const visibilityUpdatedAt = "2026-08-13";
 
@@ -41,6 +41,7 @@ const pages: SitemapPage[] = [
   { path: "/services/land-law-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/engineering", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/engineering/telegram-bots", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },
   { path: "/cases", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.8 },
   { path: "/content-cases", lastModified: "2026-07-28", changeFrequency: "weekly", priority: 0.8 },

@@ -5,17 +5,20 @@ import LegalHelpCommercialFacts from "@/components/LegalHelpCommercialFacts";
 import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
+import StarterOfferButton from "@/components/StarterOfferButton";
 import { LEGAL_OPERATOR_NAME, LEGAL_SITE_URL } from "@/lib/legalProfile";
 import {
   LEGAL_HELP_REVIEWED_AT,
   legalHelpPages,
   type LegalHelpPage,
 } from "@/lib/legalHelpPages";
+import { getStarterOffer } from "@/lib/starter-offers";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) {
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const canonicalUrl = `${baseUrl}/legal-help/${page.slug}`;
+  const featuredOffer = getStarterOffer(page.featuredOfferId, "legal");
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -34,6 +37,15 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
           serviceUrl: canonicalUrl,
           availableLanguage: "ru-RU",
         },
+        ...(featuredOffer ? {
+          offers: {
+            "@type": "AggregateOffer",
+            lowPrice: featuredOffer.price.replace(/\D/g, ""),
+            priceCurrency: "RUB",
+            offerCount: 1,
+            url: canonicalUrl,
+          },
+        } : {}),
       },
       {
         "@type": "WebPage",
@@ -80,6 +92,21 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
             {page.title}
           </h1>
           <p className="mt-6 max-w-4xl text-lg leading-relaxed text-slate-200">{page.intro}</p>
+          {featuredOffer ? (
+            <div className="mt-7 max-w-4xl rounded-2xl border border-amber-400/40 bg-slate-950/60 p-5 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:gap-6">
+              <div>
+                <p className="text-sm font-semibold text-amber-300">{featuredOffer.title}</p>
+                <p className="mt-1 text-2xl font-bold text-white">{featuredOffer.price}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">{featuredOffer.description}</p>
+              </div>
+              <StarterOfferButton
+                offerId={featuredOffer.id}
+                targetId="legal-help-form"
+                label="Заказать проверку"
+                className="mt-5 inline-flex w-full shrink-0 justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 sm:mt-0 sm:w-auto"
+              />
+            </div>
+          ) : null}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="#legal-help-form" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
               Описать ситуацию
@@ -90,6 +117,26 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
           </div>
         </div>
       </section>
+
+      {page.example ? (
+        <section className="border-y border-slate-700 bg-slate-950/60">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">{page.example.eyebrow}</p>
+            <h2 className="mt-2 text-3xl font-semibold text-white">{page.example.title}</h2>
+            <p className="mt-4 max-w-4xl leading-7 text-slate-300">{page.example.description}</p>
+            <div className="mt-8 grid gap-5 lg:grid-cols-3">
+              {page.example.items.map((item, index) => (
+                <article key={item.title} className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                  <span className="text-sm font-bold text-amber-300">0{index + 1}</span>
+                  <h3 className="mt-3 text-xl font-semibold text-white">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.description}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-5 text-sm leading-6 text-slate-400">{page.example.note}</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">

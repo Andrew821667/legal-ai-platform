@@ -14,7 +14,9 @@ type ServiceDetailPageProps = {
 export default function ServiceDetailPage({ service, path }: ServiceDetailPageProps) {
   const pagePath = path || `/services/${service.slug}`;
   const canonicalUrl = `${LEGAL_SITE_URL.replace(/\/$/, "")}${pagePath}`;
-  const isEngineeringPractice = service.slug === "custom-ai";
+  const isEngineeringPractice = service.slug === "custom-ai" || pagePath.startsWith("/engineering");
+  const offerPrices = service.offers?.map((offer) => Number(offer.price.replace(/\D/g, ""))).filter(Boolean) || [];
+  const featuredOffer = service.offers?.length === 1 ? service.offers[0] : undefined;
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -41,6 +43,15 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           serviceUrl: canonicalUrl,
           availableLanguage: "ru-RU",
         },
+        ...(offerPrices.length ? {
+          offers: {
+            "@type": "AggregateOffer",
+            lowPrice: Math.min(...offerPrices),
+            priceCurrency: "RUB",
+            offerCount: offerPrices.length,
+            url: canonicalUrl,
+          },
+        } : {}),
       },
       {
         "@type": "WebPage",
@@ -86,6 +97,21 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-amber-700 sm:mt-8">{service.eyebrow}</p>
           <h1 className="mt-3 max-w-5xl text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">{service.title}</h1>
           <p className="mt-5 max-w-4xl text-base leading-7 text-slate-600 sm:mt-6 sm:text-xl sm:leading-relaxed">{service.intro}</p>
+          {featuredOffer ? (
+            <div className="mt-7 max-w-4xl rounded-2xl border border-amber-300 bg-white/90 p-5 shadow-sm backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:gap-6">
+              <div>
+                <p className="text-sm font-semibold text-amber-800">{featuredOffer.title}</p>
+                <p className="mt-1 text-2xl font-bold text-slate-950">{featuredOffer.price}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">{featuredOffer.description}</p>
+              </div>
+              <StarterOfferButton
+                offerId={featuredOffer.id}
+                targetId="lead-form"
+                label="Обсудить прототип"
+                className="mt-5 inline-flex w-full shrink-0 justify-center rounded-lg bg-amber-700 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-800 sm:mt-0 sm:w-auto"
+              />
+            </div>
+          ) : null}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="#lead-form" className="rounded-lg bg-amber-700 px-6 py-3 text-center font-semibold text-white hover:bg-amber-800">
               {isEngineeringPractice ? "Обсудить инженерный проект" : "Обсудить процесс"}
@@ -109,7 +135,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         </section>
       )}
 
-      {service.offers?.length ? (
+      {service.offers && service.offers.length > 1 ? (
         <section className="border-b border-slate-200 bg-slate-100">
           <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
@@ -156,6 +182,25 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           </aside>
         </div>
       </section>
+
+      {service.example ? (
+        <section className="border-y border-slate-200 bg-slate-900 text-slate-100">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-400">{service.example.eyebrow}</p>
+            <h2 className="mt-2 text-3xl font-bold text-white">{service.example.title}</h2>
+            <p className="mt-4 max-w-4xl leading-7 text-slate-300">{service.example.description}</p>
+            <div className="mt-8 grid gap-5 lg:grid-cols-3">
+              {service.example.items.map((item) => (
+                <article key={item.title} className="rounded-2xl border border-slate-700 bg-slate-800 p-6">
+                  <h3 className="text-xl font-semibold text-white">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.description}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-5 text-sm leading-6 text-slate-400">{service.example.note}</p>
+          </div>
+        </section>
+      ) : null}
 
       <section id="workflow" className="border-y border-slate-200 bg-slate-100">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">

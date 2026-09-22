@@ -38,6 +38,7 @@ export default function Footer() {
     services: [
       { name: "Юридическая помощь", href: ROUTES.legalHelp },
       { name: "Разработка и AI", href: ROUTES.engineering },
+      { name: "Telegram-боты для бизнеса", href: ROUTES.telegramBots },
       { name: "Консультация юриста онлайн", href: "/legal-help/online-consultation" },
       { name: "Юридическая помощь по регионам", href: "/legal-help/regions" },
       { name: "Юрист для бизнеса", href: ROUTES.legalHelpBusiness },

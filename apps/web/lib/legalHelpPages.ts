@@ -29,9 +29,17 @@ export type LegalHelpPage = {
   related: string[];
   clientType: LegalClientType;
   area: LegalArea;
+  featuredOfferId?: "legal_contract_review";
+  example?: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    items: LegalHelpStep[];
+    note: string;
+  };
 };
 
-export const LEGAL_HELP_REVIEWED_AT = "2026-08-05";
+export const LEGAL_HELP_REVIEWED_AT = "2026-09-22";
 
 export const legalHelpPages: Record<string, LegalHelpPage> = {
   "online-consultation": {
@@ -107,16 +115,18 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
   },
   contracts: {
     slug: "contracts",
-    seoTitle: "Юрист по договорам: проверка и составление",
-    title: "Юрист по договорам: проверка, составление и сопровождение сделок",
+    seoTitle: "Проверка договора юристом — от 7 900 ₽",
+    title: "Проверка договора юристом: риски, правки и план переговоров",
     description:
-      "Проверка и составление договоров для бизнеса и частных лиц: оценка рисков, протокол разногласий, переговоры и сопровождение исполнения.",
+      "Проверка договора юристом по праву РФ: письменный перечень рисков и правок. Экспресс-формат до 15 страниц от 7 900 рублей.",
     keywords: [
       "юрист по договорам",
       "проверка договора юристом",
       "составление договора",
       "правовой анализ договора",
       "протокол разногласий",
+      "экспресс проверка договора",
+      "анализ рисков договора",
     ],
     eyebrow: "Договоры и сделки",
     intro:
@@ -174,6 +184,28 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
     related: ["corporate", "debt-collection", "litigation"],
     clientType: "unknown",
     area: "contracts",
+    featuredOfferId: "legal_contract_review",
+    example: {
+      eyebrow: "Пример результата",
+      title: "Как выглядит разбор условий",
+      description:
+        "Вместо общей оценки клиент получает перечень конкретных условий, их последствий и предлагаемой позиции.",
+      items: [
+        {
+          title: "Приёмка работ",
+          description: "Риск: оплата зависит от акта, а срок для замечаний не указан. Правка: закрепить срок и порядок мотивированного отказа.",
+        },
+        {
+          title: "Ответственность",
+          description: "Риск: неустойка односторонняя и не ограничена ценой этапа. Позиция: сделать её взаимной и установить предел.",
+        },
+        {
+          title: "Расторжение",
+          description: "Риск: контрагент может отказаться без срока на передачу результата. Правка: добавить срок уведомления и оплату выполненного.",
+        },
+      ],
+      note: "Демонстрационный пример. Конкретные выводы зависят от текста договора, цели сделки и позиции клиента.",
+    },
   },
   litigation: {
     slug: "litigation",
