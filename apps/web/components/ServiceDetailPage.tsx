@@ -17,9 +17,11 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
   const isEngineeringPractice = service.slug === "custom-ai" || pagePath.startsWith("/engineering");
   const offerPrices = service.offers?.map((offer) => Number(offer.price.replace(/\D/g, ""))).filter(Boolean) || [];
   const featuredOffer = service.offers?.length === 1 ? service.offers[0] : undefined;
-  const featuredOfferLabel = featuredOffer?.id === "engineering_prototype"
-    ? "Обсудить прототип"
-    : "Обсудить AI/RAG-контур";
+  const featuredOfferLabel = featuredOffer?.id === "engineering_diagnostic"
+    ? "Заказать диагностику"
+    : featuredOffer?.id === "engineering_prototype"
+      ? "Обсудить прототип"
+      : "Обсудить AI/RAG-контур";
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [

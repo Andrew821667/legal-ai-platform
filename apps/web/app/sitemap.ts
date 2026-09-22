@@ -41,6 +41,7 @@ const pages: SitemapPage[] = [
   { path: "/services/land-law-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/engineering", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/engineering/automation-diagnostic", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/engineering/telegram-bots", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/engineering/ai-rag", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services/outsourcing-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.65 },

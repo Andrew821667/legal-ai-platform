@@ -19,9 +19,11 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
   const baseUrl = LEGAL_SITE_URL.replace(/\/$/, "");
   const canonicalUrl = `${baseUrl}/legal-help/${page.slug}`;
   const featuredOffer = getStarterOffer(page.featuredOfferId, "legal");
-  const featuredOfferLabel = page.featuredOfferId === "legal_contract_review"
-    ? "Заказать проверку"
-    : "Заказать документ";
+  const featuredOfferLabel = page.featuredOfferId === "legal_consultation"
+    ? "Записаться на консультацию"
+    : page.featuredOfferId === "legal_contract_review"
+      ? "Заказать проверку"
+      : "Заказать документ";
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
