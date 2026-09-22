@@ -10,6 +10,7 @@ export const ROUTES = {
   legalHelp: "/legal-help",
   engineering: "/engineering",
   telegramBots: "/engineering/telegram-bots",
+  aiRag: "/engineering/ai-rag",
   legalHelpBusiness: "/legal-help/business",
   legalHelpIndividuals: "/legal-help/individuals",
   about: "/about",

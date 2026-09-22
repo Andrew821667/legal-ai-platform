@@ -17,6 +17,9 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
   const isEngineeringPractice = service.slug === "custom-ai" || pagePath.startsWith("/engineering");
   const offerPrices = service.offers?.map((offer) => Number(offer.price.replace(/\D/g, ""))).filter(Boolean) || [];
   const featuredOffer = service.offers?.length === 1 ? service.offers[0] : undefined;
+  const featuredOfferLabel = featuredOffer?.id === "engineering_prototype"
+    ? "Обсудить прототип"
+    : "Обсудить AI/RAG-контур";
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -61,7 +64,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
-        ...(isEngineeringPractice ? { dateModified: "2026-09-21" } : {}),
+        ...(isEngineeringPractice ? { dateModified: "2026-09-22" } : {}),
       },
       {
         "@type": "BreadcrumbList",
@@ -107,7 +110,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
               <StarterOfferButton
                 offerId={featuredOffer.id}
                 targetId="lead-form"
-                label="Обсудить прототип"
+                label={featuredOfferLabel}
                 className="mt-5 inline-flex w-full shrink-0 justify-center rounded-lg bg-amber-700 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-800 sm:mt-0 sm:w-auto"
               />
             </div>
