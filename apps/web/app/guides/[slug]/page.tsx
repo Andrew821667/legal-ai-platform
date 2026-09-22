@@ -52,7 +52,17 @@ export default async function GuidePage({ params }: GuidePageProps) {
       ? { href: "/for-lawyers", label: "ИИ для юристов: практические сценарии" }
     : guide.slug === "legal-ai-data-security"
       ? { href: "/engineering", label: "Безопасная архитектура и интеграции" }
+    : guide.slug === "online-lawyer-consultation-price"
+      ? { href: "/legal-help/online-consultation", label: "Онлайн-консультация юриста — 4 900 ₽" }
+    : guide.slug === "business-process-automation-audit"
+      ? { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации — 7 900 ₽" }
       : { href: "/solutions", label: "Решения для юридической автоматизации" };
+  const cta = guide.cta || {
+    heading: "Нужно разобрать ваш процесс?",
+    text: "Опишите задачу и текущий маршрут — начнем с диагностики, а не с продажи инструмента.",
+    href: "/#lead-form",
+    label: "Оставить заявку",
+  };
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -142,10 +152,10 @@ export default async function GuidePage({ params }: GuidePageProps) {
         </section>
 
         <section className="mt-10 rounded-xl bg-slate-900 p-7 text-slate-100">
-          <h2 className="text-2xl font-semibold">Нужно разобрать ваш процесс?</h2>
-          <p className="mt-3 text-slate-300">Опишите задачу и текущий маршрут — начнем с диагностики, а не с продажи инструмента.</p>
-          <Link href="/#lead-form" className="mt-5 inline-flex rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
-            Оставить заявку
+          <h2 className="text-2xl font-semibold">{cta.heading}</h2>
+          <p className="mt-3 text-slate-300">{cta.text}</p>
+          <Link href={cta.href} className="mt-5 inline-flex rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
+            {cta.label}
           </Link>
         </section>
 

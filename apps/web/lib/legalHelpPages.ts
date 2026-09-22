@@ -27,6 +27,7 @@ export type LegalHelpPage = {
   boundaries: string[];
   faq: LegalHelpFaq[];
   related: string[];
+  resource?: { href: string; label: string; description: string };
   clientType: LegalClientType;
   area: LegalArea;
   featuredOfferId?: "legal_consultation" | "legal_contract_review" | "legal_claim_response";
@@ -110,6 +111,11 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
       { question: "Работаете с клиентами из регионов?", answer: "Да, дистанционный формат доступен клиентам из разных регионов России, если характер задачи не требует обязательного очного участия в конкретном месте." },
     ],
     related: ["contracts", "litigation", "real-estate"],
+    resource: {
+      href: "/guides/online-lawyer-consultation-price",
+      label: "Сколько стоит консультация юриста онлайн",
+      description: "Что входит в формат за 4 900 ₽, как подготовиться и когда нужна отдельная работа с документами.",
+    },
     clientType: "unknown",
     area: "other",
     featuredOfferId: "legal_consultation",

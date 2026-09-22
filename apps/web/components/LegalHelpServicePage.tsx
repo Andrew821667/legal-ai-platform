@@ -233,6 +233,11 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
           })}
         </div>
         <div className="mt-7 flex flex-wrap gap-4 text-sm">
+          {page.resource ? (
+            <Link href={page.resource.href} className="text-amber-300 hover:text-amber-200">
+              {page.resource.label} →
+            </Link>
+          ) : null}
           <Link href="/legal-help/business" className="text-amber-300 hover:text-amber-200">Все услуги бизнесу →</Link>
           <Link href="/legal-help/individuals" className="text-amber-300 hover:text-amber-200">Помощь частным лицам →</Link>
         </div>
