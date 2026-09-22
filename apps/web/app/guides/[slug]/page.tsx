@@ -56,6 +56,10 @@ export default async function GuidePage({ params }: GuidePageProps) {
       ? { href: "/legal-help/online-consultation", label: "Онлайн-консультация юриста — 4 900 ₽" }
     : guide.slug === "business-process-automation-audit"
       ? { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации — 7 900 ₽" }
+    : guide.slug === "contract-review-lawyer-price"
+      ? { href: "/legal-help/contracts", label: "Проверка договора юристом — от 7 900 ₽" }
+    : guide.slug === "response-to-counterparty-claim"
+      ? { href: "/legal-help/litigation", label: "Претензия или ответ — от 9 900 ₽" }
       : { href: "/solutions", label: "Решения для юридической автоматизации" };
   const cta = guide.cta || {
     heading: "Нужно разобрать ваш процесс?",
@@ -141,6 +145,21 @@ export default async function GuidePage({ params }: GuidePageProps) {
             </section>
           ))}
         </div>
+
+        {guide.sources?.length ? (
+          <section className="mt-12 border-t border-slate-200 pt-8">
+            <h2 className="text-xl font-bold">Официальный источник</h2>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700">
+              {guide.sources.map((source) => (
+                <li key={source.href}>
+                  <a href={source.href} target="_blank" rel="noopener noreferrer" className="font-medium text-amber-800 underline underline-offset-4">
+                    {source.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section className="mt-14 rounded-xl border border-amber-200 bg-amber-50 p-7">
           <h2 className="text-2xl font-bold">Чек-лист перед стартом</h2>

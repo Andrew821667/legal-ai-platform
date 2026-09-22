@@ -200,6 +200,11 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
       { question: "AI сам принимает решение по договору?", answer: "Нет. Технологии могут ускорять поиск и структурирование условий, но юридическую позицию и финальные рекомендации подтверждает человек." },
     ],
     related: ["corporate", "debt-collection", "litigation"],
+    resource: {
+      href: "/guides/contract-review-lawyer-price",
+      label: "Сколько стоит проверка договора юристом",
+      description: "Что входит в экспресс-формат от 7 900 ₽ и когда нужен отдельный объём работы.",
+    },
     clientType: "unknown",
     area: "contracts",
     featuredOfferId: "legal_contract_review",
@@ -296,6 +301,11 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
       { question: "Можно урегулировать спор без суда?", answer: "Иногда претензия, переговоры или соглашение дают более управляемый результат. Возможность досудебного решения оценивается вместе с риском утраты времени и доказательств." },
     ],
     related: ["debt-collection", "contracts", "corporate"],
+    resource: {
+      href: "/guides/response-to-counterparty-claim",
+      label: "Как подготовить ответ на претензию",
+      description: "Сроки, документы, расчёты, безопасная позиция и доказательство отправки.",
+    },
     clientType: "unknown",
     area: "disputes",
     featuredOfferId: "legal_claim_response",
