@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>XRAY_BALANCER_MAX_POOL</key>
+		<string>8</string>
+	</dict>
+	<key>Label</key>
+	<string>ru.legalai.xray-balancer-sync</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>/usr/local/sbin/xray-balancer-sync.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/andrej/Library/Logs/xray-balancer-sync.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andrej/Library/Logs/xray-balancer-sync.out.log</string>
+	<key>StartInterval</key>
+	<integer>1800</integer>
+</dict>
+</plist>

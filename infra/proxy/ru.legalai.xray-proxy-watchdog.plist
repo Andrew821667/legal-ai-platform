@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>ru.legalai.xray-proxy-watchdog</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/usr/local/sbin/xray-proxy-watchdog.sh</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>120</integer>
+	<key>StandardOutPath</key>
+	<string>/Users/andrej/Library/Logs/xray-proxy-watchdog.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/andrej/Library/Logs/xray-proxy-watchdog.err.log</string>
+</dict>
+</plist>
