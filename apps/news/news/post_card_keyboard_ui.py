@@ -52,6 +52,17 @@ def build_post_card_keyboard_rows(
             ]
         )
     else:
+        # Опубликованный пост правится прямо в канале: сохранение правки
+        # меняет само сообщение, а не только запись в базе. Перенос времени,
+        # «опубликовать сейчас» и удаление к уже вышедшему посту не относятся.
+        rows.extend(
+            two_column_rows(
+                [
+                    callback_button("✍️ Править в канале", callback_data=f"pm:{post_id}:{status}:{offset}"),
+                    callback_button("🤖 Править через LLM", callback_data=f"pa:{post_id}:{status}:{offset}"),
+                ]
+            )
+        )
         rows.append([callback_button("🔄 Обновить карточку", callback_data=f"pv:{post_id}:{status}:{offset}")])
 
     if status == "draft":

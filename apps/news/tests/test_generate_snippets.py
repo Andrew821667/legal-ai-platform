@@ -173,7 +173,8 @@ def test_collect_generation_previews_uses_fallback_for_synthetic_slot_rejection(
 
     assert len(result.previews) == 1
     assert result.previews[0]["publication_kind"] == "practice"
-    assert result.previews[0]["status"] == "review"
+    # Статус задаёт режим автопубликации, а не логика фоллбэка.
+    assert result.previews[0]["status"] == generate_module.generated_post_status()
     assert _FakeWriter.generate_calls == 1
     assert _FakeWriter.fallback_calls == 1
 

@@ -53,6 +53,16 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+def generated_post_status() -> str:
+    """Статус, с которым плановый генератор сохраняет готовый пост.
+
+    `scheduled` — пост уйдёт в канал сам в своё время. `review` — прежний
+    режим, где каждый пост ждал ручного одобрения; с ним канал молчал всякий
+    раз, когда одобрение запаздывало. Переключается NEWS_AUTOPUBLISH_GENERATED.
+    """
+    return "scheduled" if settings.news_autopublish_generated else "review"
+
+
 @dataclass(slots=True)
 class GenerationRunResult:
     previews: list[dict[str, str]]
@@ -930,7 +940,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                 "channel_id": settings.telegram_channel_id or "",
                 "channel_username": settings.telegram_channel_username or "",
                 "publish_at": publish_at_utc.isoformat(),
-                "status": "review",
+                "status": generated_post_status(),
                 "article_published_at": article.published_at.isoformat() if article.published_at else "",
                 "longread_topic": slot.longread_topic or "",
             }

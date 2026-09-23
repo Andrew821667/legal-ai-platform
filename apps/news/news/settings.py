@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     news_publish_idle_fallback_enabled: bool = False
     news_publish_max_overdue_minutes: int = 360
     news_publish_editorial_fallback_grace_minutes: int = 45
+    # Плановый генератор ставит посты сразу в расписание, минуя ручную
+    # проверку: генератор показал себя достаточно надёжным, а посты всё равно
+    # проходят гейт качества дважды — при генерации и перед отправкой. Правка
+    # после публикации — кнопкой в админ-боте. NEWS_AUTOPUBLISH_GENERATED=0
+    # возвращает прежний режим «сначала на проверку».
+    news_autopublish_generated: bool = True
     news_publish_fallback_startup_grace_seconds: int = 600
     news_publication_monitor_enabled: bool = True
     news_publication_monitor_interval_seconds: int = 300
