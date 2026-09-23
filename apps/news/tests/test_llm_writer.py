@@ -59,6 +59,30 @@ def test_looks_complete_prose_rejects_incomplete_tail() -> None:
     assert not LLMNewsWriter._looks_complete_prose(text)
 
 
+def test_looks_complete_prose_ignores_footer_cta_link() -> None:
+    """Регрессия 22-23.09: «умный футер» сам вставляет CTA-ссылку последней
+    строкой, а гейт считал пост обрезанным, потому что у ссылки нет точки в
+    конце. Два слота публикации подряд встали в review при исправном тексте."""
+    text = (
+        "<b>Что произошло</b>\nТекст завершен.\n\n"
+        "<b>Следующий шаг</b>\n"
+        '<a href="https://ai-verdict.ru/automation">Как AI Verdict проектирует автоматизацию</a>\n\n'
+        "#AIVerdict #LegalAI"
+    )
+    assert LLMNewsWriter._looks_complete_prose(text)
+
+
+def test_looks_complete_prose_still_rejects_truncation_before_footer_link() -> None:
+    """Ссылка футера не должна маскировать реально оборванный текст над ней."""
+    text = (
+        "<b>Что произошло</b>\nТекст оборван потому\n\n"
+        "<b>Следующий шаг</b>\n"
+        '<a href="https://ai-verdict.ru/automation">Как AI Verdict проектирует автоматизацию</a>\n\n'
+        "#AIVerdict"
+    )
+    assert not LLMNewsWriter._looks_complete_prose(text)
+
+
 def test_specificity_signal_allows_legal_markers_without_digits() -> None:
     text = "<b>Юридические риски</b>\nНужно проверить персональные данные, договорную ответственность и AI Act."
     assert LLMNewsWriter._has_specificity_signal(text)
