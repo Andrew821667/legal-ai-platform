@@ -205,3 +205,31 @@ def test_build_post_card_action_keyboards() -> None:
         callback_button=_inline_button,
     )
     assert _callbacks(batch_confirm) == ["mbc:due:8:page", "mbn:due:8:page", "refresh"]
+
+
+def test_build_post_card_keyboard_rows_for_posted_offers_channel_edit() -> None:
+    """Опубликованный пост правится прямо в канале; перенос времени,
+    «опубликовать сейчас» и удаление к уже вышедшему посту не относятся."""
+    rows = build_post_card_keyboard_rows(
+        post_id="p1",
+        status="posted",
+        offset=0,
+        two_column_rows=_two_column_rows,
+        callback_button=_inline_button,
+        is_auto_queue_context=lambda value: value.startswith("aq_"),
+        auto_queue_filters_from_context=_auto_filters,
+        is_calendar_context=lambda value: value.startswith("cal_"),
+        calendar_date_from_context=_calendar_date,
+        is_theme_context=lambda value: value.startswith("th_"),
+        theme_from_context=lambda value: value.removeprefix("th_"),
+        is_source_context=lambda value: value.startswith("src_"),
+        source_from_context=lambda value: value.removeprefix("src_"),
+        is_manual_queue_context=lambda value: value.startswith("mq_"),
+        queue_filters_from_context=_manual_filters,
+        button_style_danger="danger",
+    )
+    callbacks = _callbacks(rows)
+    assert "pm:p1:posted:0" in callbacks
+    assert "pa:p1:posted:0" in callbacks
+    assert "pv:p1:posted:0" in callbacks
+    assert not any(item.startswith(("pt:", "ppc:", "pdd:", "pf:")) for item in callbacks)

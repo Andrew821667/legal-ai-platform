@@ -4660,6 +4660,45 @@ class NewsAdminBot:
         tail_text = "\n".join(tail_parts)[-1800:].strip()
         return result.returncode, tail_text
 
+    async def _edit_published_message(self, context: ContextTypes.DEFAULT_TYPE, post: dict[str, Any], text: str) -> None:
+        """Заменяет текст уже опубликованного поста прямо в канале.
+
+        Править сообщение может только бот, который его отправил. На проде
+        публикатор и админ-бот — один и тот же бот (TELEGRAM_BOT_TOKEN и
+        NEWS_ADMIN_BOT_TOKEN совпадают), поэтому хватает context.bot. Если их
+        когда-нибудь разведут, Telegram ответит «message can't be edited» —
+        это и покажем, а не молча сохраним правку только в базе.
+        """
+        chat_id = settings.telegram_channel_id or settings.telegram_channel_username
+        if not chat_id:
+            raise RuntimeError("TELEGRAM_CHANNEL_ID или TELEGRAM_CHANNEL_USERNAME не заданы")
+        message_id = int(post.get("telegram_message_id") or 0)
+        if not message_id:
+            raise RuntimeError("у поста нет id сообщения в канале — править в канале нечего")
+        if post.get("media_urls"):
+            # Подпись к медиа ограничена 1024 символами, а остаток текста уходил
+            # отдельными сообщениями, id которых не сохраняются. Честно
+            # отредактировать такой пост нельзя — лучше отказать явно.
+            raise RuntimeError("правка постов с медиа пока не поддерживается")
+        normalized = (text or "").strip()
+        if not normalized:
+            raise RuntimeError("пустой текст")
+        if len(normalized) > 4096:
+            raise RuntimeError(f"текст длиннее лимита Telegram: {len(normalized)} из 4096 символов")
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=normalized,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        except BadRequest as exc:
+            # Текст совпал с уже опубликованным — для пользователя это успех.
+            if "message is not modified" in str(exc).lower():
+                return
+            raise
+
     async def _send_to_telegram(self, context: ContextTypes.DEFAULT_TYPE, text: str, media_urls: list[str] | None) -> int:
         chat_id = settings.telegram_channel_id or settings.telegram_channel_username
         if not chat_id:
@@ -7924,15 +7963,35 @@ class NewsAdminBot:
                     await query.message.reply_text("Черновик редактирования не найден. Повторите редактирование.")
                     return
 
-                payload = {"text": LLMNewsWriter.normalize_post_footer_blocks(str(draft.get("text") or ""))}
-                self.client.patch_post(post_id, payload).raise_for_status()
+                new_text = LLMNewsWriter.normalize_post_footer_blocks(str(draft.get("text") or ""))
+                current = self._get_post(post_id)
+                published = str(current.get("status") or "") == "posted"
+                if published:
+                    # Сначала канал, потом база: если Telegram откажет, в базе
+                    # останется текст, который действительно висит в канале, а
+                    # черновик правки — в user_data, чтобы можно было повторить.
+                    try:
+                        await self._edit_published_message(context, current, new_text)
+                    except Exception as exc:
+                        logger.warning(
+                            "published_post_edit_failed",
+                            extra={"post_id": post_id, "error": str(exc)},
+                        )
+                        await query.message.reply_text(
+                            f"Пост в канале не изменён: {exc}\n"
+                            "Текст правки сохранён в черновике — можно нажать «Сохранить» ещё раз."
+                        )
+                        return
+
+                self.client.patch_post(post_id, {"text": new_text}).raise_for_status()
                 self._invalidate_post_caches()
                 context.user_data.pop(_STATE_DRAFT_EDIT, None)
                 context.user_data.pop(_STATE_PENDING_EDIT, None)
 
                 post = self._get_post(post_id)
-                await self._safe_edit_message_text(query, 
-                    "Изменения сохранены.\n\n" + self._post_card_text(post),
+                saved_label = "Пост обновлён в канале." if published else "Изменения сохранены."
+                await self._safe_edit_message_text(query,
+                    saved_label + "\n\n" + self._post_card_text(post),
                     reply_markup=self._post_card_keyboard(post_id, status, int(offset_raw)),
                 )
                 return
@@ -8301,11 +8360,13 @@ class NewsAdminBot:
 
             preview = new_text if len(new_text) <= 2500 else new_text[:2500] + "\n\n…"
             mode_label = "LLM" if mode == "ai" else "ручной"
+            published = str(post.get("status") or "") == "posted"
+            save_label = "✅ Сохранить и обновить в канале" if published else "✅ Сохранить"
             await update.effective_message.reply_text(
                 f"Черновик ({mode_label}) готов.\nПроверьте и подтвердите сохранение:\n\n{preview}",
                 reply_markup=InlineKeyboardMarkup(
                     [
-                        [InlineKeyboardButton("✅ Сохранить", callback_data=f"ps:{post_id}:{status}:{offset}")],
+                        [InlineKeyboardButton(save_label, callback_data=f"ps:{post_id}:{status}:{offset}")],
                         [InlineKeyboardButton("❌ Отмена", callback_data=f"px:{status}:{offset}")],
                     ]
                 ),
