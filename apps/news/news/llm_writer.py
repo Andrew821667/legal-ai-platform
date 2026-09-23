@@ -164,6 +164,11 @@ _DEFAULT_RUBRIC_BY_PILLAR = {
     "tools": "market",
     "market": "market",
 }
+# Строка вида `<a href="...">Текст ссылки</a>` (допускаются хвостовые знаки
+# препинания) — футер поста, а не проза: проверку завершённости к ней применять
+# нельзя.
+_LINK_ONLY_LINE_RE = re.compile(r"<a\s[^>]*>.*?</a>[\s.,;:!?…]*", re.IGNORECASE | re.DOTALL)
+
 _INCOMPLETE_TRAILING_WORDS = (
     "и",
     "или",
@@ -1204,10 +1209,21 @@ class LLMNewsWriter:
 
     @staticmethod
     def _looks_complete_prose(text: str) -> bool:
-        plain = html.unescape(re.sub(r"<[^>]+>", "", text or ""))
-        lines = [line.strip() for line in plain.splitlines() if line.strip()]
         filtered: list[str] = []
-        for line in lines:
+        for raw_line in (text or "").splitlines():
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+            # Строка, которая целиком является ссылкой, — это футер («Следующий
+            # шаг», «Источник»), а не проза: точки в конце у неё нет и не должно
+            # быть. Заголовок «Следующий шаг» отфильтровывался и раньше, а сама
+            # ссылка под ним — нет, и пост с ней уезжал в review как обрезанный:
+            # 22–23.09 так встали подряд два слота публикации в канале.
+            if _LINK_ONLY_LINE_RE.fullmatch(raw_line):
+                continue
+            line = html.unescape(re.sub(r"<[^>]+>", "", raw_line)).strip()
+            if not line:
+                continue
             lowered = line.lower()
             if lowered.startswith("источник"):
                 continue
