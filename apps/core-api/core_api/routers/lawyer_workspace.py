@@ -91,8 +91,18 @@ def _days_until(value: datetime | None) -> int | None:
     return (value.astimezone(timezone.utc) - datetime.now(timezone.utc)).days
 
 
-def _stage_for(*, nda_signed: bool, agreement_status: str | None) -> str:
-    """Этап дела одной фразой — то, что юрист хочет увидеть, не открывая карточку."""
+WITHOUT_AGREEMENT_STAGE = "В работе без договора"
+
+
+def _stage_for(
+    *, nda_signed: bool, agreement_status: str | None, without_agreement: bool = False
+) -> str:
+    """Этап дела одной фразой — то, что юрист хочет увидеть, не открывая карточку.
+
+    without_agreement — юрист сам решил вести дело без договора. Пока
+    договора нет, «Готовим условия» тут было бы неправдой: условия никто не
+    готовит, работа уже идёт. Появится договор — этап снова по нему.
+    """
     if agreement_status == "signed":
         return "Договор подписан"
     if agreement_status in {"sent", "viewed"}:
@@ -101,9 +111,26 @@ def _stage_for(*, nda_signed: bool, agreement_status: str | None) -> str:
         return "Договор не отправлен"
     if agreement_status == "declined":
         return "Клиент отказался"
+    if without_agreement:
+        return WITHOUT_AGREEMENT_STAGE
     if nda_signed:
         return "Готовим условия"
     return "Первичное обращение"
+
+
+_LIVE_INTAKE_EXCLUDED = (LegalIntakeStatus.closed, LegalIntakeStatus.declined)
+
+
+def _worked_without_agreement(intakes: list[tuple[bool, LegalIntakeStatus]]) -> bool:
+    """Клиента ведут без договора и условий от юриста никто не ждёт.
+
+    Хотя бы одно обращение отмечено «без договора», и нет живого обращения,
+    по которому решение ещё не принято: у постоянного клиента с новым
+    вопросом этап должен звать готовить условия, а не прятать его.
+    """
+    worked = any(flag for flag, _ in intakes)
+    awaiting_terms = any(not flag and status not in _LIVE_INTAKE_EXCLUDED for flag, status in intakes)
+    return worked and not awaiting_terms
 
 
 def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
@@ -254,6 +281,8 @@ def today(
         select(LegalIntake, Lead)
         .join(Lead, Lead.id == LegalIntake.lead_id)
         .where(LegalIntake.id.not_in(with_agreement))
+        # Юрист уже решил: договор не нужен. Напоминать о нём — шум.
+        .where(LegalIntake.without_agreement.is_(False))
         .where(
             LegalIntake.status.not_in(
                 [LegalIntakeStatus.closed, LegalIntakeStatus.declined]
@@ -521,12 +550,18 @@ def clients(
     # Один клиент может вести несколько дел в разных практиках.
     areas: dict[uuid.UUID, list[str]] = {}
     practices: dict[uuid.UUID, list[str]] = {}
+    intake_flags: dict[uuid.UUID, list[tuple[bool, LegalIntakeStatus]]] = {}
     if lead_ids:
-        for lead_id, area, practice in db.execute(
-            select(LegalIntake.lead_id, LegalIntake.legal_area, LegalIntake.practice).where(
-                LegalIntake.lead_id.in_(lead_ids)
-            )
+        for lead_id, area, practice, without_agreement, intake_status in db.execute(
+            select(
+                LegalIntake.lead_id,
+                LegalIntake.legal_area,
+                LegalIntake.practice,
+                LegalIntake.without_agreement,
+                LegalIntake.status,
+            ).where(LegalIntake.lead_id.in_(lead_ids))
         ).all():
+            intake_flags.setdefault(lead_id, []).append((bool(without_agreement), intake_status))
             # Область права есть только у права: у инженерного обращения в
             # legal_area лежит служебное «other», и в фильтр по областям оно
             # попадать не должно.
@@ -555,6 +590,7 @@ def clients(
             "stage": _stage_for(
                 nda_signed=lead.id in signed_nda,
                 agreement_status=open_agreements.get(lead.id),
+                without_agreement=_worked_without_agreement(intake_flags.get(lead.id, [])),
             ),
             "waiting_on_me": lead.id in awaiting_me,
             "legal_areas": areas.get(lead.id, []),
@@ -686,6 +722,9 @@ def client_card(
         "stage": _stage_for(
             nda_signed=nda is not None,
             agreement_status=latest_agreement.status.value if latest_agreement else None,
+            without_agreement=_worked_without_agreement(
+                [(item.without_agreement, item.status) for item in intakes]
+            ),
         ),
         "contact": lead.contact,
         "company": lead.company,

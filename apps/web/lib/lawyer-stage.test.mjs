@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { matterStage, stageFor } from "./lawyer-stage.ts";
+import { matterStage, stageFor, WITHOUT_AGREEMENT_STAGE } from "./lawyer-stage.ts";
 
 test("лестница этапов совпадает с ядром", () => {
   assert.equal(stageFor(false, null), "Первичное обращение");
@@ -20,4 +20,11 @@ test("этап обращения — по его последнему дого�
   ];
   assert.equal(matterStage(agreements, true), "Договор подписан");
   assert.equal(matterStage([], true), "Готовим условия");
+});
+
+test("без договора — свой этап, пока договор всё же не составлен", () => {
+  assert.equal(stageFor(true, null, true), WITHOUT_AGREEMENT_STAGE);
+  assert.equal(matterStage([], true, true), "В работе без договора");
+  // Передумали и составили договор — этап снова по нему.
+  assert.equal(matterStage([{ status: "sent", created_at: "2026-09-20T00:00:00Z" }], true, true), "Договор у клиента");
 });

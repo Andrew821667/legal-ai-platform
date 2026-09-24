@@ -24,6 +24,8 @@ test("стадии раскладываются по тому, у кого хо�
   assert.equal(clientGroup(row("Договор у клиента")), "theirs");
   assert.equal(clientGroup(row("Договор подписан")), "active");
   assert.equal(clientGroup(row("Клиент отказался")), "declined");
+  // Решили вести без договора — работа идёт, хода от юриста по договору не ждём.
+  assert.equal(clientGroup(row("В работе без договора")), "active");
 });
 
 test("группы идут в порядке срочности, пустые не показываются", () => {

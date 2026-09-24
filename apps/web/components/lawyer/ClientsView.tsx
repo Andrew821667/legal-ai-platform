@@ -14,6 +14,7 @@ import {
   groupClients,
 } from "@/lib/lawyer-clients";
 import type { ClientFilter, ClientSort } from "@/lib/lawyer-clients";
+import { WITHOUT_AGREEMENT_STAGE } from "@/lib/lawyer-stage";
 import { EXTERNAL_LINKS } from "@/lib/links";
 
 /**
@@ -42,7 +43,7 @@ const FEW_CLIENTS = 5;
 
 function stageTone(stage: string, waiting: boolean) {
   if (waiting) return "alert" as const;
-  if (stage === "Договор подписан") return "ok" as const;
+  if (stage === "Договор подписан" || stage === WITHOUT_AGREEMENT_STAGE) return "ok" as const;
   if (stage === "Договор не отправлен" || stage === "Клиент отказался") return "warn" as const;
   return "mute" as const;
 }
