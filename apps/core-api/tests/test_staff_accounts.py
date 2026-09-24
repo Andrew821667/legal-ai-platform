@@ -14,10 +14,9 @@ import pytest
 from core_api.config import get_settings
 from core_api.db import SessionLocal
 from core_api.main import app
-from core_api.models import Lead, LeadSource, LegalIntake, LegalIntakeStatus, Scope, ServiceAgreement
+from core_api.models import Lead, LeadSource, LegalIntake, LegalIntakeStatus, Scope
 from core_api.staff import is_staff, staff_telegram_ids
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
 
 from test_client_archive import _agreement, _cleanup, _key
 
