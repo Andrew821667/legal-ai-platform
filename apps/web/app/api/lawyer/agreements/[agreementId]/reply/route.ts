@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { corePost } from "@/lib/lawyer-core";
+import { corePost, TELEGRAM_DELIVERY_TIMEOUT_MS } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +26,9 @@ export async function POST(
     return Response.json({ detail: "Пустой ответ отправлять некуда" }, { status: 422 });
   }
 
-  return corePost(`/api/v1/service-agreements/${agreementId}/replies/deliver`, {
-    text: text.slice(0, MAX_LENGTH),
-    telegram_user_id: auth.telegramUserId,
-  });
+  return corePost(
+    `/api/v1/service-agreements/${agreementId}/replies/deliver`,
+    { text: text.slice(0, MAX_LENGTH), telegram_user_id: auth.telegramUserId },
+    { timeoutMs: TELEGRAM_DELIVERY_TIMEOUT_MS },
+  );
 }

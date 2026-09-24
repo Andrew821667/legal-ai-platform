@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from core_api.config import get_settings
+from core_api.config import get_settings, telegram_proxies
 from core_api.models import Lead, LeadSegment, LeadSource, LegalIntake
 
 logger = logging.getLogger(__name__)
@@ -215,6 +215,7 @@ def _post_telegram_message(
                     **({"parse_mode": parse_mode} if parse_mode else {}),
                 },
                 timeout=_NOTIFY_HTTP_TIMEOUT_SECONDS,
+                proxies=telegram_proxies(),
             )
             response.raise_for_status()
             body = response.json()

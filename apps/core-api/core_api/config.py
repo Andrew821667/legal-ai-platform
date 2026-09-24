@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://legalai_app:change_me_local_only@localhost:5432/legalai_platform"
     cors_origins: str = "http://localhost:3000"
     alert_bot_token: str | None = None
+    # Прокси до Telegram — тот же, что у бота-ассистента и сайта
+    # (xray-balancer на хосте). Напрямую api.telegram.org с прод-хоста
+    # недоступен: без прокси каждая отправка из ядра — договор, акт, ответ
+    # клиенту, уведомление — висела до таймаута и падала.
+    legal_ai_https_proxy: str = ""
     # Sentry: пусто по умолчанию — мониторинг включается явным заданием
     # DSN, а не молчаливым переходом в SaaS вне РФ.
     sentry_dsn: str | None = None
@@ -84,6 +89,12 @@ class Settings(BaseSettings):
     intake_assistant_name: str = "Никита"
     intake_assistant_model: str = "gpt-5.6-sol"
     intake_assistant_timeout_seconds: float = 45.0
+
+
+def telegram_proxies() -> dict[str, str] | None:
+    """Прокси для запросов к api.telegram.org или None, если не задан."""
+    url = (get_settings().legal_ai_https_proxy or "").strip()
+    return {"https": url, "http": url} if url else None
 
 
 @lru_cache

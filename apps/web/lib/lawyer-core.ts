@@ -16,9 +16,22 @@ const CORE_API_ADMIN_KEY =
 // Ядро на той же машине; если оно не ответило за это время, ответит и не позже.
 const TIMEOUT_MS = 15_000;
 
+/**
+ * Для вызовов, где ядро само идёт в Telegram (договор, ответ клиенту, акт).
+ * Там до трёх попыток по 15 с с паузами — около 50 с в худшем случае.
+ * Обрыв раньше показал бы юристу «ядро не ответило», а сообщение всё равно
+ * ушло бы клиенту, и повторное нажатие упёрлось бы в «уже отправлено».
+ */
+export const TELEGRAM_DELIVERY_TIMEOUT_MS = 60_000;
+
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
-async function coreCall(method: Method, path: string, payload?: unknown): Promise<NextResponse> {
+async function coreCall(
+  method: Method,
+  path: string,
+  payload?: unknown,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<NextResponse> {
   if (!CORE_API_ADMIN_KEY) {
     return NextResponse.json(
       { detail: "Сервер не настроен: нет ключа доступа к ядру" },
@@ -27,7 +40,7 @@ async function coreCall(method: Method, path: string, payload?: unknown): Promis
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${CORE_API_URL}${path}`, {
       method,
@@ -61,8 +74,12 @@ export function coreGet(path: string): Promise<NextResponse> {
   return coreCall("GET", path);
 }
 
-export function corePost(path: string, payload?: unknown): Promise<NextResponse> {
-  return coreCall("POST", path, payload);
+export function corePost(
+  path: string,
+  payload?: unknown,
+  options: { timeoutMs?: number } = {},
+): Promise<NextResponse> {
+  return coreCall("POST", path, payload, options.timeoutMs);
 }
 
 export function corePatch(path: string, payload: unknown): Promise<NextResponse> {
