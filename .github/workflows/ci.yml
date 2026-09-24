@@ -218,7 +218,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Очередь выше пускает деплои по одному, но в порядке окончания сборки,
+      # а не коммитов: три мержа подряд — и более старый коммит выкатился
+      # после нового, откатив его. Если на main уже есть коммит новее, этот
+      # деплой не нужен: тот выкатит и эти изменения. Кроме случая, когда
+      # новый помечен «[skip deploy]» — тогда он сам не выкатится.
+      - name: Skip if a newer commit is on main
+        id: freshness
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=20 origin main
+          head="$(git rev-parse origin/main)"
+          if [ "$head" != "$GITHUB_SHA" ] && ! git log -1 --format=%B "$head" | grep -qF '[skip deploy]'; then
+            echo "На main уже $head, новее $GITHUB_SHA — выкатит его деплой."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure SSH
+        if: steps.freshness.outputs.skip != 'true'
         env:
           MACMINI_SSH_KEY: ${{ secrets.MACMINI_SSH_KEY }}
           MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
@@ -233,6 +250,7 @@ jobs:
           ssh-keyscan -H "$MACMINI_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync deploy files
+        if: steps.freshness.outputs.skip != 'true'
         env:
           MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
         run: |
@@ -261,6 +279,7 @@ jobs:
         run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Deploy on Mac Mini
+        if: steps.freshness.outputs.skip != 'true'
         env:
           MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
           GHCR_USERNAME: ${{ github.actor }}
