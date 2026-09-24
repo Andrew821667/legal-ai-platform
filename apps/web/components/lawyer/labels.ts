@@ -138,6 +138,21 @@ export const HISTORY: Record<string, string> = {
   "service_agreement.question": "Клиент задал вопрос по договору",
   "service_agreement.reply": "Вы ответили клиенту",
   "service_agreement.amount": "Сумма к учёту изменена",
+  "service_agreement.supplement": "Допсоглашение составлено",
+};
+
+/**
+ * Те же события у допсоглашения. Оно идёт тем же путём, что и договор, и в
+ * журнале те же действия — но «клиент подписал договор» про допсоглашение
+ * читалось бы как второй договор.
+ */
+export const SUPPLEMENT_HISTORY: Record<string, string> = {
+  "service_agreement.sent": "Допсоглашение отправлено клиенту",
+  "service_agreement.deliver": "Допсоглашение отправлено клиенту",
+  "service_agreement.viewed": "Клиент открыл допсоглашение",
+  "service_agreement.sign": "Клиент подписал допсоглашение",
+  "service_agreement.decline": "Клиент отклонил допсоглашение",
+  "service_agreement.question": "Клиент задал вопрос по допсоглашению",
 };
 
 /** Направление практики. */

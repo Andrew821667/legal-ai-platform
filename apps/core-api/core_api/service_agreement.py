@@ -436,6 +436,102 @@ def render_agreement_text(
     )
 
 
+SUPPLEMENT_VERSION = "2026-09-24.1"
+
+# Как назван основной договор в его собственном тексте — допсоглашение
+# ссылается на него тем же названием.
+PARENT_TITLES = {
+    "legal_services": "Договору возмездного оказания юридических услуг",
+    "software_development": "Договору на разработку программного обеспечения",
+    "legal_automation": "Договору на автоматизацию юридической функции",
+}
+
+SUPPLEMENT_TEXT = """ДОПОЛНИТЕЛЬНОЕ СОГЛАШЕНИЕ № {supplement_no}
+к {parent_title} № {parent_number} от {parent_date}
+Регистрационный номер: {number}. Дата предложения: {created_date}.
+
+1. Стороны
+Исполнитель: {operator_name}{operator_status}{operator_inn}{operator_details}.
+Заказчик: {client_party}.
+Реквизиты Заказчика: {client_details}.
+
+Стороны договорились изменить Договор следующим образом.
+
+2. Дополнительные услуги (работы)
+Перечень услуг (работ) по Договору дополняется следующим:
+{scope}
+
+Сроки выполнения дополнительных услуг (работ):
+{schedule}
+
+3. Стоимость
+Стоимость услуг (работ) по Договору с учётом дополнительных составляет {price}.
+Порядок и сроки оплаты: {payment_terms}.
+
+4. Прочие условия
+Во всём, что не изменено настоящим соглашением, стороны руководствуются
+условиями Договора. Настоящее соглашение является неотъемлемой частью Договора.
+
+5. Подписание
+Настоящее соглашение подписывается сторонами в том же порядке, что и Договор:
+Исполнитель направляет его точную редакцию через Telegram-бот, Заказчик
+открывает её и подтверждает подписание из своей учётной записи Telegram.
+Соглашение вступает в силу с момента фиксации подписания Заказчика системой
+Исполнителя. Предложение подписать соглашение действительно до {expires_date}
+включительно.
+
+Версия документа: {version}"""
+
+
+def render_supplement_text(
+    *,
+    number: str,
+    supplement_no: int,
+    parent_number: str,
+    parent_date: str,
+    created_date: str,
+    expires_date: str,
+    operator_name: str,
+    operator_status: str,
+    operator_inn: str,
+    operator_details: str,
+    client_name: str,
+    client_details: str,
+    scope: str,
+    schedule: str,
+    price: str,
+    payment_terms: str,
+    client_org: str | None = None,
+    template_kind: str = "legal_services",
+) -> str:
+    """Собирает точный экземпляр дополнительного соглашения перед сохранением."""
+    customer = (
+        f"{client_org}, в лице {client_name or 'представителя'}"
+        if client_org
+        else (client_name or "Заказчик")
+    )
+    return SUPPLEMENT_TEXT.format(
+        supplement_no=supplement_no,
+        parent_title=PARENT_TITLES.get(template_kind, PARENT_TITLES["legal_services"]),
+        parent_number=parent_number,
+        parent_date=parent_date,
+        number=number,
+        created_date=created_date,
+        expires_date=expires_date,
+        operator_name=operator_name or "Исполнитель",
+        operator_status=f", {operator_status}" if operator_status else "",
+        operator_inn=f", ИНН {operator_inn}" if operator_inn else "",
+        operator_details=f", {operator_details}" if operator_details else "",
+        client_party=customer,
+        client_details=(client_details or "").strip() or "указаны в Договоре",
+        scope=(scope or "").strip(),
+        schedule=(schedule or "").strip() or "в сроки, установленные Договором",
+        price=(price or "").strip(),
+        payment_terms=(payment_terms or "").strip() or "в порядке, установленном Договором",
+        version=SUPPLEMENT_VERSION,
+    )
+
+
 def document_hash(text: str) -> str:
     """Возвращает SHA-256 точного экземпляра."""
     return sha256(text.encode("utf-8")).hexdigest()

@@ -127,7 +127,8 @@ def build_core_context_block(telegram_user_id: int | None) -> str:
     for agreement in agreements[:_MAX_AGREEMENTS]:
         status = _label(_AGREEMENT_STATUS_LABELS, agreement.get("status"))
         subject = (agreement.get("subject") or "").strip()[:_DESCRIPTION_LIMIT]
-        line = f"- Договор № {agreement.get('number') or '—'} ({status})"
+        title = "Допсоглашение" if agreement.get("kind") == "supplement" else "Договор"
+        line = f"- {title} № {agreement.get('number') or '—'} ({status})"
         if subject:
             line += f": {subject}"
         lines.append(line)

@@ -12,15 +12,25 @@ import { lawyerAction } from "./useTelegram";
  * редакциях одного договора складывать нельзя, а число без формулировки в
  * договор не положить. Договоры, составленные до появления числа, здесь же и
  * дозаполняются — иначе итоги молча неполные.
+ *
+ * Указанную сумму отсюда не поменять: это было бы решение одной стороны.
+ * У подписанного договора вместо правки — допсоглашение, которое подписывает
+ * клиент; неподписанный меняется новой редакцией.
  */
 export default function AmountBox({
   agreementId,
   amountMinor,
+  pendingMinor = null,
+  onSupplement,
   initData,
   onChanged,
 }: {
   agreementId: string;
   amountMinor: number | null;
+  /** Сумма из отправленного, но ещё не подписанного допсоглашения. */
+  pendingMinor?: number | null;
+  /** Есть только у подписанного договора — открывает форму допсоглашения. */
+  onSupplement?: () => void;
   initData: string;
   onChanged: () => void;
 }) {
@@ -38,16 +48,29 @@ export default function AmountBox({
         ) : (
           <span className="font-medium text-lw-ink">{formatRub(amountMinor)}</span>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            setValue(amountMinor === null ? "" : String(amountMinor / 100));
-            setEditing(true);
-          }}
-          className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
-        >
-          {amountMinor === null ? "указать" : "изменить"}
-        </button>
+        {pendingMinor !== null && pendingMinor !== amountMinor ? (
+          <span className="text-lw-muted">→ {formatRub(pendingMinor)} после подписи допсоглашения</span>
+        ) : null}
+        {amountMinor === null ? (
+          <button
+            type="button"
+            onClick={() => {
+              setValue("");
+              setEditing(true);
+            }}
+            className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
+          >
+            указать
+          </button>
+        ) : onSupplement ? (
+          <button
+            type="button"
+            onClick={onSupplement}
+            className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
+          >
+            допсоглашение
+          </button>
+        ) : null}
       </div>
     );
   }

@@ -99,6 +99,8 @@ export type AgreementMessage = { role: string; text: string; created_at: string 
 export type AgreementCard = {
   agreement_id: string;
   intake_id: string | null;
+  /** Заполнено у допсоглашения — ссылка на договор, к которому оно. */
+  parent_agreement_id?: string | null;
   number: string;
   status: string;
   template_kind: "legal_services" | "software_development" | "legal_automation";
@@ -124,6 +126,8 @@ export type AgreementCard = {
   decline_reason: string | null;
   messages: AgreementMessage[];
   acts: WorkAct[];
+  /** Допсоглашения к этому договору, новые первыми. */
+  supplements?: AgreementCard[];
 };
 
 export type WorkAct = {

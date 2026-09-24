@@ -13,6 +13,7 @@ import IntakeLinks from "./IntakeLinks";
 import NoteBox from "./NoteBox";
 import ReplyBox from "./ReplyBox";
 import RichText from "./RichText";
+import SupplementForm from "./SupplementForm";
 import WorkActBox from "./WorkActBox";
 import { Card, Pill, Progress, Row, SectionTitle } from "./ui";
 import { lawyerAction } from "./useTelegram";
@@ -264,14 +265,19 @@ export default function ClientCardView({
   );
 }
 
+const OPEN_STATUSES = ["draft", "sent", "viewed"];
+
 function Agreement({
   item,
   initData,
   onChanged,
+  supplement = false,
 }: {
   item: AgreementCard;
   initData: string;
   onChanged: () => void;
+  /** Допсоглашение внутри карточки своего договора: без суммы к учёту и актов. */
+  supplement?: boolean;
 }) {
   const unanswered =
     item.messages.length > 0 && item.messages[item.messages.length - 1].role === "client";
@@ -279,9 +285,18 @@ function Agreement({
   const clientName = typeof client.full_name === "string" ? client.full_name : null;
   const clientOrg = typeof client.org === "string" ? client.org : null;
 
-  return (
-    <Card>
-      <p className="text-lw-lg font-bold text-lw-ink">{item.subject}</p>
+  const supplements = item.supplements || [];
+  const liveSupplements = supplements.filter((row) => row.status !== "superseded");
+  const oldSupplements = supplements.filter((row) => row.status === "superseded");
+  // Новые первыми — первое открытое и есть то, что сейчас у клиента.
+  const openSupplement = supplements.find((row) => OPEN_STATUSES.includes(row.status)) || null;
+  const [supplementOpen, setSupplementOpen] = useState(false);
+
+  const body = (
+    <>
+      <p className={supplement ? "text-lw-base font-semibold text-lw-ink" : "text-lw-lg font-bold text-lw-ink"}>
+        {supplement ? item.subject.split(" к договору")[0] : item.subject}
+      </p>
       <p className="mt-0.5 text-lw-sm text-lw-muted">
         № {item.number}
         {item.revision > 1 ? ` · редакция ${item.revision}` : ""}
@@ -291,25 +306,71 @@ function Agreement({
         {unanswered ? <Pill tone="alert">Ждёт ответа</Pill> : null}
       </div>
 
-      <div className="mt-3 border-t border-lw-border pt-2">
-        <Row label="Стоимость" value={item.price_text} />
-        {item.status === "superseded" ? null : (
-          <AmountBox
-            agreementId={item.agreement_id}
-            amountMinor={item.amount_minor}
-            initData={initData}
-            onChanged={onChanged}
-          />
-        )}
-        <Row label="Оплата" value={item.payment_terms} />
-        <Row label="Что входит" value={item.scope_text} />
-        <Row label="Не входит" value={item.exclusions_text} />
-        <Row label="Сроки" value={item.schedule_text} />
-        <Row label="Подписант" value={clientName} />
-        <Row label="Организация" value={clientOrg} />
-        <Row label="Должность" value={item.signer_position} />
-        <Row label="Основание" value={item.authority_basis} />
-      </div>
+      {supplement ? (
+        <div className="mt-3 border-t border-lw-border pt-2">
+          <Row label="Работы" value={item.scope_text} />
+          <Row label="Сроки" value={item.schedule_text || "как в договоре"} />
+          <Row label="Новая стоимость" value={item.price_text} />
+          <Row label="Оплата" value={item.payment_terms || "как в договоре"} />
+        </div>
+      ) : (
+        <div className="mt-3 border-t border-lw-border pt-2">
+          <Row label="Стоимость" value={item.price_text} />
+          {item.status === "superseded" ? null : (
+            <AmountBox
+              agreementId={item.agreement_id}
+              amountMinor={item.amount_minor}
+              pendingMinor={openSupplement?.amount_minor ?? null}
+              onSupplement={item.status === "signed" ? () => setSupplementOpen(true) : undefined}
+              initData={initData}
+              onChanged={onChanged}
+            />
+          )}
+          <Row label="Оплата" value={item.payment_terms} />
+          <Row label="Что входит" value={item.scope_text} />
+          <Row label="Не входит" value={item.exclusions_text} />
+          <Row label="Сроки" value={item.schedule_text} />
+          <Row label="Подписант" value={clientName} />
+          <Row label="Организация" value={clientOrg} />
+          <Row label="Должность" value={item.signer_position} />
+          <Row label="Основание" value={item.authority_basis} />
+        </div>
+      )}
+
+      {supplementOpen ? (
+        <SupplementForm
+          agreementId={item.agreement_id}
+          currentMinor={item.amount_minor}
+          replacesOpen={openSupplement !== null}
+          initData={initData}
+          onClose={() => setSupplementOpen(false)}
+          onCreated={() => {
+            setSupplementOpen(false);
+            onChanged();
+          }}
+        />
+      ) : null}
+
+      {liveSupplements.length > 0 ? (
+        <div className="mt-3 border-t border-lw-border pt-3">
+          <p className="text-lw-sm uppercase tracking-wide text-lw-muted">
+            Допсоглашения · {liveSupplements.length}
+          </p>
+          {liveSupplements.map((row) => (
+            <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} supplement />
+          ))}
+          {oldSupplements.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-lw-sm text-lw-muted">
+                Прежние редакции ({oldSupplements.length})
+              </summary>
+              {oldSupplements.map((row) => (
+                <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} supplement />
+              ))}
+            </details>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-lw-border pt-2 text-lw-sm text-lw-muted">
         <span>составлен {shortDate(item.created_at)}</span>
@@ -343,7 +404,11 @@ function Agreement({
         <div className="mt-3 border-t border-lw-border pt-3">
           <ActionButton
             label="Отправить клиенту"
-            done="Отправлено. Клиент получил проект договора."
+            done={
+              supplement
+                ? "Отправлено. Клиент получил допсоглашение."
+                : "Отправлено. Клиент получил проект договора."
+            }
             onRun={async () => {
               await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
               onChanged();
@@ -388,9 +453,11 @@ function Agreement({
         </div>
       ) : null}
 
-      <WorkActBox agreement={item} initData={initData} onChanged={onChanged} />
-    </Card>
+      {supplement ? null : <WorkActBox agreement={item} initData={initData} onChanged={onChanged} />}
+    </>
   );
+
+  return supplement ? <div className="mt-2 rounded-xl bg-lw-cell p-3">{body}</div> : <Card>{body}</Card>;
 }
 
 function Intake({

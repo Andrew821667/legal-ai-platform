@@ -247,6 +247,8 @@ def summary(
         } for row in intakes],
         "agreements": [{
             "id": str(row.id), "intake_id": str(row.intake_id) if row.intake_id else None,
+            "kind": "supplement" if row.parent_agreement_id else "agreement",
+            "parent_agreement_id": str(row.parent_agreement_id) if row.parent_agreement_id else None,
             "number": row.agreement_number, "revision": row.revision,
             "status": row.status.value, "subject": row.subject,
             "price_text": row.price_text, "amount_minor": row.amount_minor,
