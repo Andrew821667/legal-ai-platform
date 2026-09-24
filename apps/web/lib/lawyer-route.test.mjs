@@ -27,6 +27,7 @@ test("мусор вместо идентификатора не открывае
 test("tab= выбирает вкладку, неизвестная — клиенты", () => {
   assert.equal(parseWorkspaceRoute("?tab=today").tab, "today");
   assert.equal(parseWorkspaceRoute("?tab=finance").tab, "finance");
+  assert.equal(parseWorkspaceRoute("?tab=archive").tab, "archive");
   assert.equal(parseWorkspaceRoute("?tab=nope").tab, "clients");
 });
 

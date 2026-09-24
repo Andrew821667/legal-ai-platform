@@ -1136,12 +1136,12 @@ async def _set_command_menu(app: Application) -> None:
     admin_id = getattr(config, "ADMIN_TELEGRAM_ID", None)
     if not admin_id:
         return
-    try:
-        await app.bot.set_my_commands(
-            ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=int(admin_id))
-        )
-    except TelegramError as error:
-        logger.warning("Не удалось задать админское меню команд: %s", type(error).__name__)
+    # Второй аккаунт владельца видит те же команды: /admin и клиентские.
+    for chat_id in (int(admin_id), *(getattr(config, "LAWYER_TELEGRAM_IDS", None) or ())):
+        try:
+            await app.bot.set_my_commands(ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=int(chat_id)))
+        except TelegramError as error:
+            logger.warning("Не удалось задать админское меню команд: %s", type(error).__name__)
 
     await _restore_default_menu_button(app, int(admin_id))
 

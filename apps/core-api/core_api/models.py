@@ -357,9 +357,19 @@ class Lead(Base):
     # Раньше жили только в SQLite бота — ядро теперь единственное место.
     team_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     contracts_per_month: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Юрист убрал клиента в архив — корзина, а не «завершённые»: клиента нет
+    # ни в списке, ни в задачах, ни в деньгах, бот не пишет ему первым.
+    # Из архива — восстановить или удалить совсем. Сам вернулся с новым
+    # обращением — снова в списке.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
+        Index(
+            "ix_leads_archived_at",
+            "archived_at",
+            postgresql_where=sa_text("archived_at IS NOT NULL"),
+        ),
         Index(
             "ix_leads_legacy_lead_id",
             "legacy_lead_id",

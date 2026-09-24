@@ -97,3 +97,9 @@ test("сортировка «сначала новые» — порядок се
   const [group] = groupClients([a, b], "all", { sort: "recent" });
   assert.deepEqual(group.rows.map((r) => r.name), ["a", "b"]);
 });
+
+test("свои аккаунты — в группе «Тест» внизу, что бы ни ждало ответа", () => {
+  assert.equal(clientGroup(row("Договор подписан", { is_test: true, waiting_on_me: true })), "test");
+  const groups = groupClients([row("Первичное обращение", { is_test: true }), row("Договор подписан")]);
+  assert.deepEqual(groups.map((g) => g.key), ["active", "test"]);
+});

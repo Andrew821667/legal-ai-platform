@@ -224,6 +224,7 @@ export default function ClientsView({
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {row.is_test ? <Pill tone="mute">Тест</Pill> : null}
                       <Pill tone={stageTone(row.stage, row.waiting_on_me)}>{row.stage}</Pill>
                       {row.waiting_on_me ? <Pill tone="alert">Ждёт ответа</Pill> : null}
                       {row.nda_signed ? null : <Pill tone="warn">без NDA</Pill>}

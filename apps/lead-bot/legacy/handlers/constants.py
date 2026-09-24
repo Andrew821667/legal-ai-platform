@@ -256,7 +256,7 @@ def client_miniapp_inline_row():
     return [[InlineKeyboardButton("📱 Открыть мини-апп и мои дела", web_app=WebAppInfo(url=url))]]
 
 
-def lawyer_workspace_keyboard_url() -> str:
+def lawyer_workspace_keyboard_url(user_id: int | None = None) -> str:
     """Адрес для кнопки reply-клавиатуры — с токеном входа.
 
     Mini App, запущенный кнопкой reply-клавиатуры, получает пустой initData
@@ -271,15 +271,17 @@ def lawyer_workspace_keyboard_url() -> str:
     """
     config = get_config()
     url = getattr(config, "LAWYER_WORKSPACE_URL", "")
+    # Токен — на тот аккаунт, которому показывают кнопку: второй аккаунт
+    # владельца входит в рабочее место под собой, а не под основным.
     login = lawyer_session_link.build_login_url(
-        getattr(config, "ADMIN_TELEGRAM_ID", 0) or 0,
+        user_id or getattr(config, "ADMIN_TELEGRAM_ID", 0) or 0,
         workspace_url=url,
         secret=getattr(config, "LAWYER_SESSION_SECRET", ""),
     )
     return login or url
 
 
-def build_admin_reply_menu():
+def build_admin_reply_menu(user_id: int | None = None, *, client_too: bool = False):
     """Постоянная клавиатура владельца — то, что видно под полем ввода всегда.
 
     Одна кнопка, и только она: там, где у клиента стоит «Мини-апп», у
@@ -290,7 +292,11 @@ def build_admin_reply_menu():
     """
     if not getattr(get_config(), "LAWYER_WORKSPACE_URL", ""):
         return build_client_reply_menu()
-    return [[KeyboardButton("🗂 Рабочее пространство", web_app=WebAppInfo(url=lawyer_workspace_keyboard_url()))]]
+    workspace = KeyboardButton("🗂 Рабочее пространство", web_app=WebAppInfo(url=lawyer_workspace_keyboard_url(user_id)))
+    # Второй аккаунт владельца проверяет и клиентский путь — ему обе кнопки.
+    if client_too:
+        return [[workspace, client_miniapp_button()]]
+    return [[workspace]]
 
 
 def case_management_button():

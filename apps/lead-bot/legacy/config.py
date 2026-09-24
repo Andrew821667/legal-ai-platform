@@ -88,6 +88,16 @@ class Config:
         if not admin_id:
             raise ValueError("ADMIN_TELEGRAM_ID не установлен в переменных окружения")
         self.ADMIN_TELEGRAM_ID: int = int(admin_id)
+        # Дополнительные аккаунты владельца (через запятую) — та же переменная,
+        # по которой сайт пускает в рабочее место. С них доступно всё, что
+        # владельцу: /admin, кнопки юриста, рабочее пространство. Клиентский
+        # путь при этом остаётся как у клиента — с них владелец его и
+        # проверяет; уведомления по-прежнему идут на ADMIN_TELEGRAM_ID.
+        self.LAWYER_TELEGRAM_IDS: list[int] = [
+            int(item.strip())
+            for item in os.getenv('LAWYER_TELEGRAM_IDS', '').split(',')
+            if item.strip().isdigit() and int(item.strip()) != self.ADMIN_TELEGRAM_ID
+        ]
         operator_ids_raw = os.getenv('BUSINESS_OPERATOR_TELEGRAM_IDS', '').strip()
         self.BUSINESS_OPERATOR_TELEGRAM_IDS: list[int] = []
         if operator_ids_raw:

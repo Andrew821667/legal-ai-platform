@@ -10,6 +10,7 @@ import uuid
 import admin_interface
 import utils
 from config import get_config
+from admin_access import is_admin_user
 from core_api_bridge import core_api_bridge
 from handlers import work_acts
 from handlers.constants import workspace_row
@@ -228,7 +229,7 @@ async def show_admin_agreements(update: Update, context: ContextTypes.DEFAULT_TY
     message = update.effective_message
     if not user or not message:
         return
-    if user.id != config.ADMIN_TELEGRAM_ID:
+    if not is_admin_user(config, user.id):
         await utils.safe_reply_text(
             message, "У вас нет доступа к этому разделу.", action="agreement_admin_denied"
         )
@@ -465,7 +466,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
 
     data = dict(context.user_data.get(DATA_KEY) or {})
     if state == "admin_wizard":
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             _clear(context)
             return False
         idx = int(data.get("field_index") or 0)
@@ -686,7 +687,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         return True
 
     if state == "admin_reply":
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             _clear(context)
             return False
         item = await asyncio.to_thread(
@@ -739,7 +740,7 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if not query:
         return
     await utils.safe_answer_callback(query, action="agreement_admin_callback")
-    if query.from_user.id != config.ADMIN_TELEGRAM_ID:
+    if not is_admin_user(config, query.from_user.id):
         await utils.safe_reply_text(
             query.message, "У вас нет доступа к этому разделу.", action="agreement_admin_denied"
         )

@@ -1,0 +1,23 @@
+import { NextRequest } from "next/server";
+
+import { corePost } from "@/lib/lawyer-core";
+import { requireLawyer } from "@/lib/lawyer-auth";
+
+/** Вернуть клиента из архива в список. */
+
+export const dynamic = "force-dynamic";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ leadId: string }> },
+) {
+  const auth = requireLawyer(request);
+  if (auth instanceof Response) return auth;
+  const { leadId } = await params;
+  if (!UUID.test(leadId)) {
+    return Response.json({ detail: "Некорректный идентификатор клиента" }, { status: 400 });
+  }
+  return corePost(`/api/v1/lawyer/clients/${leadId}/restore`);
+}

@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
+from core_api.staff import real_client
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -112,6 +113,11 @@ def create_legal_intake(
         ).order_by(Lead.created_at).limit(2)).all()
         if len(matches) == 1:
             existing = matches[0]
+    # Клиент из архива сам пришёл с новым вопросом — значит, он не мусор:
+    # возвращаем в список, иначе обращение легло бы туда, где его не видно.
+    restored_from_archive = existing is not None and existing.archived_at is not None
+    if restored_from_archive:
+        existing.archived_at = None
     lead = existing or Lead(
         source=payload.source,
         telegram_user_id=payload.telegram_user_id,
@@ -171,6 +177,16 @@ def create_legal_intake(
             "consent_at": payload.consent_at.isoformat(),
         },
     )
+    if restored_from_archive:
+        write_audit(
+            db,
+            actor_type=ActorType.api_key,
+            actor_id=identity.name,
+            action="lead.restore",
+            target_type="lead",
+            target_id=lead.id,
+            details={"reason": "new_intake"},
+        )
     db.flush()
     db.refresh(lead)
     db.refresh(item)
@@ -198,7 +214,11 @@ def list_legal_intakes(
     limit: int = 100,
 ) -> list[LegalIntakeOut]:
     _ = identity
-    query = select(LegalIntake, Lead).join(Lead, Lead.id == LegalIntake.lead_id)
+    query = (
+        select(LegalIntake, Lead)
+        .join(Lead, Lead.id == LegalIntake.lead_id)
+        .where(Lead.archived_at.is_(None))
+    )
     if status_filter is not None:
         query = query.where(LegalIntake.status == status_filter)
     rows = db.execute(query.order_by(LegalIntake.created_at.desc()).limit(max(1, min(limit, 500)))).all()
@@ -309,6 +329,9 @@ def list_intakes_pending_outreach(
             LegalIntake.outreach_sent_at.is_(None),
             LegalIntake.outreach_blocked_reason.is_(None),
             LegalIntake.created_at <= ready_before,
+            # Архивному клиенту и владельцу со своего аккаунта бот первым не пишет.
+            Lead.archived_at.is_(None),
+            real_client(Lead.telegram_user_id),
         )
         .order_by(LegalIntake.created_at)
         .limit(max(1, min(limit, 50)))

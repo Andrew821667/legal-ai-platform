@@ -12,6 +12,7 @@ import content
 import database
 import utils
 from config import get_config
+from admin_access import is_admin_user, is_extra_admin
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -126,7 +127,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         start_markup = _start_markup_for(
             lead=lead,
             selected_profile=selected_profile,
-            is_admin=user.id == config.ADMIN_TELEGRAM_ID,
+            is_admin=is_admin_user(config, user.id),
+            client_too=is_extra_admin(config, user.id),
         )
 
         if not start_payload and not needs_pdn_consent:
@@ -451,7 +453,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = _workspace_markup_for(
             lead=lead,
             selected_profile=selected_profile,
-            is_admin=bool(user and user.id == config.ADMIN_TELEGRAM_ID),
+            is_admin=bool(user and is_admin_user(config, user.id)),
         )
 
         message = update.effective_message

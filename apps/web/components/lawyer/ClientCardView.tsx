@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 import ActionButton from "./ActionButton";
+import { footprintText } from "./ArchiveView";
+import ConfirmButton from "./ConfirmButton";
 import AgreementForm from "./AgreementForm";
 import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
@@ -95,6 +97,7 @@ export default function ClientCardView({
   onBack,
   onChanged,
   onOpenClient,
+  onArchiveChange,
   loading,
   initData,
   insideTelegram,
@@ -103,6 +106,8 @@ export default function ClientCardView({
   onBack: () => void;
   onChanged: () => void;
   onOpenClient: (leadId: string) => void;
+  /** Клиент убран в архив, возвращён или удалён совсем. */
+  onArchiveChange?: (kind: "archived" | "restored" | "purged") => void;
   loading: boolean;
   initData: string;
   insideTelegram: boolean;
@@ -112,6 +117,15 @@ export default function ClientCardView({
   const conflictAlert = worstConflict(card.intakes);
   const clientType = knownClientType(card.intakes);
   const contacts = clientContacts(card);
+  // Что пропадёт при удалении — по тому, что уже есть в карточке.
+  const mainAgreements = card.agreements.filter((a) => a.status !== "superseded");
+  const footprint = {
+    intakes: card.intakes.length,
+    agreements: mainAgreements.length,
+    signed_agreements: mainAgreements.filter((a) => a.status === "signed").length,
+    acts: card.agreements.reduce((sum, a) => sum + a.acts.length, 0),
+    nda_signed: Boolean(card.nda),
+  };
   // Шкала «обращение → NDA → договор → подписан» у такого клиента звала бы
   // к договору, который юрист сознательно решил не заключать.
   const withoutAgreement = card.stage === WITHOUT_AGREEMENT_STAGE;
@@ -149,6 +163,7 @@ export default function ClientCardView({
           {card.source ? ` · ${label(SOURCE, card.source)}` : ""}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
+          {card.is_test ? <Pill tone="alert">Тест · ваш аккаунт</Pill> : null}
           <Pill tone={card.stage === "Договор подписан" || withoutAgreement ? "ok" : "mute"}>{card.stage}</Pill>
           {clientType ? <Pill>{label(CLIENT_TYPE, clientType)}</Pill> : null}
           {conflictAlert ? (
@@ -196,6 +211,51 @@ export default function ClientCardView({
           )}
         </div>
       </Card>
+
+      {card.archived_at ? (
+        <div className="rounded-2xl bg-lw-warning-soft p-4">
+          <p className="text-lw-base font-semibold text-lw-warning">
+            Клиент в архиве с {shortDate(card.archived_at)}
+          </p>
+          <p className="mt-1 text-lw-sm text-lw-ink">
+            Его нет в списке, задачах и деньгах. Бот не пишет ему первым; если клиент сам придёт
+            с новым вопросом — вернётся в список.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <ConfirmButton
+              label="Восстановить"
+              explain="Клиент вернётся в список со всеми обращениями и договорами."
+              confirmLabel="Вернуть в список"
+              busy="Возвращаю…"
+              onConfirm={async () => {
+                await lawyerAction(`/api/lawyer/clients/${card.lead_id}/restore`, initData);
+                onArchiveChange?.("restored");
+              }}
+            />
+            <ConfirmButton
+              label="Удалить навсегда"
+              danger
+              explain={
+                <>
+                  <p className="font-semibold">Удалить «{card.name}» без возможности восстановления?</p>
+                  <p className="mt-1">Пропадёт: {footprintText(footprint)}, переписка и история.</p>
+                  {footprint.signed_agreements || footprint.acts || footprint.nda_signed ? (
+                    <p className="mt-1 text-lw-danger">
+                      Среди них подписанные документы — после удаления их не восстановить.
+                    </p>
+                  ) : null}
+                </>
+              }
+              confirmLabel="Удалить навсегда"
+              busy="Удаляю…"
+              onConfirm={async () => {
+                await lawyerAction(`/api/lawyer/clients/${card.lead_id}`, initData, undefined, "DELETE");
+                onArchiveChange?.("purged");
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {loading ? <p className="text-lw-base text-lw-muted">Обновляю…</p> : null}
 
@@ -268,6 +328,25 @@ export default function ClientCardView({
       </section>
 
       <HistoryList leadId={card.lead_id} initData={initData} />
+
+      {card.archived_at ? null : (
+        <ConfirmButton
+          label="Удалить клиента"
+          explain={
+            <p>
+              Клиент уйдёт в архив: пропадёт из списка, задач и денег, но ничего не удалится.
+              Из архива его можно восстановить или удалить совсем.
+            </p>
+          }
+          confirmLabel="Убрать в архив"
+          busy="Убираю…"
+          danger
+          onConfirm={async () => {
+            await lawyerAction(`/api/lawyer/clients/${card.lead_id}/archive`, initData);
+            onArchiveChange?.("archived");
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ from telegram_ui import reply_button as KeyboardButton
 
 import content
 from config import get_config
+from admin_access import is_admin_user, is_extra_admin
 from .constants import (
     build_admin_reply_menu,
     build_client_reply_menu,
@@ -119,6 +120,7 @@ def start_markup_for(
     selected_profile: str | None = None,
     *,
     is_admin: bool = False,
+    client_too: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = build_start_inline_menu(
         content.offer_profile_cta_label(
@@ -126,11 +128,11 @@ def start_markup_for(
             selected_profile=selected_profile,
         )
     )
-    if is_admin:
-        if button := lawyer_workspace_button():
-            rows.insert(0, [button])
-    elif miniapp_rows := client_miniapp_inline_row():
+    # Второй аккаунт владельца: и вход в рабочее место, и клиентский мини-апп.
+    if (not is_admin or client_too) and (miniapp_rows := client_miniapp_inline_row()):
         rows[:0] = miniapp_rows
+    if is_admin and (button := lawyer_workspace_button()):
+        rows.insert(0, [button])
     return InlineKeyboardMarkup(rows)
 
 
@@ -166,10 +168,11 @@ def with_channel_button(
 
 
 def main_menu_markup(user_id: int) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        build_admin_reply_menu() if user_id == config.ADMIN_TELEGRAM_ID else build_client_reply_menu(),
-        resize_keyboard=True,
-    )
+    if is_admin_user(config, user_id):
+        rows = build_admin_reply_menu(user_id, client_too=is_extra_admin(config, user_id))
+    else:
+        rows = build_client_reply_menu()
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
 def main_menu_hint(user_id: int) -> str:
@@ -180,7 +183,7 @@ def main_menu_hint(user_id: int) -> str:
     замечанию, что объяснение в нём читалось как лишнее, — просто иконка
     без слов, не текст-подсказка.
     """
-    return "🗂" if user_id == config.ADMIN_TELEGRAM_ID else "📱"
+    return "🗂" if is_admin_user(config, user_id) else "📱"
 
 
 def profile_edit_markup() -> InlineKeyboardMarkup:
