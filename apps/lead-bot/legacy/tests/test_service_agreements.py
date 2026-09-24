@@ -560,6 +560,49 @@ async def test_already_signed_message_is_sent_once(monkeypatch, replies) -> None
 
 
 @pytest.mark.anyio
+async def test_supplement_opens_straight_to_the_document_under_its_own_name(monkeypatch, replies) -> None:
+    """Реквизиты уже в договоре: допсоглашение открывается сразу и зовётся своим именем."""
+    bot = Bot()
+    ctx = SimpleNamespace(user_data={}, bot=bot)
+    query = SimpleNamespace(
+        data="sa_c:open:11111111-1111-1111-1111-111111111111",
+        from_user=SimpleNamespace(id=77, username="client"),
+        message=SimpleNamespace(chat_id=77),
+        id="callback-supplement",
+    )
+    supplement = {**_agreement("sent"), "kind": "supplement", "agreement_number": "AV-20260907-ABC123-DS1"}
+    monkeypatch.setattr(flow.core_api_bridge, "get_service_agreement", lambda *args: supplement)
+    monkeypatch.setattr(
+        flow.core_api_bridge, "mark_service_agreement_viewed", lambda *args, **kwargs: {**supplement, "status": "viewed"}
+    )
+
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), ctx)
+
+    assert bot.documents[0]["caption"] == "Точная редакция допсоглашения № AV-20260907-ABC123-DS1"
+    assert bot.documents[0]["document"].name == "dopsoglashenie-AV-20260907-ABC123-DS1.txt"
+
+
+@pytest.mark.anyio
+async def test_signed_supplement_is_reported_as_supplement(monkeypatch, replies) -> None:
+    ctx = SimpleNamespace(user_data={}, bot=Bot())
+    query = SimpleNamespace(
+        data="sa_c:sign:11111111-1111-1111-1111-111111111111",
+        from_user=SimpleNamespace(id=77, username="client"),
+        message=SimpleNamespace(chat_id=77),
+        id="callback-supplement-signed",
+    )
+    monkeypatch.setattr(
+        flow.core_api_bridge,
+        "get_service_agreement",
+        lambda *args: {**_agreement("signed"), "kind": "supplement"},
+    )
+
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), ctx)
+
+    assert replies == ["Это допсоглашение уже подписано."]
+
+
+@pytest.mark.anyio
 async def test_client_question_notice_opens_the_card_directly(replies, monkeypatch) -> None:
     """Самое частое действие юриста — ответить на вопрос клиента.
 

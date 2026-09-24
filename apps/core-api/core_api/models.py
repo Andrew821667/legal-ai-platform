@@ -526,6 +526,15 @@ class ServiceAgreement(Base):
         ForeignKey("service_agreements.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Заполнено — это дополнительное соглашение к подписанному договору, а не
+    # самостоятельный договор. Подписывается тем же путём (бот, кабинет), но
+    # в итоги, этапы и редакции основного договора не входит: после подписи
+    # его сумма становится учётной суммой основного договора.
+    parent_agreement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("service_agreements.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     scope_text: Mapped[str] = mapped_column(Text, nullable=False)
     exclusions_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -581,6 +590,7 @@ class ServiceAgreement(Base):
         Index("ix_service_agreements_intake", "intake_id", "created_at"),
         Index("ix_service_agreements_client_tg", "client_telegram_user_id", "created_at"),
         Index("ix_service_agreements_status", "status", "created_at"),
+        Index("ix_service_agreements_parent", "parent_agreement_id", "created_at"),
     )
 
 

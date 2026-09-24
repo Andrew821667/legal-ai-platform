@@ -79,6 +79,16 @@ _CONFLICT = {
 _NO_AGREEMENT_NOTE = "Обращение закрыто без заключения договора/соглашения."
 
 
+def _is_supplement(item: dict) -> bool:
+    """Допсоглашение идёт тем же путём, что и договор, но называется своим именем."""
+    return item.get("kind") == "supplement"
+
+
+def _of_doc(item: dict) -> str:
+    """«договора» / «допсоглашения» — для «редакция …», «файл …»."""
+    return "допсоглашения" if _is_supplement(item) else "договора"
+
+
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ctx.user_data.pop(STATE_KEY, None)
     ctx.user_data.pop(DATA_KEY, None)
@@ -188,7 +198,8 @@ async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | N
         return None
     data = io.BytesIO(text.encode("utf-8"))
     number = str(item.get("agreement_number") or "agreement").replace("/", "-")
-    data.name = f"dogovor-{number}.txt"
+    prefix = "dopsoglashenie" if _is_supplement(item) else "dogovor"
+    data.name = f"{prefix}-{number}.txt"
 
     async def send():
         data.seek(0)
@@ -617,7 +628,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         _clear(context)
         notified = await _notify_admin(
             context.bot,
-            f"Вопрос клиента по договору № {(item or {}).get('agreement_number', agreement_id)}:\n\n{value}",
+            f"Вопрос клиента по {'допсоглашению' if _is_supplement(item or {}) else 'договору'}"
+            f" № {(item or {}).get('agreement_number', agreement_id)}:\n\n{value}",
             InlineKeyboardMarkup(
                 [
                     *workspace_row((item or {}).get("lead_id")),
@@ -1025,19 +1037,19 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
                 context.bot,
                 query.message.chat_id,
                 item,
-                f"Точная редакция договора № {item['agreement_number']}",
+                f"Точная редакция {_of_doc(item)} № {item['agreement_number']}",
             )
         except TelegramError:
             await utils.safe_reply_text(
                 query.message,
-                "Telegram не доставил файл договора. Попробуйте открыть его ещё раз.",
+                f"Telegram не доставил файл {_of_doc(item)}. Попробуйте открыть его ещё раз.",
                 action="agreement_document_delivery_failed",
             )
             return
         if message_id is None:
             await utils.safe_reply_text(
                 query.message,
-                "Файл договора пока недоступен. Сообщите об этом юристу.",
+                f"Файл {_of_doc(item)} пока недоступен. Сообщите об этом юристу.",
                 action="agreement_document_missing",
             )
             return
@@ -1096,7 +1108,9 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
     if action == "sign":
         if item.get("status") == "signed":
             await utils.safe_reply_text(
-                query.message, "Этот договор уже подписан.", action="agreement_already_signed"
+                query.message,
+                "Это допсоглашение уже подписано." if _is_supplement(item) else "Этот договор уже подписан.",
+                action="agreement_already_signed",
             )
             return
         if not item.get("client_details_complete"):
@@ -1105,7 +1119,7 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         if item.get("status") == "sent":
             await utils.safe_reply_text(
                 query.message,
-                "Сначала откройте точный текст договора.",
+                f"Сначала откройте точный текст {_of_doc(item)}.",
                 reply_markup=_doc_markup(agreement_id),
                 action="agreement_open_required",
             )
@@ -1131,12 +1145,13 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         await utils.safe_reply_text(
             query.message,
             _summary(item)
-            + "\n\nНажимая кнопку, вы подписываете именно открытую редакцию договора.",
+            + f"\n\nНажимая кнопку, вы подписываете именно открытую редакцию {_of_doc(item)}.",
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "Подписать договор", callback_data=f"sa_c:confirm:{agreement_id}"
+                            "Подписать допсоглашение" if _is_supplement(item) else "Подписать договор",
+                            callback_data=f"sa_c:confirm:{agreement_id}",
                         )
                     ]
                 ]
@@ -1176,12 +1191,18 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         _clear(context)
         await utils.safe_reply_text(
             query.message,
-            f"Договор № {item['agreement_number']} подписан. Копия остаётся доступна в разделе документов.",
+            (
+                f"Допсоглашение № {item['agreement_number']} подписано."
+                if _is_supplement(item)
+                else f"Договор № {item['agreement_number']} подписан."
+            )
+            + " Копия остаётся доступна в разделе документов.",
             action="agreement_signed",
         )
         await _notify_admin(
             context.bot,
-            f"Клиент подписал договор № {item['agreement_number']}.",
+            f"Клиент подписал {'допсоглашение' if _is_supplement(item) else 'договор'}"
+            f" № {item['agreement_number']}.",
             InlineKeyboardMarkup(
                 [
                     *workspace_row(item.get("lead_id")),
@@ -1231,7 +1252,7 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
         await _notify_admin(
             context.bot,
-            f"Клиент отказался от договора № {item['agreement_number']}.",
+            f"Клиент отказался от {_of_doc(item)} № {item['agreement_number']}.",
             InlineKeyboardMarkup(
                 [
                     *workspace_row(item.get("lead_id")),

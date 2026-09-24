@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -41,7 +42,13 @@ from core_api.models import (
     conflict_check_blocks_agreement,
     nda_required_for_agreement,
 )
-from core_api.service_agreement import agreement_version, document_hash, render_agreement_text
+from core_api.service_agreement import (
+    SUPPLEMENT_VERSION,
+    agreement_version,
+    document_hash,
+    render_agreement_text,
+    render_supplement_text,
+)
 
 router = APIRouter(prefix="/api/v1/service-agreements", tags=["service-agreements"])
 
@@ -63,6 +70,20 @@ class AgreementCreate(BaseModel):
     # Копейки. Необязательно: мастер в боте пока спрашивает только текст.
     amount_minor: int | None = Field(default=None, ge=0, le=10**13)
     payment_terms: str = Field(min_length=2, max_length=2000)
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class SupplementCreate(BaseModel):
+    """Допсоглашение: новая общая стоимость и дополнительные работы."""
+
+    prepared_by_telegram_user_id: int = Field(gt=0)
+    scope_text: str = Field(min_length=10, max_length=6000)
+    schedule_text: str | None = Field(default=None, max_length=2000)
+    price_text: str = Field(min_length=2, max_length=500)
+    # Новая общая стоимость по договору — после подписи она же становится
+    # учётной суммой основного договора. Без числа допсоглашение не нужно.
+    amount_minor: int = Field(ge=0, le=10**13)
+    payment_terms: str | None = Field(default=None, max_length=2000)
     expires_in_days: int = Field(default=7, ge=1, le=30)
 
 
@@ -147,6 +168,19 @@ class AgreementMessageIn(BaseModel):
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Даты в тексте допсоглашения — по Москве, как и у практики: подпись в час
+# ночи не должна датироваться вчерашним днём.
+_DOCUMENT_TZ = ZoneInfo("Europe/Moscow")
+
+
+def _is_supplement(item: ServiceAgreement) -> bool:
+    return item.parent_agreement_id is not None
+
+
+def _document_title(item: ServiceAgreement) -> str:
+    return "Дополнительное соглашение" if _is_supplement(item) else "Договор"
 
 
 def _nda_for_lead(db: Session, lead: Lead) -> NdaSignature | None:
@@ -243,6 +277,11 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "version": item.document_version,
         "hash": item.document_hash,
         "template_kind": item.template_kind.value,
+        # Допсоглашение идёт тем же путём, что и договор; по этим полям бот и
+        # кабинет называют его своим именем, а не «договором».
+        "kind": "supplement" if _is_supplement(item) else "agreement",
+        "document_title": _document_title(item),
+        "parent_agreement_id": str(item.parent_agreement_id) if item.parent_agreement_id else None,
     }
     # Готовое сообщение клиенту собирается здесь, а не у каждого отправителя.
     # Бот берёт его отсюда, рабочее место — тоже: одна формулировка на всех.
@@ -320,6 +359,7 @@ def create_agreement(
     previous = db.execute(
         select(ServiceAgreement)
         .where(ServiceAgreement.intake_id == intake.id)
+        .where(ServiceAgreement.parent_agreement_id.is_(None))
         .order_by(ServiceAgreement.revision.desc())
         .limit(1)
         .with_for_update()
@@ -421,6 +461,167 @@ def create_agreement(
     return body
 
 
+def _apply_supplement(db: Session, identity: ApiKeyIdentity, item: ServiceAgreement) -> None:
+    """Подписанное допсоглашение меняет учётную сумму основного договора.
+
+    Текст договора, под которым стоит подпись, не трогаем: новая стоимость
+    живёт в тексте допсоглашения, а в итоги идёт как сумма договора.
+    """
+    parent = db.execute(
+        select(ServiceAgreement)
+        .where(ServiceAgreement.id == item.parent_agreement_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if parent is None:
+        raise HTTPException(status_code=409, detail="Main agreement not found")
+    before = parent.amount_minor
+    parent.amount_minor = item.amount_minor
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action="service_agreement.amount",
+        target_type="service_agreement",
+        target_id=parent.id,
+        details={
+            "from": before,
+            "to": item.amount_minor,
+            "supplement_id": str(item.id),
+            "supplement_number": item.agreement_number,
+        },
+    )
+
+
+@router.post("/{agreement_id}/supplements", status_code=status.HTTP_201_CREATED, response_model=None)
+def create_supplement(
+    agreement_id: uuid.UUID,
+    payload: SupplementCreate,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> dict:
+    """Дополнительное соглашение к подписанному договору — черновиком.
+
+    Сумму подписанного договора нельзя поменять в одну сторону: клиент
+    подписывал другую. Новая общая стоимость и дополнительные работы уходят
+    ему документом, и только его подпись переносит сумму в договор.
+
+    Неподписанное допсоглашение к тому же договору заменяется новым — как
+    редакция договора: у клиента на руках должна быть одна актуальная.
+    """
+    namespace = "service_agreements.supplement"
+    if idempotency_key and (cached := cached_response(db, idempotency_key, namespace=namespace)):
+        code, body = cached
+        return JSONResponse(status_code=code, content=body)
+
+    parent = _get(db, agreement_id, lock=True)
+    if _is_supplement(parent):
+        raise HTTPException(status_code=409, detail="A supplement is added to the main agreement")
+    if parent.status != ServiceAgreementStatus.signed:
+        raise HTTPException(
+            status_code=409,
+            detail="Only a signed agreement takes a supplement; change an unsigned one with a new revision",
+        )
+    if not parent.client_telegram_user_id:
+        raise HTTPException(status_code=409, detail="Client has no Telegram")
+
+    supplements = db.execute(
+        select(ServiceAgreement)
+        .where(ServiceAgreement.parent_agreement_id == parent.id)
+        .order_by(ServiceAgreement.created_at.desc())
+        .with_for_update()
+    ).scalars().all()
+    # Номер растёт только с подписью: отклонённое или заменённое допсоглашение
+    # не занимает номер, новое выходит под тем же номером следующей редакцией.
+    supplement_no = 1 + sum(1 for row in supplements if row.status == ServiceAgreementStatus.signed)
+    base = parent.agreement_number.split("-R", 1)[0]
+    series = f"{base}-DS{supplement_no}"
+    same_series = [row for row in supplements if row.agreement_number.split("-R", 1)[0] == series]
+    revision = 1 + max((row.revision for row in same_series), default=0)
+    number = f"{series}-R{revision}" if revision > 1 else series
+    for row in supplements:
+        if row.status in _OPEN:
+            row.status = ServiceAgreementStatus.superseded
+    previous = same_series[0] if same_series else None
+
+    client = dict(parent.client_snapshot or {})
+    operator = parent.operator_snapshot or {}
+    created = _now()
+    expires = created + timedelta(days=payload.expires_in_days)
+    signed_on = (parent.signed_at or created).astimezone(_DOCUMENT_TZ)
+    scope = payload.scope_text.strip()
+    schedule = (payload.schedule_text or "").strip()
+    payment_terms = (payload.payment_terms or "").strip()
+    text = render_supplement_text(
+        number=number,
+        supplement_no=supplement_no,
+        parent_number=parent.agreement_number,
+        parent_date=signed_on.strftime("%d.%m.%Y"),
+        created_date=created.astimezone(_DOCUMENT_TZ).strftime("%d.%m.%Y"),
+        expires_date=expires.astimezone(_DOCUMENT_TZ).strftime("%d.%m.%Y"),
+        operator_name=str(operator.get("name") or ""),
+        operator_status=str(operator.get("status") or ""),
+        operator_inn=str(operator.get("inn") or ""),
+        operator_details=str(operator.get("details") or ""),
+        client_name=str(client.get("full_name") or ""),
+        client_org=client.get("org"),
+        client_details=_client_details_text(client) if client.get("details_complete") else "",
+        scope=scope,
+        schedule=schedule,
+        price=payload.price_text.strip(),
+        payment_terms=payment_terms,
+        template_kind=parent.template_kind.value,
+    )
+    item = ServiceAgreement(
+        agreement_number=number,
+        lead_id=parent.lead_id,
+        intake_id=parent.intake_id,
+        parent_agreement_id=parent.id,
+        revision=revision,
+        supersedes_id=previous.id if previous else None,
+        subject=f"Дополнительное соглашение № {supplement_no} к договору № {parent.agreement_number}",
+        scope_text=scope,
+        exclusions_text="",
+        schedule_text=schedule,
+        price_text=payload.price_text.strip(),
+        amount_minor=payload.amount_minor,
+        currency=parent.currency,
+        payment_terms=payment_terms,
+        created_by=identity.name,
+        prepared_by_telegram_user_id=payload.prepared_by_telegram_user_id,
+        operator_snapshot=operator,
+        # Реквизиты клиента уже в подписанном договоре — второй раз их не
+        # спрашиваем, поэтому бот и кабинет сразу открывают документ.
+        client_snapshot={**client, "details_complete": True},
+        template_kind=parent.template_kind,
+        document_text=text,
+        document_version=SUPPLEMENT_VERSION,
+        document_hash=document_hash(text),
+        expires_at=expires,
+        client_telegram_user_id=parent.client_telegram_user_id,
+    )
+    db.add(item)
+    db.flush()
+    _audit(
+        db,
+        identity,
+        item,
+        "service_agreement.supplement",
+        {
+            "parent_id": str(parent.id),
+            "parent_number": parent.agreement_number,
+            "amount_from": parent.amount_minor,
+            "amount_to": payload.amount_minor,
+        },
+    )
+    body = _payload(item, include_text=True)
+    if idempotency_key:
+        store_response(db, idempotency_key, status.HTTP_201_CREATED, body, namespace=namespace)
+    else:
+        db.commit()
+    return body
+
+
 @router.get("/by-intake/{intake_id}")
 def list_for_intake(
     intake_id: uuid.UUID,
@@ -432,6 +633,8 @@ def list_for_intake(
         db.execute(
             select(ServiceAgreement)
             .where(ServiceAgreement.intake_id == intake_id)
+            # Редакции договора по обращению; допсоглашения живут под своим договором.
+            .where(ServiceAgreement.parent_agreement_id.is_(None))
             .order_by(ServiceAgreement.revision.desc())
         )
         .scalars()
@@ -492,10 +695,13 @@ def mark_sent(
     item.sent_message_id = payload.message_id
     item.sent_by_telegram_user_id = payload.telegram_user_id
     item.sent_callback_id = payload.callback_id
-    if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
-        intake.status = LegalIntakeStatus.proposal_sent
-    if item.lead_id and (lead := db.get(Lead, item.lead_id)):
-        lead.status = LeadStatus.proposal
+    # Допсоглашение уходит по делу, которое уже в работе: откатывать его к
+    # «условия отправлены» было бы неправдой.
+    if not _is_supplement(item):
+        if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
+            intake.status = LegalIntakeStatus.proposal_sent
+        if item.lead_id and (lead := db.get(Lead, item.lead_id)):
+            lead.status = LeadStatus.proposal
     _audit(db, identity, item, "service_agreement.sent")
     db.commit()
     return _payload(item)
@@ -549,6 +755,7 @@ def complete_client_details(
     latest_id = db.execute(
         select(ServiceAgreement.id)
         .where(ServiceAgreement.intake_id == item.intake_id)
+        .where(ServiceAgreement.parent_agreement_id.is_(None))
         .order_by(ServiceAgreement.revision.desc())
         .limit(1)
     ).scalar_one_or_none()
@@ -691,16 +898,20 @@ def sign_agreement(
     item.signer_position = signer_position
     item.authority_basis = authority_basis
     item.signed_callback_id = payload.callback_id
-    if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
-        intake.status = LegalIntakeStatus.accepted
-    if item.lead_id and (lead := db.get(Lead, item.lead_id)):
-        lead.status = LeadStatus.won
+    if _is_supplement(item):
+        _apply_supplement(db, identity, item)
+    else:
+        if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
+            intake.status = LegalIntakeStatus.accepted
+        if item.lead_id and (lead := db.get(Lead, item.lead_id)):
+            lead.status = LeadStatus.won
     _audit(db, identity, item, "service_agreement.sign", {"version": item.document_version})
     if payload.channel == "miniapp":
+        what = "допсоглашение" if _is_supplement(item) else "договор"
         queue_notice(
             db,
             f"agreement:{item.id}:signed",
-            f"Клиент подписал договор № {item.agreement_number} в кабинете.",
+            f"Клиент подписал {what} № {item.agreement_number} в кабинете.",
         )
     db.commit()
     return {**_payload(item), "already_signed": False}
@@ -721,14 +932,16 @@ def decline_agreement(
     item.declined_at = _now()
     item.decline_reason = payload.reason
     item.declined_callback_id = payload.callback_id
-    if item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
+    # Отказ от допсоглашения не отменяет подписанный договор: дело остаётся в работе.
+    if not _is_supplement(item) and item.intake_id and (intake := db.get(LegalIntake, item.intake_id)):
         intake.status = LegalIntakeStatus.scope_preparation
     _audit(db, identity, item, "service_agreement.decline")
     if payload.channel == "miniapp":
+        what = "допсоглашение" if _is_supplement(item) else "договор"
         queue_notice(
             db,
             f"agreement:{item.id}:declined",
-            f"Клиент отклонил договор № {item.agreement_number}."
+            f"Клиент отклонил {what} № {item.agreement_number}."
             + (f" Причина: {item.decline_reason}" if item.decline_reason else ""),
         )
     db.commit()
@@ -761,7 +974,8 @@ def add_question(
         queue_notice(
             db,
             f"agreement:{item.id}:question:{msg.id}",
-            f"Новый вопрос клиента по договору № {item.agreement_number}:\n{msg.text}",
+            f"Новый вопрос клиента по {'допсоглашению' if _is_supplement(item) else 'договору'}"
+            f" № {item.agreement_number}:\n{msg.text}",
         )
     db.commit()
     return {"id": str(msg.id), "created_at": msg.created_at.isoformat() if msg.created_at else None}
@@ -850,7 +1064,7 @@ def deliver_agreement(
             token,
             str(item.client_telegram_user_id),
             build_proposal_text(payload),
-            reply_markup=build_proposal_markup(str(item.id)),
+            reply_markup=build_proposal_markup(str(item.id), supplement=_is_supplement(item)),
         )
     except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
         raise HTTPException(

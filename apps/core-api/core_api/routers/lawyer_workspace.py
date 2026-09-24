@@ -541,6 +541,9 @@ def clients(
         for lead_id, status, amount_minor in db.execute(
             select(ServiceAgreement.lead_id, ServiceAgreement.status, ServiceAgreement.amount_minor)
             .where(ServiceAgreement.lead_id.in_(lead_ids))
+            # Допсоглашение — не отдельные деньги: его сумма после подписи
+            # становится суммой договора, и счёт дважды завысил бы итог.
+            .where(ServiceAgreement.parent_agreement_id.is_(None))
             .order_by(ServiceAgreement.created_at.desc())
         ).all():
             open_agreements.setdefault(lead_id, status.value)
@@ -715,6 +718,53 @@ def client_card(
                 }
             )
 
+    # Допсоглашения — под своим договором, а не отдельной строкой: иначе на
+    # экране они выглядят вторым договором, а этап считался бы по ним.
+    supplements: dict[uuid.UUID, list[ServiceAgreement]] = {}
+    for item in agreements:
+        if item.parent_agreement_id is not None:
+            supplements.setdefault(item.parent_agreement_id, []).append(item)
+    agreements = [item for item in agreements if item.parent_agreement_id is None]
+
+    def _agreement_row(item: ServiceAgreement) -> dict:
+        return {
+            "agreement_id": str(item.id),
+            # Без этого при втором обращении клиента нельзя понять, к чему
+            # относится договор: на экране они лежат одним списком.
+            "intake_id": str(item.intake_id) if item.intake_id else None,
+            "parent_agreement_id": str(item.parent_agreement_id) if item.parent_agreement_id else None,
+            "number": item.agreement_number,
+            "status": item.status.value,
+            "template_kind": item.template_kind.value,
+            "revision": item.revision,
+            "subject": item.subject,
+            "price_text": item.price_text,
+            "amount_minor": item.amount_minor,
+            "currency": item.currency,
+            "payment_terms": item.payment_terms,
+            "scope_text": item.scope_text,
+            "exclusions_text": item.exclusions_text,
+            "schedule_text": item.schedule_text,
+            "expires_at": _iso(item.expires_at),
+            "created_at": _iso(item.created_at),
+            "sent_at": _iso(item.sent_at),
+            "viewed_at": _iso(item.viewed_at),
+            "signed_at": _iso(item.signed_at),
+            "declined_at": _iso(item.declined_at),
+            # Клиент называет причину, когда отклоняет, — она писалась в
+            # базу и нигде не читалась: юрист видел только дату отказа.
+            "decline_reason": item.decline_reason,
+            # Реквизиты, которые клиент ввёл при подписании: юристу они
+            # нужны так же, как условия, — по ним видно, с кем договор.
+            "client_snapshot": item.client_snapshot or {},
+            "signer_position": item.signer_position,
+            "authority_basis": item.authority_basis,
+            "document_version": item.document_version,
+            "messages": messages.get(item.id, []),
+            "acts": acts.get(item.id, []),
+            "supplements": [_agreement_row(row) for row in supplements.get(item.id, [])],
+        }
+
     latest_agreement = agreements[0] if agreements else None
     return {
         "lead_id": str(lead.id),
@@ -774,44 +824,7 @@ def client_card(
             }
             for item in intakes
         ],
-        "agreements": [
-            {
-                "agreement_id": str(item.id),
-                # Без этого при втором обращении клиента нельзя понять, к чему
-                # относится договор: на экране они лежат одним списком.
-                "intake_id": str(item.intake_id) if item.intake_id else None,
-                "number": item.agreement_number,
-                "status": item.status.value,
-                "template_kind": item.template_kind.value,
-                "revision": item.revision,
-                "subject": item.subject,
-                "price_text": item.price_text,
-                "amount_minor": item.amount_minor,
-                "currency": item.currency,
-                "payment_terms": item.payment_terms,
-                "scope_text": item.scope_text,
-                "exclusions_text": item.exclusions_text,
-                "schedule_text": item.schedule_text,
-                "expires_at": _iso(item.expires_at),
-                "created_at": _iso(item.created_at),
-                "sent_at": _iso(item.sent_at),
-                "viewed_at": _iso(item.viewed_at),
-                "signed_at": _iso(item.signed_at),
-                "declined_at": _iso(item.declined_at),
-                # Клиент называет причину, когда отклоняет, — она писалась в
-                # базу и нигде не читалась: юрист видел только дату отказа.
-                "decline_reason": item.decline_reason,
-                # Реквизиты, которые клиент ввёл при подписании: юристу они
-                # нужны так же, как условия, — по ним видно, с кем договор.
-                "client_snapshot": item.client_snapshot or {},
-                "signer_position": item.signer_position,
-                "authority_basis": item.authority_basis,
-                "document_version": item.document_version,
-                "messages": messages.get(item.id, []),
-                "acts": acts.get(item.id, []),
-            }
-            for item in agreements
-        ],
+        "agreements": [_agreement_row(item) for item in agreements],
     }
 
 
@@ -911,7 +924,10 @@ def _sum_and_count(db: Session, *conditions) -> dict:
             func.count(ServiceAgreement.id),
             func.coalesce(func.sum(ServiceAgreement.amount_minor), 0),
             func.count(ServiceAgreement.id).filter(ServiceAgreement.amount_minor.is_(None)),
-        ).where(*conditions)
+        )
+        # Допсоглашение не отдельная сделка: его сумма уже в сумме договора.
+        .where(ServiceAgreement.parent_agreement_id.is_(None))
+        .where(*conditions)
     ).one()
     return {"count": int(row[0]), "minor": int(row[1]), "unpriced": int(row[2])}
 
@@ -936,6 +952,7 @@ def finance(
         select(ServiceAgreement, Lead)
         .outerjoin(Lead, Lead.id == ServiceAgreement.lead_id)
         .where(ServiceAgreement.status != ServiceAgreementStatus.superseded)
+        .where(ServiceAgreement.parent_agreement_id.is_(None))
         .order_by(ServiceAgreement.created_at.desc())
         .limit(200)
     ).all()
@@ -995,15 +1012,23 @@ def set_agreement_amount(
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Сумма к учёту — поле бухгалтерии, а не документа.
+    """Сумма к учёту — только дозаполнить пустую.
 
-    Меняется и у подписанного договора: текст, под которым стоит подпись,
-    остаётся прежним, а вот учётная сумма могла быть не проставлена вовсе —
-    у договоров, составленных до того, как она появилась.
+    Нужна договорам, составленным до того, как сумма появилась числом:
+    иначе итоги молча неполные. Поменять уже указанную сумму отсюда нельзя —
+    это было бы решение одной стороны. Неподписанный договор меняется новой
+    редакцией, подписанный — допсоглашением, которое подписывает клиент.
     """
     item = db.get(ServiceAgreement, agreement_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Agreement not found")
+    if item.parent_agreement_id is not None:
+        raise HTTPException(status_code=409, detail="Supplement amount is set by its document")
+    if item.amount_minor is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Amount is already set; change it with a new revision or a supplementary agreement",
+        )
     before = item.amount_minor
     item.amount_minor = payload.amount_minor
     db.add(item)

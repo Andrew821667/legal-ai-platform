@@ -131,6 +131,10 @@ def create_act(
         raise HTTPException(status_code=404, detail="Agreement not found")
     if agreement.status != ServiceAgreementStatus.signed:
         raise HTTPException(status_code=409, detail="Act can only be issued for a signed agreement")
+    # Работы по допсоглашению — это работы по договору: акт выставляется по
+    # нему, иначе у одного дела оказалось бы два независимых счёта актов.
+    if agreement.parent_agreement_id is not None:
+        raise HTTPException(status_code=409, detail="Issue the act under the main agreement")
 
     item = WorkAct(
         act_number=_next_act_number(),

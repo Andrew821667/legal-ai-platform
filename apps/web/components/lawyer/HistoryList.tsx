@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { formatRub } from "@/lib/money";
-import { CONFLICT, HISTORY, INTAKE_STATUS, OUTREACH_REASON, label, shortDay } from "./labels";
+import { CONFLICT, HISTORY, INTAKE_STATUS, OUTREACH_REASON, SUPPLEMENT_HISTORY, label, shortDay } from "./labels";
 import { lawyerFetch } from "./useTelegram";
 import type { History, HistoryItem } from "./types";
 
@@ -27,6 +27,12 @@ function when(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Номер допсоглашения — номер договора с «-DS<n>». */
+function title(item: HistoryItem): string {
+  const supplement = /-DS\d+/.test(item.agreement_number || "");
+  return (supplement && SUPPLEMENT_HISTORY[item.action]) || label(HISTORY, item.action);
 }
 
 /** Что именно поменялось — по деталям события, человеческими словами. */
@@ -60,6 +66,10 @@ function explain(item: HistoryItem): string[] {
       out.push(
         `${formatRub(typeof d.from === "number" ? d.from : null)} → ${formatRub(typeof d.to === "number" ? d.to : null)}`,
       );
+      if (typeof d.supplement_number === "string") out.push(`по допсоглашению № ${d.supplement_number}`);
+      break;
+    case "service_agreement.supplement":
+      if (typeof d.amount_to === "number") out.push(`новая стоимость ${formatRub(d.amount_to)}`);
       break;
     default:
       break;
@@ -101,7 +111,7 @@ export default function HistoryList({ leadId, initData }: { leadId: string; init
               <li key={index} className="flex gap-3 text-lw-sm">
                 <span className="w-24 shrink-0 tabular-nums text-lw-muted">{when(item.at)}</span>
                 <span className="min-w-0 text-lw-ink">
-                  {label(HISTORY, item.action)}
+                  {title(item)}
                   {item.agreement_number ? (
                     <span className="text-lw-muted"> · № {item.agreement_number}</span>
                   ) : null}
