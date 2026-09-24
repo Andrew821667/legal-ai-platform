@@ -33,7 +33,7 @@ scipy==1.11.4
 
 # Document processing
 python-docx==1.1.0
-pypdf==6.10.2
+pypdf==6.14.1
 pdfplumber==0.10.3
 reportlab==4.0.9  # PDF generation
 lxml==6.1.0
@@ -44,7 +44,7 @@ pdf2docx>=0.5.6  # PDF → DOCX с сохранением форматирова
 # OCR and additional formats
 pytesseract==0.3.10
 pdf2image==1.17.0
-Pillow==12.2.0
+Pillow==12.3.0
 striprtf==0.0.26
 odfpy==1.4.1
 pypandoc==1.13
@@ -56,12 +56,12 @@ jinja2==3.1.6
 streamlit==1.54.0
 fastapi==0.109.2
 uvicorn[standard]==0.27.0
-python-multipart==0.0.27  # For FastAPI form data
+python-multipart==0.0.32  # For FastAPI form data
 websockets==12.0  # WebSocket support
 
 # Authentication & Security
 bcrypt==4.1.2
-pyjwt==2.12.0
+pyjwt==2.13.0
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 qrcode[pil]==7.4.2  # For demo link QR codes
@@ -73,7 +73,7 @@ sendgrid==6.11.0  # SendGrid email service (optional)
 stripe==7.9.0  # Stripe payment integration
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.2.3
 requests==2.33.0
 tenacity==8.2.3
 python-dateutil==2.8.2
@@ -87,7 +87,7 @@ pandas==2.1.4
 redis==5.0.1
 
 # Testing
-pytest==7.4.4
+pytest==9.0.3
 pytest-asyncio==0.23.3
 pytest-cov==4.1.0
 pytest-benchmark==4.0.0  # Performance benchmarks
