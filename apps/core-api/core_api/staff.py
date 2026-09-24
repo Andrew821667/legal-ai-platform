@@ -16,7 +16,13 @@ from core_api.config import get_settings
 def staff_telegram_ids() -> frozenset[int]:
     settings = get_settings()
     ids: set[int] = set()
-    for raw in (settings.admin_telegram_id, *str(settings.lawyer_telegram_ids or "").split(",")):
+    raw_ids = (
+        settings.admin_telegram_id,
+        *str(settings.lawyer_telegram_ids or "").split(","),
+        # Тестовые аккаунты — без прав владельца, но и не клиенты.
+        *str(settings.test_telegram_ids or "").split(","),
+    )
+    for raw in raw_ids:
         text = str(raw or "").strip()
         if text.isdigit():
             ids.add(int(text))

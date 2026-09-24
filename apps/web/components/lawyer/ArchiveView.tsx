@@ -51,7 +51,7 @@ export default function ArchiveView({
     return (
       <Card>
         <p className="text-lw-base text-lw-muted">
-          Архив пуст. Клиент попадает сюда кнопкой «Удалить клиента» в своей карточке.
+          Архив пуст. Клиент попадает сюда кнопкой «Удалить» в шапке своей карточки.
         </p>
       </Card>
     );
