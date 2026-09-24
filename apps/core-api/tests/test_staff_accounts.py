@@ -61,6 +61,19 @@ def _client(telegram_id: int | None, name: str) -> dict:
         db.close()
 
 
+def test_test_account_is_not_a_client_without_owner_rights(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Аккаунт для проверки системы — «Тест», хотя прав владельца у него нет."""
+    monkeypatch.setenv("ADMIN_TELEGRAM_ID", str(OWNER))
+    monkeypatch.setenv("LAWYER_TELEGRAM_IDS", "")
+    monkeypatch.setenv("TEST_TELEGRAM_IDS", str(SECOND))
+    get_settings.cache_clear()
+    try:
+        assert staff_telegram_ids() == {OWNER, SECOND}
+        assert is_staff(SECOND)
+    finally:
+        get_settings.cache_clear()
+
+
 def test_both_owner_accounts_are_staff(staff) -> None:
     assert staff_telegram_ids() == {OWNER, SECOND}
     assert is_staff(SECOND)

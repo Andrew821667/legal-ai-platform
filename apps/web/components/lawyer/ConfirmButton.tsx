@@ -25,8 +25,6 @@ export default function ConfirmButton({
   onConfirm: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const tone = danger ? "lw-btn-quiet lw-btn-quiet-danger w-full" : "lw-btn-quiet w-full";
 
   if (!open) {
@@ -36,6 +34,37 @@ export default function ConfirmButton({
       </button>
     );
   }
+
+  return (
+    <ConfirmPanel
+      explain={explain}
+      confirmLabel={confirmLabel}
+      busy={busy}
+      danger={danger}
+      onConfirm={onConfirm}
+      onCancel={() => setOpen(false)}
+    />
+  );
+}
+
+/** Само подтверждение — для мест, где кнопку-триггер рисуют отдельно. */
+export function ConfirmPanel({
+  explain,
+  confirmLabel,
+  busy = "Выполняю…",
+  danger = false,
+  onConfirm,
+  onCancel,
+}: {
+  explain: React.ReactNode;
+  confirmLabel: string;
+  busy?: string;
+  danger?: boolean;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className={`rounded-xl p-3 ${danger ? "bg-lw-danger-soft" : "bg-lw-cell"}`}>
@@ -49,7 +78,7 @@ export default function ConfirmButton({
             setError(null);
             try {
               await onConfirm();
-              setOpen(false);
+              onCancel();
             } catch (err) {
               setError(err instanceof Error ? err.message : "Не получилось");
             } finally {
@@ -60,7 +89,7 @@ export default function ConfirmButton({
         >
           {running ? busy : confirmLabel}
         </button>
-        <button type="button" disabled={running} onClick={() => setOpen(false)} className="lw-btn-quiet">
+        <button type="button" disabled={running} onClick={onCancel} className="lw-btn-quiet">
           Отмена
         </button>
       </div>

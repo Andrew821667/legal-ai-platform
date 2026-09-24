@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ActionButton from "./ActionButton";
 import { footprintText } from "./ArchiveView";
-import ConfirmButton from "./ConfirmButton";
+import ConfirmButton, { ConfirmPanel } from "./ConfirmButton";
 import AgreementForm from "./AgreementForm";
 import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
@@ -129,6 +129,9 @@ export default function ClientCardView({
   // Шкала «обращение → NDA → договор → подписан» у такого клиента звала бы
   // к договору, который юрист сознательно решил не заключать.
   const withoutAgreement = card.stage === WITHOUT_AGREEMENT_STAGE;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Открытое подтверждение не должно переезжать на другого клиента.
+  useEffect(() => setConfirmDelete(false), [card.lead_id]);
 
   return (
     <div className="space-y-4">
@@ -141,8 +144,40 @@ export default function ClientCardView({
       </button>
 
       <Card>
-        {/* Имя крупное — пилюли под ним, а не рядом: на телефоне им тесно. */}
-        <h1 className="text-lw-2xl font-extrabold tracking-tight text-lw-ink">{card.name}</h1>
+        {/* Имя крупное — пилюли под ним, а не рядом: на телефоне им тесно.
+            «Удалить» — в шапке, на виду: внизу, под историей, его не находили. */}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 text-lw-2xl font-extrabold tracking-tight text-lw-ink">{card.name}</h1>
+          {card.archived_at || confirmDelete ? null : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="shrink-0 rounded-full bg-lw-danger-soft px-3 py-1.5 text-lw-sm font-semibold text-lw-danger"
+            >
+              Удалить
+            </button>
+          )}
+        </div>
+        {confirmDelete ? (
+          <div className="mt-3">
+            <ConfirmPanel
+              explain={
+                <p>
+                  Клиент уйдёт в архив: пропадёт из списка, задач и денег, но ничего не удалится.
+                  Из архива его можно восстановить или удалить совсем.
+                </p>
+              }
+              confirmLabel="Убрать в архив"
+              busy="Убираю…"
+              danger
+              onConfirm={async () => {
+                await lawyerAction(`/api/lawyer/clients/${card.lead_id}/archive`, initData);
+                onArchiveChange?.("archived");
+              }}
+              onCancel={() => setConfirmDelete(false)}
+            />
+          </div>
+        ) : null}
         {card.company ? <p className="mt-0.5 text-lw-base text-lw-muted">{card.company}</p> : null}
         {/* Контакты — ссылками: карточку открывают перед разговором, и по
             контакту отсюда нужно сразу написать или позвонить. */}
@@ -328,25 +363,6 @@ export default function ClientCardView({
       </section>
 
       <HistoryList leadId={card.lead_id} initData={initData} />
-
-      {card.archived_at ? null : (
-        <ConfirmButton
-          label="Удалить клиента"
-          explain={
-            <p>
-              Клиент уйдёт в архив: пропадёт из списка, задач и денег, но ничего не удалится.
-              Из архива его можно восстановить или удалить совсем.
-            </p>
-          }
-          confirmLabel="Убрать в архив"
-          busy="Убираю…"
-          danger
-          onConfirm={async () => {
-            await lawyerAction(`/api/lawyer/clients/${card.lead_id}/archive`, initData);
-            onArchiveChange?.("archived");
-          }}
-        />
-      )}
     </div>
   );
 }
