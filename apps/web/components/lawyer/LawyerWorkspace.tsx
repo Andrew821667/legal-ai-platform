@@ -239,6 +239,23 @@ export default function LawyerWorkspace() {
     [openClient, loadToday, loadClients, loadFinance],
   );
 
+  // Допсоглашение ведётся в соседней вкладке: вернулись сюда — карточка
+  // должна показывать то, что там сделали, а не состояние до ухода. Id —
+  // в ref, чтобы подписка не пересоздавалась на каждое обновление карточки.
+  const openCardId = useRef<string | null>(null);
+  useEffect(() => {
+    openCardId.current = card?.lead_id ?? null;
+  }, [card]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && openCardId.current) {
+        void refreshAfterAction(openCardId.current);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshAfterAction]);
+
   const pendingCount = today
     ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
     : undefined;

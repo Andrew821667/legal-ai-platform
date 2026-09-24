@@ -64,8 +64,8 @@ def fake_telegram(monkeypatch: pytest.MonkeyPatch):
         def raise_for_status(self) -> None:
             return None
 
-    def fake_post(url: str, data: dict[str, Any], timeout: int) -> _Response:
-        calls.append({"url": url, "data": data, "timeout": timeout})
+    def fake_post(url: str, data: dict[str, Any], timeout: int, proxies=None) -> _Response:
+        calls.append({"url": url, "data": data, "timeout": timeout, "proxies": proxies})
         return _Response()
 
     monkeypatch.setattr(lead_notifications.requests, "post", fake_post)
@@ -242,3 +242,53 @@ def test_no_notification_when_not_configured(
     finally:
         _cleanup_lead(lead_id)
         get_settings.cache_clear()
+
+
+def test_telegram_goes_through_the_configured_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Напрямую api.telegram.org с прод-хоста не открывается — только через прокси."""
+    seen: list[Any] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {"ok": True, "result": {"message_id": 7}}
+
+    def fake_post(url: str, data: dict[str, Any], timeout: int, proxies=None) -> _Response:
+        seen.append(proxies)
+        return _Response()
+
+    monkeypatch.setattr(lead_notifications.requests, "post", fake_post)
+    monkeypatch.setenv("LEGAL_AI_HTTPS_PROXY", "http://192.168.64.1:10811")
+    get_settings.cache_clear()
+    try:
+        result = lead_notifications._post_telegram_message("token", "1", "текст")
+    finally:
+        get_settings.cache_clear()
+    assert result == {"message_id": 7}
+    assert seen == [{"https": "http://192.168.64.1:10811", "http": "http://192.168.64.1:10811"}]
+
+
+def test_without_proxy_telegram_is_called_directly(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[Any] = []
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {"ok": True, "result": {}}
+
+    def fake_post(url: str, data: dict[str, Any], timeout: int, proxies=None) -> _Response:
+        seen.append(proxies)
+        return _Response()
+
+    monkeypatch.setattr(lead_notifications.requests, "post", fake_post)
+    monkeypatch.setenv("LEGAL_AI_HTTPS_PROXY", "")
+    get_settings.cache_clear()
+    try:
+        lead_notifications._post_telegram_message("token", "1", "текст")
+    finally:
+        get_settings.cache_clear()
+    assert seen == [None]

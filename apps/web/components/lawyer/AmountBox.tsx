@@ -22,6 +22,7 @@ export default function AmountBox({
   amountMinor,
   pendingMinor = null,
   onSupplement,
+  supplementHref,
   initData,
   onChanged,
 }: {
@@ -31,6 +32,8 @@ export default function AmountBox({
   pendingMinor?: number | null;
   /** Есть только у подписанного договора — открывает форму допсоглашения. */
   onSupplement?: () => void;
+  /** Есть — «допсоглашение» открывается по ссылке в новой вкладке. */
+  supplementHref?: string;
   initData: string;
   onChanged: () => void;
 }) {
@@ -62,6 +65,15 @@ export default function AmountBox({
           >
             указать
           </button>
+        ) : supplementHref ? (
+          <a
+            href={supplementHref}
+            target="_blank"
+            rel="noopener"
+            className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
+          >
+            допсоглашение ↗
+          </a>
         ) : onSupplement ? (
           <button
             type="button"

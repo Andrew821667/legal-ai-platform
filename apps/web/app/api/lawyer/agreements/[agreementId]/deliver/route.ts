@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { corePost } from "@/lib/lawyer-core";
+import { corePost, TELEGRAM_DELIVERY_TIMEOUT_MS } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
 export const dynamic = "force-dynamic";
@@ -18,5 +18,7 @@ export async function POST(
   if (!UUID.test(agreementId)) {
     return Response.json({ detail: "Некорректный идентификатор договора" }, { status: 400 });
   }
-  return corePost(`/api/v1/service-agreements/${agreementId}/deliver`);
+  return corePost(`/api/v1/service-agreements/${agreementId}/deliver`, undefined, {
+    timeoutMs: TELEGRAM_DELIVERY_TIMEOUT_MS,
+  });
 }

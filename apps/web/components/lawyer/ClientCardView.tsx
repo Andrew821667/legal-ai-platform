@@ -214,6 +214,8 @@ export default function ClientCardView({
                 item={item}
                 initData={initData}
                 onChanged={onChanged}
+                leadId={card.lead_id}
+                insideTelegram={insideTelegram}
               />
             ))}
             {history.length > 0 ? (
@@ -272,17 +274,27 @@ export default function ClientCardView({
 
 const OPEN_STATUSES = ["draft", "sent", "viewed"];
 
-function Agreement({
+/** Отдельная вкладка допсоглашения: составить, отправить, вести переписку. */
+export function supplementPageHref(leadId: string, agreementId: string): string {
+  return `/lawyer/supplement?client=${encodeURIComponent(leadId)}&agreement=${encodeURIComponent(agreementId)}`;
+}
+
+export function Agreement({
   item,
   initData,
   onChanged,
   supplement = false,
+  leadId,
+  insideTelegram = false,
 }: {
   item: AgreementCard;
   initData: string;
   onChanged: () => void;
   /** Допсоглашение внутри карточки своего договора: без суммы к учёту и актов. */
   supplement?: boolean;
+  /** Есть — «допсоглашение» открывается отдельной вкладкой (вне Telegram). */
+  leadId?: string;
+  insideTelegram?: boolean;
 }) {
   const unanswered =
     item.messages.length > 0 && item.messages[item.messages.length - 1].role === "client";
@@ -327,6 +339,14 @@ function Agreement({
               amountMinor={item.amount_minor}
               pendingMinor={openSupplement?.amount_minor ?? null}
               onSupplement={item.status === "signed" ? () => setSupplementOpen(true) : undefined}
+              // В браузере — отдельной вкладкой: форма, отправка и переписка
+              // не теснят карточку. В мини-аппе Telegram новое окно уводит из
+              // приложения, поэтому там форма остаётся на месте.
+              supplementHref={
+                item.status === "signed" && leadId && !insideTelegram
+                  ? supplementPageHref(leadId, item.agreement_id)
+                  : undefined
+              }
               initData={initData}
               onChanged={onChanged}
             />

@@ -4,7 +4,7 @@ import logging
 
 import requests
 
-from core_api.config import get_settings
+from core_api.config import get_settings, telegram_proxies
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ def send_telegram_alert(text: str) -> None:
             f"https://api.telegram.org/bot{settings.alert_bot_token}/sendMessage",
             data={"chat_id": settings.alert_chat_id, "text": text},
             timeout=5,
+            proxies=telegram_proxies(),
         )
         response.raise_for_status()
     except Exception:

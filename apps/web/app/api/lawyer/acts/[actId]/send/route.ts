@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { corePost } from "@/lib/lawyer-core";
+import { corePost, TELEGRAM_DELIVERY_TIMEOUT_MS } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
 /**
@@ -25,5 +25,7 @@ export async function POST(
     return Response.json({ detail: "Некорректный идентификатор акта" }, { status: 400 });
   }
 
-  return corePost(`/api/v1/work-acts/${actId}/send`);
+  return corePost(`/api/v1/work-acts/${actId}/send`, undefined, {
+    timeoutMs: TELEGRAM_DELIVERY_TIMEOUT_MS,
+  });
 }
