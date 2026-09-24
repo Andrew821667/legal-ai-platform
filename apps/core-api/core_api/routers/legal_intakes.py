@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
+from core_api.staff import real_client
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -328,8 +329,9 @@ def list_intakes_pending_outreach(
             LegalIntake.outreach_sent_at.is_(None),
             LegalIntake.outreach_blocked_reason.is_(None),
             LegalIntake.created_at <= ready_before,
-            # Архивному клиенту бот первым не пишет.
+            # Архивному клиенту и владельцу со своего аккаунта бот первым не пишет.
             Lead.archived_at.is_(None),
+            real_client(Lead.telegram_user_id),
         )
         .order_by(LegalIntake.created_at)
         .limit(max(1, min(limit, 50)))

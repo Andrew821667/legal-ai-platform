@@ -163,6 +163,7 @@ export default function ClientCardView({
           {card.source ? ` · ${label(SOURCE, card.source)}` : ""}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
+          {card.is_test ? <Pill tone="alert">Тест · ваш аккаунт</Pill> : null}
           <Pill tone={card.stage === "Договор подписан" || withoutAgreement ? "ok" : "mute"}>{card.stage}</Pill>
           {clientType ? <Pill>{label(CLIENT_TYPE, clientType)}</Pill> : null}
           {conflictAlert ? (

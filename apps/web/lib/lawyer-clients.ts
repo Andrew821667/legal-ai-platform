@@ -9,7 +9,7 @@
 
 import { WITHOUT_AGREEMENT_STAGE } from "./lawyer-stage.ts";
 
-export type ClientGroupKey = "mine" | "theirs" | "active" | "declined";
+export type ClientGroupKey = "mine" | "theirs" | "active" | "declined" | "test";
 
 export type ClientLike = {
   stage: string;
@@ -18,6 +18,8 @@ export type ClientLike = {
   legal_areas: string[];
   practices?: string[];
   amount_minor: number | null;
+  /** Ваш собственный аккаунт Telegram — проверка системы, а не клиент. */
+  is_test?: boolean;
 };
 
 export const CLIENT_GROUPS: { key: ClientGroupKey; title: string; hint: string }[] = [
@@ -25,9 +27,13 @@ export const CLIENT_GROUPS: { key: ClientGroupKey; title: string; hint: string }
   { key: "theirs", title: "Ждём клиента", hint: "договор у клиента, решение за ним" },
   { key: "active", title: "В работе", hint: "договор подписан или ведёте без договора" },
   { key: "declined", title: "Отказались", hint: "" },
+  { key: "test", title: "Тест", hint: "ваши аккаунты — проверка системы, не клиенты" },
 ];
 
 export function clientGroup(row: ClientLike): ClientGroupKey {
+  // Свои тесты — отдельно и в самом низу: иначе они теснят настоящих
+  // клиентов в «Нужен ваш ход», хотя ход там ваш только понарошку.
+  if (row.is_test) return "test";
   if (row.waiting_on_me) return "mine";
   if (row.stage === "Договор подписан" || row.stage === WITHOUT_AGREEMENT_STAGE) return "active";
   if (row.stage === "Клиент отказался") return "declined";

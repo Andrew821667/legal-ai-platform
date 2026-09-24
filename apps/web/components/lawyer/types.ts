@@ -17,6 +17,8 @@ export type TodayItem = {
   expires_at?: string | null;
   deadline_at?: string | null;
   days_left?: number | null;
+  /** Ваш собственный аккаунт — проверка системы, а не клиент. */
+  is_test?: boolean;
 };
 
 export type TodaySection = {
@@ -42,6 +44,7 @@ export type ClientRow = {
   legal_areas: string[];
   practices: string[];
   amount_minor: number | null;
+  is_test?: boolean;
 };
 
 export type Clarification = { question: string; answer: string; created_at: string | null };
@@ -149,6 +152,8 @@ export type ClientCard = {
   name: string;
   /** Не пусто — клиент в архиве: в карточке «Восстановить» и «Удалить навсегда». */
   archived_at?: string | null;
+  /** Ваш собственный аккаунт Telegram — тест, не в деньгах и счётчиках. */
+  is_test?: boolean;
   stage: string;
   contact: string | null;
   company: string | null;
@@ -227,4 +232,5 @@ export type ArchiveRow = {
   signed_agreements: number;
   acts: number;
   nda_signed: boolean;
+  is_test?: boolean;
 };

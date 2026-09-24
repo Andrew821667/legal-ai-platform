@@ -20,6 +20,7 @@ from decimal import Decimal, InvalidOperation
 import admin_interface
 import utils
 from config import get_config
+from admin_access import is_admin_user
 from telegram import InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -147,7 +148,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         return False
     message = update.effective_message
     user = update.effective_user
-    if not message or not user or user.id != config.ADMIN_TELEGRAM_ID:
+    if not message or not user or not is_admin_user(config, user.id):
         return False
 
     value = (text or "").strip()
@@ -219,7 +220,7 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     await utils.safe_answer_callback(query, action="work_act_admin_callback")
     user = query.from_user
-    if not user or user.id != config.ADMIN_TELEGRAM_ID:
+    if not user or not is_admin_user(config, user.id):
         return
     parts = (query.data or "").split(":")
     action = parts[1] if len(parts) > 1 else ""
@@ -363,7 +364,7 @@ async def _handle_note(update, context, text: str, state: str) -> bool:
     user, message = update.effective_user, update.effective_message
     if not user or not message:
         return False
-    if state == "act_cancel" and user.id != config.ADMIN_TELEGRAM_ID:
+    if state == "act_cancel" and not is_admin_user(config, user.id):
         _clear(context)
         return False
     value = (text or "").strip()

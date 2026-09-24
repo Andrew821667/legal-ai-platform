@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
+from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
     ActorType,
     AuditLog,
@@ -343,6 +344,7 @@ def today(
                         "agreement_id": str(a.id),
                         "lead_id": str(a.lead_id) if a.lead_id else None,
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "subject": a.subject[:160],
                         "price_text": a.price_text,
                         "created_at": _iso(a.created_at),
@@ -360,6 +362,7 @@ def today(
                         "agreement_id": str(a.id),
                         "lead_id": str(a.lead_id) if a.lead_id else None,
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "question": m.text[:300],
                         "asked_at": _iso(m.created_at),
                         "days_waiting": _days_since(m.created_at),
@@ -376,6 +379,7 @@ def today(
                         "intake_id": str(i.id),
                         "lead_id": str(i.lead_id),
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "contact": lead.contact,
                         "reason": i.outreach_blocked_reason,
                         "created_at": _iso(i.created_at),
@@ -393,6 +397,7 @@ def today(
                         "agreement_id": str(a.id),
                         "lead_id": str(a.lead_id) if a.lead_id else None,
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "subject": a.subject[:160],
                         "status": a.status.value,
                         "sent_at": _iso(a.sent_at),
@@ -410,6 +415,7 @@ def today(
                         "agreement_id": str(a.id),
                         "lead_id": str(a.lead_id) if a.lead_id else None,
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "subject": a.subject[:160],
                         "status": a.status.value,
                         "expires_at": _iso(a.expires_at),
@@ -427,6 +433,7 @@ def today(
                         "intake_id": str(i.id),
                         "lead_id": str(i.lead_id),
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "legal_area": i.legal_area.value,
                         "practice": i.practice.value,
                         "category": i.category,
@@ -446,6 +453,7 @@ def today(
                         "intake_id": str(i.id),
                         "lead_id": str(i.lead_id),
                         "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                         "legal_area": i.legal_area.value,
                         "practice": i.practice.value,
                         "category": i.category,
@@ -611,6 +619,8 @@ def clients(
             "legal_areas": areas.get(lead.id, []),
             "practices": practices.get(lead.id, []),
             "amount_minor": amounts.get(lead.id),
+            # Аккаунт владельца: он проверяет систему, а не обращается.
+            "is_test": is_staff(lead.telegram_user_id),
         }
         for lead, count, last_at in rows
     ]
@@ -783,6 +793,7 @@ def client_card(
         "name": _lead_title(lead),
         # Карточку архивного клиента открывают из архива — там свои кнопки.
         "archived_at": _iso(lead.archived_at),
+        "is_test": is_staff(lead.telegram_user_id),
         "stage": _stage_for(
             nda_signed=nda is not None,
             agreement_status=latest_agreement.status.value if latest_agreement else None,
@@ -928,10 +939,14 @@ def _month_start(now: datetime, months_back: int = 0) -> datetime:
 
 
 def _not_archived_agreement():
-    """Договор не архивного клиента. NOT IN по NULL дал бы NULL — договор без
-    клиента выпал бы из итогов, поэтому он оговорён отдельно."""
-    archived = select(Lead.id).where(Lead.archived_at.is_not(None))
-    return or_(ServiceAgreement.lead_id.is_(None), ServiceAgreement.lead_id.not_in(archived))
+    """Договор, который идёт в деньги: не архивного клиента и не теста с
+    аккаунта владельца. NOT IN по NULL дал бы NULL — договор без клиента
+    выпал бы из итогов, поэтому он оговорён отдельно."""
+    hidden = select(Lead.id).where(Lead.archived_at.is_not(None))
+    staff = staff_telegram_ids()
+    if staff:
+        hidden = select(Lead.id).where(or_(Lead.archived_at.is_not(None), Lead.telegram_user_id.in_(staff)))
+    return or_(ServiceAgreement.lead_id.is_(None), ServiceAgreement.lead_id.not_in(hidden))
 
 
 def _sum_and_count(db: Session, *conditions) -> dict:
@@ -976,6 +991,7 @@ def finance(
         .where(Lead.archived_at.is_(None))
         .where(ServiceAgreement.status != ServiceAgreementStatus.superseded)
         .where(ServiceAgreement.parent_agreement_id.is_(None))
+        .where(real_client(Lead.telegram_user_id))
         .order_by(ServiceAgreement.created_at.desc())
         .limit(200)
     ).all()
@@ -1010,6 +1026,7 @@ def finance(
                 "agreement_id": str(a.id),
                 "lead_id": str(a.lead_id) if a.lead_id else None,
                 "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
                 "number": a.agreement_number,
                 "subject": a.subject[:160],
                 "status": a.status.value,
@@ -1343,6 +1360,7 @@ def archive(
             "company": lead.company,
             "created_at": _iso(lead.created_at),
             "archived_at": _iso(lead.archived_at),
+            "is_test": is_staff(lead.telegram_user_id),
             **_client_footprint(db, lead.id),
         }
         for lead in leads

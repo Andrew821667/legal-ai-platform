@@ -14,6 +14,7 @@ import database
 import security
 import utils
 from config import get_config
+from admin_access import is_admin_user
 from .constants import ADMIN_CLEANUP_MENU
 
 config = get_config()
@@ -46,7 +47,7 @@ async def handle_cleanup_callback(update: Update, context: ContextTypes.DEFAULT_
 
     user = query.from_user
 
-    if user.id != config.ADMIN_TELEGRAM_ID:
+    if not is_admin_user(config, user.id):
         await utils.safe_reply_text(query.message, "У вас нет доступа к этой функции", action="cleanup_access_denied")
         return
 

@@ -9,6 +9,7 @@ import requests
 
 from core_api.config import get_settings, telegram_proxies
 from core_api.models import Lead, LeadSegment, LeadSource, LegalIntake
+from core_api.staff import is_staff
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +256,9 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         if lead is None:
             logger.warning("Lead %s vanished before notify", lead_id)
             return
+        if is_staff(lead.telegram_user_id):
+            # Владелец проверяет систему со своего аккаунта — не новый лид.
+            return
         text = _format_lead_message(lead)
     finally:
         db.close()
@@ -329,6 +333,8 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
             logger.warning("Legal intake %s vanished before notify", intake_id)
             return
         item, lead = row
+        if is_staff(lead.telegram_user_id):
+            return
         header = "СРОЧНОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ" if item.urgency.value == "urgent" else "НОВОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ"
         lines = [
             header,

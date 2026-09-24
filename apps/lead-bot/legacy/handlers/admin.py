@@ -15,6 +15,7 @@ import ai_brain
 import lead_qualifier
 import admin_interface
 from config import get_config
+from admin_access import is_admin_user
 config = get_config()
 import utils
 import email_sender
@@ -34,7 +35,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -52,7 +53,7 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -77,7 +78,7 @@ async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -103,7 +104,7 @@ async def view_conversation_command(update: Update, context: ContextTypes.DEFAUL
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -139,7 +140,7 @@ async def security_stats_command(update: Update, context: ContextTypes.DEFAULT_T
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -176,7 +177,7 @@ async def blacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -215,7 +216,7 @@ async def unblacklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         user = update.effective_user
 
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -255,7 +256,7 @@ async def pdn_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /pdn_user <telegram_id> - карточка ПД и согласий пользователя."""
     try:
         user = update.effective_user
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -298,7 +299,7 @@ async def edit_pdn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /edit_pdn <telegram_id> <field> <value> - редактирование ПД."""
     try:
         user = update.effective_user
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -346,7 +347,7 @@ async def revoke_user_consent_command(update: Update, context: ContextTypes.DEFA
     """Команда /revoke_user_consent <telegram_id> - отзыв согласия и анонимизация."""
     try:
         user = update.effective_user
-        if user.id != config.ADMIN_TELEGRAM_ID:
+        if not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
 
@@ -378,7 +379,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показ админ-панели"""
     try:
         user = update.effective_user
-        if not user or user.id != config.ADMIN_TELEGRAM_ID:
+        if not user or not is_admin_user(config, user.id):
             await update.message.reply_text("У вас нет доступа к этой команде")
             return
         admin_panel_message = (

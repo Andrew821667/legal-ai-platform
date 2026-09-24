@@ -50,7 +50,9 @@ async def handle_admin_lookup_input(
         await utils.safe_reply_text(
             message,
             "Ок, режим поиска/редактирования закрыт.",
-            reply_markup=_main_menu_markup(config.ADMIN_TELEGRAM_ID),
+            reply_markup=_main_menu_markup(
+                update.effective_user.id if update.effective_user else config.ADMIN_TELEGRAM_ID
+            ),
             action="admin_lookup_cancel",
         )
         return True

@@ -98,7 +98,10 @@ export default function TodayView({
                   className="w-full rounded-xl bg-lw-cell p-3 text-left transition-colors hover:bg-lw-blue-soft disabled:cursor-default disabled:opacity-70"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="min-w-0 text-lw-base font-medium text-lw-ink">{item.client}</span>
+                    <span className="min-w-0 text-lw-base font-medium text-lw-ink">
+                      {item.client}
+                      {item.is_test ? <span className="ml-2 align-middle"><Pill tone="mute">Тест</Pill></span> : null}
+                    </span>
                     {(() => {
                       const badge = itemBadge(item);
                       return badge ? <Pill tone={badge.tone}>{badge.text}</Pill> : null;

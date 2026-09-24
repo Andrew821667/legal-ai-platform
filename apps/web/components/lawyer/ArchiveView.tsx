@@ -65,7 +65,10 @@ export default function ArchiveView({
       {rows.map((row) => (
         <Card key={row.lead_id}>
           <button type="button" onClick={() => onOpen(row.lead_id)} className="block w-full text-left">
-            <p className="text-lw-lg font-bold text-lw-ink">{row.name}</p>
+            <p className="text-lw-lg font-bold text-lw-ink">
+              {row.name}
+              {row.is_test ? <span className="ml-2 align-middle text-lw-sm font-semibold text-lw-muted">Тест</span> : null}
+            </p>
             {row.contact || row.company ? (
               <p className="text-lw-sm text-lw-muted">{[row.contact, row.company].filter(Boolean).join(" · ")}</p>
             ) : null}

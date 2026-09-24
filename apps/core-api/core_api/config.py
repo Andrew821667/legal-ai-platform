@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://legalai_app:change_me_local_only@localhost:5432/legalai_platform"
     cors_origins: str = "http://localhost:3000"
     alert_bot_token: str | None = None
+    # Аккаунты владельца практики в Telegram: основной и дополнительные
+    # (через запятую) — те же переменные, что у бота и сайта. Обращения с
+    # них — проверка системы, а не клиенты: помечаются «Тест» и не попадают
+    # в деньги, счётчики и уведомления о новых лидах.
+    admin_telegram_id: str = ""
+    lawyer_telegram_ids: str = ""
     # Прокси до Telegram — тот же, что у бота-ассистента и сайта
     # (xray-balancer на хосте). Напрямую api.telegram.org с прод-хоста
     # недоступен: без прокси каждая отправка из ядра — договор, акт, ответ

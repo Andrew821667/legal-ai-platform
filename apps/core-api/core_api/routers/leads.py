@@ -14,6 +14,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.lead_notifications import notify_new_lead
+from core_api.staff import real_client
 from core_api.models import ActorType, ContractJob, Event, Lead, LeadSource, LeadStatus, Scope
 from core_api.schemas import LEAD_UPSERT_FLAGS, LeadCreate, LeadOut, LeadPatch, LeadStatsOut, LegacySequenceHandover
 
@@ -248,6 +249,7 @@ def pending_lead_notifications(
         Lead.last_message_at <= cutoff,
         Lead.notification_sent.is_(False),
         Lead.archived_at.is_(None),
+        real_client(Lead.telegram_user_id),
         (
             Lead.temperature.in_(("warm", "hot"))
             | (

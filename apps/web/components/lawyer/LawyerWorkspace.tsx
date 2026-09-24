@@ -290,9 +290,12 @@ export default function LawyerWorkspace() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refreshAfterAction]);
 
+  // Счётчики — только настоящие клиенты: ваши тесты видны в списках с
+  // пометкой, но «ждут ответа» и «клиентов» не раздувают.
   const pendingCount = today
-    ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
+    ? today.sections.reduce((sum, section) => sum + section.items.filter((item) => !item.is_test).length, 0)
     : undefined;
+  const realClients = clients ? clients.filter((row) => !row.is_test).length : undefined;
   const tabIsEmpty =
     tab === "today"
       ? today === null
@@ -317,7 +320,7 @@ export default function LawyerWorkspace() {
         <div className="mt-4 grid grid-cols-2 gap-2.5">
           {(
             [
-              [clients?.length ?? "—", "клиентов"],
+              [realClients ?? "—", "клиентов"],
               [pendingCount ?? 0, "ждут ответа"],
               [finance?.in_pipeline.count ?? "—", "договоров у клиентов"],
               [finance ? formatRub(finance.signed_this_month.minor) : "—", "подписано в этом месяце"],
@@ -336,7 +339,7 @@ export default function LawyerWorkspace() {
       <nav className="mb-4 flex gap-1.5" role="tablist">
         {(
           [
-            ["clients", "Клиенты", clients?.length],
+            ["clients", "Клиенты", realClients],
             ["today", "Задачи", pendingCount],
             ["finance", "Деньги", undefined],
             ["archive", "Архив", archive?.length],

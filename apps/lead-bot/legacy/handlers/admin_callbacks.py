@@ -21,6 +21,7 @@ import lawyer_session_link
 import security
 import utils
 from config import get_config
+from admin_access import is_admin_user
 from .constants import (
     ADMIN_CLEANUP_MENU,
     ADMIN_EDIT_FIELD_MENU,
@@ -273,7 +274,7 @@ async def handle_admin_panel_callback(update: Update, context: ContextTypes.DEFA
         logger.warning(f"Failed to answer admin callback: {answer_error}")
 
     user = query.from_user
-    if user.id != config.ADMIN_TELEGRAM_ID:
+    if not is_admin_user(config, user.id):
         await query.message.reply_text("У вас нет доступа к этой функции")
         return
 
