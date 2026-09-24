@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { translateCoreErrorBody } from "./core-errors";
+
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
 const CORE_API_BOT_KEY = process.env.CORE_API_BOT_KEY || process.env.API_KEY_BOT || "";
@@ -21,7 +23,9 @@ async function call(method: Method, path: string, payload?: unknown): Promise<Ne
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
-    return new NextResponse(await response.text(), {
+    const raw = await response.text();
+    // Отказы ядра — по-английски; клиенту они нужны по-русски.
+    return new NextResponse(response.ok ? raw : translateCoreErrorBody(raw), {
       status: response.status,
       headers: { "content-type": "application/json" },
     });
