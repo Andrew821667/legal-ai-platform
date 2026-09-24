@@ -147,6 +147,8 @@ export type WorkAct = {
 export type ClientCard = {
   lead_id: string;
   name: string;
+  /** Не пусто — клиент в архиве: в карточке «Восстановить» и «Удалить навсегда». */
+  archived_at?: string | null;
   stage: string;
   contact: string | null;
   company: string | null;
@@ -211,3 +213,18 @@ export type HistoryItem = {
 };
 
 export type History = { lead_id: string; items: HistoryItem[] };
+
+/** Клиент в архиве и то, что пропадёт вместе с ним при удалении. */
+export type ArchiveRow = {
+  lead_id: string;
+  name: string;
+  contact: string | null;
+  company: string | null;
+  created_at: string | null;
+  archived_at: string | null;
+  intakes: number;
+  agreements: number;
+  signed_agreements: number;
+  acts: number;
+  nda_signed: boolean;
+};

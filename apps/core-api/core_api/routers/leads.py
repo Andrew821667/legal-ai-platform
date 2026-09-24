@@ -247,6 +247,7 @@ def pending_lead_notifications(
         Lead.last_message_at.is_not(None),
         Lead.last_message_at <= cutoff,
         Lead.notification_sent.is_(False),
+        Lead.archived_at.is_(None),
         (
             Lead.temperature.in_(("warm", "hot"))
             | (

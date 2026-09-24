@@ -104,6 +104,12 @@
     background: var(--color-lw-primary-soft);
   }
   .lw-btn-quiet:disabled { opacity: 0.6; }
+  /* Необратимое или заметное действие: удалить, убрать в архив. */
+  .lw-btn-danger { background: var(--color-lw-danger); }
+  .lw-btn-quiet-danger {
+    color: var(--color-lw-danger);
+    background: var(--color-lw-danger-soft);
+  }
   .lw-input {
     width: 100%;
     border: 1px solid var(--color-lw-border);

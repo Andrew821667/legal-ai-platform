@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-import { coreGet } from "@/lib/lawyer-core";
+import { coreDelete, coreGet } from "@/lib/lawyer-core";
 import { requireLawyer } from "@/lib/lawyer-auth";
 
 export const dynamic = "force-dynamic";
@@ -21,4 +21,21 @@ export async function GET(
     return Response.json({ detail: "Некорректный идентификатор клиента" }, { status: 400 });
   }
   return coreGet(`/api/v1/lawyer/clients/${leadId}`);
+}
+
+/**
+ * Удалить клиента совсем. Ядро примет это только для клиента из архива:
+ * «Удалить» в карточке сначала отправляет в архив, отсюда — второй шаг.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ leadId: string }> },
+) {
+  const auth = requireLawyer(request);
+  if (auth instanceof Response) return auth;
+  const { leadId } = await params;
+  if (!UUID.test(leadId)) {
+    return Response.json({ detail: "Некорректный идентификатор клиента" }, { status: 400 });
+  }
+  return coreDelete(`/api/v1/lawyer/clients/${leadId}`);
 }

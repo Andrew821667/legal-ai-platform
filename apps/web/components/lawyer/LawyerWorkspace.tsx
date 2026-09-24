@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import ArchiveView from "./ArchiveView";
 import ClientCardView from "./ClientCardView";
 import FinanceView from "./FinanceView";
 import TodayView from "./TodayView";
 import ClientsView from "./ClientsView";
 import { formatRub } from "@/lib/money";
 import { LawyerFetchError, lawyerFetch, telegramBackButton, useTelegramInitData } from "./useTelegram";
-import type { ClientCard, ClientRow, Finance, Today } from "./types";
+import type { ArchiveRow, ClientCard, ClientRow, Finance, Today } from "./types";
 import { buildWorkspaceSearch, parseWorkspaceRoute } from "@/lib/lawyer-route";
 import type { Tab, WorkspaceRoute } from "@/lib/lawyer-route";
 
@@ -39,6 +40,7 @@ export default function LawyerWorkspace() {
   const [today, setToday] = useState<Today | null>(null);
   const [finance, setFinance] = useState<Finance | null>(null);
   const [clients, setClients] = useState<ClientRow[] | null>(null);
+  const [archive, setArchive] = useState<ArchiveRow[] | null>(null);
   const [card, setCard] = useState<ClientCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -100,6 +102,21 @@ export default function LawyerWorkspace() {
     }
   }, [ready, initData, beginLoading, endLoading]);
 
+  // Архив — тот же контракт, что у остальных загрузчиков: только ready/initData.
+  const loadArchive = useCallback(async () => {
+    if (!ready) return;
+    beginLoading();
+    setError(null);
+    try {
+      setArchive(await lawyerFetch<ArchiveRow[]>("/api/lawyer/archive", initData));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось загрузить архив");
+      setUnauthorized(err instanceof LawyerFetchError && err.status === 401);
+    } finally {
+      endLoading();
+    }
+  }, [ready, initData, beginLoading, endLoading]);
+
   const loadClients = useCallback(
     async (search = lastSearch.current) => {
       if (!ready) return;
@@ -128,14 +145,16 @@ export default function LawyerWorkspace() {
     void loadClients();
     void loadToday();
     void loadFinance();
-  }, [loadClients, loadToday, loadFinance]);
+    void loadArchive();
+  }, [loadClients, loadToday, loadFinance, loadArchive]);
 
   // При каждом переходе на «Задачи» — свежие данные, а не то, что было при
   // первом заходе в раздел.
   useEffect(() => {
     if (tab === "today") void loadToday();
     if (tab === "finance") void loadFinance();
-  }, [tab, loadToday, loadFinance]);
+    if (tab === "archive") void loadArchive();
+  }, [tab, loadToday, loadFinance, loadArchive]);
 
   const openClient = useCallback(
     async (leadId: string) => {
@@ -239,6 +258,21 @@ export default function LawyerWorkspace() {
     [openClient, loadToday, loadClients, loadFinance],
   );
 
+  // Архив меняет сразу несколько экранов: клиент пропадает из списка, задач
+  // и денег и появляется в архиве (или наоборот). Убран или удалён — карточка
+  // закрывается: смотреть в ней больше нечего.
+  const afterArchiveChange = useCallback(
+    async (leadId: string, kind: "archived" | "restored" | "purged") => {
+      if (kind === "restored") {
+        await Promise.all([refreshAfterAction(leadId), loadArchive()]);
+        return;
+      }
+      closeCard();
+      await Promise.all([loadClients(), loadToday(), loadFinance(), loadArchive()]);
+    },
+    [refreshAfterAction, loadArchive, closeCard, loadClients, loadToday, loadFinance],
+  );
+
   // Допсоглашение ведётся в соседней вкладке: вернулись сюда — карточка
   // должна показывать то, что там сделали, а не состояние до ухода. Id —
   // в ref, чтобы подписка не пересоздавалась на каждое обновление карточки.
@@ -260,7 +294,13 @@ export default function LawyerWorkspace() {
     ? today.sections.reduce((sum, section) => sum + section.items.length, 0)
     : undefined;
   const tabIsEmpty =
-    tab === "today" ? today === null : tab === "finance" ? finance === null : clients === null;
+    tab === "today"
+      ? today === null
+      : tab === "finance"
+        ? finance === null
+        : tab === "archive"
+          ? archive === null
+          : clients === null;
 
   const list = (
     <div>
@@ -291,12 +331,15 @@ export default function LawyerWorkspace() {
         </div>
       </header>
 
-      <nav className="mb-4 flex gap-2" role="tablist">
+      {/* Четыре вкладки на телефоне в ширину едва помещаются: отступы и шрифт
+          уже, чем у остальных кнопок, и ни одна не должна выпадать за край. */}
+      <nav className="mb-4 flex gap-1.5" role="tablist">
         {(
           [
             ["clients", "Клиенты", clients?.length],
             ["today", "Задачи", pendingCount],
             ["finance", "Деньги", undefined],
+            ["archive", "Архив", archive?.length],
           ] as [Tab, string, number | undefined][]
         ).map(([key, title, count]) => (
           <button
@@ -305,7 +348,7 @@ export default function LawyerWorkspace() {
             role="tab"
             aria-selected={tab === key}
             onClick={() => selectTab(key)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-lw-base font-semibold transition-colors ${
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-1.5 py-3 text-lw-sm font-semibold transition-colors sm:gap-1.5 sm:px-2.5 sm:text-lw-base ${
               tab === key
                 ? "bg-lw-primary text-white shadow-lw-card"
                 : "lw-card text-lw-ink hover:bg-lw-blue-soft"
@@ -314,7 +357,7 @@ export default function LawyerWorkspace() {
             {title}
             {count ? (
               <span
-                className={`rounded-full px-2 text-lw-sm font-bold ${
+                className={`rounded-full px-1.5 text-lw-sm font-bold ${
                   tab === key
                     ? "bg-white/20 text-white"
                     : key === "today"
@@ -340,7 +383,13 @@ export default function LawyerWorkspace() {
           <button
             type="button"
             onClick={() =>
-              void (tab === "today" ? loadToday() : tab === "finance" ? loadFinance() : loadClients())
+              void (tab === "today"
+                ? loadToday()
+                : tab === "finance"
+                  ? loadFinance()
+                  : tab === "archive"
+                    ? loadArchive()
+                    : loadClients())
             }
             className="ml-3 underline underline-offset-2"
           >
@@ -362,6 +411,14 @@ export default function LawyerWorkspace() {
           onOpen={showClient}
           initData={initData}
           insideTelegram={insideTelegram}
+        />
+      ) : null}
+      {!error && tab === "archive" ? (
+        <ArchiveView
+          rows={archive}
+          initData={initData}
+          onOpen={showClient}
+          onChanged={() => void Promise.all([loadArchive(), loadClients(), loadToday(), loadFinance()])}
         />
       ) : null}
       {!error && tab === "clients" ? (
@@ -392,6 +449,7 @@ export default function LawyerWorkspace() {
             onBack={closeCard}
             onChanged={() => void refreshAfterAction(card.lead_id)}
             onOpenClient={showClient}
+            onArchiveChange={(kind) => void afterArchiveChange(card.lead_id, kind)}
             loading={loading}
             initData={initData}
             insideTelegram={insideTelegram}

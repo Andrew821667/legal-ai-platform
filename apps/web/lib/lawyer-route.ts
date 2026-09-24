@@ -7,7 +7,7 @@
  * экран был чистым состоянием React без имени.
  */
 
-export const TABS = ["clients", "today", "finance"] as const;
+export const TABS = ["clients", "today", "finance", "archive"] as const;
 export type Tab = (typeof TABS)[number];
 
 export type WorkspaceRoute = { tab: Tab; client: string | null };
