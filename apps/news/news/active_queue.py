@@ -32,14 +32,47 @@ def row_publication_kind(row: dict[str, object]) -> str:
     return publication_kind_from_format_type(str(row.get("format_type") or ""))
 
 
-def next_active_slot_by_kind(*, control_rows: list[dict[str, object]] | None = None) -> dict[str, datetime]:
+def unmanaged_scheduled_times(rows: list[dict[str, object]], *, now_utc: datetime) -> list[datetime]:
+    """Время постов в расписании, которыми очередь не управляет (ручные и пр.).
+
+    Очередь двигает только форматы генератора (ACTIVE_PUBLICATION_KINDS);
+    ручной пост стоит там, куда его поставили. Раньше очередь его не видела и
+    ставила свой пост в тот же слот: 23.09 в 18:00 так вышли два поста с
+    разницей в пять минут. Только что наступившие, но ещё не отправленные
+    ручные посты тоже считаются — публикатор забирает их с шагом в несколько
+    минут, и слот рядом с ними всё ещё занят.
+    """
+    guard = timedelta(minutes=max(settings.news_publish_manual_slot_guard_minutes, 0))
+    result: list[datetime] = []
+    for row in rows:
+        if row_publication_kind(row) in ACTIVE_PUBLICATION_KINDS:
+            continue
+        publish_at = parse_post_datetime(row.get("publish_at"))
+        if publish_at is None or publish_at <= now_utc - guard:
+            continue
+        result.append(publish_at)
+    return result
+
+
+def next_active_slot_by_kind(
+    *,
+    control_rows: list[dict[str, object]] | None = None,
+    occupied_times: list[datetime] | None = None,
+) -> dict[str, datetime]:
     now_local = datetime.now(ZoneInfo(settings.tz_name))
+    guard = timedelta(minutes=max(settings.news_publish_manual_slot_guard_minutes, 0))
+    occupied = list(occupied_times or [])
     result: dict[str, datetime] = {}
     for slot in build_schedule_window(now_local, days=21, control_rows=control_rows, future_only=True):
         kind = slot.publication_kind
         if kind not in ACTIVE_PUBLICATION_KINDS or kind in result:
             continue
-        result[kind] = slot.publish_at_local.astimezone(UTC)
+        slot_utc = slot.publish_at_local.astimezone(UTC)
+        # Слот рядом с ручным постом занят — берём следующий слот этого же
+        # формата, а не выпускаем два поста подряд.
+        if any(abs(slot_utc - taken) < guard for taken in occupied):
+            continue
+        result[kind] = slot_utc
         if len(result) == len(ACTIVE_PUBLICATION_KINDS):
             break
     return result
@@ -52,7 +85,6 @@ def rebalance_active_publish_queue(
     preferred_post_id: str | None = None,
     scan_limit: int = ACTIVE_QUEUE_SCAN_LIMIT,
 ) -> dict[str, int]:
-    next_slot_map = next_active_slot_by_kind(control_rows=control_rows)
     scheduled_response = client.list_posts(limit=scan_limit, status="scheduled", newest_first=False)
     scheduled_response.raise_for_status()
     ready_response = client.list_posts(limit=scan_limit, status="ready", newest_first=False)
@@ -61,6 +93,10 @@ def rebalance_active_publish_queue(
     scheduled_rows = list(scheduled_response.json() or [])
     ready_rows = list(ready_response.json() or [])
     now_utc = datetime.now(UTC)
+    next_slot_map = next_active_slot_by_kind(
+        control_rows=control_rows,
+        occupied_times=unmanaged_scheduled_times(scheduled_rows, now_utc=now_utc),
+    )
 
     def _row_time(row: dict[str, object]) -> datetime:
         return parse_post_datetime(row.get("publish_at")) or datetime.max.replace(tzinfo=UTC)

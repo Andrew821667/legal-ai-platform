@@ -105,3 +105,101 @@ def test_rebalance_active_publish_queue_keeps_pending_retry(monkeypatch) -> None
 
     assert result == {"demoted": 0, "promoted": 0, "rescheduled": 0}
     assert client.patched == []
+
+
+def _slots(*items: tuple[str, datetime]):
+    from types import SimpleNamespace
+
+    return [SimpleNamespace(publication_kind=kind, publish_at_local=when) for kind, when in items]
+
+
+def test_next_slot_skips_slot_taken_by_manual_post(monkeypatch) -> None:
+    """Регрессия 23.09: ручной пост стоял на 18:00 — вечернем слоте ежедневных
+    новостей, — и очередь поставила туда же свой пост. Вышли оба с разницей в
+    пять минут. Теперь слот занят, и ежедневная новость идёт на следующий."""
+    from news.active_queue import next_active_slot_by_kind
+
+    base = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=2)
+    evening = base
+    morning = base + timedelta(hours=15)
+    monkeypatch.setattr(
+        "news.active_queue.build_schedule_window",
+        lambda *args, **kwargs: _slots(("daily", evening), ("daily", morning)),
+    )
+
+    assert next_active_slot_by_kind()["daily"] == evening
+    assert next_active_slot_by_kind(occupied_times=[evening])["daily"] == morning
+
+
+def test_manual_post_near_slot_also_takes_it(monkeypatch) -> None:
+    """17:50 и 18:00 — это те же два поста подряд, что и точное совпадение."""
+    from news.active_queue import next_active_slot_by_kind
+
+    base = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=2)
+    later = base + timedelta(hours=15)
+    monkeypatch.setattr(
+        "news.active_queue.build_schedule_window",
+        lambda *args, **kwargs: _slots(("daily", base), ("daily", later)),
+    )
+
+    assert next_active_slot_by_kind(occupied_times=[base - timedelta(minutes=10)])["daily"] == later
+
+
+def test_manual_post_far_from_slot_does_not_take_it(monkeypatch) -> None:
+    """Ручной пост в двух часах от слота слот не занимает — иначе очередь
+    откладывала бы свои посты без причины."""
+    from news.active_queue import next_active_slot_by_kind
+
+    base = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=3)
+    monkeypatch.setattr(
+        "news.active_queue.build_schedule_window",
+        lambda *args, **kwargs: _slots(("daily", base), ("daily", base + timedelta(hours=15))),
+    )
+
+    assert next_active_slot_by_kind(occupied_times=[base - timedelta(hours=2)])["daily"] == base
+
+
+def test_rebalance_treats_only_unmanaged_scheduled_posts_as_occupied(monkeypatch) -> None:
+    """Слот занимают ручные посты; собственные посты очереди она двигает
+    сама и слот ими не блокирует."""
+    now_utc = datetime.now(UTC)
+    manual_at = now_utc + timedelta(hours=3)
+    captured: dict[str, object] = {}
+
+    def _fake_next_slots(**kwargs):
+        captured.update(kwargs)
+        return {"daily": now_utc + timedelta(hours=18)}
+
+    monkeypatch.setattr("news.active_queue.next_active_slot_by_kind", _fake_next_slots)
+    client = _FakeClient(
+        scheduled_rows=[
+            {"id": "manual-1", "format_type": "manual_practice", "publish_at": manual_at.isoformat()},
+            {"id": "daily-1", "format_type": "daily", "publish_at": (now_utc + timedelta(hours=5)).isoformat()},
+        ],
+        ready_rows=[],
+    )
+
+    rebalance_active_publish_queue(client)
+
+    occupied = captured["occupied_times"]
+    assert len(occupied) == 1
+    assert abs(occupied[0] - manual_at) < timedelta(seconds=1)
+    assert ("daily-1", {"status": "scheduled", "publish_at": (now_utc + timedelta(hours=18)).isoformat()}) in client.patched
+
+
+def test_recently_due_manual_post_still_occupies_its_slot() -> None:
+    """Ручной пост, время которого только что наступило, ещё не отправлен —
+    публикатор забирает посты с шагом в несколько минут. Слот рядом с ним всё
+    ещё занят; давно прошедшие посты — уже нет."""
+    from news.active_queue import unmanaged_scheduled_times
+
+    now_utc = datetime.now(UTC)
+    rows = [
+        {"format_type": "manual_practice", "publish_at": (now_utc - timedelta(minutes=5)).isoformat()},
+        {"format_type": "manual_practice", "publish_at": (now_utc - timedelta(hours=5)).isoformat()},
+        {"format_type": "daily", "publish_at": (now_utc + timedelta(hours=1)).isoformat()},
+    ]
+
+    times = unmanaged_scheduled_times(rows, now_utc=now_utc)
+
+    assert len(times) == 1

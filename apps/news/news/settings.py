@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # после публикации — кнопкой в админ-боте. NEWS_AUTOPUBLISH_GENERATED=0
     # возвращает прежний режим «сначала на проверку».
     news_autopublish_generated: bool = True
+    # Ручной пост в расписании занимает слот генератора, если стоит к нему
+    # ближе этого: очередь тогда ставит свой пост на следующий слот формата.
+    # По умолчанию слоты генератора разнесены минимум на два часа, так что час
+    # не задевает соседние слоты.
+    news_publish_manual_slot_guard_minutes: int = 60
     news_publish_fallback_startup_grace_seconds: int = 600
     news_publication_monitor_enabled: bool = True
     news_publication_monitor_interval_seconds: int = 300
