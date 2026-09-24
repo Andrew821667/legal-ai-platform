@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AGREEMENT_FIELDS } from "@/lib/agreement-draft";
 import { formatRub, parseRublesInput } from "@/lib/money";
 import { dropDraft, readDraft, writeDraft } from "./draft-storage";
+import TemplateBar from "./TemplateBar";
 import { lawyerAction } from "./useTelegram";
 
 /**
@@ -25,6 +26,7 @@ export default function AgreementForm({
   initData,
   again,
   startOpen = false,
+  practice = null,
   onCreated,
 }: {
   intakeId: string;
@@ -32,6 +34,8 @@ export default function AgreementForm({
   again: boolean;
   /** Форму уже попросили кнопкой рядом — второй раз «Составить договор» не спрашиваем. */
   startOpen?: boolean;
+  /** Практика обращения — для подбора заготовок. */
+  practice?: string | null;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(startOpen);
@@ -96,6 +100,15 @@ export default function AgreementForm({
       }}
     >
       <p className="text-lw-base font-medium text-lw-ink">{title}</p>
+      <TemplateBar
+        practice={practice}
+        values={values}
+        initData={initData}
+        onApply={(draft) => {
+          setValues(draft);
+          writeDraft(draftKey(intakeId), draft);
+        }}
+      />
       {again ? (
         <p className="text-lw-sm text-lw-warning">
           Прежняя редакция станет заменённой, как только новая будет составлена.

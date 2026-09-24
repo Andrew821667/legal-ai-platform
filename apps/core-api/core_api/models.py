@@ -639,6 +639,39 @@ class ClientNotice(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AgreementTemplate(Base):
+    """Заготовка условий договора, которую юрист сохранил для типовой услуги.
+
+    Предмет, объём, исключения, сроки, цену и оплату юрист раньше набирал
+    руками в каждом договоре, хотя для консультации или проверки договора
+    они из раза в раз одни и те же. Заготовка только заполняет форму: договор
+    всё равно составляется из того, что в форме, и юрист правит его под дело.
+    """
+
+    __tablename__ = "agreement_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Практика, для которой заготовка; пусто — для любой.
+    practice: Mapped[Practice | None] = mapped_column(
+        Enum(Practice, name="practice_enum", create_type=False), nullable=True
+    )
+    subject: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    scope_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    exclusions_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    schedule_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    price_text: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    payment_terms: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Чаще используемые — выше в списке.
+    use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class TelegramDelivery(Base):
     """Журнал отправок ядра в Telegram — чтобы сбой не был молчаливым.
 
