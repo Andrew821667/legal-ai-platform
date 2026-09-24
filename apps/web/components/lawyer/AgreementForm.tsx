@@ -24,15 +24,20 @@ export default function AgreementForm({
   intakeId,
   initData,
   again,
+  startOpen = false,
   onCreated,
 }: {
   intakeId: string;
   initData: string;
   again: boolean;
+  /** Форму уже попросили кнопкой рядом — второй раз «Составить договор» не спрашиваем. */
+  startOpen?: boolean;
   onCreated: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(startOpen);
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    startOpen ? readDraft<Record<string, string>>(draftKey(intakeId), {}) : {},
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

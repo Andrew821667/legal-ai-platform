@@ -7,6 +7,8 @@
  * что мне делать сейчас. Внутри группы — как отдал сервер, новые первыми.
  */
 
+import { WITHOUT_AGREEMENT_STAGE } from "./lawyer-stage.ts";
+
 export type ClientGroupKey = "mine" | "theirs" | "active" | "declined";
 
 export type ClientLike = {
@@ -21,13 +23,13 @@ export type ClientLike = {
 export const CLIENT_GROUPS: { key: ClientGroupKey; title: string; hint: string }[] = [
   { key: "mine", title: "Нужен ваш ход", hint: "ответить, подготовить условия или отправить договор" },
   { key: "theirs", title: "Ждём клиента", hint: "договор у клиента, решение за ним" },
-  { key: "active", title: "В работе", hint: "договор подписан" },
+  { key: "active", title: "В работе", hint: "договор подписан или ведёте без договора" },
   { key: "declined", title: "Отказались", hint: "" },
 ];
 
 export function clientGroup(row: ClientLike): ClientGroupKey {
   if (row.waiting_on_me) return "mine";
-  if (row.stage === "Договор подписан") return "active";
+  if (row.stage === "Договор подписан" || row.stage === WITHOUT_AGREEMENT_STAGE) return "active";
   if (row.stage === "Клиент отказался") return "declined";
   if (row.stage === "Договор у клиента") return "theirs";
   return "mine";

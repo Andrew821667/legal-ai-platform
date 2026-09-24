@@ -981,6 +981,79 @@ def test_client_list_shows_only_those_with_intakes() -> None:
             db.close()
 
 
+def _seed_without_agreement(*, second_open: bool = False) -> dict:
+    """Клиент подписал NDA, юрист решил вести дело без договора."""
+    db = SessionLocal()
+    try:
+        lead = Lead(name="Рябова Алёна", contact="@ryabova", source=LeadSource.telegram_bot)
+        db.add(lead)
+        db.flush()
+        db.add(
+            NdaSignature(
+                lead_id=lead.id,
+                signer_full_name="Рябова Алёна",
+                document_version="v1",
+                document_hash="n" * 64,
+            )
+        )
+        intake = LegalIntake(
+            lead_id=lead.id,
+            description="Разовая консультация по аренде.",
+            status=LegalIntakeStatus.accepted,
+            without_agreement=True,
+        )
+        db.add(intake)
+        if second_open:
+            db.add(
+                LegalIntake(
+                    lead_id=lead.id,
+                    description="Новый вопрос — теперь по трудовому договору.",
+                    status=LegalIntakeStatus.scope_preparation,
+                )
+            )
+        db.commit()
+        return {"lead_id": str(lead.id), "intake_id": str(intake.id)}
+    finally:
+        db.close()
+
+
+def test_work_without_agreement_has_its_own_stage() -> None:
+    """Решил вести без договора — нигде не зовём «готовить условия»."""
+    client = TestClient(app)
+    names = ["pytest.workspace.without_agreement"]
+    key = _key(names[0])
+    seeded = _seed_without_agreement()
+    try:
+        rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
+        row = next(item for item in rows if item["lead_id"] == seeded["lead_id"])
+        assert row["stage"] == "В работе без договора"
+
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        assert card["stage"] == "В работе без договора"
+
+        today = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
+        waiting = [i["intake_id"] for i in _section(today, "no_agreement")["items"]]
+        assert seeded["intake_id"] not in waiting
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
+def test_new_question_from_client_without_agreement_asks_for_terms_again() -> None:
+    """Постоянный клиент пришёл с новым делом — этап снова зовёт готовить условия."""
+    client = TestClient(app)
+    names = ["pytest.workspace.without_agreement.second"]
+    key = _key(names[0])
+    seeded = _seed_without_agreement(second_open=True)
+    try:
+        rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
+        row = next(item for item in rows if item["lead_id"] == seeded["lead_id"])
+        assert row["stage"] == "Готовим условия"
+    finally:
+        _cleanup(names, seeded["lead_id"])
+
+
 def test_search_finds_by_name() -> None:
     client = TestClient(app)
     names = ["pytest.workspace.search"]

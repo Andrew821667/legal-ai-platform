@@ -33,7 +33,7 @@ import {
 } from "./labels";
 import type { AgreementCard, ClientCard, IntakeCard } from "./types";
 import { clientContacts } from "@/lib/lawyer-contacts";
-import { matterStage } from "@/lib/lawyer-stage";
+import { matterStage, WITHOUT_AGREEMENT_STAGE } from "@/lib/lawyer-stage";
 
 /**
  * Карточку открывают, чтобы вспомнить всё о деле перед разговором.
@@ -111,6 +111,9 @@ export default function ClientCardView({
   const conflictAlert = worstConflict(card.intakes);
   const clientType = knownClientType(card.intakes);
   const contacts = clientContacts(card);
+  // Шкала «обращение → NDA → договор → подписан» у такого клиента звала бы
+  // к договору, который юрист сознательно решил не заключать.
+  const withoutAgreement = card.stage === WITHOUT_AGREEMENT_STAGE;
 
   return (
     <div className="space-y-4">
@@ -145,7 +148,7 @@ export default function ClientCardView({
           {card.source ? ` · ${label(SOURCE, card.source)}` : ""}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Pill tone={card.stage === "Договор подписан" ? "ok" : "mute"}>{card.stage}</Pill>
+          <Pill tone={card.stage === "Договор подписан" || withoutAgreement ? "ok" : "mute"}>{card.stage}</Pill>
           {clientType ? <Pill>{label(CLIENT_TYPE, clientType)}</Pill> : null}
           {conflictAlert ? (
             <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
@@ -154,7 +157,7 @@ export default function ClientCardView({
 
         {/* Шкала хода — одна сделка. У клиента с несколькими обращениями она
             стоит у каждого из них, а не в шапке: там показала бы только одно. */}
-        {card.intakes.length > 1 ? null : <Progress stage={card.stage} />}
+        {card.intakes.length > 1 || withoutAgreement ? null : <Progress stage={card.stage} />}
 
         {/* Самый юридически значимый статус на карточке — акцентным блоком,
             а не «проваленным» полем: от него зависит, можно ли принимать документы. */}
@@ -195,6 +198,7 @@ export default function ClientCardView({
 
       {loading ? <p className="text-lw-base text-lw-muted">Обновляю…</p> : null}
 
+      {withoutAgreement && card.agreements.length === 0 ? null : (
       <section>
         <SectionTitle count={card.agreements.length}>Договоры</SectionTitle>
         {card.agreements.length === 0 ? (
@@ -231,6 +235,7 @@ export default function ClientCardView({
           </div>
         )}
       </section>
+      )}
 
       <section>
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>
@@ -447,6 +452,9 @@ function Intake({
   const closed = item.status === "closed" || item.status === "declined";
   const canWorkWithoutAgreement =
     !item.without_agreement && agreements.length === 0 && ndaSigned && !conflictBlocks && !closed;
+  // Ведём без договора и договоров по делу нет — о договоре молчим, кроме
+  // одной кнопки: клиент может вернуться с отдельной задачей, где он нужен.
+  const withoutAgreement = item.without_agreement && agreements.length === 0;
   const [agreementAnyway, setAgreementAnyway] = useState(false);
   const workWithoutAgreement = async () => {
     await lawyerAction(`/api/lawyer/intakes/${item.intake_id}/without-agreement`, initData);
@@ -459,7 +467,7 @@ function Intake({
       <div className="mt-2 flex flex-wrap gap-2">
         {item.practice !== "legal" ? <Pill tone="mute">{label(PRACTICE, item.practice)}</Pill> : null}
         <Pill>{label(INTAKE_STATUS, item.status)}</Pill>
-        {item.without_agreement ? <Pill tone="mute">Без договора</Pill> : null}
+        {withoutAgreement ? <Pill tone="mute">Без договора</Pill> : null}
         {/* У инженерного обращения проверка конфликта — пометка, а не условие;
             непроверенную не показываем, чтобы не читалась как преграда. */}
         {gated || item.conflict_status !== "unchecked" ? (
@@ -474,7 +482,7 @@ function Intake({
         {item.region ? <span>{item.region}</span> : null}
       </div>
 
-      {ownProgress ? <Progress stage={matterStage(agreements, ndaSigned)} /> : null}
+      {ownProgress && !withoutAgreement ? <Progress stage={matterStage(agreements, ndaSigned)} /> : null}
 
       {item.outreach_blocked_reason ? (
         <p className="mt-2 text-lw-sm text-lw-warning">
@@ -549,17 +557,10 @@ function Intake({
         </div>
       ) : null}
 
-      {signed ? null : item.without_agreement && !agreementAnyway ? (
-        <p className="mt-3 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-ink">
-          Ведётся без договора.{" "}
-          <button
-            type="button"
-            onClick={() => setAgreementAnyway(true)}
-            className="text-lw-muted underline underline-offset-2 hover:text-lw-primary"
-          >
-            Всё же составить договор
-          </button>
-        </p>
+      {signed ? null : withoutAgreement && !agreementAnyway ? (
+        <button type="button" onClick={() => setAgreementAnyway(true)} className="lw-btn-quiet mt-3 w-full">
+          Заключить договор
+        </button>
       ) : blocker ? (
         <p className="mt-3 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-ink">{blocker}</p>
       ) : conflictBlocks ? null : (
@@ -567,6 +568,7 @@ function Intake({
           intakeId={item.intake_id}
           initData={initData}
           again={openAgreement}
+          startOpen={agreementAnyway}
           onCreated={onChanged}
         />
       )}
