@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api import telegram_delivery
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
@@ -48,6 +49,7 @@ from core_api.models import (
     ServiceAgreementStatus,
     SpecialConsultationOrder,
     SpecialConsultationPayment,
+    TelegramDelivery,
     WorkAct,
 )
 
@@ -332,6 +334,25 @@ def today(
         .order_by(LegalIntake.deadline_at)
     ).all()
 
+    # 8. Не ушло в Telegram: не ушло совсем или повтор затянулся. Раньше такие
+    #    сбои оседали в логе, и о них никто не знал.
+    undelivered = db.execute(
+        select(TelegramDelivery, Lead)
+        .outerjoin(Lead, Lead.id == TelegramDelivery.lead_id)
+        .where(TelegramDelivery.dismissed_at.is_(None))
+        .where(
+            or_(
+                TelegramDelivery.status == "failed",
+                and_(
+                    TelegramDelivery.status == "pending",
+                    TelegramDelivery.created_at < now - telegram_delivery.STUCK_AFTER,
+                ),
+            )
+        )
+        .order_by(TelegramDelivery.created_at.desc())
+        .limit(50)
+    ).all()
+
     return {
         "generated_at": _iso(now),
         "sections": [
@@ -465,7 +486,33 @@ def today(
                     for i, lead in no_agreement
                 ],
             },
+            {
+                "key": "undelivered",
+                "title": "Не доставлено в Telegram",
+                "hint": "Уведомления повторяются сами; договор, ответ и акт отправьте из карточки заново.",
+                "items": [
+                    {
+                        "delivery_id": str(d.id),
+                        "lead_id": str(d.lead_id) if d.lead_id else None,
+                        "client": _lead_title(lead) if lead else "Вам — уведомление",
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "kind": d.kind,
+                        "kind_label": telegram_delivery.KIND_LABELS.get(d.kind, d.kind),
+                        "text": d.text[:200],
+                        "delivery_status": d.status,
+                        "retryable": d.retryable,
+                        "attempts": d.attempts,
+                        "last_error": d.last_error,
+                        "created_at": _iso(d.created_at),
+                        "days_waiting": _days_since(d.created_at),
+                    }
+                    for d, lead in undelivered
+                ],
+            },
         ],
+        # Связь ядра с Telegram — для плашки над рабочим местом. None, пока
+        # проверки не было ни разу.
+        "telegram": telegram_delivery.health_snapshot(db),
     }
 
 
@@ -1494,3 +1541,41 @@ def purge_client(
     )
     db.commit()
     return {"lead_id": str(lead_id), "deleted": footprint}
+
+
+# --- Не доставлено в Telegram -----------------------------------------------
+
+
+@router.post("/deliveries/{delivery_id}/retry")
+def retry_delivery(
+    delivery_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+) -> dict:
+    """Повторить уведомление сейчас. Договор, ответ и акт так не повторяются:
+    их отправляют из карточки, чтобы клиент не получил дубль."""
+    _ = identity
+    status = telegram_delivery.retry_now(delivery_id)
+    if status == "missing":
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if status == "not_retryable":
+        raise HTTPException(status_code=409, detail="Send it again from the client card")
+    return {"delivery_id": str(delivery_id), "status": status}
+
+
+@router.post("/deliveries/{delivery_id}/dismiss")
+def dismiss_delivery(
+    delivery_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Убрать из «Не доставлено»: отправка потеряла смысл."""
+    _ = identity
+    row = db.get(TelegramDelivery, delivery_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    row.dismissed_at = row.dismissed_at or datetime.now(timezone.utc)
+    if row.status == "pending":
+        row.status = "failed"
+        row.next_attempt_at = None
+    db.commit()
+    return {"delivery_id": str(delivery_id), "dismissed": True}

@@ -25,6 +25,7 @@ from core_api.client_proposal import (
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
+from core_api import telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     TEMPLATE_KIND_BY_PRACTICE,
@@ -1060,11 +1061,15 @@ def deliver_agreement(
 
     payload = _payload(item)
     try:
-        _post_telegram_message(
-            token,
-            str(item.client_telegram_user_id),
-            build_proposal_text(payload),
+        telegram_delivery.send(
+            kind="agreement",
+            token=token,
+            chat_id=item.client_telegram_user_id,
+            text=build_proposal_text(payload),
             reply_markup=build_proposal_markup(str(item.id), supplement=_is_supplement(item)),
+            lead_id=item.lead_id,
+            agreement_id=item.id,
+            transport=_post_telegram_message,
         )
     except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
         raise HTTPException(
@@ -1105,10 +1110,14 @@ def reply_and_deliver(
         raise HTTPException(status_code=500, detail="Bot token is not configured")
 
     try:
-        _post_telegram_message(
-            token,
-            str(item.client_telegram_user_id),
-            build_reply_text(_payload(item), text),
+        telegram_delivery.send(
+            kind="agreement_reply",
+            token=token,
+            chat_id=item.client_telegram_user_id,
+            text=build_reply_text(_payload(item), text),
+            lead_id=item.lead_id,
+            agreement_id=item.id,
+            transport=_post_telegram_message,
         )
     except Exception as exc:  # noqa: BLE001
         # Не записываем ответ, который не дошёл: иначе в переписке он будет

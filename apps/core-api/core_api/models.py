@@ -639,6 +639,65 @@ class ClientNotice(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class TelegramDelivery(Base):
+    """Журнал отправок ядра в Telegram — чтобы сбой не был молчаливым.
+
+    Ядро месяцами слало договоры, акты и уведомления без прокси, и всё это
+    падало в лог, который никто не читал. Здесь у каждой отправки есть
+    исход: ушло, ждёт повтора или не ушло. Фоновые уведомления (retryable)
+    повторяются сами; договор, ответ клиенту и акт — нет: юрист видит ошибку
+    сразу, а повтор без него мог бы прислать клиенту дубль.
+    """
+
+    __tablename__ = "telegram_deliveries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    # lead_notice, intake_notice, agreement, agreement_reply, work_act
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    chat_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    reply_markup: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parse_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # pending — ждёт повтора, sent — ушло, failed — не ушло и само не уйдёт
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Юрист убрал из «Не доставлено»: отправка потеряла смысл.
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=True
+    )
+    agreement_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    act_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_telegram_deliveries_due", "status", "next_attempt_at"),
+        Index("ix_telegram_deliveries_lead", "lead_id"),
+    )
+
+
+class ServiceHealth(Base):
+    """Последняя проверка связи ядра с внешней службой (сейчас — Telegram)."""
+
+    __tablename__ = "service_health"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Когда о текущем сбое уже сообщили владельцу — чтобы не повторять.
+    alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class WorkActStatus(str, enum.Enum):
     draft = "draft"
     sent = "sent"

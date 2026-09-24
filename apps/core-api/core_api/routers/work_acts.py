@@ -18,6 +18,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
+from core_api import telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
@@ -256,12 +257,17 @@ def send_act(
         raise HTTPException(status_code=500, detail="Bot token is not configured")
 
     try:
-        sent = _post_telegram_message(
-            token,
-            str(agreement.client_telegram_user_id),
-            _build_act_text(item, agreement),
+        sent = telegram_delivery.send(
+            kind="work_act",
+            token=token,
+            chat_id=agreement.client_telegram_user_id,
+            text=_build_act_text(item, agreement),
             reply_markup=_act_markup(str(item.id)),
             parse_mode="HTML",
+            lead_id=item.lead_id,
+            agreement_id=agreement.id,
+            act_id=item.id,
+            transport=_post_telegram_message,
         )
     except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
         raise HTTPException(

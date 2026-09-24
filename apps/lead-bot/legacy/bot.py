@@ -977,6 +977,21 @@ async def client_notice_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.warning("Client notice delivery failed: %s", type(error).__name__)
 
 
+async def telegram_tick_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Раз в пару минут просит ядро проверить свою связь с Telegram и досылать
+    неушедшие уведомления. Своего планировщика у ядра нет; о пропавшей связи
+    ядро сообщит владельцу через очередь уведомлений, которую доставляет бот —
+    у него своя дорога в Telegram."""
+    try:
+        result = await asyncio.to_thread(admin_interface.admin_interface.telegram_tick)
+    except Exception as error:
+        logger.warning("Telegram tick failed: %s", type(error).__name__)
+        return
+    health = (result or {}).get("health") or {}
+    if health.get("ok") is False:
+        logger.warning("Core cannot reach Telegram since %s", health.get("failing_since"))
+
+
 async def intake_outreach_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Пишет клиенту от лица команды через несколько минут после обращения.
 
@@ -1277,6 +1292,14 @@ def build_application() -> Application:
             interval=config.CLIENT_NOTICE_CHECK_INTERVAL_SECONDS,
             first=10,
             name="client_notices",
+            job_kwargs={"coalesce": True, "max_instances": 1, "misfire_grace_time": 120},
+        )
+
+        application.job_queue.run_repeating(
+            telegram_tick_job,
+            interval=config.TELEGRAM_TICK_INTERVAL_SECONDS,
+            first=45,
+            name="telegram_tick",
             job_kwargs={"coalesce": True, "max_instances": 1, "misfire_grace_time": 120},
         )
 
