@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -41,8 +43,17 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def _next_act_number() -> str:
-    return f"AC-{_now():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+def _next_act_number(kind: str = "act") -> str:
+    prefix = "PP" if kind == "advance" else "AC"
+    return f"{prefix}-{_now():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _is_advance(item: WorkAct) -> bool:
+    return (item.kind or "act") == "advance"
+
+
+def _title(item: WorkAct) -> str:
+    return "Счёт на предоплату" if _is_advance(item) else "Акт выполненных работ"
 
 
 def _client_bot_token() -> str:
@@ -76,6 +87,7 @@ def _payload(item: WorkAct) -> dict:
         "act_number": item.act_number,
         "agreement_id": str(item.agreement_id),
         "lead_id": str(item.lead_id) if item.lead_id else None,
+        "kind": item.kind or "act",
         "status": item.status.value,
         "description_text": item.description_text,
         "amount_minor": item.amount_minor,
@@ -120,7 +132,9 @@ def _audit(
 
 class ActCreate(BaseModel):
     agreement_id: uuid.UUID
-    description_text: str = Field(min_length=2, max_length=4000)
+    # advance — счёт на предоплату: без приёмки работы, описание можно не писать.
+    kind: Literal["act", "advance"] = "act"
+    description_text: str = Field(default="", max_length=4000)
     amount_minor: int = Field(ge=0, le=10**13)
     prepared_by_telegram_user_id: int | None = Field(default=None, gt=0)
 
@@ -142,16 +156,20 @@ def create_act(
     if agreement.parent_agreement_id is not None:
         raise HTTPException(status_code=409, detail="Issue the act under the main agreement")
 
+    description = payload.description_text.strip()
+    if payload.kind == "advance" and not description:
+        description = f"Предоплата по договору № {agreement.agreement_number}"
     item = WorkAct(
-        act_number=_next_act_number(),
+        act_number=_next_act_number(payload.kind),
+        kind=payload.kind,
         agreement_id=agreement.id,
         lead_id=agreement.lead_id,
-        description_text=payload.description_text.strip(),
+        description_text=description,
         amount_minor=payload.amount_minor,
         currency=agreement.currency,
         prepared_by_telegram_user_id=payload.prepared_by_telegram_user_id,
     )
-    if not item.description_text:
+    if len(item.description_text) < 2:
         raise HTTPException(status_code=422, detail="Describe completed work")
     _freeze_document(item, agreement)
     db.add(item)
@@ -184,6 +202,19 @@ def list_by_agreement(
 def _freeze_document(item: WorkAct, agreement: ServiceAgreement) -> None:
     if item.document_hash:
         return
+    if _is_advance(item):
+        item.document_version = "2026-09-25.advance.1"
+        item.document_text = "\n".join([
+            f"СЧЁТ НА ПРЕДОПЛАТУ № {item.act_number}",
+            f"К договору № {agreement.agreement_number}",
+            f"Исполнитель: {(agreement.operator_snapshot or {}).get('name') or 'Исполнитель по договору'}",
+            f"Заказчик: {(agreement.client_snapshot or {}).get('full_name') or 'Заказчик по договору'}",
+            "", item.description_text, "",
+            f"Сумма предоплаты: {_format_rub(item.amount_minor)}",
+            "Предоплата засчитывается в оплату работ по договору.",
+        ])
+        item.document_hash = hashlib.sha256(item.document_text.encode("utf-8")).hexdigest()
+        return
     item.document_version = "2026-09-13.1"
     item.document_text = "\n".join([
         f"АКТ ВЫПОЛНЕННЫХ РАБОТ № {item.act_number}",
@@ -211,7 +242,7 @@ def payment_details() -> dict:
 
 def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
     lines = [
-        f"Акт выполненных работ № {html.escape(item.act_number)}",
+        f"{_title(item)} № {html.escape(item.act_number)}",
         f"К договору № {html.escape(agreement.agreement_number)}",
         "",
         html.escape(item.description_text[:700]) + ("…" if len(item.description_text) > 700 else ""),
@@ -227,11 +258,14 @@ def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
         # Реквизиты в <code> — Telegram копирует такой текст по тапу, без
         # выделения вручную.
         lines += ["", "Оплата:"] + details
+    if _is_advance(item):
+        return "\n".join(lines + ["", "После оплаты нажмите «Я оплатил(а)» — юрист сверит поступление."])
     return "\n".join(lines + ["", "Откройте полный акт, чтобы принять работу или оставить замечания."])
 
 
-def _act_markup(act_id: str) -> str:
-    rows = [[{"text": "Открыть акт", "callback_data": f"act_c:open:{act_id}"}]]
+def _act_markup(act_id: str, *, advance: bool = False) -> str:
+    # У аванса нечего принимать — только оплатить.
+    rows = [] if advance else [[{"text": "Открыть акт", "callback_data": f"act_c:open:{act_id}"}]]
     # Реквизиты счёта заданы — QR, который банк заполнит сам, вместо ручного
     # набора суммы при переводе по телефону.
     if payment_qr.requisites() is not None:
@@ -270,7 +304,7 @@ def send_act(
             token=token,
             chat_id=agreement.client_telegram_user_id,
             text=_build_act_text(item, agreement),
-            reply_markup=_act_markup(str(item.id)),
+            reply_markup=_act_markup(str(item.id), advance=_is_advance(item)),
             parse_mode="HTML",
             lead_id=item.lead_id,
             agreement_id=agreement.id,
@@ -299,7 +333,7 @@ _REMIND_EVERY_HOURS = 24
 
 def _build_reminder_text(item: WorkAct, agreement: ServiceAgreement) -> str:
     lines = [
-        f"Напоминаем об оплате по акту № {html.escape(item.act_number)}",
+        f"Напоминаем об оплате: {'счёт на предоплату' if _is_advance(item) else 'акт'} № {html.escape(item.act_number)}",
         f"к договору № {html.escape(agreement.agreement_number)}.",
         "",
         f"К оплате: {_format_rub(item.amount_minor)}",
@@ -345,7 +379,7 @@ def remind_payment(
             token=token,
             chat_id=agreement.client_telegram_user_id,
             text=_build_reminder_text(item, agreement),
-            reply_markup=_act_markup(str(item.id)),
+            reply_markup=_act_markup(str(item.id), advance=_is_advance(item)),
             parse_mode="HTML",
             lead_id=item.lead_id,
             agreement_id=agreement.id,
@@ -472,7 +506,8 @@ def record_receipt(
                 token=token,
                 chat_id=agreement.client_telegram_user_id,
                 text=(
-                    f"Чек по акту № {item.act_number} на {_format_rub(item.amount_minor)}:\n{ref}\n\n"
+                    f"Чек по {'счёту на предоплату' if _is_advance(item) else 'акту'} № {item.act_number} "
+                    f"на {_format_rub(item.amount_minor)}:\n{ref}\n\n"
                     "Спасибо за оплату."
                 ),
                 lead_id=item.lead_id,
@@ -541,7 +576,9 @@ def act_payment_qr(
     if item.cancelled_at or item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
         raise HTTPException(status_code=409, detail="Act is not awaiting payment")
     agreement = db.get(ServiceAgreement, item.agreement_id)
-    purpose = f"Оплата по акту № {item.act_number}"
+    purpose = (
+        f"Предоплата по счёту № {item.act_number}" if _is_advance(item) else f"Оплата по акту № {item.act_number}"
+    )
     if agreement is not None:
         purpose += f" к договору № {agreement.agreement_number}"
     data = payment_qr.payload(item.amount_minor, purpose + ". НДС не облагается")
@@ -608,6 +645,8 @@ def client_action(
             return _payload(item)
         item.viewed_at = _now()
     elif action in ("accept", "object"):
+        if _is_advance(item):
+            raise HTTPException(status_code=409, detail="An advance invoice has no acceptance")
         if not item.viewed_at:
             raise HTTPException(status_code=409, detail="Read the act first")
         if item.accepted_at:

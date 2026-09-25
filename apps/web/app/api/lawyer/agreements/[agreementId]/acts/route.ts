@@ -31,9 +31,12 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as {
     description_text?: unknown;
     amount?: unknown;
+    kind?: unknown;
   };
+  // Счёт на предоплату — без описания работ: ядро подставит «Предоплата по договору № …».
+  const kind = body.kind === "advance" ? "advance" : "act";
   const description = String(body.description_text ?? "").trim();
-  if (description.length < 2) {
+  if (kind === "act" && description.length < 2) {
     return Response.json({ detail: "Опишите, что сделано." }, { status: 400 });
   }
   const amount = parseRublesInput(body.amount);
@@ -46,6 +49,7 @@ export async function POST(
 
   return corePost("/api/v1/work-acts", {
     agreement_id: agreementId,
+    kind,
     description_text: description,
     amount_minor: amount.minor,
     prepared_by_telegram_user_id: auth.telegramUserId,

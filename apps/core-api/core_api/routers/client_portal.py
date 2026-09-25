@@ -263,7 +263,7 @@ def summary(
         } for row in agreements],
         "acts": [{
             "id": str(row.id), "agreement_id": str(row.agreement_id),
-            "number": row.act_number, "status": row.status.value,
+            "number": row.act_number, "status": row.status.value, "kind": row.kind or "act",
             "description": row.description_text, "amount_minor": row.amount_minor,
             "currency": row.currency, "hash": row.document_hash,
             "version": row.document_version, "created_at": _iso(row.created_at),

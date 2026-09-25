@@ -119,7 +119,9 @@ function ActRow({
   return (
     <div className="rounded-xl bg-lw-cell p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-lw-base font-medium text-lw-ink">№ {act.act_number}</span>
+        <span className="text-lw-base font-medium text-lw-ink">
+          {act.kind === "advance" ? "Счёт на предоплату" : "Акт"} № {act.act_number}
+        </span>
         <span className="tabular-nums text-lw-base font-medium text-lw-ink">
           {formatRub(act.amount_minor)}
         </span>
@@ -190,14 +192,18 @@ function NewActForm({
   agreementId,
   initData,
   defaults,
+  paidAdvanceMinor,
   onCreated,
 }: {
   agreementId: string;
   initData: string;
   defaults: { description: string; amountMinor: number | null };
+  /** Сколько уже пришло авансом — для подсказки в итоговом акте. */
+  paidAdvanceMinor: number;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"act" | "advance">("act");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -205,29 +211,49 @@ function NewActForm({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          const draft = readDraft<{ description: string; amount: string }>(draftKey(agreementId), {
-            description: defaults.description,
-            amount: defaults.amountMinor === null ? "" : String(defaults.amountMinor / 100),
-          });
-          setDescription(draft.description);
-          setAmount(draft.amount);
-          setOpen(true);
-        }}
-        className="lw-btn-quiet mt-3 inline-flex"
-      >
-        Выставить акт
-      </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const draft = readDraft<{ description: string; amount: string }>(draftKey(agreementId), {
+              description: defaults.description,
+              amount:
+                defaults.amountMinor === null
+                  ? ""
+                  : String(Math.max(defaults.amountMinor - paidAdvanceMinor, 0) / 100),
+            });
+            setKind("act");
+            setDescription(draft.description);
+            setAmount(draft.amount);
+            setOpen(true);
+          }}
+          className="lw-btn-quiet inline-flex"
+        >
+          Выставить акт
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setKind("advance");
+            setDescription("");
+            setAmount("");
+            setOpen(true);
+          }}
+          className="lw-btn-quiet inline-flex"
+        >
+          Счёт на аванс
+        </button>
+      </div>
     );
   }
 
   const update = (nextDescription: string, nextAmount: string) => {
     setDescription(nextDescription);
     setAmount(nextAmount);
-    writeDraft(draftKey(agreementId), { description: nextDescription, amount: nextAmount });
+    // Черновик — только у акта: аванс короткий, его незачем хранить.
+    if (kind === "act") writeDraft(draftKey(agreementId), { description: nextDescription, amount: nextAmount });
   };
+  const advance = kind === "advance";
 
   return (
     <form
@@ -238,10 +264,11 @@ function NewActForm({
         setError(null);
         try {
           await lawyerAction(`/api/lawyer/agreements/${agreementId}/acts`, initData, {
+            kind,
             description_text: description,
             amount,
           });
-          dropDraft(draftKey(agreementId));
+          if (!advance) dropDraft(draftKey(agreementId));
           setOpen(false);
           setDescription("");
           setAmount("");
@@ -253,19 +280,33 @@ function NewActForm({
         }
       }}
     >
-      <p className="text-lw-base font-medium text-lw-ink">Новый акт</p>
+      <p className="text-lw-base font-medium text-lw-ink">{advance ? "Счёт на предоплату" : "Новый акт"}</p>
+      {advance ? (
+        <p className="text-lw-sm text-lw-muted">
+          Клиент получит счёт с QR и кнопкой «Я оплатил(а)» — без приёмки работы. Предоплата засчитывается в
+          оплату по договору.
+        </p>
+      ) : paidAdvanceMinor > 0 ? (
+        <p className="rounded-lg bg-lw-warning-soft p-2 text-lw-sm text-lw-warning">
+          Уже оплачено авансом: {formatRub(paidAdvanceMinor)}. В акте укажите остаток к оплате.
+        </p>
+      ) : null}
       <label className="block">
-        <span className="text-lw-sm text-lw-muted">Что сделано</span>
+        <span className="text-lw-sm text-lw-muted">{advance ? "За что (можно не заполнять)" : "Что сделано"}</span>
         <textarea
           value={description}
           onChange={(event) => update(event.target.value, amount)}
-          rows={4}
-          placeholder="Подготовлено и подано заявление, представительство на заседании…"
+          rows={advance ? 2 : 4}
+          placeholder={
+            advance
+              ? "Предоплата по договору"
+              : "Подготовлено и подано заявление, представительство на заседании…"
+          }
           className="lw-input mt-1"
         />
       </label>
       <label className="block">
-        <span className="text-lw-sm text-lw-muted">Сумма к оплате, ₽</span>
+        <span className="text-lw-sm text-lw-muted">{advance ? "Сумма предоплаты, ₽" : "Сумма к оплате, ₽"}</span>
         <input
           inputMode="decimal"
           value={amount}
@@ -277,7 +318,7 @@ function NewActForm({
       {error ? <p className="text-lw-sm text-lw-danger">{error}</p> : null}
       <div className="flex gap-2">
         <button type="submit" disabled={busy} className="lw-btn">
-          {busy ? "Составляю…" : "Составить"}
+          {busy ? "Составляю…" : advance ? "Составить счёт" : "Составить"}
         </button>
         <button
           type="button"
@@ -321,6 +362,9 @@ export default function WorkActBox({
           description: agreement.scope_text || agreement.subject || "",
           amountMinor: agreement.amount_minor,
         }}
+        paidAdvanceMinor={agreement.acts
+          .filter((a) => a.kind === "advance" && a.status === "paid")
+          .reduce((sum, a) => sum + a.amount_minor, 0)}
         onCreated={onChanged}
       />
     </div>

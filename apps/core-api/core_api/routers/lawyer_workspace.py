@@ -899,6 +899,7 @@ def client_card(
                 {
                     "act_id": str(act.id),
                     "act_number": act.act_number,
+                    "kind": act.kind or "act",
                     "status": act.status.value,
                     "description_text": act.description_text,
                     "amount_minor": act.amount_minor,
