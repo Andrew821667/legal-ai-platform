@@ -27,6 +27,64 @@ function actStatusTone(status: string): Tone {
   return "mute";
 }
 
+/**
+ * Чек из «Мой налог» по оплаченному акту.
+ *
+ * Самозанятый обязан передать покупателю чек при расчёте — в том числе
+ * ссылкой. Система знала об оплате, но не о чеке, и держалось всё на памяти.
+ * Ссылку из приложения «Мой налог» вставляют сюда — и отправляют клиенту.
+ */
+function ReceiptBox({ act, initData, onChanged }: { act: WorkAct; initData: string; onChanged: () => void }) {
+  const [ref, setRef] = useState("");
+  const save = (sendToClient: boolean) => async () => {
+    await lawyerAction(`/api/lawyer/acts/${act.act_id}/receipt`, initData, {
+      ref: ref.trim() || null,
+      send_to_client: sendToClient,
+    });
+    onChanged();
+  };
+
+  if (act.receipt_at) {
+    const link = act.receipt_ref && /^https:\/\//i.test(act.receipt_ref) ? act.receipt_ref : null;
+    return (
+      <p className="mt-2 text-lw-sm text-lw-muted">
+        Чек выдан {shortDate(act.receipt_at)}
+        {link ? (
+          <>
+            {" · "}
+            <a href={link} target="_blank" rel="noreferrer" className="text-lw-primary underline">
+              открыть чек
+            </a>
+          </>
+        ) : act.receipt_ref ? (
+          ` · № ${act.receipt_ref}`
+        ) : null}
+        {act.receipt_sent_at ? ` · отправлен клиенту ${shortDate(act.receipt_sent_at)}` : null}
+      </p>
+    );
+  }
+
+  const isLink = /^https:\/\//i.test(ref.trim());
+  return (
+    <div className="mt-2 rounded-lg bg-lw-warning-soft p-2">
+      <p className="text-lw-sm text-lw-warning">Выдайте чек в «Мой налог» и вставьте ссылку на него.</p>
+      <input
+        value={ref}
+        onChange={(event) => setRef(event.target.value)}
+        placeholder="https://lknpd.nalog.ru/… или номер чека"
+        className="lw-input mt-2 w-full"
+        maxLength={500}
+      />
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {isLink ? (
+          <ActionButton label="Сохранить и отправить клиенту" busy="Отправляю…" done="Чек отправлен" onRun={save(true)} />
+        ) : null}
+        <ActionButton label={ref.trim() ? "Сохранить" : "Чек выдан, без ссылки"} busy="Сохраняю…" done="Сохранено" tone="quiet" onRun={save(false)} />
+      </div>
+    </div>
+  );
+}
+
 function ActRow({
   act,
   initData,
@@ -84,6 +142,7 @@ function ActRow({
           )}
         </div>
       ) : null}
+      {act.status === "paid" ? <ReceiptBox act={act} initData={initData} onChanged={onChanged} /> : null}
       {act.status === "sent" || act.status === "claimed_paid" ? (
         <div className="mt-2">
           <ActionButton
