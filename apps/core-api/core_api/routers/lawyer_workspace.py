@@ -259,6 +259,21 @@ def today(
         .order_by(ServiceAgreement.sent_at)
     ).all()
 
+    # 4а. Бот передал клиента юристу, а обращения нет. Разговор шёл в
+    #     консультанте бота и до анкеты не дошёл — такой клиент не попадал ни
+    #     в один раздел задач, и из четырёх таких на проде юрист не узнал ни
+    #     об одном. Договора тоже нет — иначе он уже в других разделах.
+    has_intake = select(LegalIntake.lead_id).where(LegalIntake.lead_id.is_not(None))
+    has_agreement = select(ServiceAgreement.lead_id).where(ServiceAgreement.lead_id.is_not(None))
+    handed_off = db.execute(
+        select(Lead)
+        .where(Lead.archived_at.is_(None))
+        .where(Lead.conversation_stage == "handoff")
+        .where(Lead.id.not_in(has_intake))
+        .where(Lead.id.not_in(has_agreement))
+        .order_by(Lead.created_at)
+    ).scalars().all()
+
     # 5. Обращение без договора: диалог прошёл, а условия не предложены.
     with_agreement = select(ServiceAgreement.intake_id).where(
         ServiceAgreement.intake_id.is_not(None)
@@ -391,6 +406,23 @@ def today(
                         "days_waiting": _days_since(i.created_at),
                     }
                     for i, lead in unreachable
+                ],
+            },
+            {
+                "key": "bot_handoff",
+                "title": "Бот передал вам клиента",
+                "hint": "Разговор с ботом дошёл до передачи юристу, а обращения нет. Напишите клиенту или уберите в архив.",
+                "items": [
+                    {
+                        "lead_id": str(lead.id),
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id),
+                        "contact": lead.contact,
+                        "need": (lead.pain_point or lead.specific_need or "")[:160] or None,
+                        "created_at": _iso(lead.created_at),
+                        "days_waiting": _days_since(lead.last_message_at or lead.created_at),
+                    }
+                    for lead in handed_off
                 ],
             },
             {

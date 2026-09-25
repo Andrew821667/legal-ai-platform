@@ -10,6 +10,8 @@ export type TodayItem = {
   question?: string;
   contact?: string | null;
   reason?: string | null;
+  /** Что клиент успел рассказать боту (раздел «Бот передал вам клиента»). */
+  need?: string | null;
   status?: string;
   legal_area?: string;
   practice?: string;

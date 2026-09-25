@@ -240,6 +240,10 @@ def leads_summary(
     )
 
 
+# Уведомлять о лиде, который затих не позже этого срока назад.
+_NOTIFY_MAX_AGE_DAYS = 30
+
+
 @router.get("/notifications/pending", response_model=list[LeadOut])
 def pending_lead_notifications(
     idle_minutes: int = 5,
@@ -249,15 +253,25 @@ def pending_lead_notifications(
     db: Session = Depends(get_db),
 ) -> list[Lead]:
     _ = identity
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(1, min(idle_minutes, 1440)))
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=max(1, min(idle_minutes, 1440)))
+    # Когда клиент затих. Раньше — только по last_message_at, а бот ставит его
+    # не на каждом пути: клиент, дошедший до «передачи юристу» одними кнопками,
+    # в очередь не попадал вовсе — так юрист не узнал о четырёх клиентах.
+    # last_activity_at есть всегда: его обновляет каждая запись бота.
+    activity = func.coalesce(Lead.last_message_at, Lead.last_activity_at)
     ready = select(Lead).where(
-        Lead.last_message_at.is_not(None),
-        Lead.last_message_at <= cutoff,
+        activity <= cutoff,
+        # Старше месяца — уже не «новый лид»: такие видны в «Сегодня», а не
+        # приходят пачкой уведомлений о клиентах трёхмесячной давности.
+        activity >= now - timedelta(days=_NOTIFY_MAX_AGE_DAYS),
         Lead.notification_sent.is_(False),
         Lead.archived_at.is_(None),
         real_client(Lead.telegram_user_id),
         (
             Lead.temperature.in_(("warm", "hot"))
+            # Бот сам решил передать клиента юристу — это и есть повод.
+            | (Lead.conversation_stage == "handoff")
             | (
                 Lead.name.is_not(None)
                 & (Lead.email.is_not(None) | Lead.phone.is_not(None) | Lead.contact.is_not(None))
@@ -267,7 +281,7 @@ def pending_lead_notifications(
     )
     if source_filter is not None:
         ready = ready.where(Lead.source == source_filter)
-    return list(db.scalars(ready.order_by(Lead.last_message_at).limit(max(1, min(limit, 100)))))
+    return list(db.scalars(ready.order_by(activity).limit(max(1, min(limit, 100)))))
 
 
 @router.post("/{lead_id}/notification-sent", response_model=LeadOut)
