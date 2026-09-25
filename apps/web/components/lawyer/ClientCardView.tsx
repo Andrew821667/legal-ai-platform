@@ -751,6 +751,7 @@ function Intake({
           initData={initData}
           again={openAgreement}
           startOpen={agreementAnyway}
+          practice={item.practice}
           onCreated={onChanged}
         />
       )}
