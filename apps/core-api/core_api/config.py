@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     # «просрочено» не отличить от «только что выставлено».
     act_payment_days: int = 7
     lawyer_payment_recipient: str | None = None
+    # Реквизиты счёта для платёжного QR (ГОСТ Р 56042, «ST00012»): его
+    # сканирует приложение любого крупного банка, и реквизиты, сумма и
+    # назначение заполняются сами. Официальный QR СБП самозанятому без
+    # торгового договора с банком недоступен — это стандартная замена. Пока
+    # счёт не задан, QR не показывается и остаётся перевод по телефону.
+    lawyer_payment_account: str | None = None
+    lawyer_payment_bic: str | None = None
+    lawyer_payment_corr_account: str | None = None
+    lawyer_payment_inn: str | None = None
     lead_notify_chat_id: str | None = None
     lead_notify_web_base_url: str = "https://ai-verdict.ru"
     api_key_cache_ttl_seconds: int = 60

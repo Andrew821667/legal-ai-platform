@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,7 +19,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api import telegram_delivery
+from core_api import payment_qr, telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
@@ -195,11 +196,14 @@ def _freeze_document(item: WorkAct, agreement: ServiceAgreement) -> None:
 
 def payment_details() -> dict:
     settings = get_settings()
+    qr = payment_qr.requisites() is not None
     phone = settings.lawyer_payment_sbp_phone
-    if not phone:
+    if not phone and not qr:
         return {}
     return {"phone": phone, "bank": settings.lawyer_payment_bank,
-            "recipient": settings.lawyer_payment_recipient}
+            "recipient": settings.lawyer_payment_recipient,
+            # Есть реквизиты счёта — у акта есть платёжный QR.
+            "qr": qr}
 
 
 def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
@@ -224,13 +228,13 @@ def _build_act_text(item: WorkAct, agreement: ServiceAgreement) -> str:
 
 
 def _act_markup(act_id: str) -> str:
-    return json.dumps(
-        {"inline_keyboard": [
-            [{"text": "Открыть акт", "callback_data": f"act_c:open:{act_id}"}],
-            [{"text": "Я оплатил(а)", "callback_data": f"act_c:claim:{act_id}"}],
-        ]},
-        ensure_ascii=False,
-    )
+    rows = [[{"text": "Открыть акт", "callback_data": f"act_c:open:{act_id}"}]]
+    # Реквизиты счёта заданы — QR, который банк заполнит сам, вместо ручного
+    # набора суммы при переводе по телефону.
+    if payment_qr.requisites() is not None:
+        rows.append([{"text": "QR для оплаты", "callback_data": f"act_c:qr:{act_id}"}])
+    rows.append([{"text": "Я оплатил(а)", "callback_data": f"act_c:claim:{act_id}"}])
+    return json.dumps({"inline_keyboard": rows}, ensure_ascii=False)
 
 
 @router.post("/{act_id}/send")
@@ -447,6 +451,39 @@ def act_document(
     item = _get(db, act_id)
     _assert_client(db, item, telegram_user_id)
     return {**_payload(item), "text": item.document_text, "payment": payment_details()}
+
+
+@router.get("/{act_id}/payment-qr", response_model=None)
+def act_payment_qr(
+    act_id: uuid.UUID,
+    telegram_user_id: int | None = Query(default=None, gt=0),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Платёжный QR акта (ГОСТ Р 56042): реквизиты, сумма и назначение для банка.
+
+    Клиенту — только свой акт и только пока он ждёт оплаты: QR на оплаченный
+    или отозванный акт привёл бы к лишнему переводу.
+    """
+    item = _get(db, act_id)
+    if identity.scope == Scope.bot:
+        if telegram_user_id is None:
+            raise HTTPException(status_code=400, detail="telegram_user_id is required")
+        _assert_client(db, item, telegram_user_id)
+    if item.cancelled_at or item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
+        raise HTTPException(status_code=409, detail="Act is not awaiting payment")
+    agreement = db.get(ServiceAgreement, item.agreement_id)
+    purpose = f"Оплата по акту № {item.act_number}"
+    if agreement is not None:
+        purpose += f" к договору № {agreement.agreement_number}"
+    data = payment_qr.payload(item.amount_minor, purpose + ". НДС не облагается")
+    if data is None:
+        raise HTTPException(status_code=404, detail="Payment QR is not configured")
+    return Response(
+        content=payment_qr.png(data),
+        media_type="image/png",
+        headers={"Content-Disposition": f'inline; filename="qr-{item.act_number}.png"', "Cache-Control": "no-store"},
+    )
 
 
 @router.post("/{act_id}/client/{action}")

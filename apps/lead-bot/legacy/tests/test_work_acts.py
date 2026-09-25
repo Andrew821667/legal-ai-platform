@@ -356,3 +356,33 @@ async def test_client_claim_failure_is_generic(monkeypatch, replies) -> None:
 
     assert any("Не получилось отметить оплату" in text for text in replies)
     assert bot.messages == []
+
+
+@pytest.mark.anyio
+async def test_qr_button_sends_the_payment_qr(monkeypatch) -> None:
+    """«QR для оплаты» — картинка с реквизитами и кнопкой «Я оплатил(а)»."""
+    from types import SimpleNamespace
+
+    from handlers import work_acts as flow
+
+    photos: list[dict] = []
+
+    class _Bot:
+        async def send_photo(self, **kwargs):
+            photos.append(kwargs)
+
+    async def _answer(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(flow.utils, "safe_answer_callback", _answer)
+    monkeypatch.setattr(
+        flow.admin_interface.admin_interface, "get_work_act_payment_qr", lambda *a, **k: b"\x89PNG qr"
+    )
+    query = SimpleNamespace(
+        data="act_c:qr:act-1", from_user=SimpleNamespace(id=77), message=SimpleNamespace(chat_id=77), id="cb"
+    )
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), SimpleNamespace(bot=_Bot()))
+
+    assert photos[0]["chat_id"] == 77
+    assert photos[0]["photo"].getvalue().startswith(b"\x89PNG")
+    assert "act_c:claim:act-1" in str(photos[0]["reply_markup"].to_dict())

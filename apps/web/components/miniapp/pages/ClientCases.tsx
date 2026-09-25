@@ -32,7 +32,7 @@ type Summary = {
 type Doc = {
   id: string; text: string; hash?: string; document_hash?: string; status: string; kind?: string;
   accepted_at?: string | null; objected_at?: string | null; cancelled_at?: string | null;
-  payment?: { phone?: string; bank?: string; recipient?: string };
+  payment?: { phone?: string; bank?: string; recipient?: string; qr?: boolean };
 };
 
 const practiceLabels: Record<string, string> = {
@@ -212,7 +212,7 @@ function DocumentPanel({ kind, doc, note, setNote, busy, close, run, variant }: 
   // нужен z-[60] и отступ сверху вместо max-w-md, рассчитанного на
   // мобильный экран Mini App внутри Telegram.
   const isSite = variant === "site";
-  return <div className={`fixed inset-0 ${isSite ? "z-[60]" : "z-50"} overflow-y-auto bg-slate-950/95 p-4`}><div className={`mx-auto pb-12 ${isSite ? "max-w-3xl pt-20" : "max-w-md"}`}><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div>{kind === "nda" ? <NdaSigningPanel doc={doc} busy={busy} close={close} run={run}/> : <><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "agreement" ? <div className="mt-5 space-y-3">{isSite ? <a href={`/api/client/agreements/${doc.id}/pdf`} className="inline-block text-sm font-semibold text-amber-300 underline">Скачать PDF</a> : null}{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>{doc.kind === "supplement" ? "Подписать допсоглашение" : "Подписать договор"}</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</>}</div></div>;
+  return <div className={`fixed inset-0 ${isSite ? "z-[60]" : "z-50"} overflow-y-auto bg-slate-950/95 p-4`}><div className={`mx-auto pb-12 ${isSite ? "max-w-3xl pt-20" : "max-w-md"}`}><div className="sticky top-0 flex justify-end bg-slate-950 py-2"><button type="button" onClick={close} title="Закрыть документ" aria-label="Закрыть документ" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 text-slate-100"><X className="h-5 w-5"/></button></div>{kind === "nda" ? <NdaSigningPanel doc={doc} busy={busy} close={close} run={run}/> : <><pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-100">{doc.text}</pre>{kind === "agreement" ? <div className="mt-5 space-y-3">{isSite ? <a href={`/api/client/agreements/${doc.id}/pdf`} className="inline-block text-sm font-semibold text-amber-300 underline">Скачать PDF</a> : null}{doc.status === "viewed" ? <Button disabled={busy} onClick={() => act("sign")}><CheckCircle2 className="mr-1 inline h-4 w-4"/>{doc.kind === "supplement" ? "Подписать допсоглашение" : "Подписать договор"}</Button> : null}{["sent","viewed"].includes(doc.status) ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Причина отказа, если решили не принимать условия" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy} onClick={() => act("decline", { reason: note })}>Отклонить условия</Button></> : null}</div> : <div className="mt-5 space-y-3">{canAccept || canClaimPaid ? <div className="flex flex-wrap gap-2">{canAccept ? <Button disabled={busy} onClick={() => act("accept")}>Принять работу</Button> : null}{canClaimPaid ? <Button tone="quiet" disabled={busy} onClick={() => act("claim-paid")}>Сообщить об оплате</Button> : null}</div> : null}{canObject ? <><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} placeholder="Замечания к выполненной работе" className="w-full rounded bg-slate-800 p-3 text-sm"/><Button tone="danger" disabled={busy || note.trim().length < 3} onClick={() => act("object", { text: note })}>Отправить замечания</Button></> : null}{kind === "act" && doc.payment?.qr && canClaimPaid ? <PaymentQr actId={doc.id} /> : null}{doc.payment?.phone ? <p className="text-sm text-slate-300">Перевод по номеру <strong className="text-white">{doc.payment.phone}</strong>{doc.payment.bank ? `, ${doc.payment.bank}` : ""}{doc.payment.recipient ? `, ${doc.payment.recipient}` : ""}.</p> : null}</div>}</>}</div></div>;
 }
 
 type NdaDetails = {
@@ -279,5 +279,38 @@ function NdaSigningPanel({ doc, busy, close, run }: { doc: Doc; busy: boolean; c
       <button type="button" disabled={busy || !checked} onClick={acceptConsent} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950 disabled:opacity-50">Даю согласие на обработку ПД</button>
     </div> : null}
     {step === "nda" ? <div className="mt-5 space-y-3 border-t border-slate-700 pt-4"><p className="text-sm leading-5 text-emerald-300">Согласие на обработку ПД зафиксировано отдельно. Теперь можно подписать NDA.</p><button type="button" disabled={busy} onClick={sign} className="w-full rounded-lg bg-amber-500 p-3 font-semibold text-slate-950">Подписать NDA</button></div> : null}
+  </div>;
+}
+
+/**
+ * Платёжный QR акта (ГОСТ Р 56042): приложение банка само заполнит
+ * получателя, сумму и назначение. Картинка грузится запросом с тем же
+ * подтверждением личности, что и остальной кабинет: у <img src> в мини-аппе
+ * Telegram заголовка с initData не было бы.
+ */
+function PaymentQr({ actId }: { actId: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let revoked: string | null = null;
+    const initData = telegramInitData();
+    fetch(`/api/client/acts/${actId}/payment-qr`, {
+      headers: initData ? { "x-telegram-init-data": initData } : {},
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        revoked = URL.createObjectURL(await response.blob());
+        setUrl(revoked);
+      })
+      .catch(() => setFailed(true));
+    return () => {
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [actId]);
+  if (failed) return null;
+  return <div className="rounded-lg border border-slate-700 bg-white p-3 text-center">
+    {url ? <img src={url} alt="QR для оплаты" className="mx-auto h-56 w-56" /> : <p className="py-10 text-sm text-slate-500">Готовлю QR…</p>}
+    <p className="mt-2 text-xs text-slate-600">Отсканируйте в приложении банка — получатель, сумма и назначение заполнятся сами. На телефоне: сохраните картинку и откройте её в приложении банка. После оплаты нажмите «Сообщить об оплате».</p>
   </div>;
 }
