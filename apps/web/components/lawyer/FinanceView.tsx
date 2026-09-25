@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { formatRub } from "@/lib/money";
+import FunnelBlock from "./FunnelBlock";
 import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, label, shortDate } from "./labels";
@@ -314,6 +315,8 @@ export default function FinanceView({
       {finance.acts ? (
         <ActsBlock data={finance.acts} month={month} initData={initData} onOpen={onOpen} onChanged={onChanged} />
       ) : null}
+
+      <FunnelBlock initData={initData} />
 
       <section>
         <div className="mb-2 flex items-center justify-between gap-3">
