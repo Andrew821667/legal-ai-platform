@@ -19,6 +19,14 @@ export type TodayItem = {
   days_left?: number | null;
   /** Ваш собственный аккаунт — проверка системы, а не клиент. */
   is_test?: boolean;
+  // «Не доставлено в Telegram»
+  delivery_id?: string;
+  kind_label?: string;
+  text?: string;
+  delivery_status?: "pending" | "failed" | "sent";
+  retryable?: boolean;
+  attempts?: number;
+  last_error?: string | null;
 };
 
 export type TodaySection = {
@@ -28,7 +36,15 @@ export type TodaySection = {
   items: TodayItem[];
 };
 
-export type Today = { generated_at: string; sections: TodaySection[] };
+/** Связь ядра с Telegram по последней проверке; null — проверки ещё не было. */
+export type TelegramHealth = {
+  ok: boolean;
+  checked_at: string | null;
+  failing_since: string | null;
+  last_error: string | null;
+};
+
+export type Today = { generated_at: string; sections: TodaySection[]; telegram?: TelegramHealth | null };
 
 export type ClientRow = {
   lead_id: string;

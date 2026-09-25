@@ -269,6 +269,11 @@ class AdminInterface:
         rows = self._core_request_json("POST", "/api/v1/client-notices/claim")
         return rows if isinstance(rows, list) else []
 
+    def telegram_tick(self) -> dict | None:
+        """Такт ядра: проверка его связи с Telegram и повтор неушедших уведомлений."""
+        row = self._core_request_json("POST", "/api/v1/telegram/tick")
+        return row if isinstance(row, dict) else None
+
     def acknowledge_client_notice(self, notice_id: str, claim_token: str) -> bool:
         row = self._core_request_json(
             "POST",

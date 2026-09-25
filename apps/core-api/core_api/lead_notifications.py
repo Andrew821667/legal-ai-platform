@@ -10,6 +10,7 @@ import requests
 from core_api.config import get_settings, telegram_proxies
 from core_api.models import Lead, LeadSegment, LeadSource, LegalIntake
 from core_api.staff import is_staff
+from core_api import telegram_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -264,9 +265,18 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         db.close()
 
     try:
-        _post_telegram_message(token, chat_id, text)
+        # Через журнал: при сбое уведомление повторится само, а не пропадёт в логе.
+        telegram_delivery.send(
+            kind="lead_notice",
+            token=token,
+            chat_id=chat_id,
+            text=text,
+            retryable=True,
+            lead_id=lead_id,
+            transport=_post_telegram_message,
+        )
     except Exception:
-        logger.exception("Failed to send new-lead Telegram notification", extra={"lead_id": str(lead_id)})
+        logger.warning("New-lead notification deferred", extra={"lead_id": str(lead_id)})
 
 
 
@@ -335,6 +345,7 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
         item, lead = row
         if is_staff(lead.telegram_user_id):
             return
+        lead_id_for_journal = lead.id
         header = "СРОЧНОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ" if item.urgency.value == "urgent" else "НОВОЕ ЮРИДИЧЕСКОЕ ОБРАЩЕНИЕ"
         lines = [
             header,
@@ -373,9 +384,14 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
         text = f"{text}\n{analysis_block}"
 
     try:
-        _post_telegram_message(token, chat_id, text)
-    except Exception:
-        logger.exception(
-            "Failed to send legal-intake Telegram notification",
-            extra={"intake_id": str(intake_id)},
+        telegram_delivery.send(
+            kind="intake_notice",
+            token=token,
+            chat_id=chat_id,
+            text=text,
+            retryable=True,
+            lead_id=lead_id_for_journal,
+            transport=_post_telegram_message,
         )
+    except Exception:
+        logger.warning("Legal-intake notification deferred", extra={"intake_id": str(intake_id)})

@@ -139,6 +139,10 @@ class Config:
         self.INTAKE_OUTREACH_DELAY_MINUTES: int = int(os.getenv('INTAKE_OUTREACH_DELAY_MINUTES', '5'))
         self.INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS: int = int(os.getenv('INTAKE_OUTREACH_CHECK_INTERVAL_SECONDS', '120'))
         self.INTAKE_OUTREACH_BATCH_SIZE: int = int(os.getenv('INTAKE_OUTREACH_BATCH_SIZE', '10'))
+        # Как часто просить ядро проверить связь с Telegram и досылать неушедшее.
+        self.TELEGRAM_TICK_INTERVAL_SECONDS: int = max(
+            30, int(os.getenv('TELEGRAM_TICK_INTERVAL_SECONDS', '120'))
+        )
         self.CLIENT_NOTICE_CHECK_INTERVAL_SECONDS: int = max(
             10,
             int(os.getenv('CLIENT_NOTICE_CHECK_INTERVAL_SECONDS', '20')),

@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, OUTREACH_REASON, days, intakeTitle, label, shortDate, shortDay } from "./labels";
 import type { Today, TodayItem, TodaySection } from "./types";
+import { lawyerAction } from "./useTelegram";
 
 /**
  * Экран «Сегодня» отвечает на один вопрос: что стоит без движения из-за меня.
@@ -28,6 +31,8 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return `${intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category })} — до ${shortDay(item.deadline_at)}`;
     case "no_agreement":
       return intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category });
+    case "undelivered":
+      return `${item.kind_label}: ${item.text || ""}`;
     default:
       return "";
   }
@@ -55,9 +60,14 @@ function itemBadge(item: TodayItem): { text: string; tone: Tone } | null {
 export default function TodayView({
   today,
   onOpen,
+  initData = "",
+  onChanged,
 }: {
   today: Today;
   onOpen: (leadId: string) => void;
+  initData?: string;
+  /** После «Повторить» или «Скрыть» — перечитать задачи. */
+  onChanged?: () => void;
 }) {
   const sections = today.sections.filter((s) => s.items.length > 0);
   const total = sections.reduce((sum, s) => sum + s.items.length, 0);
@@ -110,12 +120,69 @@ export default function TodayView({
                   <p className="mt-1 line-clamp-2 text-lw-sm text-lw-muted">
                     {itemLine(section, item)}
                   </p>
+                  {section.key === "undelivered" && item.last_error ? (
+                    <p className="mt-1 line-clamp-1 text-lw-sm text-lw-danger">
+                      {item.delivery_status === "pending" ? "Повторяется: " : "Не ушло: "}
+                      {item.last_error}
+                    </p>
+                  ) : null}
                 </button>
+                {section.key === "undelivered" && item.delivery_id ? (
+                  <DeliveryActions item={item} initData={initData} onChanged={onChanged} />
+                ) : null}
               </li>
             ))}
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * «Повторить» — только для уведомлений: договор, ответ и акт отправляют из
+ * карточки, чтобы клиент не получил дубль того, что уже отправлено заново.
+ */
+function DeliveryActions({
+  item,
+  initData,
+  onChanged,
+}: {
+  item: TodayItem;
+  initData: string;
+  onChanged?: () => void;
+}) {
+  const [busy, setBusy] = useState<"retry" | "dismiss" | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const run = async (action: "retry" | "dismiss") => {
+    setBusy(action);
+    setNote(null);
+    try {
+      const result = await lawyerAction<{ status?: string }>(
+        `/api/lawyer/deliveries/${item.delivery_id}/${action}`,
+        initData,
+      );
+      if (action === "retry" && result.status !== "sent") setNote("Не ушло и сейчас — повторится само.");
+      onChanged?.();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Не получилось");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+      {item.retryable ? (
+        <button type="button" disabled={busy !== null} onClick={() => run("retry")} className="lw-btn-quiet !px-3 !py-1.5 !text-lw-sm">
+          {busy === "retry" ? "Отправляю…" : "Повторить"}
+        </button>
+      ) : item.lead_id ? (
+        <span className="text-lw-sm text-lw-muted">Отправьте заново из карточки клиента.</span>
+      ) : null}
+      <button type="button" disabled={busy !== null} onClick={() => run("dismiss")} className="text-lw-sm text-lw-muted underline underline-offset-2 hover:text-lw-primary">
+        {busy === "dismiss" ? "Скрываю…" : "Скрыть"}
+      </button>
+      {note ? <span className="text-lw-sm text-lw-danger">{note}</span> : null}
     </div>
   );
 }

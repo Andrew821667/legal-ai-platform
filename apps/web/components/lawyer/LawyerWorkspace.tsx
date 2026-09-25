@@ -23,6 +23,12 @@ import type { Tab, WorkspaceRoute } from "@/lib/lawyer-route";
  * history.back() закрыл бы мини-апп целиком, поэтому такая запись помечена
  * как не наша, и «назад» просто подменяет адрес на список.
  */
+function shortTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
 function todayLabel(): string {
   return new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
 }
@@ -305,8 +311,25 @@ export default function LawyerWorkspace() {
           ? archive === null
           : clients === null;
 
+  // Ядро не достаёт до Telegram — всё, что юрист отправит отсюда, не уйдёт.
+  // Говорим сразу и наверху: сайт открывается и без Telegram, и это
+  // единственное место, где такой сбой видно, пока связи нет.
+  const telegramDown = today?.telegram && today.telegram.ok === false ? today.telegram : null;
+
   const list = (
     <div>
+      {telegramDown ? (
+        <div className="mb-4 rounded-2xl bg-lw-danger-soft p-4 text-lw-base text-lw-danger">
+          <p className="font-semibold">
+            Нет связи с Telegram
+            {telegramDown.failing_since ? ` с ${shortTime(telegramDown.failing_since)}` : ""}
+          </p>
+          <p className="mt-1 text-lw-sm text-lw-ink">
+            Договоры, акты и ответы клиентам сейчас не уйдут. Уведомления отправятся сами, когда
+            связь вернётся.
+          </p>
+        </div>
+      ) : null}
       {/* Шапка как в «Судебных делах»: день, крупный заголовок и четыре
           числа, ради которых экран и открывают между встречами. */}
       <header className="lw-hero mb-4 p-5">
@@ -407,7 +430,9 @@ export default function LawyerWorkspace() {
         <p className="text-lw-base text-lw-muted">Загружаю…</p>
       ) : null}
 
-      {!error && tab === "today" && today ? <TodayView today={today} onOpen={showClient} /> : null}
+      {!error && tab === "today" && today ? (
+        <TodayView today={today} onOpen={showClient} initData={initData} onChanged={() => void loadToday()} />
+      ) : null}
       {!error && tab === "finance" && finance ? (
         <FinanceView
           finance={finance}
