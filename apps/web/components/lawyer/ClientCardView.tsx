@@ -496,6 +496,9 @@ export function Agreement({
         <span>составлен {shortDate(item.created_at)}</span>
         {item.sent_at ? <span>отправлен {shortDate(item.sent_at)}</span> : null}
         {item.viewed_at ? <span>просмотрен {shortDate(item.viewed_at)}</span> : null}
+        {item.last_reminded_at && !item.signed_at && !item.declined_at ? (
+          <span>бот напомнил {shortDate(item.last_reminded_at)}</span>
+        ) : null}
         {item.signed_at ? (
           <span className="text-lw-success">подписан {shortDate(item.signed_at)}</span>
         ) : null}

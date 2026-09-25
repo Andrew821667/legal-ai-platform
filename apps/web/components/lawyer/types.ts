@@ -147,6 +147,8 @@ export type AgreementCard = {
   created_at: string | null;
   sent_at: string | null;
   viewed_at: string | null;
+  /** Когда бот сам напомнил клиенту о неподписанном документе. */
+  last_reminded_at?: string | null;
   signed_at: string | null;
   declined_at: string | null;
   decline_reason: string | null;

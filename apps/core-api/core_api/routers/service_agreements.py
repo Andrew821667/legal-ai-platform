@@ -266,6 +266,8 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
         "viewed_at": item.viewed_at.isoformat() if item.viewed_at else None,
         "signed_at": item.signed_at.isoformat() if item.signed_at else None,
         "declined_at": item.declined_at.isoformat() if item.declined_at else None,
+        "reminders_sent": item.reminders_sent or 0,
+        "last_reminded_at": item.last_reminded_at.isoformat() if item.last_reminded_at else None,
         "client_telegram_user_id": item.client_telegram_user_id,
         "client_name": client.get("full_name"),
         "client_contact": client.get("contact"),

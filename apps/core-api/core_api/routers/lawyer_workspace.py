@@ -434,6 +434,7 @@ def today(
                         "status": a.status.value,
                         "sent_at": _iso(a.sent_at),
                         "days_waiting": _days_since(a.sent_at),
+                        "last_reminded_at": _iso(a.last_reminded_at),
                     }
                     for a, lead in awaiting
                 ],
@@ -867,6 +868,7 @@ def client_card(
             "created_at": _iso(item.created_at),
             "sent_at": _iso(item.sent_at),
             "viewed_at": _iso(item.viewed_at),
+            "last_reminded_at": _iso(item.last_reminded_at),
             "signed_at": _iso(item.signed_at),
             "declined_at": _iso(item.declined_at),
             # Клиент называет причину, когда отклоняет, — она писалась в

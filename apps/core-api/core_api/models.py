@@ -577,6 +577,9 @@ class ServiceAgreement(Base):
     viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Автонапоминания клиенту о неподписанном документе (см. agreement_reminders).
+    reminders_sent: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     client_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)

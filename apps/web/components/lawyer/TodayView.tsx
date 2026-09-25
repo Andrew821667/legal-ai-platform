@@ -25,7 +25,9 @@ function itemLine(section: TodaySection, item: TodayItem): string {
     case "unreachable":
       return `${item.contact || "контакт не указан"} — ${label(OUTREACH_REASON, item.reason)}`;
     case "awaiting_client":
-      return `${item.subject} — ${label(AGREEMENT_STATUS, item.status)}`;
+      return `${item.subject} — ${label(AGREEMENT_STATUS, item.status)}${
+        item.last_reminded_at ? ` · бот напомнил ${shortDate(item.last_reminded_at)}` : ""
+      }`;
     case "expiring":
       return `${item.subject} — действует до ${shortDate(item.expires_at)}`;
     case "deadline_soon":
