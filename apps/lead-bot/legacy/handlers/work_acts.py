@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from decimal import Decimal, InvalidOperation
 
@@ -331,6 +332,35 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
                 action="work_act_accept")
             if result:
                 await _notify_admin(context.bot, f"Клиент принял работу по акту № {act['act_number']}.", _act_admin_markup(act_id))
+        return
+    if action == "qr":
+        # Платёжный QR (ГОСТ Р 56042): банк сам заполнит получателя, сумму и
+        # назначение. Сканировать с другого устройства или открыть картинку из
+        # галереи в приложении банка.
+        qr = await asyncio.to_thread(
+            admin_interface.admin_interface.get_work_act_payment_qr, act_id, telegram_user_id=user.id,
+        )
+        if not qr:
+            await utils.safe_reply_text(
+                query.message,
+                "QR для этого акта недоступен — оплатите переводом по реквизитам из сообщения с актом.",
+                action="work_act_qr_unavailable",
+            )
+            return
+        photo = io.BytesIO(qr)
+        photo.name = "qr-oplata.png"
+        await context.bot.send_photo(
+            chat_id=user.id,
+            photo=photo,
+            caption=(
+                "QR для оплаты: отсканируйте в приложении банка (или откройте эту картинку "
+                "из галереи) — получатель, сумма и назначение заполнятся сами. "
+                "После перевода нажмите «Я оплатил(а)»."
+            ),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Я оплатил(а)", callback_data=f"act_c:claim:{act_id}")]]
+            ),
+        )
         return
     if action != "claim":
         return

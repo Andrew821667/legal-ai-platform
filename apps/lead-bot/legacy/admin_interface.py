@@ -253,6 +253,24 @@ class AdminInterface:
         )
         return row if isinstance(row, dict) else None
 
+    def get_work_act_payment_qr(self, act_id: str, *, telegram_user_id: int) -> bytes | None:
+        """Платёжный QR акта (PNG) или None — нет реквизитов, акт не ждёт оплаты, сбой."""
+        if not self.core_api_enabled:
+            return None
+        query = urllib.parse.urlencode({"telegram_user_id": telegram_user_id})
+        request = urllib.request.Request(
+            url=f"{self.core_api_url}/api/v1/work-acts/{act_id}/payment-qr?{query}",
+            headers=self._core_headers(),
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=config.CORE_API_TIMEOUT_SECONDS) as response:
+                data = response.read()
+        except Exception as error:  # noqa: BLE001 — без QR остаётся перевод по телефону
+            logger.warning("Payment QR fetch failed: %s", type(error).__name__)
+            return None
+        return data if data.startswith(b"\x89PNG") else None
+
     def work_act_client_action(self, act_id: str, action: str, payload: dict) -> dict | None:
         row = self._core_request_json(
             "POST", f"/api/v1/work-acts/{act_id}/client/{action}", payload=payload,

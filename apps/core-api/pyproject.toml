@@ -19,6 +19,8 @@ dependencies = [
     "cryptography>=43",
     # PDF договора со страницей подписания — чистый Python, без системных библиотек.
     "fpdf2>=2.8",
+    # Платёжный QR по ГОСТ Р 56042 для акта.
+    "qrcode[pil]>=8.2",
 ]
 
 [tool.uv.sources]
