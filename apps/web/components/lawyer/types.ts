@@ -221,6 +221,16 @@ export type FinanceAgreement = {
   created_at: string | null;
 };
 
+export type FunnelStageKey = "leads" | "intake" | "agreement" | "signed" | "paid";
+
+/** Воронка практики: когорта пришедших за период (см. core practice_funnel). */
+export type Funnel = {
+  days: number;
+  stages: { key: FunnelStageKey; title: string; count: number; from_previous_pct: number | null }[];
+  sources: { key: string; title: string; counts: Record<FunnelStageKey, number>; paid_minor: number }[];
+  paid_minor: number;
+};
+
 export type Finance = {
   generated_at: string;
   currency: string;

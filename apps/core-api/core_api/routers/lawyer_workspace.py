@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import telegram_delivery
+from core_api import practice_funnel, telegram_delivery
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
@@ -1204,6 +1204,19 @@ def finance(
             for a, lead in rows
         ],
     }
+
+
+@router.get("/funnel")
+def funnel(
+    days: int = Query(default=90, ge=7, le=730),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Откуда приходят клиенты и на каком шаге останавливаются (см. practice_funnel)."""
+    _ = identity
+    now = datetime.now(timezone.utc)
+    result = practice_funnel.build(db, since=practice_funnel.period_start(now, days), now=now)
+    return {"days": days, **result}
 
 
 class AmountPatch(BaseModel):
