@@ -173,7 +173,7 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
       {data.cases.map((item) => <article key={item.id} className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-amber-300">{practiceLabels[item.practice] || item.practice}</p><h3 className="mt-1 font-semibold text-white">{item.description.slice(0, 100)}</h3></div><span className="whitespace-nowrap text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div>
         {item.without_agreement ? <p className="mt-2 text-xs text-slate-400">Работа ведётся без отдельного соглашения.</p> : null}
-        <p className="mt-3 text-xs text-slate-400">Документы: {item.documents.length}. Для безопасной загрузки отправьте файл в чат бота по этому обращению.</p>
+        <CaseDocuments item={item} ndaSigned={data.nda.signed} onUploaded={() => void load()} />
         <a href={`${EXTERNAL_LINKS.leadBot}?start=case_${item.id}`} className="mt-3 inline-block text-sm font-semibold text-amber-300">Написать по делу</a>
       </article>)}
       {data.cases.length === 0 ? <p className="rounded-lg border border-slate-700 p-4 text-sm text-slate-300">Обращений пока нет.</p> : null}
@@ -312,5 +312,40 @@ function PaymentQr({ actId }: { actId: string }) {
   return <div className="rounded-lg border border-slate-700 bg-white p-3 text-center">
     {url ? <img src={url} alt="QR для оплаты" className="mx-auto h-56 w-56" /> : <p className="py-10 text-sm text-slate-500">Готовлю QR…</p>}
     <p className="mt-2 text-xs text-slate-600">Отсканируйте в приложении банка — получатель, сумма и назначение заполнятся сами. На телефоне: сохраните картинку и откройте её в приложении банка. После оплаты нажмите «Сообщить об оплате».</p>
+  </div>;
+}
+
+/**
+ * Документы по делу: что уже передано и загрузка нового. Раньше здесь было
+ * «отправьте файл в чат бота по этому обращению» — лишний шаг и путаница,
+ * к какому делу файл. Файл уходит юристу в Telegram и сразу виден в деле.
+ */
+function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned: boolean; onUploaded: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const upload = async (file: File) => {
+    setBusy(true); setNote(null);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      await request(`/api/client/cases/${item.id}/documents`, { method: "POST", body: form });
+      setNote({ ok: true, text: `«${file.name}» передан юристу.` });
+      onUploaded();
+    } catch (e) {
+      setNote({ ok: false, text: e instanceof Error ? e.message : "Не удалось загрузить файл" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <div className="mt-3 space-y-2">
+    <p className="text-xs text-slate-400">Документы: {item.documents.length}</p>
+    {item.documents.length ? <ul className="space-y-1 text-xs text-slate-300">{item.documents.slice(-5).map((doc) => <li key={doc.id} className="truncate">📎 {doc.file_name || "файл"}</li>)}</ul> : null}
+    {ndaSigned ? <label className={`inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-100 ${busy ? "opacity-50" : ""}`}>
+      <input type="file" className="hidden" disabled={busy} accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.xls,.xlsx,.csv,.ods,.jpg,.jpeg,.png,.heic,.webp,.zip"
+        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file); }} />
+      {busy ? "Загружаю…" : "Загрузить документ"}
+    </label> : <p className="text-xs text-slate-400">Документы принимаются после подписания NDA.</p>}
+    {ndaSigned ? <p className="text-xs text-slate-500">PDF, Word, Excel, фото или ZIP до 20 МБ. Файл сразу увидит юрист.</p> : null}
+    {note ? <p className={`text-xs ${note.ok ? "text-emerald-400" : "text-red-300"}`}>{note.text}</p> : null}
   </div>;
 }

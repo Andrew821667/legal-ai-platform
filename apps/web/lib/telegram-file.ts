@@ -97,7 +97,7 @@ export async function uploadTelegramDocument(
   file: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> },
   caption: string,
   fetchImpl: Fetch = telegramFetch,
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   // Форма — из того же семейства, что и fetch: для undici через прокси —
   // его FormData, для подставленного fetch (тесты) — встроенная.
   const form = fetchImpl === telegramFetch ? telegramFormData() : new FormData();
@@ -110,10 +110,17 @@ export async function uploadTelegramDocument(
   } catch {
     throw new TelegramFileError("Telegram не отвечает");
   }
-  const body = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    description?: string;
+    result?: Record<string, unknown>;
+  };
   if (!response.ok || !body.ok) {
     throw new TelegramFileError("Не удалось отправить файл в чат");
   }
+  // Отправленное сообщение: в нём document.file_id — по нему файл потом
+  // открывается в рабочем месте.
+  return body.result || {};
 }
 
 /**
