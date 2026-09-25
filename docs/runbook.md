@@ -782,7 +782,7 @@ ssh legalai-prod 'grep "^PII_ENCRYPTION_KEY=" ~/projects/legal-ai-platform/.env'
 ## MacBook Protocol (contract-worker)
 Граница контура:
 - текущий production-контур договоров = `core-api` + `contract-worker`;
-- `apps/contract-ai` не подключён к runtime-контуру и не запускается в основном compose.
+- Копии `apps/contract-ai` в репозитории больше нет: Contract AI собирается и деплоится из Contract-AI-System.
 - Логика анализатора и формат `result_json`: [docs/contract-analyzer.md](./contract-analyzer.md).
 
 1. Установить зависимости:

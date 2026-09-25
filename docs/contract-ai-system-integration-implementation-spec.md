@@ -32,7 +32,7 @@
 - `contract-worker`;
 - текущий статусный и audit-контур.
 
-Не встраиваем `apps/contract-ai` в production-compose как обязательный сервис.
+Не встраиваем Contract AI в production-compose как обязательный сервис (локальная копия `apps/contract-ai` удалена).
 
 ### 2.2 Что делаем
 

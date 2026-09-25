@@ -15,7 +15,7 @@
 
 ## Граница контрактного контура (важно)
 - В текущей версии production-контур договоров состоит только из `core-api` (`contract_jobs`) и `contract-worker` на MacBook.
-- `apps/contract-ai` не подключён к runtime-контуру и не деплоится сервисом в production compose.
+- Копия `apps/contract-ai` удалена из репозитория (сентябрь 2026): Contract AI живёт в своём репозитории Contract-AI-System и деплоится оттуда.
 - Реальный `Contract_AI_System` ведется отдельно; integration boundary зафиксирован в [docs/contract-ai-boundary.md](./contract-ai-boundary.md).
 - Сейчас в проекте реализуются и поддерживаются только API/endpoints и очередь задач для будущей интеграции.
 

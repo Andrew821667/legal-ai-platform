@@ -73,7 +73,7 @@
 - [x] Сформировать чеклист release-gate (`docs/release-gate-phase1.md`).
 
 ## Scope-контур по договорам (чтобы не дублировать системы)
-- `apps/contract-ai` не является частью текущего production-контура.
+- Копия `apps/contract-ai` удалена из репозитория; Contract AI — отдельный репозиторий Contract-AI-System.
 - На данном этапе реализуется только endpoint-слой и очередь задач в `core-api` + исполнение воркером `apps/contract-worker` (MacBook).
 - Полноценная интеграция `contract-ai` рассматривается отдельной фазой после стабилизации текущего ядра.
 - Концепция следующего этапа интеграции зафиксирована в `docs/contract-ai-system-integration-concept.md`.

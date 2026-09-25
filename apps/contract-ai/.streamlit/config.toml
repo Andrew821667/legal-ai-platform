@@ -1,7 +1,0 @@
-[server]
-maxUploadSize = 200
-enableXsrfProtection = false
-port = 8501
-
-[browser]
-gatherUsageStats = false
