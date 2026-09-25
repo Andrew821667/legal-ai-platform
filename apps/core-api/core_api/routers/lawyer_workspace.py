@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import case_stage, practice_funnel, telegram_delivery
+from core_api import case_stage, npd_limit, practice_funnel, telegram_delivery
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
@@ -1211,6 +1211,8 @@ def finance(
         # По актам: сколько выставлено и оплачено, кто должен и кто просрочил.
         # Подписанный договор — ещё не деньги; деньги — оплаченный акт.
         "acts": acts,
+        # Доход за год против лимита самозанятого.
+        "npd": npd_limit.summary(db, now),
         "agreements": [
             {
                 "agreement_id": str(a.id),

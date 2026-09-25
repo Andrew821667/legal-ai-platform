@@ -19,7 +19,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api import payment_qr, telegram_delivery
+from core_api import npd_limit, payment_qr, telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
@@ -420,6 +420,10 @@ def mark_paid(
     item.paid_note = payload.note.strip() if payload.note else None
     db.add(item)
     _audit(db, identity, item, "work_act.paid", {"note": item.paid_note} if item.paid_note else None)
+    db.flush()
+    # Оплата двигает годовой доход к лимиту самозанятого — пройден порог,
+    # владелец узнает сразу, а не в конце года.
+    npd_limit.notify_if_crossed(db, item.paid_at)
     db.commit()
     db.refresh(item)
     return _payload(item)
