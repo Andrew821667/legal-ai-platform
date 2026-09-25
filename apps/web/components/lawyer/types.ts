@@ -249,7 +249,18 @@ export type Finance = {
   drafts: MoneyBucket;
   declined_this_month: MoneyBucket;
   acts?: FinanceActs;
+  /** Доход за год против лимита самозанятого (см. core npd_limit). */
+  npd?: NpdLimit;
   agreements: FinanceAgreement[];
+};
+
+export type NpdLimit = {
+  year: number;
+  income_minor: number;
+  limit_minor: number;
+  left_minor: number;
+  used_pct: number;
+  level: "ok" | "warn" | "alert" | "over";
 };
 
 export type ActBucket = { count: number; minor: number };

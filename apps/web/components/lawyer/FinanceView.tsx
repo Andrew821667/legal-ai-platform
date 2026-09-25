@@ -8,7 +8,7 @@ import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, label, shortDate } from "./labels";
 import { lawyerAction } from "./useTelegram";
-import type { ActBucket, Finance, FinanceActs, FinanceAgreement, MoneyBucket, OpenAct } from "./types";
+import type { ActBucket, Finance, FinanceActs, FinanceAgreement, MoneyBucket, NpdLimit, OpenAct } from "./types";
 
 /**
  * Деньги практики одним взглядом.
@@ -46,6 +46,43 @@ function Tile({ title, bucket, note }: { title: string; bucket: MoneyBucket; not
         ) : null}
       </p>
       {note ? <p className="mt-1 text-lw-sm text-lw-muted">{note}</p> : null}
+    </Card>
+  );
+}
+
+/**
+ * Доход за год против лимита самозанятого.
+ *
+ * Превысил — право на НПД пропадает до конца года; узнать об этом задним
+ * числом хуже всего. Система видит каждую отмеченную оплату, но не видит
+ * оплаты мимо неё — это сказано прямо под цифрой.
+ */
+function NpdLimitCard({ npd }: { npd: NpdLimit }) {
+  const tone =
+    npd.level === "ok" ? "bg-lw-primary" : npd.level === "warn" ? "bg-lw-warning" : "bg-lw-danger";
+  const note =
+    npd.level === "over"
+      ? "Лимит превышен: право на НПД пропало до конца года."
+      : npd.level === "ok"
+        ? `До лимита — ${formatRub(npd.left_minor)}.`
+        : `До лимита осталось ${formatRub(npd.left_minor)} — стоит заранее решить, как принимать оплаты дальше.`;
+  return (
+    <Card>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-lw-sm text-lw-muted">Доход за {npd.year} год · лимит самозанятого</p>
+        <span className="text-lw-sm tabular-nums text-lw-muted">{npd.used_pct}%</span>
+      </div>
+      <p className="mt-1 text-lw-xl font-extrabold tabular-nums text-lw-ink">
+        {formatRub(npd.income_minor)}
+        <span className="text-lw-base font-normal text-lw-muted"> из {formatRub(npd.limit_minor)}</span>
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-lw-cell">
+        <div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.min(npd.used_pct, 100)}%` }} />
+      </div>
+      <p className={`mt-2 text-lw-sm ${npd.level === "ok" ? "text-lw-muted" : npd.level === "warn" ? "text-lw-warning" : "text-lw-danger"}`}>
+        {note}
+      </p>
+      <p className="mt-1 text-lw-sm text-lw-muted">Считаются оплаты, отмеченные здесь; оплаты мимо системы не видны.</p>
     </Card>
   );
 }
@@ -311,6 +348,8 @@ export default function FinanceView({
           {formatRub(finance.declined_this_month.minor)}.
         </p>
       ) : null}
+
+      {finance.npd ? <NpdLimitCard npd={finance.npd} /> : null}
 
       {finance.acts ? (
         <ActsBlock data={finance.acts} month={month} initData={initData} onOpen={onOpen} onChanged={onChanged} />
