@@ -102,3 +102,45 @@ async def test_process_pending_start_payload_ignores_unknown_payload(monkeypatch
     assert processed is False
     assert called["create_new_lead"] is False
     assert context.user_data.get("pending_start_payload") is None
+
+
+@pytest.mark.anyio
+async def test_channel_post_button_creates_channel_lead(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Кнопка «Спросить юриста» под постом: свой текст и метка канала,
+    чтобы статистика бота-читателя не смешивалась с каналом."""
+    context = SimpleNamespace(user_data={"pending_start_payload": "chq_22222222-2222-2222-2222-222222222222"})
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(start_payloads, "fetch_post_context", lambda post_id: {"title": "Суд и ИИ"})
+    monkeypatch.setattr(
+        user_handlers.database.db,
+        "create_new_lead",
+        lambda local_user_id, payload: captured.setdefault("payload", payload) and 789,
+    )
+    monkeypatch.setattr(
+        user_handlers.database.db,
+        "track_event",
+        lambda local_user_id, event_type, payload=None, lead_id=None: captured.setdefault("event", event_type),
+    )
+
+    async def _fake_notify(*args, **kwargs) -> None:
+        return None
+
+    async def _fake_reply(message_obj, text: str, **kwargs) -> None:
+        captured["reply"] = text
+
+    monkeypatch.setattr(start_payloads, "notify_admin_new_lead", _fake_notify)
+    monkeypatch.setattr(user_handlers.utils, "safe_reply_text", _fake_reply)
+
+    processed = await user_handlers.process_pending_start_payload(
+        message=_DummyMessage(), context=context, user_data={"id": 77}, user=SimpleNamespace(first_name="")
+    )
+
+    assert processed is True
+    payload = captured["payload"]
+    assert payload["cta_variant"] == "channel_post"  # type: ignore[index]
+    assert payload["notes"].startswith("[CHANNEL_POST]")  # type: ignore[index]
+    assert "[READER_REFERRAL]" not in payload["notes"]  # type: ignore[index]
+    assert payload["name"] == "Клиент из канала"  # type: ignore[index]
+    assert captured["event"] == "channel_post_start"
+    assert "из поста в канале" in captured["reply"]  # type: ignore[operator]

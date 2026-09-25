@@ -462,7 +462,31 @@ def _retryable_publish_patch(post: dict[str, Any], exc: Exception, *, now_utc: d
     }
 
 
-def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
+_POST_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+def _ask_lawyer_markup(post_id: object) -> str | None:
+    """Кнопка «Спросить юриста» под постом — в бота-ассистента с номером поста.
+
+    Раньше из поста к юристу вела цепочка через бота-читателя, и на каждом
+    шаге люди терялись, а воронка не видела, что клиент пришёл из канала.
+    Бот по метке chq_<id> подхватывает тему поста и помечает лид «из канала».
+    """
+    if not settings.news_channel_ask_button_enabled:
+        return None
+    post_id = str(post_id or "")
+    username = settings.news_helper_bot_username.strip().lstrip("@")
+    if not username or not _POST_ID_RE.match(post_id):
+        return None
+    label = (settings.news_channel_ask_button_label or "").strip() or "Спросить юриста"
+    url = f"https://t.me/{username}?start=chq_{post_id}"
+    return json.dumps({"inline_keyboard": [[{"text": label, "url": url}]]}, ensure_ascii=False)
+
+
+def _send_to_telegram(text: str, media_urls: list[str] | None, reply_markup: str | None = None) -> int:
+    """Отправляет пост в канал. Кнопка — под последним сообщением поста:
+    её видно, когда дочитали. У альбома без текстового хвоста кнопки нет —
+    sendMediaGroup её не принимает."""
     chat_id = settings.telegram_channel_id or settings.telegram_channel_username
     if not chat_id:
         raise RuntimeError("TELEGRAM_CHANNEL_ID or TELEGRAM_CHANNEL_USERNAME is required")
@@ -474,6 +498,7 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
     if media_urls:
         caption = normalized_text[:1020]
         remainder = normalized_text[1020:].strip()
+        remainder_parts = _split_text_for_telegram(remainder) if remainder else []
 
         def _payload_for_media(media: str) -> tuple[str, str, str]:
             if media.startswith("tgphoto://"):
@@ -515,34 +540,36 @@ def _send_to_telegram(text: str, media_urls: list[str] | None) -> int:
                 if index == 0 and caption:
                     payload["caption"] = caption
                     payload["parse_mode"] = "HTML"
+                if reply_markup and not remainder_parts and index == len(resolved) - 1:
+                    payload["reply_markup"] = reply_markup
                 response = _telegram_request(method, payload)
                 if message_id == 0:
                     message_id = int(response.get("result", {}).get("message_id") or 0)
 
-        if remainder:
-            for part in _split_text_for_telegram(remainder):
-                _telegram_request(
-                    "sendMessage",
-                    {
-                        "chat_id": chat_id,
-                        "text": part,
-                        "parse_mode": "HTML",
-                        "disable_web_page_preview": True,
-                    },
-                )
-        return message_id
-
-    primary_message_id = 0
-    for part in _split_text_for_telegram(normalized_text):
-        response = _telegram_request(
-            "sendMessage",
-            {
+        for index, part in enumerate(remainder_parts):
+            payload = {
                 "chat_id": chat_id,
                 "text": part,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,
-            },
-        )
+            }
+            if reply_markup and index == len(remainder_parts) - 1:
+                payload["reply_markup"] = reply_markup
+            _telegram_request("sendMessage", payload)
+        return message_id
+
+    primary_message_id = 0
+    parts = _split_text_for_telegram(normalized_text)
+    for index, part in enumerate(parts):
+        payload = {
+            "chat_id": chat_id,
+            "text": part,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if reply_markup and index == len(parts) - 1:
+            payload["reply_markup"] = reply_markup
+        response = _telegram_request("sendMessage", payload)
         if primary_message_id == 0:
             primary_message_id = int(response.get("result", {}).get("message_id") or 0)
     return primary_message_id
@@ -782,7 +809,9 @@ def main(*, allow_idle_fallback: bool = True) -> int:
                 intelligent_footer=publish_intelligent_footer,
                 strict_quality=True,
             )
-            message_id = _send_to_telegram(normalized_text, post.get("media_urls"))
+            message_id = _send_to_telegram(
+                normalized_text, post.get("media_urls"), reply_markup=_ask_lawyer_markup(post_id)
+            )
             patch_payload: dict[str, Any] = {
                 "status": "posted",
                 "last_error": None,

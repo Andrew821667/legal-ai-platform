@@ -35,6 +35,8 @@ from test_client_archive import _agreement, _cleanup, _key
     [
         (LeadSource.telegram_bot, "reader_referral", None, "channel"),
         (LeadSource.telegram_bot, None, "[READER_REFERRAL] post_id=1", "channel"),
+        (LeadSource.telegram_bot, "channel_post", None, "channel"),
+        (LeadSource.telegram_bot, None, "[CHANNEL_POST]\npost_id=1", "channel"),
         (LeadSource.telegram_channel, None, None, "channel"),
         (LeadSource.telegram_bot, "legal_help", None, "site_bot"),
         (LeadSource.website_form, "legal_help", None, "site_form"),

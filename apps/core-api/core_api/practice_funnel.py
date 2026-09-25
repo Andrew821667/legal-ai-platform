@@ -42,7 +42,7 @@ STAGES: list[tuple[str, str]] = [
 # Порядок — как на экране. «Бот напрямую» — всё, у чего нет метки: сюда же
 # попадает тот, кто прочитал пост и написал боту сам, без кнопки.
 SOURCES: list[tuple[str, str]] = [
-    ("channel", "Канал"),
+    ("channel", "Канал"),  # кнопка под постом или через бота-читателя
     ("site_bot", "Сайт → бот"),
     ("site_form", "Форма на сайте"),
     ("miniapp_form", "Форма в мини-аппе"),
@@ -50,14 +50,18 @@ SOURCES: list[tuple[str, str]] = [
 ]
 
 READER_REFERRAL_MARK = "[READER_REFERRAL]"
+# Кнопка «Спросить юриста» прямо под постом в канале (news/publish.py).
+CHANNEL_POST_MARK = "[CHANNEL_POST]"
+CHANNEL_CTA = {"reader_referral", "channel_post"}
 
 
 def source_key(source: LeadSource | None, cta_variant: str | None, notes: str | None) -> str:
     """Откуда пришёл клиент — по меткам, которые ставят бот и сайт."""
     if (
         source == LeadSource.telegram_channel
-        or cta_variant == "reader_referral"
+        or cta_variant in CHANNEL_CTA
         or READER_REFERRAL_MARK in (notes or "")
+        or CHANNEL_POST_MARK in (notes or "")
     ):
         return "channel"
     if source == LeadSource.website_form:
