@@ -106,7 +106,11 @@ export default function RootLayout({
   reportLegalProfileWarnings();
 
   return (
-    <html lang="ru" className="scroll-smooth">
+    // telegram-web-app.js (рабочее место юриста, мини-апп) ещё до React
+    // проставляет <html> стиль с высотой окна Telegram; без этого флага React
+    // ругается на расхождение атрибутов при каждой загрузке. Флаг действует
+    // только на атрибуты самого <html>, не на содержимое.
+    <html lang="ru" className="scroll-smooth" suppressHydrationWarning>
       <head>
         <StructuredData siteUrl={siteUrl} />
       </head>
