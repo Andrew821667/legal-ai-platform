@@ -227,8 +227,11 @@ jobs:
         id: freshness
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=20 origin main
-          head="$(git rev-parse origin/main)"
+          # Вершину main — прямо с сервера: «git fetch origin main» после
+          # actions/checkout обновляет только FETCH_HEAD, а origin/main
+          # остаётся на проверяемом коммите — проверка видела «новее нет».
+          head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          git fetch --no-tags --depth=1 origin "$head"
           if [ "$head" != "$GITHUB_SHA" ] && ! git log -1 --format=%B "$head" | grep -qF '[skip deploy]'; then
             echo "На main уже $head, новее $GITHUB_SHA — выкатит его деплой."
             echo "skip=true" >> "$GITHUB_OUTPUT"
