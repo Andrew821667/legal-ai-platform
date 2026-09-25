@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN pip install --no-cache-dir uv
+# Шрифт с кириллицей для PDF договоров (core_api/pdf_document.py).
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --link pyproject.toml /app/pyproject.toml
 COPY --link packages/shared /app/packages/shared

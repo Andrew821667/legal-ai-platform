@@ -93,3 +93,36 @@ export function corePatch(path: string, payload: unknown): Promise<NextResponse>
 export function coreDelete(path: string): Promise<NextResponse> {
   return coreCall("DELETE", path);
 }
+
+/**
+ * Файл из ядра (PDF договора) — как есть, с типом и именем от ядра.
+ * Отказ — JSON с переведённым текстом, как у остальных вызовов.
+ */
+export async function coreGetFile(path: string): Promise<NextResponse> {
+  if (!CORE_API_ADMIN_KEY) {
+    return NextResponse.json({ detail: "Сервер не настроен: нет ключа доступа к ядру" }, { status: 500 });
+  }
+  try {
+    const response = await fetch(`${CORE_API_URL}${path}`, {
+      headers: { "X-API-Key": CORE_API_ADMIN_KEY },
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS * 2),
+    });
+    if (!response.ok) {
+      return new NextResponse(translateCoreErrorBody(await response.text()), {
+        status: response.status,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new NextResponse(await response.arrayBuffer(), {
+      status: 200,
+      headers: {
+        "content-type": response.headers.get("content-type") || "application/octet-stream",
+        "content-disposition": response.headers.get("content-disposition") || "attachment",
+        "cache-control": "no-store",
+      },
+    });
+  } catch {
+    return NextResponse.json({ detail: "Ядро не ответило вовремя" }, { status: 504 });
+  }
+}

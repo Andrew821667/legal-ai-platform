@@ -17,6 +17,8 @@ dependencies = [
     "psutil>=6.1",
     "sentry-sdk>=2.19",
     "cryptography>=43",
+    # PDF договора со страницей подписания — чистый Python, без системных библиотек.
+    "fpdf2>=2.8",
 ]
 
 [tool.uv.sources]
