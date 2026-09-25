@@ -13,6 +13,7 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
+from core_api import smoke
 from core_api.lead_notifications import notify_new_lead
 from core_api.staff import real_client
 from core_api.models import ActorType, ContractJob, Event, Lead, LeadSource, LeadStatus, Scope
@@ -64,6 +65,8 @@ def upsert_lead(
     now = datetime.now(timezone.utc)
 
     is_new_lead = lead is None
+    # Проверочная заявка после деплоя — сразу в архив, без уведомления юристу.
+    is_smoke = is_new_lead and smoke.is_smoke(payload.utm_source, payload.utm_medium, payload.utm_campaign)
     if lead is None and payload.update_only:
         raise HTTPException(status_code=404, detail="Lead not found")
     if lead is None:
@@ -105,6 +108,9 @@ def upsert_lead(
         )
         if payload.created_at is not None:
             lead.created_at = payload.created_at
+        if is_smoke:
+            lead.archived_at = now
+            lead.notes = smoke.mark_notes(lead.notes)
         db.add(lead)
     else:
         # Только то, что прислали явно: бот обновляет лид по одному полю
@@ -127,7 +133,7 @@ def upsert_lead(
             namespace="leads.upsert",
         )
 
-    if is_new_lead and lead.source != LeadSource.telegram_bot:
+    if is_new_lead and not is_smoke and lead.source != LeadSource.telegram_bot:
         background_tasks.add_task(notify_new_lead, lead.id)
 
     return lead

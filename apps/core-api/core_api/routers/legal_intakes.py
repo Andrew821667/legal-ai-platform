@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
@@ -14,6 +15,7 @@ from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.intake_assistant import next_turn
+from core_api import smoke
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
@@ -142,6 +144,11 @@ def create_legal_intake(
         utm_content=payload.utm_content,
         utm_term=payload.utm_term,
     )
+    # Проверочная заявка после деплоя — сразу в архив, без уведомления юристу.
+    is_smoke = existing is None and smoke.is_smoke(payload.utm_source, payload.utm_medium, payload.utm_campaign)
+    if is_smoke:
+        lead.archived_at = datetime.now(timezone.utc)
+        lead.notes = smoke.mark_notes(lead.notes)
     db.add(lead)
     db.flush()
 
@@ -202,7 +209,8 @@ def create_legal_intake(
         )
     else:
         db.commit()
-    background_tasks.add_task(notify_new_legal_intake, item.id)
+    if not is_smoke:
+        background_tasks.add_task(notify_new_legal_intake, item.id)
     return result
 
 
