@@ -629,6 +629,34 @@ class ServiceAgreementMessage(Base):
     __table_args__ = (Index("ix_service_agreement_messages_agreement", "agreement_id", "created_at"),)
 
 
+class ClientReview(Base):
+    """Отзыв клиента о работе — по одному на оплаченный акт.
+
+    На сайт попадает только то, на что клиент дал согласие (publish_consent)
+    и что одобрил юрист (status=approved). Новый текст снова ждёт одобрения.
+    """
+
+    __tablename__ = "client_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    act_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("work_acts.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=True
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    publish_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_text("false"))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ClientNotice(Base):
     __tablename__ = "client_notices"
 
@@ -809,6 +837,8 @@ class WorkAct(Base):
     receipt_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
     receipt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     receipt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Когда бот попросил клиента оценить работу (см. review_requests).
+    review_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_work_acts_agreement", "agreement_id", "created_at"),

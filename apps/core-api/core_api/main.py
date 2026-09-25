@@ -30,6 +30,7 @@ from core_api.routers import (
     service_agreements,
     special_consultations,
     telegram_ops,
+    reviews,
     users,
     work_acts,
     workers,
@@ -83,6 +84,7 @@ app.include_router(client_notices.router)
 app.include_router(client_portal.router)
 app.include_router(workers.router)
 app.include_router(telegram_ops.router)
+app.include_router(reviews.router)
 app.include_router(agreement_templates.router)
 app.include_router(admin.router)
 

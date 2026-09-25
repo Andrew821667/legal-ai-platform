@@ -277,6 +277,11 @@ class AdminInterface:
         )
         return row if isinstance(row, dict) else None
 
+    def work_act_review(self, act_id: str, payload: dict) -> dict | None:
+        """Оценка, текст отзыва или согласие на публикацию — по оплаченному акту."""
+        row = self._core_request_json("POST", f"/api/v1/work-acts/{act_id}/review", payload=payload)
+        return row if isinstance(row, dict) else None
+
     def cancel_work_act(self, act_id: str, reason: str) -> dict | None:
         row = self._core_request_json(
             "POST", f"/api/v1/work-acts/{act_id}/cancel", payload={"reason": reason}, admin_scope=True,

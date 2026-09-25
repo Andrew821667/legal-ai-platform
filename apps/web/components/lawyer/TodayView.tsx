@@ -40,6 +40,8 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return `${item.kind_label}: ${item.text || ""}`;
     case "receipt_missing":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
+    case "review_moderation":
+      return `${"⭐".repeat(item.score || 0)} «${item.review_text || ""}» — акт № ${item.act_number}`;
     case "act_claimed_paid":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
     case "act_overdue":
@@ -143,11 +145,51 @@ export default function TodayView({
                 {section.key === "undelivered" && item.delivery_id ? (
                   <DeliveryActions item={item} initData={initData} onChanged={onChanged} />
                 ) : null}
+                {section.key === "review_moderation" && item.review_id ? (
+                  <ReviewActions item={item} initData={initData} onChanged={onChanged} />
+                ) : null}
               </li>
             ))}
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+
+/** Показать отзыв на сайте или оставить только для себя. */
+function ReviewActions({
+  item,
+  initData,
+  onChanged,
+}: {
+  item: TodayItem;
+  initData: string;
+  onChanged?: () => void;
+}) {
+  const [busy, setBusy] = useState<"approve" | "hide" | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const run = async (decision: "approve" | "hide") => {
+    setBusy(decision);
+    setNote(null);
+    try {
+      await lawyerAction(`/api/lawyer/reviews/${item.review_id}/${decision}`, initData);
+      onChanged?.();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Не получилось");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+      <button type="button" disabled={busy !== null} onClick={() => run("approve")} className="lw-btn-quiet !px-3 !py-1.5 !text-lw-sm">
+        {busy === "approve" ? "Публикую…" : "Опубликовать на сайте"}
+      </button>
+      <button type="button" disabled={busy !== null} onClick={() => run("hide")} className="text-lw-sm text-lw-muted underline underline-offset-2 hover:text-lw-primary">
+        {busy === "hide" ? "Скрываю…" : "Не публиковать"}
+      </button>
+      {note ? <span className="text-lw-sm text-lw-danger">{note}</span> : null}
     </div>
   );
 }

@@ -85,6 +85,28 @@ function ReceiptBox({ act, initData, onChanged }: { act: WorkAct; initData: stri
   );
 }
 
+const REVIEW_STATUS: Record<string, string> = {
+  approved: "на сайте",
+  hidden: "не публикуется",
+  pending: "ждёт вашего решения",
+};
+
+/** Отзыв клиента по акту — оценка, текст и где он виден. */
+function ReviewLine({ review }: { review: NonNullable<WorkAct["review"]> }) {
+  const where = !review.text
+    ? null
+    : review.publish_consent
+      ? REVIEW_STATUS[review.status] || review.status
+      : "только для вас";
+  return (
+    <p className="mt-2 text-lw-sm text-lw-ink">
+      Отзыв: {review.score ? "⭐".repeat(review.score) : "без оценки"}
+      {review.text ? <span className="text-lw-muted"> «{review.text}»</span> : null}
+      {where ? <span className="text-lw-muted"> · {where}</span> : null}
+    </p>
+  );
+}
+
 function ActRow({
   act,
   initData,
@@ -143,6 +165,7 @@ function ActRow({
         </div>
       ) : null}
       {act.status === "paid" ? <ReceiptBox act={act} initData={initData} onChanged={onChanged} /> : null}
+      {act.review ? <ReviewLine review={act.review} /> : null}
       {act.status === "sent" || act.status === "claimed_paid" ? (
         <div className="mt-2">
           <ActionButton

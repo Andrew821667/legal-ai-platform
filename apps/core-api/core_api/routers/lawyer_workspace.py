@@ -25,13 +25,14 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import case_stage, npd_limit, practice_funnel, telegram_delivery
+from core_api import case_stage, client_reviews, npd_limit, practice_funnel, telegram_delivery
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
     ActorType,
     AuditLog,
+    ClientReview,
     ContractJob,
     Event,
     IntakeClarification,
@@ -273,6 +274,17 @@ def today(
         .where(Lead.id.not_in(has_agreement))
         .order_by(Lead.created_at)
     ).scalars().all()
+
+    # Отзыв с согласием на публикацию ждёт решения юриста.
+    reviews_pending = db.execute(
+        select(ClientReview, WorkAct, Lead)
+        .join(WorkAct, WorkAct.id == ClientReview.act_id)
+        .outerjoin(Lead, Lead.id == ClientReview.lead_id)
+        .where(ClientReview.status == "pending")
+        .where(ClientReview.publish_consent.is_(True))
+        .where(ClientReview.text.is_not(None))
+        .order_by(ClientReview.updated_at)
+    ).all()
 
     # Оплачено, а чек в «Мой налог» не записан. Самозанятый обязан выдать
     # чек при расчёте; старые оплаты не тянем — только за два месяца.
@@ -529,6 +541,24 @@ def today(
                         "days_waiting": _days_since(a.claimed_paid_at),
                     }
                     for a, lead in acts_claimed
+                ],
+            },
+            {
+                "key": "review_moderation",
+                "title": "Отзыв ждёт решения",
+                "hint": "Клиент разрешил публикацию. На сайте будет только имя, оценка и текст.",
+                "items": [
+                    {
+                        "review_id": str(r.id),
+                        "lead_id": str(r.lead_id) if r.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(r.telegram_user_id),
+                        "act_number": act.act_number,
+                        "score": r.score,
+                        "review_text": (r.text or "")[:600],
+                        "days_waiting": _days_since(r.updated_at),
+                    }
+                    for r, act, lead in reviews_pending
                 ],
             },
             {
@@ -849,6 +879,16 @@ def client_card(
             )
 
     acts: dict[uuid.UUID, list[dict]] = {}
+    reviews: dict[uuid.UUID, ClientReview] = {}
+    if agreements:
+        reviews = {
+            row.act_id: row
+            for row in db.scalars(
+                select(ClientReview)
+                .join(WorkAct, WorkAct.id == ClientReview.act_id)
+                .where(WorkAct.agreement_id.in_([a.id for a in agreements]))
+            )
+        }
     if agreements:
         for act in db.execute(
             select(WorkAct)
@@ -872,6 +912,7 @@ def client_card(
                     "receipt_ref": act.receipt_ref,
                     "receipt_at": _iso(act.receipt_at),
                     "receipt_sent_at": _iso(act.receipt_sent_at),
+                    "review": client_reviews.payload(reviews.get(act.id)),
                 }
             )
 
@@ -1770,3 +1811,33 @@ def dismiss_delivery(
         row.next_attempt_at = None
     db.commit()
     return {"delivery_id": str(delivery_id), "dismissed": True}
+
+
+@router.post("/reviews/{review_id}/{decision}")
+def moderate_review(
+    review_id: uuid.UUID,
+    decision: str,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Юрист решает, показывать ли отзыв на сайте. Без согласия клиента — нельзя."""
+    if decision not in ("approve", "hide"):
+        raise HTTPException(status_code=404, detail="Not found")
+    review = db.get(ClientReview, review_id, with_for_update=True)
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if decision == "approve" and not (review.publish_consent and review.text):
+        raise HTTPException(status_code=409, detail="Client did not allow publishing this review")
+    review.status = "approved" if decision == "approve" else "hidden"
+    review.moderated_at = datetime.now(timezone.utc)
+    write_audit(
+        db,
+        actor_type=ActorType.api_key,
+        actor_id=identity.name,
+        action=f"client_review.{decision}",
+        target_type="client_review",
+        target_id=review.id,
+    )
+    db.commit()
+    return client_reviews.payload(review)
+

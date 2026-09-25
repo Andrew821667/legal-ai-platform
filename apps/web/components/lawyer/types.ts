@@ -1,6 +1,10 @@
 import type { StageKey } from "@/lib/lawyer-clients";
 
 export type TodayItem = {
+  /** Раздел «Отзыв ждёт решения». */
+  review_id?: string;
+  score?: number | null;
+  review_text?: string;
   agreement_id?: string;
   intake_id?: string;
   lead_id?: string | null;
@@ -183,6 +187,16 @@ export type WorkAct = {
   receipt_ref?: string | null;
   receipt_at?: string | null;
   receipt_sent_at?: string | null;
+  /** Отзыв клиента по этому акту (core client_reviews). */
+  review?: ActReview | null;
+};
+
+export type ActReview = {
+  review_id: string;
+  score: number | null;
+  text: string | null;
+  publish_consent: boolean;
+  status: "pending" | "approved" | "hidden";
 };
 
 export type ClientCard = StageFields & {

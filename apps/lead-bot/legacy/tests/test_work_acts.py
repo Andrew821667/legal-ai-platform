@@ -386,3 +386,48 @@ async def test_qr_button_sends_the_payment_qr(monkeypatch) -> None:
     assert photos[0]["chat_id"] == 77
     assert photos[0]["photo"].getvalue().startswith(b"\x89PNG")
     assert "act_c:claim:act-1" in str(photos[0]["reply_markup"].to_dict())
+
+
+@pytest.mark.anyio
+async def test_review_score_text_and_consent(monkeypatch, replies) -> None:
+    """Оценка кнопкой → пара слов → согласие на публикацию: всё уходит в ядро."""
+    calls: list[tuple[str, dict]] = []
+
+    def review(act_id, payload):
+        calls.append((act_id, payload))
+        return {"review_id": "r1", "act_number": "AC-1", **payload}
+
+    monkeypatch.setattr(flow.admin_interface.admin_interface, "work_act_review", review)
+    context = SimpleNamespace(user_data={}, bot=Bot())
+    user = SimpleNamespace(id=77)
+
+    query = SimpleNamespace(data="act_c:rv:act-1:5", from_user=user, message=SimpleNamespace(chat_id=77), id="cb")
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), context)
+    assert calls[-1] == ("act-1", {"telegram_user_id": 77, "score": 5})
+    assert context.user_data[flow.STATE_KEY] == "act_review_text"
+
+    consent_markup: list = []
+
+    async def reply(message, text, **kwargs) -> None:
+        replies.append(text)
+        consent_markup.append(kwargs.get("reply_markup"))
+
+    monkeypatch.setattr(flow.utils, "safe_reply_text", reply)
+    update = SimpleNamespace(effective_user=user, effective_message=SimpleNamespace(message_id=5))
+    assert await flow.handle_message(update, context, "Всё быстро и по делу") is True
+    assert calls[-1] == ("act-1", {"telegram_user_id": 77, "text": "Всё быстро и по делу"})
+    assert flow.STATE_KEY not in context.user_data
+    assert "act_c:rvp:act-1:1" in str(consent_markup[-1].to_dict())
+
+    query = SimpleNamespace(data="act_c:rvp:act-1:1", from_user=user, message=SimpleNamespace(chat_id=77), id="cb2")
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), context)
+    assert calls[-1] == ("act-1", {"telegram_user_id": 77, "publish_consent": True})
+
+
+@pytest.mark.anyio
+async def test_review_score_ignores_garbage(monkeypatch, replies) -> None:
+    called: list = []
+    monkeypatch.setattr(flow.admin_interface.admin_interface, "work_act_review", lambda *a: called.append(a))
+    query = SimpleNamespace(data="act_c:rv:act-1:9", from_user=SimpleNamespace(id=77), message=SimpleNamespace(), id="cb")
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), SimpleNamespace(user_data={}))
+    assert called == []
