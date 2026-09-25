@@ -805,6 +805,10 @@ class WorkAct(Base):
     # Когда юрист последний раз напомнил клиенту об оплате — чтобы не
     # напоминать чаще раза в сутки и видеть, что напоминание уже было.
     last_reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Чек из «Мой налог»: ссылка или номер, когда выдан и когда отправлен клиенту.
+    receipt_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    receipt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    receipt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_work_acts_agreement", "agreement_id", "created_at"),

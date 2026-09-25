@@ -179,6 +179,10 @@ export type WorkAct = {
   paid_note: string | null;
   /** Когда последний раз напоминали клиенту об оплате. */
   last_reminded_at?: string | null;
+  /** Чек из «Мой налог»: ссылка или номер, когда выдан и когда отправлен клиенту. */
+  receipt_ref?: string | null;
+  receipt_at?: string | null;
+  receipt_sent_at?: string | null;
 };
 
 export type ClientCard = StageFields & {

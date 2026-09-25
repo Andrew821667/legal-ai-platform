@@ -75,6 +75,8 @@ const EXACT: Record<string, string> = {
   "Describe objections": "Опишите замечания.",
   "Not the client of this act": "Этот акт выставлен другому клиенту.",
   "Payment reminder was already sent today": "Сегодня уже напоминали — следующее напоминание можно завтра.",
+  "Receipt is recorded for a paid act": "Чек записывается только для оплаченного акта.",
+  "Receipt link is required to send it": "Чтобы отправить чек клиенту, вставьте ссылку на него из «Мой налог».",
 
   // Архив, отправки
   "Move the client to the archive first": "Сначала уберите клиента в архив.",

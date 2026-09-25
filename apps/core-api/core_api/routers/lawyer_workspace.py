@@ -274,6 +274,16 @@ def today(
         .order_by(Lead.created_at)
     ).scalars().all()
 
+    # Оплачено, а чек в «Мой налог» не записан. Самозанятый обязан выдать
+    # чек при расчёте; старые оплаты не тянем — только за два месяца.
+    receipt_missing = db.execute(
+        _counted_acts()
+        .where(WorkAct.status == WorkActStatus.paid)
+        .where(WorkAct.receipt_at.is_(None))
+        .where(WorkAct.paid_at >= now - timedelta(days=_RECEIPT_LOOKBACK_DAYS))
+        .order_by(WorkAct.paid_at)
+    ).all()
+
     # 5. Обращение без договора: диалог прошёл, а условия не предложены.
     with_agreement = select(ServiceAgreement.intake_id).where(
         ServiceAgreement.intake_id.is_not(None)
@@ -519,6 +529,24 @@ def today(
                         "days_waiting": _days_since(a.claimed_paid_at),
                     }
                     for a, lead in acts_claimed
+                ],
+            },
+            {
+                "key": "receipt_missing",
+                "title": "Чек не выдан",
+                "hint": "Оплата отмечена, а чека из «Мой налог» нет — выдайте и отправьте клиенту.",
+                "items": [
+                    {
+                        "act_id": str(a.id),
+                        "lead_id": str(a.lead_id) if a.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "act_number": a.act_number,
+                        "amount_minor": a.amount_minor,
+                        "paid_at": _iso(a.paid_at),
+                        "days_waiting": _days_since(a.paid_at),
+                    }
+                    for a, lead in receipt_missing
                 ],
             },
             {
@@ -841,6 +869,9 @@ def client_card(
                     "paid_at": _iso(act.paid_at),
                     "paid_note": act.paid_note,
                     "last_reminded_at": _iso(act.last_reminded_at),
+                    "receipt_ref": act.receipt_ref,
+                    "receipt_at": _iso(act.receipt_at),
+                    "receipt_sent_at": _iso(act.receipt_sent_at),
                 }
             )
 
@@ -1073,6 +1104,8 @@ def _not_archived_agreement():
 
 
 _ACT_LIVE = (WorkActStatus.sent, WorkActStatus.claimed_paid, WorkActStatus.paid)
+# Сколько дней назад оплаченный акт ещё ждёт чека в «Сегодня».
+_RECEIPT_LOOKBACK_DAYS = 60
 _ACT_OPEN = (WorkActStatus.sent, WorkActStatus.claimed_paid)
 
 

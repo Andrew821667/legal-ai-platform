@@ -85,6 +85,9 @@ def _payload(item: WorkAct) -> dict:
         "claimed_paid_at": _iso(item.claimed_paid_at),
         "paid_at": _iso(item.paid_at),
         "last_reminded_at": _iso(item.last_reminded_at),
+        "receipt_ref": item.receipt_ref,
+        "receipt_at": _iso(item.receipt_at),
+        "receipt_sent_at": _iso(item.receipt_sent_at),
         "paid_note": item.paid_note,
         "document_hash": item.document_hash,
         "document_version": item.document_version,
@@ -424,6 +427,67 @@ def mark_paid(
     # Оплата двигает годовой доход к лимиту самозанятого — пройден порог,
     # владелец узнает сразу, а не в конце года.
     npd_limit.notify_if_crossed(db, item.paid_at)
+    db.commit()
+    db.refresh(item)
+    return _payload(item)
+
+
+class ReceiptIn(BaseModel):
+    # Ссылка на чек из «Мой налог» или его номер. Пусто — «чек выдан»,
+    # когда номер под рукой не сохранили.
+    ref: str | None = Field(default=None, max_length=500)
+    send_to_client: bool = False
+
+
+@router.post("/{act_id}/receipt")
+def record_receipt(
+    act_id: uuid.UUID,
+    payload: ReceiptIn,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Чек самозанятого по оплаченному акту: записать и, если надо, отправить.
+
+    Самозанятый обязан передать покупателю чек при расчёте — в том числе
+    ссылкой. Система знала об оплате, но не о чеке, и держалось всё на памяти.
+    Отправка — тем же ботом, что прислал клиенту акт.
+    """
+    item = _get(db, act_id, lock=True)
+    if item.cancelled_at or item.status != WorkActStatus.paid:
+        raise HTTPException(status_code=409, detail="Receipt is recorded for a paid act")
+    ref = (payload.ref or "").strip() or None
+    now = _now()
+    if payload.send_to_client:
+        if not ref or not ref.lower().startswith("https://"):
+            raise HTTPException(status_code=422, detail="Receipt link is required to send it")
+        agreement = db.get(ServiceAgreement, item.agreement_id)
+        if agreement is None or not agreement.client_telegram_user_id:
+            raise HTTPException(status_code=409, detail="Client has no Telegram")
+        token = _client_bot_token()
+        if not token:
+            raise HTTPException(status_code=500, detail="Bot token is not configured")
+        try:
+            telegram_delivery.send(
+                kind="receipt",
+                token=token,
+                chat_id=agreement.client_telegram_user_id,
+                text=(
+                    f"Чек по акту № {item.act_number} на {_format_rub(item.amount_minor)}:\n{ref}\n\n"
+                    "Спасибо за оплату."
+                ),
+                lead_id=item.lead_id,
+                agreement_id=agreement.id,
+                act_id=item.id,
+                transport=_post_telegram_message,
+            )
+        except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
+            raise HTTPException(
+                status_code=502, detail=f"Telegram delivery failed: {type(exc).__name__}"
+            ) from exc
+        item.receipt_sent_at = now
+    item.receipt_ref = ref or item.receipt_ref
+    item.receipt_at = item.receipt_at or now
+    _audit(db, identity, item, "work_act.receipt", {"sent": bool(payload.send_to_client)})
     db.commit()
     db.refresh(item)
     return _payload(item)

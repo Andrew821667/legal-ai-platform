@@ -38,6 +38,8 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category });
     case "undelivered":
       return `${item.kind_label}: ${item.text || ""}`;
+    case "receipt_missing":
+      return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
     case "act_claimed_paid":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
     case "act_overdue":
