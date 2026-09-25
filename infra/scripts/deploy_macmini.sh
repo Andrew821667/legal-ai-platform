@@ -150,4 +150,11 @@ if [ -x "$APP_DIR/infra/scripts/submit_indexnow.sh" ]; then
   "$APP_DIR/infra/scripts/submit_indexnow.sh" || echo "IndexNow notification failed; deploy remains healthy."
 fi
 
+# Проверка того, что уже ломалось незаметно (Telegram через прокси, миграции,
+# страницы, версии контейнеров). Сбой — сообщение владельцу и красный деплой.
+if [ -x "$APP_DIR/infra/scripts/postdeploy_smoke.sh" ]; then
+  core_image="${CORE_API_IMAGE:-}"
+  APP_DIR="$APP_DIR" EXPECTED_SHA="${core_image##*:}" "$APP_DIR/infra/scripts/postdeploy_smoke.sh"
+fi
+
 echo "Mac Mini deploy complete"
