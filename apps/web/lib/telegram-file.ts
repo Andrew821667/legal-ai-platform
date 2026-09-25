@@ -10,6 +10,8 @@
  * нативным просмотрщиком. Скачивание нужно снаружи, в Safari.
  */
 
+import { telegramFetch, telegramFormData } from "./telegram-fetch.ts";
+
 // Локальный Bot API server (официальный) снимает лимит в 20 МБ — адрес
 // подменяется переменной окружения; по умолчанию — облако Telegram.
 const API = (process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/+$/, "");
@@ -59,7 +61,7 @@ async function call(
 export async function getTelegramFilePath(
   token: string,
   fileId: string,
-  fetchImpl: Fetch = fetch,
+  fetchImpl: Fetch = telegramFetch,
 ): Promise<string> {
   const result = await call(token, "getFile", { file_id: fileId }, fetchImpl);
   const path = result.file_path;
@@ -79,7 +81,7 @@ export async function sendTelegramDocument(
   chatId: number,
   fileId: string,
   caption: string,
-  fetchImpl: Fetch = fetch,
+  fetchImpl: Fetch = telegramFetch,
 ): Promise<void> {
   await call(token, "sendDocument", { chat_id: chatId, document: fileId, caption }, fetchImpl);
 }
@@ -94,9 +96,11 @@ export async function uploadTelegramDocument(
   chatId: number,
   file: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> },
   caption: string,
-  fetchImpl: Fetch = fetch,
+  fetchImpl: Fetch = telegramFetch,
 ): Promise<void> {
-  const form = new FormData();
+  // Форма — из того же семейства, что и fetch: для undici через прокси —
+  // его FormData, для подставленного fetch (тесты) — встроенная.
+  const form = fetchImpl === telegramFetch ? telegramFormData() : new FormData();
   form.set("chat_id", String(chatId));
   form.set("caption", caption);
   form.set("document", new Blob([file.bytes], { type: file.type }), file.name);
