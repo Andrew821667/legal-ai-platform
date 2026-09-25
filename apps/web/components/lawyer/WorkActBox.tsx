@@ -65,6 +65,25 @@ function ActRow({
           />
         </div>
       ) : null}
+      {act.status === "sent" ? (
+        <div className="mt-2">
+          {act.last_reminded_at &&
+          Date.now() - new Date(act.last_reminded_at).getTime() < 24 * 3600 * 1000 ? (
+            <p className="text-lw-sm text-lw-muted">Об оплате напомнили {shortDate(act.last_reminded_at)}.</p>
+          ) : (
+            <ActionButton
+              label="Напомнить клиенту об оплате"
+              busy="Отправляю…"
+              done="Напоминание отправлено"
+              tone="quiet"
+              onRun={async () => {
+                await lawyerAction(`/api/lawyer/acts/${act.act_id}/remind`, initData);
+                onChanged();
+              }}
+            />
+          )}
+        </div>
+      ) : null}
       {act.status === "sent" || act.status === "claimed_paid" ? (
         <div className="mt-2">
           <ActionButton

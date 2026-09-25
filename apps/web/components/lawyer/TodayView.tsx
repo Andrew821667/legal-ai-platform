@@ -7,6 +7,7 @@ import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, OUTREACH_REASON, days, intakeTitle, label, shortDate, shortDay } from "./labels";
 import type { Today, TodayItem, TodaySection } from "./types";
 import { lawyerAction } from "./useTelegram";
+import { formatRub } from "@/lib/money";
 
 /**
  * Экран «Сегодня» отвечает на один вопрос: что стоит без движения из-за меня.
@@ -33,6 +34,12 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return intakeTitle({ practice: item.practice, legal_area: item.legal_area || "other", category: item.category });
     case "undelivered":
       return `${item.kind_label}: ${item.text || ""}`;
+    case "act_claimed_paid":
+      return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
+    case "act_overdue":
+      return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}${
+        item.last_reminded_at ? ` · напоминали ${shortDate(item.last_reminded_at)}` : ""
+      }`;
     default:
       return "";
   }

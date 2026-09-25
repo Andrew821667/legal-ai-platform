@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api import telegram_delivery
+from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
@@ -51,6 +52,7 @@ from core_api.models import (
     SpecialConsultationPayment,
     TelegramDelivery,
     WorkAct,
+    WorkActStatus,
 )
 
 router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
@@ -334,7 +336,16 @@ def today(
         .order_by(LegalIntake.deadline_at)
     ).all()
 
-    # 8. Не ушло в Telegram: не ушло совсем или повтор затянулся. Раньше такие
+    # 8. Деньги по актам: клиент сказал «оплатил» — сверить поступление;
+    #    срок оплаты вышел — напомнить. Раньше акт после отправки пропадал
+    #    из виду, пока юрист сам не откроет карточку.
+    open_acts = db.execute(
+        _counted_acts().where(WorkAct.status.in_(_ACT_OPEN)).order_by(WorkAct.sent_at)
+    ).all()
+    acts_claimed = [(a, lead) for a, lead in open_acts if a.status == WorkActStatus.claimed_paid]
+    acts_overdue = [(a, lead) for a, lead in open_acts if _overdue(a, now)]
+
+    # 9. Не ушло в Telegram: не ушло совсем или повтор затянулся. Раньше такие
     #    сбои оседали в логе, и о них никто не знал.
     undelivered = db.execute(
         select(TelegramDelivery, Lead)
@@ -484,6 +495,43 @@ def today(
                         "days_waiting": _days_since(i.created_at),
                     }
                     for i, lead in no_agreement
+                ],
+            },
+            {
+                "key": "act_claimed_paid",
+                "title": "Клиент сообщил об оплате",
+                "hint": "Сверьте поступление и отметьте акт оплаченным в карточке.",
+                "items": [
+                    {
+                        "act_id": str(a.id),
+                        "act_number": a.act_number,
+                        "lead_id": str(a.lead_id) if a.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "amount_minor": a.amount_minor,
+                        "claimed_paid_at": _iso(a.claimed_paid_at),
+                        "days_waiting": _days_since(a.claimed_paid_at),
+                    }
+                    for a, lead in acts_claimed
+                ],
+            },
+            {
+                "key": "act_overdue",
+                "title": f"Акт не оплачен дольше {max(get_settings().act_payment_days, 1)} дней",
+                "hint": "Напомнить клиенту можно в «Деньгах» или в карточке.",
+                "items": [
+                    {
+                        "act_id": str(a.id),
+                        "act_number": a.act_number,
+                        "lead_id": str(a.lead_id) if a.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "amount_minor": a.amount_minor,
+                        "sent_at": _iso(a.sent_at),
+                        "last_reminded_at": _iso(a.last_reminded_at),
+                        "days_waiting": _days_since(a.sent_at),
+                    }
+                    for a, lead in acts_overdue
                 ],
             },
             {
@@ -784,6 +832,7 @@ def client_card(
                     "claimed_paid_at": _iso(act.claimed_paid_at),
                     "paid_at": _iso(act.paid_at),
                     "paid_note": act.paid_note,
+                    "last_reminded_at": _iso(act.last_reminded_at),
                 }
             )
 
@@ -996,6 +1045,69 @@ def _not_archived_agreement():
     return or_(ServiceAgreement.lead_id.is_(None), ServiceAgreement.lead_id.not_in(hidden))
 
 
+_ACT_LIVE = (WorkActStatus.sent, WorkActStatus.claimed_paid, WorkActStatus.paid)
+_ACT_OPEN = (WorkActStatus.sent, WorkActStatus.claimed_paid)
+
+
+def _counted_acts():
+    """Акты, которые идут в деньги: не отозванные, не архивных клиентов и не тесты."""
+    return (
+        select(WorkAct, Lead)
+        .outerjoin(Lead, Lead.id == WorkAct.lead_id)
+        .where(WorkAct.cancelled_at.is_(None))
+        .where(Lead.archived_at.is_(None))
+        .where(real_client(Lead.telegram_user_id))
+    )
+
+
+def _act_bucket(rows) -> dict:
+    return {"count": len(rows), "minor": sum(int(act.amount_minor or 0) for act, _ in rows)}
+
+
+def _overdue(act: WorkAct, now: datetime) -> bool:
+    """Просрочен: ждёт оплаты, клиент не сказал «оплатил», срок с отправки вышел."""
+    days = max(get_settings().act_payment_days, 1)
+    return (
+        act.status == WorkActStatus.sent
+        and act.sent_at is not None
+        and act.sent_at < now - timedelta(days=days)
+    )
+
+
+def _acts_summary(db: Session, now: datetime, this_month: datetime) -> dict:
+    rows = db.execute(_counted_acts().where(WorkAct.status.in_(_ACT_LIVE))).all()
+    issued = [r for r in rows if r[0].sent_at and r[0].sent_at >= this_month]
+    paid = [r for r in rows if r[0].status == WorkActStatus.paid and r[0].paid_at and r[0].paid_at >= this_month]
+    open_rows = [r for r in rows if r[0].status in _ACT_OPEN]
+    overdue = [r for r in open_rows if _overdue(r[0], now)]
+    claimed = [r for r in open_rows if r[0].status == WorkActStatus.claimed_paid]
+    open_rows.sort(key=lambda r: r[0].sent_at or now)
+    return {
+        "payment_days": max(get_settings().act_payment_days, 1),
+        "issued_this_month": _act_bucket(issued),
+        "paid_this_month": _act_bucket(paid),
+        "receivable": _act_bucket(open_rows),
+        "overdue": _act_bucket(overdue),
+        "claimed": _act_bucket(claimed),
+        "open": [
+            {
+                "act_id": str(act.id),
+                "act_number": act.act_number,
+                "lead_id": str(act.lead_id) if act.lead_id else None,
+                "client": _lead_title(lead),
+                "amount_minor": act.amount_minor,
+                "status": act.status.value,
+                "sent_at": _iso(act.sent_at),
+                "claimed_paid_at": _iso(act.claimed_paid_at),
+                "last_reminded_at": _iso(act.last_reminded_at),
+                "days_since_sent": _days_since(act.sent_at),
+                "overdue": _overdue(act, now),
+            }
+            for act, lead in open_rows[:100]
+        ],
+    }
+
+
 def _sum_and_count(db: Session, *conditions) -> dict:
     """Сумма и число договоров; отдельно — сколько из них без суммы.
 
@@ -1045,6 +1157,7 @@ def finance(
 
     signed_total = _sum_and_count(db, signed)
     priced_signed = signed_total["count"] - signed_total["unpriced"]
+    acts = _acts_summary(db, now, this_month)
 
     return {
         "generated_at": _iso(now),
@@ -1068,6 +1181,9 @@ def finance(
             ServiceAgreement.status == ServiceAgreementStatus.declined,
             ServiceAgreement.declined_at >= this_month,
         ),
+        # По актам: сколько выставлено и оплачено, кто должен и кто просрочил.
+        # Подписанный договор — ещё не деньги; деньги — оплаченный акт.
+        "acts": acts,
         "agreements": [
             {
                 "agreement_id": str(a.id),

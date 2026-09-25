@@ -83,6 +83,7 @@ def _payload(item: WorkAct) -> dict:
         "sent_at": _iso(item.sent_at),
         "claimed_paid_at": _iso(item.claimed_paid_at),
         "paid_at": _iso(item.paid_at),
+        "last_reminded_at": _iso(item.last_reminded_at),
         "paid_note": item.paid_note,
         "document_hash": item.document_hash,
         "document_version": item.document_version,
@@ -283,6 +284,75 @@ def send_act(
     db.commit()
     db.refresh(item)
     return _payload(item)
+
+
+# Напоминать об оплате не чаще раза в сутки: чаще — уже давление.
+_REMIND_EVERY_HOURS = 24
+
+
+def _build_reminder_text(item: WorkAct, agreement: ServiceAgreement) -> str:
+    lines = [
+        f"Напоминаем об оплате по акту № {html.escape(item.act_number)}",
+        f"к договору № {html.escape(agreement.agreement_number)}.",
+        "",
+        f"К оплате: {_format_rub(item.amount_minor)}",
+    ]
+    payment = payment_details()
+    if payment:
+        lines += ["", f"Телефон для перевода: <code>{html.escape(payment['phone'])}</code>"]
+        for label, key in (("Банк", "bank"), ("Получатель", "recipient")):
+            if payment.get(key):
+                lines.append(f"{label}: {html.escape(payment[key])}")
+    lines += ["", "Если уже оплатили — нажмите «Я оплатил(а)», и юрист сверит поступление."]
+    return "\n".join(lines)
+
+
+@router.post("/{act_id}/remind")
+def remind_payment(
+    act_id: uuid.UUID,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Юрист напоминает клиенту об оплате акта — тем же ботом, что прислал акт.
+
+    Только для акта, который ждёт оплаты и о котором клиент ещё не сказал
+    «я оплатил»: иначе напоминание придёт тому, кто уже заплатил.
+    """
+    item = db.get(WorkAct, act_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Act not found")
+    if item.cancelled_at or item.status != WorkActStatus.sent:
+        raise HTTPException(status_code=409, detail="Act is not awaiting payment")
+    now = _now()
+    if item.last_reminded_at and (now - item.last_reminded_at).total_seconds() < _REMIND_EVERY_HOURS * 3600:
+        raise HTTPException(status_code=409, detail="Payment reminder was already sent today")
+    agreement = db.get(ServiceAgreement, item.agreement_id)
+    if agreement is None or not agreement.client_telegram_user_id:
+        raise HTTPException(status_code=409, detail="Client has no Telegram")
+    token = _client_bot_token()
+    if not token:
+        raise HTTPException(status_code=500, detail="Bot token is not configured")
+    try:
+        telegram_delivery.send(
+            kind="act_reminder",
+            token=token,
+            chat_id=agreement.client_telegram_user_id,
+            text=_build_reminder_text(item, agreement),
+            reply_markup=_act_markup(str(item.id)),
+            parse_mode="HTML",
+            lead_id=item.lead_id,
+            agreement_id=agreement.id,
+            act_id=item.id,
+            transport=_post_telegram_message,
+        )
+    except Exception as exc:  # noqa: BLE001 — причина уходит юристу, а не в трейс
+        raise HTTPException(
+            status_code=502, detail=f"Telegram delivery failed: {type(exc).__name__}"
+        ) from exc
+    item.last_reminded_at = now
+    _audit(db, identity, item, "work_act.remind")
+    db.commit()
+    return {"act_id": str(item.id), "last_reminded_at": now.isoformat()}
 
 
 class ClaimPaid(BaseModel):

@@ -439,6 +439,7 @@ export default function LawyerWorkspace() {
           onOpen={showClient}
           initData={initData}
           insideTelegram={insideTelegram}
+          onChanged={() => void Promise.all([loadFinance(), loadToday()])}
         />
       ) : null}
       {!error && tab === "archive" ? (
