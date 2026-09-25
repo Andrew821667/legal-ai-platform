@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     lawyer_payment_bic: str | None = None
     lawyer_payment_corr_account: str | None = None
     lawyer_payment_inn: str | None = None
+    # Имя владельца счёта полностью, как в банке: в QR банк сверяет его со
+    # счётом. LAWYER_PAYMENT_RECIPIENT — для текста «Получатель: …» и может
+    # быть коротким.
+    lawyer_payment_account_holder: str | None = None
+    # Начало назначения платежа, которое просит банк получателя, например у
+    # Т-Банка «Перевод средств по договору № … ФИО». Дальше — номер акта.
+    lawyer_payment_purpose_prefix: str | None = None
     lead_notify_chat_id: str | None = None
     lead_notify_web_base_url: str = "https://ai-verdict.ru"
     api_key_cache_ttl_seconds: int = 60

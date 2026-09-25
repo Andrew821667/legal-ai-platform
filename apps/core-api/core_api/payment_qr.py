@@ -35,12 +35,15 @@ def requisites() -> dict | None:
     account = _DIGITS.sub("", settings.lawyer_payment_account or "")
     bic = _DIGITS.sub("", settings.lawyer_payment_bic or "")
     corr = _DIGITS.sub("", settings.lawyer_payment_corr_account or "")
-    name = _clean(settings.lawyer_payment_recipient or settings.operator_name)
+    name = _clean(
+        settings.lawyer_payment_account_holder or settings.lawyer_payment_recipient or settings.operator_name
+    )
     bank = _clean(settings.lawyer_payment_bank)
     if len(account) != 20 or len(bic) != 9 or len(corr) != 20 or not name or not bank:
         return None
     inn = _DIGITS.sub("", settings.lawyer_payment_inn or settings.operator_inn or "")
-    return {"name": name, "account": account, "bank": bank, "bic": bic, "corr": corr, "inn": inn}
+    prefix = _clean(settings.lawyer_payment_purpose_prefix)
+    return {"name": name, "account": account, "bank": bank, "bic": bic, "corr": corr, "inn": inn, "prefix": prefix}
 
 
 def payload(amount_minor: int, purpose: str) -> str | None:
@@ -58,7 +61,8 @@ def payload(amount_minor: int, purpose: str) -> str | None:
     ]
     if len(req["inn"]) in (10, 12):
         fields.append(f"PayeeINN={req['inn']}")
-    fields += [f"Sum={int(amount_minor)}", f"Purpose={_clean(purpose)[:210]}"]
+    full_purpose = f"{req['prefix']} {purpose}" if req["prefix"] else purpose
+    fields += [f"Sum={int(amount_minor)}", f"Purpose={_clean(full_purpose)[:210]}"]
     return "|".join(fields)
 
 

@@ -24,6 +24,8 @@ REQUISITES = {
     "LAWYER_PAYMENT_BANK": "АО «ТБанк» | Москва",
     "LAWYER_PAYMENT_RECIPIENT": "Попов Андрей",
     "LAWYER_PAYMENT_INN": "123456789012",
+    "LAWYER_PAYMENT_ACCOUNT_HOLDER": "",
+    "LAWYER_PAYMENT_PURPOSE_PREFIX": "",
 }
 
 
@@ -127,3 +129,13 @@ def test_no_account_no_qr_endpoint(unconfigured) -> None:
     finally:
         _drop(seeded)
         _cleanup([name], [seeded["lead_id"]])
+
+
+def test_account_holder_and_bank_purpose_prefix(configured, monkeypatch) -> None:
+    """Полное имя как в банке и начало назначения, которое просит банк получателя."""
+    monkeypatch.setenv("LAWYER_PAYMENT_ACCOUNT_HOLDER", "Попов Андрей Викторович")
+    monkeypatch.setenv("LAWYER_PAYMENT_PURPOSE_PREFIX", "Перевод средств по договору № 111 Попов Андрей Викторович.")
+    get_settings.cache_clear()
+    data = payment_qr.payload(100, "Оплата по акту № AC-1")
+    assert "|Name=Попов Андрей Викторович|" in data
+    assert data.endswith("|Purpose=Перевод средств по договору № 111 Попов Андрей Викторович. Оплата по акту № AC-1")
