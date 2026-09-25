@@ -1027,11 +1027,15 @@ def test_work_without_agreement_has_its_own_stage() -> None:
         rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
         row = next(item for item in rows if item["lead_id"] == seeded["lead_id"])
         assert row["stage"] == "В работе без договора"
+        assert row["stage_key"] == "without_agreement"
 
         card = client.get(
             f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
         ).json()
         assert card["stage"] == "В работе без договора"
+        # Шкалы «договор → подписан» у такого дела нет.
+        assert card["stage_step"] is None
+        assert [i["stage_key"] for i in card["intakes"]] == ["without_agreement"]
 
         today = client.get("/api/v1/lawyer/today", headers={"X-API-Key": key}).json()
         waiting = [i["intake_id"] for i in _section(today, "no_agreement")["items"]]
@@ -1050,6 +1054,16 @@ def test_new_question_from_client_without_agreement_asks_for_terms_again() -> No
         rows = client.get("/api/v1/lawyer/clients", headers={"X-API-Key": key}).json()
         row = next(item for item in rows if item["lead_id"] == seeded["lead_id"])
         assert row["stage"] == "Готовим условия"
+        assert row["stage_key"] == "preparing_terms"
+
+        # У каждого обращения — свой этап: старое ведут без договора, по
+        # новому ждут условий.
+        card = client.get(
+            f"/api/v1/lawyer/clients/{seeded['lead_id']}", headers={"X-API-Key": key}
+        ).json()
+        by_intake = {i["intake_id"]: i["stage_key"] for i in card["intakes"]}
+        assert by_intake.pop(seeded["intake_id"]) == "without_agreement"
+        assert list(by_intake.values()) == ["preparing_terms"]
     finally:
         _cleanup(names, seeded["lead_id"])
 

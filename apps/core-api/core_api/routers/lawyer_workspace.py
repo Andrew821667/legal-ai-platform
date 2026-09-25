@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import practice_funnel, telegram_delivery
+from core_api import case_stage, practice_funnel, telegram_delivery
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
@@ -98,33 +98,6 @@ def _days_until(value: datetime | None) -> int | None:
     # timedelta.days округляет вниз: 2,5 дня впереди — это 2 полных дня, а
     # полдня назад — уже -1, то есть «просрочено».
     return (value.astimezone(timezone.utc) - datetime.now(timezone.utc)).days
-
-
-WITHOUT_AGREEMENT_STAGE = "В работе без договора"
-
-
-def _stage_for(
-    *, nda_signed: bool, agreement_status: str | None, without_agreement: bool = False
-) -> str:
-    """Этап дела одной фразой — то, что юрист хочет увидеть, не открывая карточку.
-
-    without_agreement — юрист сам решил вести дело без договора. Пока
-    договора нет, «Готовим условия» тут было бы неправдой: условия никто не
-    готовит, работа уже идёт. Появится договор — этап снова по нему.
-    """
-    if agreement_status == "signed":
-        return "Договор подписан"
-    if agreement_status in {"sent", "viewed"}:
-        return "Договор у клиента"
-    if agreement_status == "draft":
-        return "Договор не отправлен"
-    if agreement_status == "declined":
-        return "Клиент отказался"
-    if without_agreement:
-        return WITHOUT_AGREEMENT_STAGE
-    if nda_signed:
-        return "Готовим условия"
-    return "Первичное обращение"
 
 
 _LIVE_INTAKE_EXCLUDED = (LegalIntakeStatus.closed, LegalIntakeStatus.declined)
@@ -706,10 +679,12 @@ def clients(
             "last_intake_at": _iso(last_at),
             "nda_signed": lead.id in signed_nda,
             "agreement_status": open_agreements.get(lead.id),
-            "stage": _stage_for(
-                nda_signed=lead.id in signed_nda,
-                agreement_status=open_agreements.get(lead.id),
-                without_agreement=_worked_without_agreement(intake_flags.get(lead.id, [])),
+            **case_stage.fields(
+                case_stage.stage_for(
+                    nda_signed=lead.id in signed_nda,
+                    agreement_status=open_agreements.get(lead.id),
+                    without_agreement=_worked_without_agreement(intake_flags.get(lead.id, [])),
+                )
             ),
             "waiting_on_me": lead.id in awaiting_me,
             "legal_areas": areas.get(lead.id, []),
@@ -886,18 +861,25 @@ def client_card(
         }
 
     latest_agreement = agreements[0] if agreements else None
+    # Договоры уже новыми вперёд: первый встреченный по обращению — последний.
+    latest_by_intake: dict[uuid.UUID, ServiceAgreement] = {}
+    for item in agreements:
+        if item.intake_id is not None:
+            latest_by_intake.setdefault(item.intake_id, item)
     return {
         "lead_id": str(lead.id),
         "name": _lead_title(lead),
         # Карточку архивного клиента открывают из архива — там свои кнопки.
         "archived_at": _iso(lead.archived_at),
         "is_test": is_staff(lead.telegram_user_id),
-        "stage": _stage_for(
-            nda_signed=nda is not None,
-            agreement_status=latest_agreement.status.value if latest_agreement else None,
-            without_agreement=_worked_without_agreement(
-                [(item.without_agreement, item.status) for item in intakes]
-            ),
+        **case_stage.fields(
+            case_stage.stage_for(
+                nda_signed=nda is not None,
+                agreement_status=latest_agreement.status.value if latest_agreement else None,
+                without_agreement=_worked_without_agreement(
+                    [(item.without_agreement, item.status) for item in intakes]
+                ),
+            )
         ),
         "contact": lead.contact,
         "company": lead.company,
@@ -944,6 +926,17 @@ def client_card(
                 "clarifications": clarifications.get(item.id, []),
                 "documents": documents.get(item.id, []),
                 "links": _intake_links_for(db, item.id),
+                # У постоянного клиента с двумя делами этап в шапке — по
+                # последнему договору; у каждого обращения — свой, по его договорам.
+                **case_stage.fields(
+                    case_stage.stage_for(
+                        nda_signed=nda is not None,
+                        agreement_status=latest_by_intake[item.id].status.value
+                        if item.id in latest_by_intake
+                        else None,
+                        without_agreement=item.without_agreement,
+                    )
+                ),
             }
             for item in intakes
         ],

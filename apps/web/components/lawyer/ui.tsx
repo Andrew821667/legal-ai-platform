@@ -61,16 +61,10 @@ export function SectionTitle({
 }
 
 /** Ход дела: пройденные шаги подсвечены, текущий выделен. */
-export function Progress({ stage }: { stage: string }) {
+/** Шкала дела; шаг приходит из ядра вместе с этапом (stage_step). */
+export function Progress({ step }: { step: number }) {
   const steps = ["Обращение", "NDA", "Договор", "Подписан"];
-  const reached =
-    stage === "Договор подписан"
-      ? 4
-      : stage === "Договор у клиента" || stage === "Договор не отправлен"
-        ? 3
-        : stage === "Готовим условия"
-          ? 2
-          : 1;
+  const reached = step;
 
   return (
     <div className="mt-3 flex items-center gap-1.5">

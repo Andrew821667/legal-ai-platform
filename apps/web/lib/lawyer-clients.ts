@@ -7,12 +7,23 @@
  * что мне делать сейчас. Внутри группы — как отдал сервер, новые первыми.
  */
 
-import { WITHOUT_AGREEMENT_STAGE } from "./lawyer-stage.ts";
+/**
+ * Этап дела — ключ из ядра (core_api/case_stage.py). Этап считает только
+ * ядро; сайт показывает его текст и решает по ключу, а не по формулировке.
+ */
+export type StageKey =
+  | "first_contact"
+  | "preparing_terms"
+  | "not_sent"
+  | "with_client"
+  | "signed"
+  | "declined"
+  | "without_agreement";
 
 export type ClientGroupKey = "mine" | "theirs" | "active" | "declined" | "test";
 
 export type ClientLike = {
-  stage: string;
+  stage_key: StageKey;
   waiting_on_me: boolean;
   nda_signed: boolean;
   legal_areas: string[];
@@ -35,9 +46,9 @@ export function clientGroup(row: ClientLike): ClientGroupKey {
   // клиентов в «Нужен ваш ход», хотя ход там ваш только понарошку.
   if (row.is_test) return "test";
   if (row.waiting_on_me) return "mine";
-  if (row.stage === "Договор подписан" || row.stage === WITHOUT_AGREEMENT_STAGE) return "active";
-  if (row.stage === "Клиент отказался") return "declined";
-  if (row.stage === "Договор у клиента") return "theirs";
+  if (row.stage_key === "signed" || row.stage_key === "without_agreement") return "active";
+  if (row.stage_key === "declined") return "declined";
+  if (row.stage_key === "with_client") return "theirs";
   return "mine";
 }
 
@@ -53,7 +64,7 @@ export const CLIENT_FILTERS: { key: ClientFilter; title: string }[] = [
 export function matchesFilter(row: ClientLike, filter: ClientFilter): boolean {
   if (filter === "waiting") return row.waiting_on_me;
   if (filter === "no_nda") return !row.nda_signed;
-  if (filter === "signed") return row.stage === "Договор подписан";
+  if (filter === "signed") return row.stage_key === "signed";
   return true;
 }
 

@@ -36,7 +36,6 @@ import {
 } from "./labels";
 import type { AgreementCard, ClientCard, IntakeCard } from "./types";
 import { clientContacts } from "@/lib/lawyer-contacts";
-import { matterStage, WITHOUT_AGREEMENT_STAGE } from "@/lib/lawyer-stage";
 
 /**
  * Карточку открывают, чтобы вспомнить всё о деле перед разговором.
@@ -128,7 +127,7 @@ export default function ClientCardView({
   };
   // Шкала «обращение → NDA → договор → подписан» у такого клиента звала бы
   // к договору, который юрист сознательно решил не заключать.
-  const withoutAgreement = card.stage === WITHOUT_AGREEMENT_STAGE;
+  const withoutAgreement = card.stage_key === "without_agreement";
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Открытое подтверждение не должно переезжать на другого клиента.
   useEffect(() => setConfirmDelete(false), [card.lead_id]);
@@ -199,7 +198,7 @@ export default function ClientCardView({
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {card.is_test ? <Pill tone="alert">Тест · ваш аккаунт</Pill> : null}
-          <Pill tone={card.stage === "Договор подписан" || withoutAgreement ? "ok" : "mute"}>{card.stage}</Pill>
+          <Pill tone={card.stage_key === "signed" || withoutAgreement ? "ok" : "mute"}>{card.stage}</Pill>
           {clientType ? <Pill>{label(CLIENT_TYPE, clientType)}</Pill> : null}
           {conflictAlert ? (
             <Pill tone={conflictTone(conflictAlert)}>{label(CONFLICT, conflictAlert)}</Pill>
@@ -208,7 +207,7 @@ export default function ClientCardView({
 
         {/* Шкала хода — одна сделка. У клиента с несколькими обращениями она
             стоит у каждого из них, а не в шапке: там показала бы только одно. */}
-        {card.intakes.length > 1 || withoutAgreement ? null : <Progress stage={card.stage} />}
+        {card.intakes.length > 1 || card.stage_step === null ? null : <Progress step={card.stage_step} />}
 
         {/* Самый юридически значимый статус на карточке — акцентным блоком,
             а не «проваленным» полем: от него зависит, можно ли принимать документы. */}
@@ -677,7 +676,7 @@ function Intake({
         {item.region ? <span>{item.region}</span> : null}
       </div>
 
-      {ownProgress && !withoutAgreement ? <Progress stage={matterStage(agreements, ndaSigned)} /> : null}
+      {ownProgress && item.stage_step !== null ? <Progress step={item.stage_step} /> : null}
 
       {item.outreach_blocked_reason ? (
         <p className="mt-2 text-lw-sm text-lw-warning">
