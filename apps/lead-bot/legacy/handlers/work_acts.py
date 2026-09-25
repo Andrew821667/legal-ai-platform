@@ -143,6 +143,8 @@ async def _finish_wizard(message, context: ContextTypes.DEFAULT_TYPE, data: dict
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
     """Обрабатывает шаги мастера. False — сообщение не наше, пусть идёт дальше."""
     state = context.user_data.get(STATE_KEY)
+    if state == "act_review_text":
+        return await _handle_review_text(update, context, text)
     if state in ("act_objection", "act_cancel"):
         return await _handle_note(update, context, text, state)
     if context.user_data.get(STATE_KEY) != "act_wizard":
@@ -333,6 +335,9 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
             if result:
                 await _notify_admin(context.bot, f"Клиент принял работу по акту № {act['act_number']}.", _act_admin_markup(act_id))
         return
+    if action in ("rv", "rvp"):
+        await _handle_review_button(query, context, user, action, act_id, parts[3] if len(parts) > 3 else "")
+        return
     if action == "qr":
         # Платёжный QR (ГОСТ Р 56042): банк сам заполнит получателя, сумму и
         # назначение. Сканировать с другого устройства или открыть картинку из
@@ -388,6 +393,78 @@ async def handle_client_callback(update: Update, context: ContextTypes.DEFAULT_T
         f"{format_rub(act['amount_minor'])}. Проверьте зачисление.",
         _act_admin_markup(act["id"]),
     )
+
+
+def _consent_markup(act_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Можно опубликовать на сайте (только имя)", callback_data=f"act_c:rvp:{act_id}:1")],
+            [InlineKeyboardButton("Только для юриста", callback_data=f"act_c:rvp:{act_id}:0")],
+        ]
+    )
+
+
+async def _handle_review_button(query, context, user, action: str, act_id: str, value: str) -> None:
+    """Оценка 1–5 из просьбы об отзыве и согласие на публикацию (см. core client_reviews)."""
+    if action == "rv":
+        if value not in {"1", "2", "3", "4", "5"}:
+            return
+        result = await asyncio.to_thread(
+            admin_interface.admin_interface.work_act_review, act_id, {"telegram_user_id": user.id, "score": int(value)}
+        )
+        if not result:
+            await utils.safe_reply_text(query.message, "Не удалось сохранить оценку. Попробуйте позже.", action="review_score_failed")
+            return
+        context.user_data[STATE_KEY] = "act_review_text"
+        context.user_data[DATA_KEY] = {"act_id": act_id}
+        await utils.safe_reply_text(
+            query.message,
+            "Спасибо за оценку! Если хотите, напишите пару слов о работе — что понравилось или что можно "
+            "улучшить. Или /cancel, если не хотите.",
+            action="review_score_saved",
+        )
+        return
+    result = await asyncio.to_thread(
+        admin_interface.admin_interface.work_act_review,
+        act_id,
+        {"telegram_user_id": user.id, "publish_consent": value == "1"},
+    )
+    await utils.safe_reply_text(
+        query.message,
+        ("Спасибо! Отзыв поможет другим клиентам." if value == "1" else "Спасибо! Отзыв увидит только юрист.")
+        if result
+        else "Не удалось сохранить. Попробуйте позже.",
+        action="review_consent_saved",
+    )
+
+
+async def _handle_review_text(update, context, text: str) -> bool:
+    user, message = update.effective_user, update.effective_message
+    if not user or not message:
+        return False
+    value = (text or "").strip()
+    if value.lower() in ("/cancel", "отмена"):
+        _clear(context)
+        await utils.safe_reply_text(message, "Хорошо, спасибо за оценку!", action="review_text_cancel")
+        return True
+    if not 2 <= len(value) <= 2000:
+        await utils.safe_reply_text(message, "Нужно от 2 до 2000 символов.", action="review_text_length")
+        return True
+    act_id = dict(context.user_data.get(DATA_KEY) or {}).get("act_id", "")
+    result = await asyncio.to_thread(
+        admin_interface.admin_interface.work_act_review, act_id, {"telegram_user_id": user.id, "text": value}
+    )
+    if not result:
+        await utils.safe_reply_text(message, "Не удалось сохранить отзыв. Попробуйте ещё раз.", action="review_text_failed")
+        return True
+    _clear(context)
+    await utils.safe_reply_text(
+        message,
+        "Спасибо за отзыв! Можно показать его на сайте? Будет видно только ваше имя, без фамилии и контактов.",
+        reply_markup=_consent_markup(act_id),
+        action="review_text_saved",
+    )
+    return True
 
 
 async def _handle_note(update, context, text: str, state: str) -> bool:

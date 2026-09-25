@@ -19,7 +19,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import get_db
-from core_api import npd_limit, payment_qr, telegram_delivery
+from core_api import client_reviews, npd_limit, payment_qr, telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
@@ -552,6 +552,43 @@ def act_payment_qr(
         media_type="image/png",
         headers={"Content-Disposition": f'inline; filename="qr-{item.act_number}.png"', "Cache-Control": "no-store"},
     )
+
+
+class ReviewIn(BaseModel):
+    telegram_user_id: int = Field(gt=0)
+    score: int | None = Field(default=None, ge=1, le=5)
+    text: str | None = Field(default=None, min_length=2, max_length=2000)
+    publish_consent: bool | None = None
+
+
+@router.post("/{act_id}/review")
+def client_review(
+    act_id: uuid.UUID,
+    payload: ReviewIn,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Оценка, текст отзыва или согласие на публикацию — от клиента через бота.
+
+    Только по своему оплаченному акту: оценивать работу, которую не оплачивал,
+    или чужую — нельзя.
+    """
+    item = _get(db, act_id, lock=True)
+    _assert_client(db, item, payload.telegram_user_id)
+    if item.cancelled_at or item.status != WorkActStatus.paid:
+        raise HTTPException(status_code=409, detail="Review is for a paid act")
+    review = client_reviews.record(
+        db,
+        item,
+        telegram_user_id=payload.telegram_user_id,
+        actor=identity.name,
+        score=payload.score,
+        text=payload.text,
+        publish_consent=payload.publish_consent,
+    )
+    db.commit()
+    db.refresh(review)
+    return {"act_number": item.act_number, **client_reviews.payload(review)}
 
 
 @router.post("/{act_id}/client/{action}")

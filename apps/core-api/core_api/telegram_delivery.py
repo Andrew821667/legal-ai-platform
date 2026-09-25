@@ -54,6 +54,7 @@ KIND_LABELS = {
     "work_act": "Акт клиенту",
     "act_reminder": "Напоминание об оплате",
     "receipt": "Чек клиенту",
+    "review_request": "Просьба оценить работу",
     "agreement_reminder": "Напоминание о договоре",
 }
 

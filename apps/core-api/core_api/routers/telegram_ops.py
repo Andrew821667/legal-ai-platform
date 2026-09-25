@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from core_api import agreement_reminders, telegram_delivery, weekly_digest
+from core_api import agreement_reminders, client_reviews, telegram_delivery, weekly_digest
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.models import Scope
 
@@ -22,6 +22,9 @@ def tick(identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admi
     # Без связи напоминание не дойдёт, а отметка «напомнили» уже встанет.
     result["agreement_reminders"] = (
         agreement_reminders.process_due() if result["health"].get("ok") else {"skipped": "no_link"}
+    )
+    result["review_requests"] = (
+        client_reviews.process_due() if result["health"].get("ok") else {"skipped": "no_link"}
     )
     # Сводка идёт через очередь уведомлений — её доставляет бот своей дорогой,
     # поэтому от связи ядра с Telegram она не зависит.
