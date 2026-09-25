@@ -15,4 +15,4 @@
 
 ## Важно по контрактной части
 - На текущем этапе production-контур договоров = `core-api contract_jobs` + `apps/contract-worker`.
-- `apps/contract-ai` не интегрирован в runtime-контур и не деплоится через основной compose.
+- Копия `apps/contract-ai` удалена; Contract AI деплоится из своего репозитория, не через основной compose.

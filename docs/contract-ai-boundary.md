@@ -11,7 +11,7 @@
 Для `legal-ai-platform` это означает:
 
 - frontend/admin/auth/billing самого `Contract_AI_System` не являются source of truth этого монорепо;
-- локальная папка `apps/contract-ai` внутри `legal-ai-platform` не должна считаться каноническим production-источником;
+- локальной копии `apps/contract-ai` в `legal-ai-platform` больше нет (удалена в сентябре 2026) — канонический источник только Contract-AI-System;
 - глубокие исправления самого продукта `Contract AI` должны планироваться и вноситься в отдельном репозитории.
 
 ## Что остается в зоне ответственности legal-ai-platform

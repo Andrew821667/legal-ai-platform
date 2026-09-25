@@ -13,7 +13,6 @@ dev = [
 
 [tool.uv.workspace]
 members = [
-    "apps/contract-ai",
     "apps/contract-worker",
     "apps/core-api",
     "apps/lead-bot",
@@ -30,7 +29,6 @@ extend-exclude = [
     "apps/web",
     "apps/lead-bot/legacy",
     "apps/news/legacy",
-    "apps/contract-ai",
 ]
 
 [tool.ruff.lint]

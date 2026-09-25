@@ -100,7 +100,6 @@ legal-ai-platform/
 │   ├── news/                  # Генератор + паблишер + admin-бот новостей
 │   ├── news/legacy/           # Reader-бот (персонализация, поиск)
 │   ├── contract-worker/       # Воркер анализа (standalone)
-│   ├── contract-ai/           # Reference-контур Contract AI System
 │   │
 │   └── web/                   # Next.js 16 сайт
 │       ├── app/               # App Router (10+ маршрутов)
