@@ -900,3 +900,18 @@ Telegram в России без VPN не открывается, поэтому 
 листе сведений PDF — способ подписания. Документы прежних редакций клиент с
 Яндекс ID подписать не может (ядро отвечает 409 «эту редакцию можно подписать
 только в Telegram») — нужна новая редакция.
+
+## Журнал удалений
+
+Любое удаление из `leads`, `legal_intakes`, `service_agreements`, `work_acts`,
+`nda_signatures`, `intake_documents` пишет триггер в базе в `deletion_log`:
+таблица, id строки, id клиента, время, пользователь БД, программа
+(`application_name`), адрес, номер транзакции. Содержимого строки нет —
+«Удалить навсегда» должно действительно удалять персональные данные.
+
+Ядро представляется `legal-ai-core-api`; удаления от любой другой программы
+(psql, скрипт, миграция) ядро в своём такте присылает владельцу — одно
+сообщение на транзакцию. Посмотреть последние:
+```bash
+ssh legalai-prod 'sudo -n -u andrej -i docker exec legal-ai-postgres psql -U legalai_app -d legalai_platform -c "select deleted_at, table_name, row_id, lead_id, db_user, application_name from deletion_log order by deleted_at desc limit 30"'
+```

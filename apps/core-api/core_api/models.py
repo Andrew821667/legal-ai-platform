@@ -688,6 +688,40 @@ class ClientAccount(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class DeletionLog(Base):
+    """Что и кем удалено из таблиц с делами клиентов — пишет триггер в базе (deletion_log.py).
+
+    Без содержимого строки: удаление персональных данных должно их удалять.
+    """
+
+    __tablename__ = "deletion_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    table_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    row_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lead_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    db_user: Mapped[str] = mapped_column(String(64), nullable=False, server_default=sa_text("session_user"))
+    application_name: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, server_default=sa_text("current_setting('application_name', true)")
+    )
+    client_addr: Mapped[str | None] = mapped_column(String(64), nullable=True, server_default=sa_text("inet_client_addr()::text"))
+    txid: Mapped[int | None] = mapped_column(BigInteger, nullable=True, server_default=sa_text("txid_current()"))
+
+
+def _create_deletion_triggers(target, connection, **kw) -> None:
+    """Триггеры журнала удалений — после создания всех таблиц (схема в тестах)."""
+    if connection.dialect.name != "postgresql":
+        return
+    from core_api.deletion_log import all_statements
+
+    for statement in all_statements():
+        connection.exec_driver_sql(statement)
+
+
+event.listen(Base.metadata, "after_create", _create_deletion_triggers)
+
+
 class ClientNotice(Base):
     __tablename__ = "client_notices"
 
