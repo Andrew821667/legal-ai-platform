@@ -14,7 +14,17 @@ export default async function CabinetPage({
   const [session, { login }] = await Promise.all([readClientSession(), searchParams]);
 
   if (!session) {
-    return <CabinetLogin mode={telegramLoginMode()} botUsername={LEAD_BOT_USERNAME} reason={login} />;
+    const yandexEnabled = Boolean(
+      (process.env.YANDEX_OAUTH_CLIENT_ID || "").trim() && (process.env.YANDEX_OAUTH_CLIENT_SECRET || "").trim(),
+    );
+    return (
+      <CabinetLogin
+        mode={telegramLoginMode()}
+        botUsername={LEAD_BOT_USERNAME}
+        reason={login}
+        yandexEnabled={yandexEnabled}
+      />
+    );
   }
 
   return <CabinetHome />;

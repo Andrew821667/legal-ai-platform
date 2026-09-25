@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
+import { clientFields, clientKey, clientQuery } from "@/lib/client-ref";
 import { clientCoreGet, clientCorePost } from "@/lib/client-core";
 import { checkUpload } from "@/lib/client-upload";
 import { slidingWindowAllow } from "@/lib/rate-limit";
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
   const check = checkUpload({ name: file.name, size: file.size });
   if (!check.ok) return Response.json({ detail: check.detail }, { status: 400 });
 
-  const summaryResponse = await clientCoreGet(`/api/v1/client-portal/summary?telegram_user_id=${auth.telegramUserId}`);
+  const summaryResponse = await clientCoreGet(`/api/v1/client-portal/summary?${clientQuery(auth)}`);
   if (!summaryResponse.ok) return summaryResponse;
   const summary = (await summaryResponse.json().catch(() => ({}))) as Summary;
   const matter = (summary.cases || []).find((item) => item.id === intakeId);
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
     return Response.json({ detail: "Документы принимаются после подписания NDA." }, { status: 409 });
   }
 
-  const limit = slidingWindowAllow(recent, String(auth.telegramUserId), 10, 10 * 60_000);
+  const limit = slidingWindowAllow(recent, clientKey(auth), 10, 10 * 60_000);
   if (!limit.allowed) {
     return Response.json({ detail: "Слишком много файлов подряд — подождите несколько минут." }, { status: 429 });
   }
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
   if (!document.file_id) return Response.json({ detail: "Telegram не вернул файл — попробуйте ещё раз." }, { status: 502 });
 
   return clientCorePost(`/api/v1/legal-intakes/${intakeId}/documents`, {
-    telegram_user_id: auth.telegramUserId,
+    ...clientFields(auth),
     telegram_file_id: document.file_id,
     file_name: check.name,
     file_size: file.size,

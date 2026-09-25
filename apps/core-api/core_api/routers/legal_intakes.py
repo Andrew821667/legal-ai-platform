@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.staff import real_client
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_principal import resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
@@ -125,6 +126,7 @@ def create_legal_intake(
         telegram_user_id=payload.telegram_user_id,
         name=payload.name.strip() if payload.name else None,
         contact=payload.contact.strip(),
+        email=payload.email.strip().lower() if payload.email else None,
         company=payload.company.strip() if payload.company else None,
         segment=_segment_for(payload.client_type),
         status=LeadStatus.new,
@@ -489,8 +491,16 @@ def record_document(
     lead = db.get(Lead, item.lead_id)
     if lead is None or _signature_for_lead(db, lead) is None:
         raise HTTPException(status_code=409, detail="NDA must be signed before uploading documents")
-    if payload.get("telegram_user_id") is not None and payload["telegram_user_id"] != lead.telegram_user_id:
-        raise HTTPException(status_code=404, detail="Legal intake not found")
+    # Клиент — владелец дела: по Telegram или по учётной записи (client_principal).
+    if payload.get("telegram_user_id") is not None or payload.get("client_account_id"):
+        try:
+            account_id = uuid.UUID(str(payload["client_account_id"])) if payload.get("client_account_id") else None
+            telegram_user_id = int(payload["telegram_user_id"]) if payload.get("telegram_user_id") is not None else None
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="Invalid client reference") from exc
+        principal = resolve(db, telegram_user_id=telegram_user_id, client_account_id=account_id)
+        if item.lead_id not in principal.lead_ids:
+            raise HTTPException(status_code=404, detail="Legal intake not found")
 
     file_id = str(payload.get("telegram_file_id") or "").strip()[:255]
     if not file_id:
