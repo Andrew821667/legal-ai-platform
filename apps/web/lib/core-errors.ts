@@ -75,6 +75,10 @@ const EXACT: Record<string, string> = {
   "Describe objections": "Опишите замечания.",
   "Not the client of this act": "Этот акт выставлен другому клиенту.",
   "Payment reminder was already sent today": "Сегодня уже напоминали — следующее напоминание можно завтра.",
+  "This revision can only be signed in Telegram":
+    "Эту редакцию можно подписать только в Telegram. Попросите юриста прислать новую редакцию — её можно будет подписать в кабинете.",
+  "Client account does not own this lead": "Это обращение оставлено с другой почтой.",
+  "Consent belongs to another client": "Согласие дано другим клиентом.",
   "Receipt is recorded for a paid act": "Чек записывается только для оплаченного акта.",
   "Receipt link is required to send it": "Чтобы отправить чек клиенту, вставьте ссылку на него из «Мой налог».",
 

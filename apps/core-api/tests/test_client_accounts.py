@@ -26,7 +26,7 @@ from core_api.models import (
     WorkActStatus,
 )
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from test_client_archive import _agreement, _cleanup, _key
 
@@ -49,9 +49,12 @@ def world():
         db.flush()
         own = _agreement(site.id, intake.id, status=ServiceAgreementStatus.viewed, signed_at=None, sent_at=now,
                          viewed_at=now, client_snapshot={"details_complete": True, "full_name": "Анна"})
+        fresh = _agreement(site.id, intake.id, status=ServiceAgreementStatus.viewed, signed_at=None, sent_at=now,
+                           viewed_at=now, document_version="2026-09-25.1",
+                           client_snapshot={"details_complete": True, "full_name": "Анна"})
         foreign = _agreement(telegram.id, None, status=ServiceAgreementStatus.sent, signed_at=None, sent_at=now,
                              client_telegram_user_id=telegram.telegram_user_id)
-        db.add_all([own, foreign])
+        db.add_all([own, fresh, foreign])
         db.flush()
         paid_ready = _agreement(site.id, intake.id)  # подписанный — для акта
         db.add(paid_ready)
@@ -62,7 +65,7 @@ def world():
         db.add(act)
         db.commit()
         ids = {"site": str(site.id), "telegram": str(telegram.id), "own": str(own.id), "foreign": str(foreign.id),
-               "own_hash": own.document_hash, "act": str(act.id)}
+               "own_hash": own.document_hash, "act": str(act.id), "fresh": str(fresh.id)}
     finally:
         db.close()
     name = f"pytest.accounts.{uuid4().hex}"
@@ -108,18 +111,91 @@ def test_account_sees_only_its_site_cases(world) -> None:
     assert foreign.status_code == 403
 
 
-def test_account_can_ask_but_cannot_sign_yet(world) -> None:
+def test_account_signs_only_the_new_revision(world) -> None:
+    """Подпись после входа через Яндекс ID — только в редакции, где этот способ назван."""
     client = TestClient(app)
     account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
-    agreement = world["ids"]["own"]
-    asked = client.post(f"/api/v1/service-agreements/{agreement}/questions",
-                        json={"text": "А сроки?", "client_account_id": account_id, "channel": "miniapp"}, headers=world["bot"])
+    asked = client.post(f"/api/v1/service-agreements/{world['ids']['own']}/questions",
+                        json={"text": "А сроки?", "client_account_id": account_id, "channel": "miniapp"},
+                        headers=world["bot"])
     assert asked.status_code == 201
-    signed = client.post(f"/api/v1/service-agreements/{agreement}/sign",
-                         json={"client_account_id": account_id, "document_hash": world["ids"]["own_hash"],
-                               "callback_id": "cab-1", "channel": "miniapp"}, headers=world["bot"])
-    assert signed.status_code == 409
-    assert "without Telegram" in signed.json()["detail"]
+
+    def sign(agreement_id: str):
+        return client.post(f"/api/v1/service-agreements/{agreement_id}/sign",
+                           json={"client_account_id": account_id, "document_hash": world["ids"]["own_hash"],
+                                 "callback_id": f"cab-{agreement_id[:8]}", "channel": "miniapp"},
+                           headers=world["bot"])
+
+    old = sign(world["ids"]["own"])
+    assert old.status_code == 409
+    assert "only be signed in Telegram" in old.json()["detail"]
+
+    fresh = sign(world["ids"]["fresh"])
+    assert fresh.status_code == 201, fresh.text
+    db = SessionLocal()
+    try:
+        from core_api.models import ServiceAgreement
+        from core_api.routers.service_agreements import _certificate_rows
+
+        row = db.get(ServiceAgreement, world["ids"]["fresh"])
+        assert str(row.signer_account_id) == account_id
+        assert row.signer_email == world["email"]
+        assert row.signer_telegram_user_id is None
+        rows = dict(_certificate_rows(db, row))
+        assert rows["Способ подписания"] == "личный кабинет, вход через Яндекс ID"
+        assert rows["Почта подписанта (подтверждена Яндексом)"] == world["email"]
+    finally:
+        db.close()
+
+
+def test_account_signs_nda_for_its_own_lead_only(world) -> None:
+    client = TestClient(app)
+    account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+    details = {
+        "client_account_id": account_id,
+        "signer_full_name": "Анна Петрова",
+        "signer_contact": world["email"],
+        "signer_identity_document": "45 01 123456, выдан ОВД 01.02.2010",
+        "signer_org": "",
+    }
+    # Чужой лид (из Telegram с той же почтой) — отказ.
+    foreign = client.post("/api/v1/nda/personal-data-consent/preview",
+                          json={"lead_id": world["ids"]["telegram"], **details}, headers=world["bot"])
+    assert foreign.status_code in (200, 403)
+    denied = client.post("/api/v1/nda/personal-data-consent/accept",
+                         json={"lead_id": world["ids"]["telegram"], "document_hash": "0" * 64,
+                               "pdn_consent_accepted": True, **details}, headers=world["bot"])
+    assert denied.status_code == 403
+
+    lead_id = world["ids"]["site"]
+    preview = client.post("/api/v1/nda/personal-data-consent/preview", json={"lead_id": lead_id, **details},
+                          headers=world["bot"])
+    assert preview.status_code == 200, preview.text
+    consent = client.post("/api/v1/nda/personal-data-consent/accept",
+                          json={"lead_id": lead_id, "document_hash": preview.json()["hash"],
+                                "pdn_consent_accepted": True, "channel": "miniapp", **details},
+                          headers=world["bot"])
+    assert consent.status_code == 201, consent.text
+    consent_id = consent.json()["consent_id"]
+    nda = client.post("/api/v1/nda/document/preview",
+                      json={"lead_id": lead_id, "client_account_id": account_id, "pdn_consent_id": consent_id},
+                      headers=world["bot"])
+    assert nda.status_code == 200, nda.text
+    assert "Яндекс ID" in nda.json()["text"]
+    signed = client.post("/api/v1/nda/sign",
+                         json={"lead_id": lead_id, "client_account_id": account_id, "pdn_consent_id": consent_id,
+                               "document_hash": nda.json()["hash"], "channel": "miniapp"},
+                         headers=world["bot"])
+    assert signed.status_code == 201, signed.text
+    db = SessionLocal()
+    try:
+        from core_api.models import NdaSignature
+
+        row = db.scalar(select(NdaSignature).where(NdaSignature.lead_id == lead_id))
+        assert str(row.signer_account_id) == account_id
+        assert row.signer_email == world["email"]
+    finally:
+        db.close()
 
 
 def test_account_opens_its_act_and_reports_payment(world) -> None:
