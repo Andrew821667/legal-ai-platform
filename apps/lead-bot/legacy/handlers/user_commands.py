@@ -31,6 +31,7 @@ from .case_messages import CASE_START_PAYLOAD_RE
 from .start_payloads import (
     LEGAL_HELP_START_PAYLOAD,
     PENDING_START_PAYLOAD_KEY as _PENDING_START_PAYLOAD_KEY,
+    _CHANNEL_START_PAYLOAD_RE,
     _CONTRACT_START_PAYLOAD_RE,
     _READER_START_PAYLOAD_RE,
     process_pending_start_payload,
@@ -155,7 +156,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         elif needs_pdn_consent:
             consent_text = _pdn_consent_prompt_text()
-            if _READER_START_PAYLOAD_RE.match(start_payload):
+            if _CHANNEL_START_PAYLOAD_RE.match(start_payload):
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения согласия сразу подхвачу ваш вопрос по посту из канала."
+                )
+            elif _READER_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (
                     f"{consent_text}\n\n"
                     "После подтверждения согласия сразу подхвачу ваш запрос по материалу из ридер-бота."

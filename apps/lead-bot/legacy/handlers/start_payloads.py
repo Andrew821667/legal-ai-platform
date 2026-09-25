@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 config = get_config()
 
 _READER_START_PAYLOAD_RE = re.compile(r"^readerq_(?P<post_id>[0-9a-fA-F-]{36})$")
+# Кнопка «Спросить юриста» прямо под постом в канале (news/publish.py).
+_CHANNEL_START_PAYLOAD_RE = re.compile(r"^chq_(?P<post_id>[0-9a-fA-F-]{36})$")
 _CONTRACT_START_PAYLOAD_RE = re.compile(
     r"^contract_(?P<entry>demo|checklist|sample_report|consultation|cabinet)$"
 )
@@ -68,11 +70,15 @@ def build_reader_referral_lead_payload(
     user_first_name: str,
     post_id: str,
     post_context: Dict[str, str],
+    origin: str = "reader",
 ) -> Dict:
+    """Лид по посту. origin — откуда пришёл: из бота-читателя или прямо из
+    канала; метки разные, чтобы статистика читателя не смешивалась с каналом."""
     title = (post_context.get("title") or "").strip()
     source_url = (post_context.get("source_url") or "").strip()
     rubric = (post_context.get("rubric") or "").strip()
-    notes_parts = ["[READER_REFERRAL]", f"post_id={post_id}"]
+    from_channel = origin == "channel"
+    notes_parts = ["[CHANNEL_POST]" if from_channel else "[READER_REFERRAL]", f"post_id={post_id}"]
     if title:
         notes_parts.append(f"title={title}")
     if source_url:
@@ -86,7 +92,7 @@ def build_reader_referral_lead_payload(
         else "Нужно разобрать материал из канала и применить в юридической работе."
     )
     return {
-        "name": user_first_name or "Клиент из Reader",
+        "name": user_first_name or ("Клиент из канала" if from_channel else "Клиент из Reader"),
         "pain_point": pain_point,
         "temperature": "warm",
         "status": "new",
@@ -96,7 +102,7 @@ def build_reader_referral_lead_payload(
         "lead_magnet_delivered": 0,
         "notification_sent": 0,
         "conversation_stage": "qualify",
-        "cta_variant": "reader_referral",
+        "cta_variant": "channel_post" if from_channel else "reader_referral",
         "cta_shown": 1,
         "notes": "\n".join(notes_parts)[:3500],
     }
@@ -109,18 +115,20 @@ async def handle_reader_referral_start(
     user_data: Dict,
     user,
     post_id: str,
+    origin: str = "reader",
 ) -> bool:
     post_context = fetch_post_context(post_id)
     lead_payload = build_reader_referral_lead_payload(
         user_first_name=user.first_name or "",
         post_id=post_id,
         post_context=post_context,
+        origin=origin,
     )
 
     lead_id = database.db.create_new_lead(user_data["id"], lead_payload)
     database.db.track_event(
         user_data["id"],
-        "reader_referral_start",
+        "channel_post_start" if origin == "channel" else "reader_referral_start",
         payload={
             "post_id": post_id,
             "post_title": post_context.get("title") or "",
@@ -138,16 +146,21 @@ async def handle_reader_referral_start(
 
     title = (post_context.get("title") or "").strip()
     title_block = f"Материал: {title}\n\n" if title else ""
+    head = (
+        "✅ Вы пришли из поста в канале — заявка создана.\n\n"
+        if origin == "channel"
+        else "✅ Переход из ридер-бота принят, заявка создана.\n\n"
+    )
     await utils.safe_reply_text(
         message,
         (
-            "✅ Переход из ридер-бота принят, заявка создана.\n\n"
+            f"{head}"
             f"{title_block}"
             "Можете сразу описать ваш вопрос по внедрению в 1-2 предложениях "
             "или отправить телефон кнопкой ниже."
         ),
         reply_markup=consultation_contact_markup(),
-        action="reader_referral_start",
+        action="channel_post_start" if origin == "channel" else "reader_referral_start",
     )
     return True
 
@@ -247,6 +260,17 @@ async def process_pending_start_payload(
     payload = str((context.user_data or {}).pop(PENDING_START_PAYLOAD_KEY, "") or "").strip()
     if not payload:
         return False
+
+    channel_match = _CHANNEL_START_PAYLOAD_RE.match(payload)
+    if channel_match:
+        return await handle_reader_referral_start(
+            message=message,
+            context=context,
+            user_data=user_data,
+            user=user,
+            post_id=channel_match.group("post_id"),
+            origin="channel",
+        )
 
     match = _READER_START_PAYLOAD_RE.match(payload)
     if not match:
