@@ -532,20 +532,36 @@ export function Agreement({
         </a>
       )}
 
+      {item.delivery === "cabinet" && (item.status === "sent" || item.status === "viewed") ? (
+        <p className="mt-2 rounded-lg bg-lw-blue-soft p-2 text-lw-sm text-lw-ink">
+          Опубликован в кабинете: у клиента нет Telegram. Сообщите ему — ai-verdict.ru/cabinet → «Войти с
+          Яндекс ID» с почтой {item.cabinet_email}.
+        </p>
+      ) : null}
+
       {item.status === "draft" ? (
         <div className="mt-3 border-t border-lw-border pt-3">
-          <ActionButton
-            label="Отправить клиенту"
-            done={
-              supplement
-                ? "Отправлено. Клиент получил допсоглашение."
-                : "Отправлено. Клиент получил проект договора."
-            }
-            onRun={async () => {
-              await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
-              onChanged();
-            }}
-          />
+          {item.delivery === "none" ? (
+            <p className="text-lw-sm text-lw-warning">
+              У клиента нет ни Telegram, ни почты — отправить некуда. Попросите клиента оставить почту или
+              написать в бот.
+            </p>
+          ) : (
+            <ActionButton
+              label={item.delivery === "cabinet" ? "Опубликовать в кабинете клиента" : "Отправить клиенту"}
+              done={
+                item.delivery === "cabinet"
+                  ? `Опубликовано. Сообщите клиенту: ai-verdict.ru/cabinet → «Войти с Яндекс ID» с почтой ${item.cabinet_email}.`
+                  : supplement
+                    ? "Отправлено. Клиент получил допсоглашение."
+                    : "Отправлено. Клиент получил проект договора."
+              }
+              onRun={async () => {
+                await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
+                onChanged();
+              }}
+            />
+          )}
         </div>
       ) : null}
 

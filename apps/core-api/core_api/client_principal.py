@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass
 
@@ -103,3 +104,21 @@ def resolve(
 
 def resolve_ref(db: Session, ref: ClientRef) -> Principal:
     return resolve(db, telegram_user_id=ref.telegram_user_id, client_account_id=ref.client_account_id)
+
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def cabinet_email(lead: Lead | None) -> str | None:
+    """Почта, с которой клиент без Telegram увидит дело в кабинете (Яндекс ID).
+
+    Только для лида без Telegram — ровно то же правило, что в lead_filter:
+    иначе документ «опубликуется» туда, где его никто не увидит.
+    """
+    if lead is None or lead.telegram_user_id is not None:
+        return None
+    for value in (lead.email, lead.contact):
+        email = normalize_email(value or "")
+        if _EMAIL.match(email):
+            return email
+    return None
