@@ -14,7 +14,7 @@ import {
   groupClients,
 } from "@/lib/lawyer-clients";
 import type { ClientFilter, ClientSort } from "@/lib/lawyer-clients";
-import { WITHOUT_AGREEMENT_STAGE } from "@/lib/lawyer-stage";
+import type { StageKey } from "@/lib/lawyer-clients";
 import { EXTERNAL_LINKS } from "@/lib/links";
 
 /**
@@ -41,10 +41,10 @@ const SHARE_BOT_URL = `https://t.me/share/url?url=${encodeURIComponent(EXTERNAL_
 /** Ниже этого числа под списком остаётся пустой экран — заполняем его делом. */
 const FEW_CLIENTS = 5;
 
-function stageTone(stage: string, waiting: boolean) {
+function stageTone(stage: StageKey, waiting: boolean) {
   if (waiting) return "alert" as const;
-  if (stage === "Договор подписан" || stage === WITHOUT_AGREEMENT_STAGE) return "ok" as const;
-  if (stage === "Договор не отправлен" || stage === "Клиент отказался") return "warn" as const;
+  if (stage === "signed" || stage === "without_agreement") return "ok" as const;
+  if (stage === "not_sent" || stage === "declined") return "warn" as const;
   return "mute" as const;
 }
 
@@ -225,7 +225,7 @@ export default function ClientsView({
 
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {row.is_test ? <Pill tone="mute">Тест</Pill> : null}
-                      <Pill tone={stageTone(row.stage, row.waiting_on_me)}>{row.stage}</Pill>
+                      <Pill tone={stageTone(row.stage_key, row.waiting_on_me)}>{row.stage}</Pill>
                       {row.waiting_on_me ? <Pill tone="alert">Ждёт ответа</Pill> : null}
                       {row.nda_signed ? null : <Pill tone="warn">без NDA</Pill>}
                       {row.intakes > 1 ? <Pill>{row.intakes} обращения</Pill> : null}

@@ -1,3 +1,5 @@
+import type { StageKey } from "@/lib/lawyer-clients";
+
 export type TodayItem = {
   agreement_id?: string;
   intake_id?: string;
@@ -53,10 +55,12 @@ export type TelegramHealth = {
 
 export type Today = { generated_at: string; sections: TodaySection[]; telegram?: TelegramHealth | null };
 
-export type ClientRow = {
+/** Этап дела от ядра: текст для экрана, ключ для решений, шаг для шкалы (null — шкалы нет). */
+export type StageFields = { stage: string; stage_key: StageKey; stage_step: number | null };
+
+export type ClientRow = StageFields & {
   lead_id: string;
   name: string;
-  stage: string;
   waiting_on_me: boolean;
   contact: string | null;
   company: string | null;
@@ -97,7 +101,8 @@ export type IntakeLinkRow = {
   created_at: string | null;
 };
 
-export type IntakeCard = {
+/** Этап у обращения свой — по его договорам (у постоянного клиента их несколько). */
+export type IntakeCard = StageFields & {
   intake_id: string;
   created_at: string | null;
   legal_area: string;
@@ -174,14 +179,13 @@ export type WorkAct = {
   last_reminded_at?: string | null;
 };
 
-export type ClientCard = {
+export type ClientCard = StageFields & {
   lead_id: string;
   name: string;
   /** Не пусто — клиент в архиве: в карточке «Восстановить» и «Удалить навсегда». */
   archived_at?: string | null;
   /** Ваш собственный аккаунт Telegram — тест, не в деньгах и счётчиках. */
   is_test?: boolean;
-  stage: string;
   contact: string | null;
   company: string | null;
   email: string | null;
