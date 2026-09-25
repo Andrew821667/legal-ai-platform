@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from core_api import agreement_reminders, telegram_delivery
+from core_api import agreement_reminders, telegram_delivery, weekly_digest
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.models import Scope
 
@@ -23,4 +23,7 @@ def tick(identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admi
     result["agreement_reminders"] = (
         agreement_reminders.process_due() if result["health"].get("ok") else {"skipped": "no_link"}
     )
+    # Сводка идёт через очередь уведомлений — её доставляет бот своей дорогой,
+    # поэтому от связи ядра с Telegram она не зависит.
+    result["weekly_digest"] = weekly_digest.maybe_queue()
     return result
