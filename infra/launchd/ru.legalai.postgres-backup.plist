@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ежедневный дамп базы в 03:30 от имени andrej (у него доступ к docker).
+  Установка (нужен sudo):
+    sudo cp infra/launchd/ru.legalai.postgres-backup.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.postgres-backup.plist
+  Проверка: sudo launchctl kickstart -k system/ru.legalai.postgres-backup
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ru.legalai.postgres-backup</string>
+  <key>UserName</key>
+  <string>andrej</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/legalai/projects/legal-ai-platform/infra/scripts/backup_postgres.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/andrej</string>
+    <key>BACKUP_DIR</key>
+    <string>/Users/andrej/backups/legal-ai</string>
+    <key>BACKUP_KEEP_DAYS</key>
+    <string>14</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/andrej/backups/legal-ai/backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/andrej/backups/legal-ai/backup.log</string>
+</dict>
+</plist>

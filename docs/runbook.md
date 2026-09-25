@@ -547,14 +547,34 @@ curl -s -X PUT "$CORE_API_URL/api/v1/automation-controls/news.generate.enabled" 
 - отдельные тумблеры `news.feedback.collect.enabled` и `news.feedback.guard.enabled` отвечают за автоматический сбор сигналов и фильтрацию новых публикаций по слабой реакции аудитории.
 
 ## Backup/Restore
-Бэкап:
+На Mac mini (проверено 25.09.2026) crontab из раздела выше не установлен: до
+этого бэкапы снимались только вручную. Ежедневный дамп — LaunchDaemon от имени
+`andrej` (у него доступ к docker), дампы в `/Users/andrej/backups/legal-ai`,
+хранятся 14 дней (`BACKUP_KEEP_DAYS`):
 ```bash
-./infra/scripts/backup_postgres.sh
+sudo cp infra/launchd/ru.legalai.postgres-backup.plist /Library/LaunchDaemons/
+sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.postgres-backup.plist
+sudo launchctl kickstart -k system/ru.legalai.postgres-backup   # прогнать сейчас
+tail /Users/andrej/backups/legal-ai/backup.log
 ```
-Восстановление:
+Бэкап вручную (перед рискованными изменениями):
+```bash
+BACKUP_DIR=/Users/andrej/backups/legal-ai ./infra/scripts/backup_postgres.sh
+```
+**Проверочное восстановление** — раз в месяц и после изменений схемы. Свежий
+дамп восстанавливается во временный контейнер без портов, число строк сверяется
+с живой базой, контейнер удаляется; живая база только читается:
+```bash
+FRESH_DUMP=1 BACKUP_DIR=/Users/andrej/backups/legal-ai ./infra/scripts/restore_drill.sh
+```
+Восстановление в живую базу (только при аварии — затирает данные):
 ```bash
 ./infra/scripts/restore_postgres.sh /path/to/legal_ai_YYYYMMDD_HHMMSS.dump
 ```
+Дампы лежат на том же диске, что и база: от ошибки или порчи данных они
+спасают, от потери машины — нет. Копию стоит уносить на другой носитель.
+Паспортные данные в дампе — шифротекст; `PII_ENCRYPTION_KEY` хранится отдельно
+от дампов (см. раздел про ключ шифрования).
 
 ## Ротация API-ключей платформы
 Ключи, которые платформа выдаёт сама (`API_KEY_BOT`, `API_KEY_ADMIN` и прочие
