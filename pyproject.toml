@@ -9,6 +9,9 @@ dev = [
     "pygments>=2.20.0",
     "ruff>=0.15.14",
     "pytest>=8.3",
+    # Тестовый клиент FastAPI/Starlette: связка с httpx устарела (Starlette
+    # предупреждает на каждом прогоне), замена — httpx2.
+    "httpx2>=2.13",
 ]
 
 [tool.uv.workspace]
