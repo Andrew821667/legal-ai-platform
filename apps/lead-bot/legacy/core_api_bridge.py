@@ -87,6 +87,24 @@ class CoreApiBridge:
             logger.warning("Core API read error [%s]: %s", path, error)
         return None
 
+    def _get_bytes(self, path: str) -> bytes | None:
+        """Чтение файла из core-api (PDF договора). None — если не вышло."""
+        if not self.enabled:
+            return None
+        request = urllib.request.Request(
+            url=f"{self.base_url}{path}",
+            method="GET",
+            headers={"X-API-Key": self.api_key},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                return response.read() or None
+        except urllib.error.HTTPError as error:
+            logger.warning("Core API file read failed [%s %s]", path, error.code)
+        except Exception as error:
+            logger.warning("Core API file read error [%s]: %s", path, error)
+        return None
+
     def _post_read(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         """POST без идемпотентности — для чтения/проверки, не для создания
         записей. В отличие от _post не дедуплицирует повторные вызовы: здесь
@@ -446,6 +464,13 @@ class CoreApiBridge:
             f"/api/v1/service-agreements/{agreement_id}?telegram_user_id={telegram_user_id}"
         )
         return result if isinstance(result, dict) else None
+
+    def get_service_agreement_pdf(self, agreement_id: str, telegram_user_id: int) -> bytes | None:
+        """PDF договора: точный текст и лист сведений о подписании."""
+        data = self._get_bytes(
+            f"/api/v1/service-agreements/{agreement_id}/pdf?telegram_user_id={telegram_user_id}"
+        )
+        return data if data and data.startswith(b"%PDF") else None
 
     def mark_service_agreement_viewed(
         self,

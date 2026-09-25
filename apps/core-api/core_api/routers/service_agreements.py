@@ -8,7 +8,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.client_proposal import (
+    STATUS_LABELS,
     build_proposal_markup,
     build_proposal_text,
     build_reply_text,
@@ -678,6 +679,104 @@ def get_agreement(
         if item.status == ServiceAgreementStatus.draft:
             raise HTTPException(status_code=404, detail="Agreement not found")
     return _payload(item, include_text=True)
+
+
+def _certificate_rows(db: Session, item: ServiceAgreement) -> list[tuple[str, str]]:
+    """Лист «Сведения о документе и подписании» — из того, что записала система."""
+    from core_api.pdf_document import msk, text_hash
+
+    operator = item.operator_snapshot or {}
+    client = item.client_snapshot or {}
+    customer = client.get("org") or client.get("full_name") or "—"
+    rows: list[tuple[str, str]] = [
+        ("Документ", f"{_document_title(item)} № {item.agreement_number}"),
+    ]
+    if _is_supplement(item):
+        parent = db.get(ServiceAgreement, item.parent_agreement_id)
+        rows.append(("К договору", f"№ {parent.agreement_number}" if parent else "—"))
+    rows += [
+        ("Редакция", str(item.revision)),
+        ("Версия шаблона", item.document_version),
+        ("Контрольная сумма SHA-256", item.document_hash),
+        (
+            "Текст совпадает с суммой",
+            "да" if text_hash(item.document_text) == item.document_hash else "НЕТ — текст отличается",
+        ),
+        ("Исполнитель", ", ".join(x for x in (operator.get("name"), f"ИНН {operator['inn']}" if operator.get("inn") else "") if x) or "—"),
+        ("Заказчик", str(customer)),
+        ("Статус", STATUS_LABELS.get(item.status.value, item.status.value)),
+        ("Сформирован", msk(item.created_at)),
+        ("Отправлен клиенту", msk(item.sent_at)),
+        ("Открыт клиентом", msk(item.viewed_at)),
+    ]
+    if item.signed_at:
+        rows += [
+            ("Подписан", msk(item.signed_at)),
+            ("Подписант", item.signer_full_name or "—"),
+            ("Telegram ID подписанта", str(item.signer_telegram_user_id or "—")),
+        ]
+        if item.signer_telegram_username:
+            rows.append(("Аккаунт Telegram", f"@{item.signer_telegram_username}"))
+        if item.signer_org:
+            rows += [
+                ("Организация", item.signer_org),
+                ("Должность", item.signer_position or "—"),
+                ("Основание полномочий", item.authority_basis or "—"),
+            ]
+    elif item.declined_at:
+        rows.append(("Отклонён", msk(item.declined_at)))
+    else:
+        rows.append(("Подписан", "не подписан"))
+    return rows
+
+
+_CERTIFICATE_NOTE = (
+    "Лист сформирован автоматически {now} из журнала системы AI Verdict и в текст документа не "
+    "входит. Подписанием считается подтверждение Заказчиком в Telegram-боте или личном кабинете "
+    "из своей учётной записи Telegram в порядке, установленном договором (раздел об электронном "
+    "взаимодействии и подписи). Контрольная сумма SHA-256 вычисляется от точного текста документа "
+    "в кодировке UTF-8: её совпадение подтверждает, что текст не менялся после формирования."
+)
+
+
+@router.get("/{agreement_id}/pdf", response_model=None)
+def agreement_pdf(
+    agreement_id: uuid.UUID,
+    telegram_user_id: int | None = Query(default=None),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Точный текст договора или допсоглашения в PDF и лист сведений о подписании.
+
+    Доступ — как у просмотра документа: клиенту только свой и не черновик.
+    """
+    from core_api.pdf_document import FontMissing, render
+
+    item = _get(db, agreement_id)
+    if identity.scope == Scope.bot:
+        if telegram_user_id is None:
+            raise HTTPException(status_code=400, detail="telegram_user_id is required")
+        _assert_client(item, telegram_user_id)
+        if item.status == ServiceAgreementStatus.draft:
+            raise HTTPException(status_code=404, detail="Agreement not found")
+    title = _document_title(item)
+    try:
+        content = render(
+            text=item.document_text,
+            footer_label=f"{title} № {item.agreement_number}",
+            certificate_title="Сведения о документе и его подписании",
+            certificate_rows=_certificate_rows(db, item),
+            certificate_note=_CERTIFICATE_NOTE.format(now=datetime.now(_DOCUMENT_TZ).strftime("%d.%m.%Y %H:%M МСК")),
+        )
+    except FontMissing as exc:
+        raise HTTPException(status_code=503, detail="PDF is unavailable") from exc
+    prefix = "dopsoglashenie" if _is_supplement(item) else "dogovor"
+    filename = f"{prefix}-{item.agreement_number}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{agreement_id}/sent")

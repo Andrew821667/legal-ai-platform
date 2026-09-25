@@ -41,6 +41,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: uv run --package core-api --with httpx --directory apps/core-api alembic upgrade head
+      # Шрифт с кириллицей для PDF договоров — тот же, что в образе ядра.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core
       - run: uv run --package core-api --with httpx pytest apps/core-api/tests/ -q
 
   test-news:

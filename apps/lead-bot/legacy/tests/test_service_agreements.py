@@ -583,6 +583,28 @@ async def test_supplement_opens_straight_to_the_document_under_its_own_name(monk
 
 
 @pytest.mark.anyio
+async def test_client_gets_the_pdf_when_the_core_has_it(monkeypatch, replies) -> None:
+    """Документ — PDF со страницей подписания; .txt — только если PDF не вышел."""
+    bot = Bot()
+    ctx = SimpleNamespace(user_data={}, bot=bot)
+    query = SimpleNamespace(
+        data="sa_c:open:11111111-1111-1111-1111-111111111111",
+        from_user=SimpleNamespace(id=77, username="client"),
+        message=SimpleNamespace(chat_id=77),
+        id="callback-pdf",
+    )
+    monkeypatch.setattr(flow.core_api_bridge, "get_service_agreement", lambda *args: _agreement("viewed"))
+    monkeypatch.setattr(flow.core_api_bridge, "get_service_agreement_pdf", lambda *args: b"%PDF-1.4 test")
+    monkeypatch.setattr(flow.core_api_bridge, "mark_service_agreement_viewed", lambda *a, **k: _agreement("viewed"))
+
+    await flow.handle_client_callback(SimpleNamespace(callback_query=query), ctx)
+
+    document = bot.documents[0]["document"]
+    assert document.name == "dogovor-AV-20260907-ABC123.pdf"
+    assert document.getvalue().startswith(b"%PDF")
+
+
+@pytest.mark.anyio
 async def test_signed_supplement_is_reported_as_supplement(monkeypatch, replies) -> None:
     ctx = SimpleNamespace(user_data={}, bot=Bot())
     query = SimpleNamespace(

@@ -194,13 +194,28 @@ async def _ask_client_type(message, agreement_id: str) -> None:
 
 
 async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | None:
+    """Документ клиенту — PDF с листом сведений о подписании.
+
+    PDF собирает ядро: тот же точный текст, чья сумма зафиксирована. Если ядро
+    его не отдало (черновик для админа, нет шрифта, сбой) — прежний .txt:
+    клиент не должен остаться без документа из-за оформления.
+    """
     text = str(item.get("text") or "")
     if not text:
         return None
-    data = io.BytesIO(text.encode("utf-8"))
     number = str(item.get("agreement_number") or "agreement").replace("/", "-")
     prefix = "dopsoglashenie" if _is_supplement(item) else "dogovor"
-    data.name = f"{prefix}-{number}.txt"
+    pdf = None
+    if item.get("id") and item.get("client_telegram_user_id"):
+        pdf = await asyncio.to_thread(
+            core_api_bridge.get_service_agreement_pdf, str(item["id"]), int(item["client_telegram_user_id"])
+        )
+    if pdf:
+        data = io.BytesIO(pdf)
+        data.name = f"{prefix}-{number}.pdf"
+    else:
+        data = io.BytesIO(text.encode("utf-8"))
+        data.name = f"{prefix}-{number}.txt"
 
     async def send():
         data.seek(0)

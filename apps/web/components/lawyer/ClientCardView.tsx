@@ -477,7 +477,7 @@ export function Agreement({
             Допсоглашения · {liveSupplements.length}
           </p>
           {liveSupplements.map((row) => (
-            <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} supplement />
+            <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} insideTelegram={insideTelegram} supplement />
           ))}
           {oldSupplements.length > 0 ? (
             <details className="mt-2">
@@ -485,7 +485,7 @@ export function Agreement({
                 Прежние редакции ({oldSupplements.length})
               </summary>
               {oldSupplements.map((row) => (
-                <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} supplement />
+                <Agreement key={row.agreement_id} item={row} initData={initData} onChanged={onChanged} insideTelegram={insideTelegram} supplement />
               ))}
             </details>
           ) : null}
@@ -519,6 +519,16 @@ export function Agreement({
           initData={initData}
         />
       ) : null}
+      {/* PDF с листом сведений о подписании — для бухгалтерии, суда, архива.
+          В мини-аппе Telegram скачивание не работает: там его не предлагаем. */}
+      {insideTelegram ? null : (
+        <a
+          href={`/api/lawyer/agreements/${item.agreement_id}/pdf`}
+          className="mt-2 inline-block text-lw-sm text-lw-primary underline underline-offset-2"
+        >
+          Скачать PDF{item.status === "signed" ? " со сведениями о подписании" : ""}
+        </a>
+      )}
 
       {item.status === "draft" ? (
         <div className="mt-3 border-t border-lw-border pt-3">
