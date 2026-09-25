@@ -7,7 +7,7 @@ import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, label, shortDate } from "./labels";
 import { lawyerAction } from "./useTelegram";
-import type { Finance, FinanceAgreement, MoneyBucket } from "./types";
+import type { ActBucket, Finance, FinanceActs, FinanceAgreement, MoneyBucket, OpenAct } from "./types";
 
 /**
  * Деньги практики одним взглядом.
@@ -79,6 +79,130 @@ function Row({ item, onOpen }: { item: FinanceAgreement; onOpen: (leadId: string
   );
 }
 
+function acts(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} акт`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} акта`;
+  return `${n} актов`;
+}
+
+function ActTile({ title, bucket, alert = false }: { title: string; bucket: ActBucket; alert?: boolean }) {
+  const loud = alert && bucket.count > 0;
+  return (
+    <Card className={loud ? "!bg-lw-danger-soft" : ""}>
+      <p className={`text-lw-sm ${loud ? "text-lw-danger" : "text-lw-muted"}`}>{title}</p>
+      <p className={`mt-1 text-lw-xl font-extrabold tabular-nums ${loud ? "text-lw-danger" : "text-lw-ink"}`}>
+        {formatRub(bucket.minor)}
+      </p>
+      <p className="mt-0.5 text-lw-sm text-lw-muted">{bucket.count ? acts(bucket.count) : "нет актов"}</p>
+    </Card>
+  );
+}
+
+/** Напомнить клиенту об оплате: только тому, кто не сообщил «оплатил», и не чаще раза в сутки. */
+function RemindButton({ act, initData, onDone }: { act: OpenAct; initData: string; onDone: () => void }) {
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const remindedRecently =
+    act.last_reminded_at !== null && Date.now() - new Date(act.last_reminded_at).getTime() < 24 * 3600 * 1000;
+  if (act.status !== "sent") return null;
+  if (state === "done" || remindedRecently) {
+    return <span className="text-lw-sm text-lw-success">напомнили{act.last_reminded_at && state !== "done" ? ` ${shortDate(act.last_reminded_at)}` : ""}</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={state === "busy"}
+        onClick={async () => {
+          setState("busy");
+          setError(null);
+          try {
+            await lawyerAction(`/api/lawyer/acts/${act.act_id}/remind`, initData);
+            setState("done");
+            onDone();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Не удалось напомнить");
+            setState("idle");
+          }
+        }}
+        className={`${PILL_BUTTON} disabled:opacity-60`}
+      >
+        {state === "busy" ? "Отправляю…" : "Напомнить клиенту"}
+      </button>
+      {error ? <span className="text-lw-sm text-lw-danger">{error}</span> : null}
+    </span>
+  );
+}
+
+function ActsBlock({
+  data,
+  month,
+  initData,
+  onOpen,
+  onChanged,
+}: {
+  data: FinanceActs;
+  month: string;
+  initData: string;
+  onOpen: (leadId: string) => void;
+  onChanged: () => void;
+}) {
+  return (
+    <section>
+      <h2 className="lw-eyebrow mb-2">Акты</h2>
+      <div className="grid grid-cols-2 gap-2">
+        <ActTile title={`Выставлено, ${month}`} bucket={data.issued_this_month} />
+        <ActTile title={`Оплачено, ${month}`} bucket={data.paid_this_month} />
+        <ActTile title="Ждут оплаты" bucket={data.receivable} />
+        <ActTile title={`Просрочено (>${data.payment_days} дн.)`} bucket={data.overdue} alert />
+      </div>
+      {data.claimed.count ? (
+        <p className="mt-2 text-lw-sm text-lw-warning">
+          Клиенты сообщили об оплате: {acts(data.claimed.count)} на {formatRub(data.claimed.minor)} — сверьте
+          поступление и отметьте в карточке.
+        </p>
+      ) : null}
+      {data.open.length > 0 ? (
+        <ul className="mt-3 space-y-2">
+          {data.open.map((act) => (
+            <li key={act.act_id} className="rounded-xl bg-lw-cell p-3">
+              <button
+                type="button"
+                disabled={!act.lead_id}
+                onClick={() => act.lead_id && onOpen(act.lead_id)}
+                className="w-full text-left disabled:cursor-default"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-lw-base font-medium text-lw-ink">{act.client}</span>
+                  <span className="shrink-0 tabular-nums text-lw-base font-medium text-lw-ink">
+                    {formatRub(act.amount_minor)}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-lw-sm text-lw-muted">
+                  {act.overdue ? (
+                    <Pill tone="alert">просрочен</Pill>
+                  ) : act.status === "claimed_paid" ? (
+                    <Pill tone="warn">клиент сообщил об оплате</Pill>
+                  ) : (
+                    <Pill tone="mute">ждёт оплаты</Pill>
+                  )}
+                  <span>№ {act.act_number}</span>
+                  <span>отправлен {shortDate(act.sent_at)}</span>
+                </div>
+              </button>
+              <div className="mt-2">
+                <RemindButton act={act} initData={initData} onDone={onChanged} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Выгрузка в CSV — для бухгалтерии и отчётности; ни одного экспорта в
  * системе не было, цифры переписывали с экрана. Внутри Telegram файл нельзя
@@ -133,11 +257,14 @@ export default function FinanceView({
   onOpen,
   initData,
   insideTelegram,
+  onChanged = () => undefined,
 }: {
   finance: Finance;
   onOpen: (leadId: string) => void;
   initData: string;
   insideTelegram: boolean;
+  /** После напоминания — перечитать деньги. */
+  onChanged?: () => void;
 }) {
   const month = monthName(finance.month_from);
   const unpriced =
@@ -182,6 +309,10 @@ export default function FinanceView({
           Отклонено в этом месяце: {finance.declined_this_month.count} на{" "}
           {formatRub(finance.declined_this_month.minor)}.
         </p>
+      ) : null}
+
+      {finance.acts ? (
+        <ActsBlock data={finance.acts} month={month} initData={initData} onOpen={onOpen} onChanged={onChanged} />
       ) : null}
 
       <section>

@@ -799,6 +799,9 @@ class WorkAct(Base):
     objected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Когда юрист последний раз напомнил клиенту об оплате — чтобы не
+    # напоминать чаще раза в сутки и видеть, что напоминание уже было.
+    last_reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_work_acts_agreement", "agreement_id", "created_at"),

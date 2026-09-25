@@ -74,6 +74,7 @@ const EXACT: Record<string, string> = {
   "Describe completed work": "Опишите выполненную работу.",
   "Describe objections": "Опишите замечания.",
   "Not the client of this act": "Этот акт выставлен другому клиенту.",
+  "Payment reminder was already sent today": "Сегодня уже напоминали — следующее напоминание можно завтра.",
 
   // Архив, отправки
   "Move the client to the archive first": "Сначала уберите клиента в архив.",

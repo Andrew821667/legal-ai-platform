@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Оплата по выбору владельца: перевод по телефону, без эквайринга.
     lawyer_payment_sbp_phone: str | None = None
     lawyer_payment_bank: str | None = None
+    # Сколько дней после отправки акта оплата считается вовремя. Срока в
+    # самом акте нет (порядок оплаты — текстом в договоре), а без границы
+    # «просрочено» не отличить от «только что выставлено».
+    act_payment_days: int = 7
     lawyer_payment_recipient: str | None = None
     lead_notify_chat_id: str | None = None
     lead_notify_web_base_url: str = "https://ai-verdict.ru"

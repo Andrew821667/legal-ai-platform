@@ -27,6 +27,13 @@ export type TodayItem = {
   retryable?: boolean;
   attempts?: number;
   last_error?: string | null;
+  // Акты: «клиент сообщил об оплате», «не оплачен в срок»
+  act_id?: string;
+  act_number?: string;
+  amount_minor?: number;
+  claimed_paid_at?: string | null;
+  sent_at?: string | null;
+  last_reminded_at?: string | null;
 };
 
 export type TodaySection = {
@@ -161,6 +168,8 @@ export type WorkAct = {
   claimed_paid_at: string | null;
   paid_at: string | null;
   paid_note: string | null;
+  /** Когда последний раз напоминали клиенту об оплате. */
+  last_reminded_at?: string | null;
 };
 
 export type ClientCard = {
@@ -221,7 +230,35 @@ export type Finance = {
   in_pipeline: MoneyBucket;
   drafts: MoneyBucket;
   declined_this_month: MoneyBucket;
+  acts?: FinanceActs;
   agreements: FinanceAgreement[];
+};
+
+export type ActBucket = { count: number; minor: number };
+
+export type OpenAct = {
+  act_id: string;
+  act_number: string;
+  lead_id: string | null;
+  client: string;
+  amount_minor: number;
+  status: "sent" | "claimed_paid";
+  sent_at: string | null;
+  claimed_paid_at: string | null;
+  last_reminded_at: string | null;
+  days_since_sent: number | null;
+  overdue: boolean;
+};
+
+/** Деньги по актам: подписанный договор — ещё не деньги, оплаченный акт — деньги. */
+export type FinanceActs = {
+  payment_days: number;
+  issued_this_month: ActBucket;
+  paid_this_month: ActBucket;
+  receivable: ActBucket;
+  overdue: ActBucket;
+  claimed: ActBucket;
+  open: OpenAct[];
 };
 
 export type HistoryItem = {

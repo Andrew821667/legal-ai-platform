@@ -52,6 +52,7 @@ KIND_LABELS = {
     "agreement": "Договор клиенту",
     "agreement_reply": "Ответ клиенту",
     "work_act": "Акт клиенту",
+    "act_reminder": "Напоминание об оплате",
 }
 
 _TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")
