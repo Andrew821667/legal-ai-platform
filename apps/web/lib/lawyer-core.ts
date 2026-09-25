@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { translateCoreErrorBody } from "./core-errors";
+
 /**
  * Обращение к ядру от имени рабочего места.
  *
@@ -52,7 +54,9 @@ async function coreCall(
       signal: controller.signal,
       cache: "no-store",
     });
-    const text = await response.text();
+    const raw = await response.text();
+    // Отказы ядра — по-английски; юристу они нужны по-русски.
+    const text = response.ok ? raw : translateCoreErrorBody(raw);
     return new NextResponse(text, {
       status: response.status,
       headers: { "content-type": "application/json" },
