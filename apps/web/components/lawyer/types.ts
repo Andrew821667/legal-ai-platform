@@ -172,6 +172,8 @@ export type AgreementCard = {
 export type WorkAct = {
   act_id: string;
   act_number: string;
+  /** act — акт выполненных работ; advance — счёт на предоплату (без приёмки). */
+  kind?: "act" | "advance";
   status: "draft" | "sent" | "claimed_paid" | "paid";
   description_text: string;
   amount_minor: number;

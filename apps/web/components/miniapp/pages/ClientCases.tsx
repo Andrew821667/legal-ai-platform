@@ -23,6 +23,8 @@ type Act = {
   amount_minor: number; currency: string; hash: string; viewed_at?: string | null;
   accepted_at?: string | null; objected_at?: string | null; objection_text?: string | null;
   claimed_paid_at?: string | null; paid_at?: string | null; cancelled_at?: string | null;
+  /** advance — счёт на предоплату, без приёмки работы. */
+  kind?: "act" | "advance";
 };
 type Summary = {
   client: { lead_id?: string | null; name?: string | null; has_cases: boolean };
@@ -181,7 +183,7 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
 
     {data.agreements.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Договоры</h3></div><div className="mt-3 space-y-3">{data.agreements.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "supplement" ? `Допсоглашение № ${item.number}` : `№ ${item.number}, редакция ${item.revision}`}</p><span className="text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.subject}</p>{!item.client_details_complete && item.status === "sent" ? <AgreementDetails id={item.id} busy={busy} run={run} /> : <div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => openAgreement(item.id)}>Открыть</Button>{["sent", "viewed"].includes(item.status) ? <Question id={item.id} busy={busy} run={run} /> : null}</div>}</div>)}</div></article> : null}
 
-    {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">№ {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>Открыть акт</Button></div></div>)}</div></article> : null}
+    {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "advance" ? "Счёт на предоплату" : "Акт"} № {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>{item.kind === "advance" ? "Открыть счёт" : "Открыть акт"}</Button></div></div>)}</div></article> : null}
 
     {doc ? <DocumentPanel kind={docKind!} doc={doc} note={note} setNote={setNote} busy={busy} close={() => setDoc(null)} run={run} variant={variant} /> : null}
   </section>;
@@ -205,7 +207,8 @@ function Question({ id, busy, run }: { id: string; busy: boolean; run: (fn: () =
 function DocumentPanel({ kind, doc, note, setNote, busy, close, run, variant }: { kind: "nda" | "agreement" | "act"; doc: Doc; note: string; setNote: (v: string) => void; busy: boolean; close: () => void; run: (fn: () => Promise<unknown>) => Promise<void>; variant: "miniapp" | "site" }) {
   const act = (action: string, extra = {}) => run(async () => { await request(`/api/client/${kind === "act" ? "acts" : "agreements"}/${doc.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, document_hash: doc.document_hash || doc.hash, ...extra }) }); close(); });
   const actOpen = kind === "act" && !doc.cancelled_at;
-  const canAccept = actOpen && !doc.accepted_at && !doc.objected_at;
+  // Счёт на предоплату нечего принимать — только оплатить.
+  const canAccept = actOpen && doc.kind !== "advance" && !doc.accepted_at && !doc.objected_at;
   const canObject = canAccept;
   const canClaimPaid = actOpen && !doc.status.includes("paid");
   // На сайте панель открывается под фиксированной шапкой (z-50) — здесь

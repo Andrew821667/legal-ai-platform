@@ -837,6 +837,9 @@ class WorkAct(Base):
     receipt_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
     receipt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     receipt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # act — акт выполненных работ; advance — счёт на предоплату: тот же
+    # платёжный документ, но без приёмки работы.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="act", server_default="act")
     # Когда бот попросил клиента оценить работу (см. review_requests).
     review_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

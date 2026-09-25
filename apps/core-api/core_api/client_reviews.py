@@ -78,6 +78,8 @@ def process_due(now: datetime | None = None, transport: telegram_delivery.Transp
             .where(real_client(Lead.telegram_user_id))
             .where(ServiceAgreement.client_telegram_user_id.is_not(None))
             .where(WorkAct.status == WorkActStatus.paid)
+            # Аванс — ещё не результат работы: оценивать нечего.
+            .where(WorkAct.kind == "act")
             .where(WorkAct.cancelled_at.is_(None))
             .where(WorkAct.review_requested_at.is_(None))
             .where(WorkAct.paid_at <= now - ASK_AFTER)
