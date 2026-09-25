@@ -65,6 +65,24 @@ def build_proposal_text(agreement: dict) -> str:
     )
 
 
+def build_reminder_text(agreement: dict, *, expires_on: str | None = None) -> str:
+    """Напоминание о документе, который клиент ещё не подписал.
+
+    expires_on — дата окончания предложения, если оно сгорает в ближайшие
+    сутки: тогда это последнее напоминание, и сказать о сроке важнее всего.
+    """
+    what = "дополнительное соглашение" if agreement.get("kind") == "supplement" else "проект договора"
+    if expires_on:
+        head = f"Напоминаем: {what} действует до {expires_on}. После этого юристу придётся готовить его заново."
+    else:
+        head = f"Напоминаем: {what} ждёт вашего решения."
+    if agreement.get("kind") != "supplement" and not agreement.get("client_details_complete"):
+        action = "Заполните свои реквизиты — после этого бот сформирует точную редакцию для подписания."
+    else:
+        action = "Откройте документ, чтобы подписать его. Если что-то непонятно — задайте вопрос юристу."
+    return f"{head}\n\n{build_summary(agreement)}\n\n{action}"
+
+
 def build_proposal_markup(agreement_id: str, *, supplement: bool = False) -> str:
     """Кнопки под сообщением, готовые к отправке в Telegram."""
     # У допсоглашения реквизиты уже есть: «открыть» сразу показывает документ.
