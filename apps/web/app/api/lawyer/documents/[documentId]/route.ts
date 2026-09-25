@@ -10,6 +10,7 @@ import {
   showsInline,
   telegramFileUrl,
 } from "@/lib/telegram-file";
+import { telegramFetch } from "@/lib/telegram-fetch";
 
 /**
  * Файл, который клиент прислал боту, — потоком в браузер.
@@ -46,7 +47,7 @@ export async function GET(
 
   try {
     const path = await getTelegramFilePath(token, meta.telegram_file_id);
-    const file = await fetch(telegramFileUrl(token, path), { cache: "no-store" });
+    const file = await telegramFetch(telegramFileUrl(token, path), { cache: "no-store" });
     if (!file.ok || !file.body) {
       return Response.json({ detail: "Файл недоступен в Telegram" }, { status: 502 });
     }
