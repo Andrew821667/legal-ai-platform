@@ -253,7 +253,8 @@ def test_pending_notification_queue_is_core_owned_and_source_filtered() -> None:
             headers={"X-API-Key": key},
         )
         assert queued.status_code == 200
-        assert [row["id"] for row in queued.json()] == [str(ids[0])]
+        got = {row["id"] for row in queued.json()}
+        assert str(ids[0]) in got and str(ids[1]) not in got
 
         marked = client.post(
             f"/api/v1/leads/{ids[0]}/notification-sent",
@@ -263,10 +264,13 @@ def test_pending_notification_queue_is_core_owned_and_source_filtered() -> None:
         assert marked.status_code == 200
         assert marked.json()["notification_sent"] is True
         assert marked.json()["notification_sent_at"] is not None
-        assert client.get(
-            "/api/v1/leads/notifications/pending?idle_minutes=5&source_filter=telegram_bot",
-            headers={"X-API-Key": key},
-        ).json() == []
+        assert str(ids[0]) not in {
+            row["id"]
+            for row in client.get(
+                "/api/v1/leads/notifications/pending?idle_minutes=5&source_filter=telegram_bot",
+                headers={"X-API-Key": key},
+            ).json()
+        }
     finally:
         db = SessionLocal()
         try:
@@ -328,3 +332,64 @@ def test_delete_lead_detaches_events() -> None:
             finally:
                 db.close()
         _delete_api_key_by_name(api_key_name)
+
+
+def test_bot_handoff_reaches_the_lawyer_even_without_message_time() -> None:
+    """Клиент дошёл до «передачи юристу» одними кнопками: last_message_at пуст,
+    температура не тёплая — раньше он не попадал ни в уведомления, ни в задачи."""
+    from core_api.models import LegalIntake, LegalIntakeStatus
+
+    client = TestClient(app)
+    name = f"pytest.leads.handoff.{uuid4().hex}"
+    bot = _create_api_key(Scope.bot, name)
+    admin = _create_api_key(Scope.admin, f"{name}.admin")
+    now = datetime.now(timezone.utc)
+    db = SessionLocal()
+    try:
+        def handoff(**extra) -> Lead:
+            values = dict(
+                source=LeadSource.telegram_bot, telegram_user_id=9_900_000_000 + int(uuid4().hex[:5], 16),
+                name="Передан юристу", contact="@handoff", temperature="cold", conversation_stage="handoff",
+                notification_sent=False, created_at=now - timedelta(hours=2), last_activity_at=now - timedelta(hours=2),
+            )
+            values.update(extra)
+            row = Lead(**values)
+            db.add(row)
+            return row
+
+        fresh = handoff()
+        stale = handoff(created_at=now - timedelta(days=40), last_activity_at=now - timedelta(days=40))
+        with_intake = handoff()
+        db.flush()
+        db.add(LegalIntake(lead_id=with_intake.id, description="Обращение уже есть.", status=LegalIntakeStatus.accepted))
+        db.commit()
+        ids = {"fresh": str(fresh.id), "stale": str(stale.id), "with_intake": str(with_intake.id)}
+    finally:
+        db.close()
+
+    try:
+        pending = {
+            row["id"]
+            for row in client.get(
+                "/api/v1/leads/notifications/pending?idle_minutes=5&limit=100", headers={"X-API-Key": bot}
+            ).json()
+        }
+        assert ids["fresh"] in pending
+        # Старше месяца — не уведомление, а задача в «Сегодня».
+        assert ids["stale"] not in pending
+
+        today = client.get("/api/v1/lawyer/today", headers={"X-API-Key": admin}).json()
+        section = next(s for s in today["sections"] if s["key"] == "bot_handoff")
+        shown = {item["lead_id"] for item in section["items"]}
+        assert {ids["fresh"], ids["stale"]} <= shown
+        assert ids["with_intake"] not in shown
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(LegalIntake).where(LegalIntake.lead_id.in_(list(ids.values()))))
+            db.execute(delete(Lead).where(Lead.id.in_(list(ids.values()))))
+            db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(name)
+        _delete_api_key_by_name(f"{name}.admin")

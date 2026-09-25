@@ -24,6 +24,8 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return item.question || "";
     case "unreachable":
       return `${item.contact || "контакт не указан"} — ${label(OUTREACH_REASON, item.reason)}`;
+    case "bot_handoff":
+      return item.need ? `${item.need} — ${item.contact || "контакт не указан"}` : item.contact || "контакт не указан";
     case "awaiting_client":
       return `${item.subject} — ${label(AGREEMENT_STATUS, item.status)}${
         item.last_reminded_at ? ` · бот напомнил ${shortDate(item.last_reminded_at)}` : ""
