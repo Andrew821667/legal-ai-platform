@@ -42,6 +42,12 @@ def legal_help_client_type_markup() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Частное лицо", callback_data="legal_client:individual"),
                 InlineKeyboardButton("Не уверен", callback_data="legal_client:unknown"),
             ],
+            # Нужна только консультация — сразу выбрать время и оплатить на сайте.
+            *(
+                [[InlineKeyboardButton("📅 Записаться на консультацию по времени", url=config.CONSULTATION_BOOKING_URL)]]
+                if getattr(config, "CONSULTATION_BOOKING_URL", "")
+                else []
+            ),
         ]
     )
 
@@ -51,7 +57,8 @@ async def prompt_legal_help_client_type(message, context: ContextTypes.DEFAULT_T
     context.user_data.pop(LEGAL_HELP_CLIENT_TYPE_KEY, None)
     await utils.safe_reply_text(
         message,
-        "Юридическая помощь\n\nКому нужна помощь?",
+        "Юридическая помощь\n\nКому нужна помощь?\n\n"
+        "Нужна только консультация? Выберите удобное время и оплатите сразу — кнопка внизу.",
         reply_markup=legal_help_client_type_markup(),
         action="legal_help_choose_client_type",
     )

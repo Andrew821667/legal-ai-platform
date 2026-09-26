@@ -267,6 +267,9 @@ class LegalIntakeCreate(BaseModel):
     package_id: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]+$")
     package_title: str | None = Field(default=None, max_length=255)
     package_price_text: str | None = Field(default=None, max_length=64)
+    # Запись на платную консультацию: слот бронируется в той же транзакции,
+    # что и обращение, — занятое время не оставит «висящего» клиента.
+    consultation_slot_id: uuid.UUID | None = None
 
 
     @model_validator(mode="after")
@@ -326,6 +329,8 @@ class LegalIntakeOut(BaseModel):
     # не дошли» было нельзя, не заглядывая в базу.
     outreach_sent_at: datetime | None = None
     outreach_blocked_reason: str | None = None
+    # Бронь консультации, если обращение пришло с записью на время.
+    consultation: dict | None = None
 
 
 class LeadStatsOut(BaseModel):

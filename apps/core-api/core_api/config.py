@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     anonymize_enabled: bool = False
     archive_anonymize_after_days: int = 365
     prospect_retention_days: int = 1095
+    # Запись на платную консультацию (consultations.py): цена — как у пакета
+    # «Консультация юриста» на сайте; время держится за клиентом, пока он
+    # оплачивает; записаться впритык нельзя — юристу нужно время подготовиться.
+    consultation_price_minor: int = 490_000
+    consultation_hold_minutes: int = 30
+    consultation_min_notice_hours: int = 3
     # Сводка за неделю владельцу в Telegram по понедельникам (weekly_digest).
     weekly_digest_enabled: bool = True
     # Годовой лимит дохода самозанятого, в копейках (2,4 млн ₽ по 422-ФЗ).

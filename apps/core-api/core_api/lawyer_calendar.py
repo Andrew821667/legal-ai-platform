@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from core_api.config import get_settings
 from core_api.lead_notifications import _LEGAL_AREA_LABELS
 from core_api.models import (
+    ConsultationSlot,
     Lead,
     LegalIntake,
     LegalIntakeStatus,
@@ -113,6 +114,25 @@ def events(db: Session, now: datetime | None = None) -> list[dict]:
             "date": _day(act.sent_at + timedelta(days=days)),
             "title": f"Срок оплаты: акт {act.act_number}",
             "lead_id": str(act.lead_id) if act.lead_id else None,
+        })
+
+    # Консультации — событие со временем: оплаченные и те, где клиент сказал
+    # «оплатил». Неоплаченная бронь может сгореть — её в календаре нет.
+    slots = db.scalars(
+        select(ConsultationSlot)
+        .where(ConsultationSlot.status.in_(["claimed", "confirmed"]))
+        .where(ConsultationSlot.starts_at.between(since, until))
+    )
+    for slot in slots:
+        paid = "" if slot.status == "confirmed" else " — оплату сверить"
+        found.append({
+            "uid": f"consultation-{slot.id}",
+            "kind": "consultation",
+            "date": _day(slot.starts_at),
+            "starts_at": slot.starts_at.astimezone(timezone.utc).isoformat(),
+            "duration_min": slot.duration_min,
+            "title": f"Консультация · код {slot.code}{paid}",
+            "lead_id": str(slot.lead_id) if slot.lead_id else None,
         })
 
     found.sort(key=lambda event: (event["date"], event["uid"]))

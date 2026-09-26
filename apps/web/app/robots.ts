@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next'
 import { SEO_SITE_URL } from '@/lib/seo'
 
 export default function robots(): MetadataRoute.Robots {
-  const privatePaths = ['/api', '/admin', '/monitor', '/miniapp/lead', '/miniapp/profile', '/cabinet']
+  const privatePaths = ['/api', '/admin', '/monitor', '/miniapp/lead', '/miniapp/profile', '/cabinet', '/consultation/booking']
   const aiSearchAgents = [
     'OAI-SearchBot',
     'ChatGPT-User',
