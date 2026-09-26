@@ -359,8 +359,10 @@ def create_agreement(
     lead = db.get(Lead, intake.lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
-    if lead.telegram_user_id is None:
-        raise HTTPException(status_code=409, detail="Client has no Telegram dialog")
+    # Клиент без Telegram (заявка с сайта) получит договор в кабинете по почте
+    # из заявки (см. deliver); без почты договор отправить некуда.
+    if lead.telegram_user_id is None and cabinet_email(lead) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
     nda = _nda_for_lead(db, lead)
     # NDA подтверждает личность и фиксирует режим материалов до договора.
     # Поэтому он обязателен для любой практики платформы.
@@ -534,8 +536,10 @@ def create_supplement(
             status_code=409,
             detail="Only a signed agreement takes a supplement; change an unsigned one with a new revision",
         )
-    if not parent.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+    if not parent.client_telegram_user_id and cabinet_email(
+        db.get(Lead, parent.lead_id) if parent.lead_id else None
+    ) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
 
     supplements = db.execute(
         select(ServiceAgreement)

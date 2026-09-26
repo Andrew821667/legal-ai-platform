@@ -217,6 +217,8 @@ export type ClientCard = StageFields & {
   email: string | null;
   phone: string | null;
   telegram_user_id: number | null;
+  /** Почта, по которой клиент без Telegram видит документы в кабинете. */
+  cabinet_email?: string | null;
   source: string | null;
   created_at: string | null;
   nda: {

@@ -998,6 +998,8 @@ def client_card(
         "email": lead.email,
         "phone": lead.phone,
         "telegram_user_id": lead.telegram_user_id,
+        # Почта, по которой клиент без Telegram увидит документы в кабинете.
+        "cabinet_email": card_cabinet_email,
         "source": lead.source.value if lead.source else None,
         "created_at": _iso(lead.created_at),
         "nda": (
