@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import case_stage, client_reviews, document_requests, npd_limit, practice_funnel, telegram_delivery
+from core_api import anonymization, case_stage, client_reviews, document_requests, npd_limit, practice_funnel, telegram_delivery
 from core_api.client_principal import cabinet_email
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -1667,10 +1667,23 @@ def archive(
             "created_at": _iso(lead.created_at),
             "archived_at": _iso(lead.archived_at),
             "is_test": is_staff(lead.telegram_user_id),
+            # Когда персональные данные обезличатся по сроку (152-ФЗ) — или уже.
+            "anonymize_on": _iso(anonymization.planned_date(db, lead)),
+            "anonymized_at": _iso(lead.anonymized_at),
             **_client_footprint(db, lead.id),
         }
         for lead in leads
     ]
+
+
+@router.get("/anonymization")
+def anonymization_preview(
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Сколько клиентов и NDA ждут обезличивания по сроку — только числа."""
+    _ = identity
+    return anonymization.preview(db)
 
 
 @router.post("/clients/{lead_id}/archive")

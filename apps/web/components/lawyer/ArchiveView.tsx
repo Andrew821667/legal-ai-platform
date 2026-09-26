@@ -75,6 +75,16 @@ export default function ArchiveView({
             <p className="mt-1 text-lw-sm text-lw-muted">
               в архиве с {shortDate(row.archived_at)} · {footprintText(row)}
             </p>
+            {row.anonymized_at ? (
+              <p className="mt-1 text-lw-sm text-lw-muted">
+                Персональные данные обезличены {shortDate(row.anonymized_at)} (срок хранения, 152-ФЗ).
+              </p>
+            ) : row.anonymize_on ? (
+              <p className="mt-1 text-lw-sm text-lw-muted">
+                Без договора: персональные данные обезличатся {shortDate(row.anonymize_on)}. Восстановите клиента,
+                если дело продолжается.
+              </p>
+            ) : null}
           </button>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <ConfirmButton

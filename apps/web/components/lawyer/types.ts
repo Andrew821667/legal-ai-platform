@@ -346,6 +346,9 @@ export type ArchiveRow = {
   acts: number;
   nda_signed: boolean;
   is_test?: boolean;
+  /** Когда персональные данные обезличатся по сроку хранения (152-ФЗ). */
+  anonymize_on?: string | null;
+  anonymized_at?: string | null;
 };
 
 export type IntakePackage = {
