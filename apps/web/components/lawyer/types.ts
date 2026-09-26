@@ -1,3 +1,4 @@
+import type { DocumentRequestRow } from "@/lib/document-requests";
 import type { StageKey } from "@/lib/lawyer-clients";
 import type { SiteStats } from "@/lib/metrika-funnel";
 
@@ -125,10 +126,14 @@ export type IntakeCard = StageFields & {
   description: string;
   internal_note: string | null;
   without_agreement: boolean;
+  /** Пакет, выбранный клиентом на сайте, и заготовка юриста под него. */
+  package?: IntakePackage | null;
   outreach_sent_at: string | null;
   outreach_blocked_reason: string | null;
   clarifications: Clarification[];
   documents: IntakeDocumentRow[];
+  /** Что юрист попросил у клиента (см. lib/document-requests). */
+  document_requests?: DocumentRequestRow[];
   links: IntakeLinkRow[];
 };
 
@@ -136,6 +141,10 @@ export type AgreementMessage = { role: string; text: string; created_at: string 
 
 export type AgreementCard = {
   agreement_id: string;
+  /** Куда уйдёт документ: Telegram, кабинет (клиент без Telegram, вход через Яндекс ID) или некуда. */
+  delivery?: "telegram" | "cabinet" | "none";
+  /** Почта, с которой клиент без Telegram увидит документ в кабинете. */
+  cabinet_email?: string | null;
   intake_id: string | null;
   /** Заполнено у допсоглашения — ссылка на договор, к которому оно. */
   parent_agreement_id?: string | null;
@@ -214,6 +223,8 @@ export type ClientCard = StageFields & {
   email: string | null;
   phone: string | null;
   telegram_user_id: number | null;
+  /** Почта, по которой клиент без Telegram видит документы в кабинете. */
+  cabinet_email?: string | null;
   source: string | null;
   created_at: string | null;
   nda: {
@@ -338,4 +349,14 @@ export type ArchiveRow = {
   acts: number;
   nda_signed: boolean;
   is_test?: boolean;
+  /** Когда персональные данные обезличатся по сроку хранения (152-ФЗ). */
+  anonymize_on?: string | null;
+  anonymized_at?: string | null;
+};
+
+export type IntakePackage = {
+  id: string;
+  title: string | null;
+  price_text: string | null;
+  template_id: string | null;
 };

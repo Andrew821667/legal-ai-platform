@@ -1,0 +1,315 @@
+"""Клиент без Telegram: учётная запись (Яндекс ID) и доступ к своим делам.
+
+Закрепляется: вход через Яндекс заводит одну учётную запись и не сливает
+чужую; по почте видны только дела с сайта (без Telegram) — дело из Telegram с
+той же почтой в контактах чужому не открывается; подпись и приёмка без
+Telegram пока недоступны (до новой редакции п.6 NDA), остальное работает.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import uuid4
+
+import pytest
+from core_api.db import SessionLocal
+from core_api.main import app
+from core_api.models import (
+    ClientAccount,
+    Lead,
+    LeadSource,
+    LegalIntake,
+    LegalIntakeStatus,
+    Scope,
+    ServiceAgreementStatus,
+    WorkAct,
+    WorkActStatus,
+)
+from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
+
+from test_client_archive import _agreement, _cleanup, _key
+
+
+@pytest.fixture
+def world():
+    email = f"client-{uuid4().hex[:8]}@yandex.ru"
+    now = datetime.now(timezone.utc)
+    db = SessionLocal()
+    try:
+        site = Lead(name="С сайта", contact=email, source=LeadSource.website_form)
+        telegram = Lead(
+            name="Из Telegram", contact=email, telegram_user_id=9_050_000_000 + int(uuid4().hex[:4], 16),
+            source=LeadSource.telegram_bot,
+        )
+        db.add_all([site, telegram])
+        db.flush()
+        intake = LegalIntake(lead_id=site.id, description="Дело с сайта.", status=LegalIntakeStatus.accepted)
+        db.add(intake)
+        db.flush()
+        own = _agreement(site.id, intake.id, status=ServiceAgreementStatus.viewed, signed_at=None, sent_at=now,
+                         viewed_at=now, client_snapshot={"details_complete": True, "full_name": "Анна"})
+        fresh = _agreement(site.id, intake.id, status=ServiceAgreementStatus.viewed, signed_at=None, sent_at=now,
+                           viewed_at=now, document_version="2026-09-25.1",
+                           client_snapshot={"details_complete": True, "full_name": "Анна"})
+        foreign = _agreement(telegram.id, None, status=ServiceAgreementStatus.sent, signed_at=None, sent_at=now,
+                             client_telegram_user_id=telegram.telegram_user_id)
+        db.add_all([own, fresh, foreign])
+        db.flush()
+        paid_ready = _agreement(site.id, intake.id)  # подписанный — для акта
+        db.add(paid_ready)
+        db.flush()
+        act = WorkAct(act_number=f"AC-ACC-{uuid4().hex[:6].upper()}", agreement_id=paid_ready.id, lead_id=site.id,
+                      description_text="Консультация", amount_minor=1_000_000, status=WorkActStatus.sent,
+                      sent_at=now, document_text="АКТ", document_hash="d" * 64)
+        db.add(act)
+        db.commit()
+        ids = {"site": str(site.id), "telegram": str(telegram.id), "own": str(own.id), "foreign": str(foreign.id),
+               "own_hash": own.document_hash, "act": str(act.id), "fresh": str(fresh.id)}
+    finally:
+        db.close()
+    name = f"pytest.accounts.{uuid4().hex}"
+    yield {"email": email, "ids": ids, "bot": {"X-API-Key": _key(Scope.bot, name)}}
+    db = SessionLocal()
+    try:
+        db.execute(delete(ClientAccount).where(ClientAccount.email == email))
+        db.commit()
+    finally:
+        db.close()
+    _cleanup([name], [ids["site"], ids["telegram"]])
+
+
+def _login(client, bot, email, yandex_id="ya-1"):
+    return client.post("/api/v1/client-auth/yandex", json={"yandex_id": yandex_id, "email": email, "display_name": "Анна"}, headers=bot)
+
+
+def test_yandex_login_keeps_one_account_and_does_not_merge_another(world) -> None:
+    client = TestClient(app)
+    first = _login(client, world["bot"], world["email"].upper())
+    assert first.status_code == 200
+    account_id = first.json()["client_account_id"]
+    assert first.json()["email"] == world["email"]
+    assert _login(client, world["bot"], world["email"]).json()["client_account_id"] == account_id
+    # Та же почта, но другой аккаунт Яндекса — молча не сливаем.
+    assert _login(client, world["bot"], world["email"], yandex_id="ya-2").status_code == 409
+
+
+def test_account_sees_only_its_site_cases(world) -> None:
+    client = TestClient(app)
+    account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+    summary = client.get(f"/api/v1/client-portal/summary?client_account_id={account_id}", headers=world["bot"]).json()
+    assert summary["client"]["via"] == "account"
+    assert summary["client"]["lead_id"] == world["ids"]["site"]
+    agreement_ids = {a["id"] for a in summary["agreements"]}
+    assert world["ids"]["own"] in agreement_ids
+    # Дело из Telegram с той же почтой в контактах — не его.
+    assert world["ids"]["foreign"] not in agreement_ids
+
+    own = client.get(f"/api/v1/service-agreements/{world['ids']['own']}?client_account_id={account_id}", headers=world["bot"])
+    assert own.status_code == 200
+    foreign = client.get(f"/api/v1/service-agreements/{world['ids']['foreign']}?client_account_id={account_id}", headers=world["bot"])
+    assert foreign.status_code == 403
+
+
+def test_account_signs_only_the_new_revision(world) -> None:
+    """Подпись после входа через Яндекс ID — только в редакции, где этот способ назван."""
+    client = TestClient(app)
+    account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+    asked = client.post(f"/api/v1/service-agreements/{world['ids']['own']}/questions",
+                        json={"text": "А сроки?", "client_account_id": account_id, "channel": "miniapp"},
+                        headers=world["bot"])
+    assert asked.status_code == 201
+
+    def sign(agreement_id: str):
+        return client.post(f"/api/v1/service-agreements/{agreement_id}/sign",
+                           json={"client_account_id": account_id, "document_hash": world["ids"]["own_hash"],
+                                 "callback_id": f"cab-{agreement_id[:8]}", "channel": "miniapp"},
+                           headers=world["bot"])
+
+    old = sign(world["ids"]["own"])
+    assert old.status_code == 409
+    assert "only be signed in Telegram" in old.json()["detail"]
+
+    fresh = sign(world["ids"]["fresh"])
+    assert fresh.status_code == 201, fresh.text
+    db = SessionLocal()
+    try:
+        from core_api.models import ServiceAgreement
+        from core_api.routers.service_agreements import _certificate_rows
+
+        row = db.get(ServiceAgreement, world["ids"]["fresh"])
+        assert str(row.signer_account_id) == account_id
+        assert row.signer_email == world["email"]
+        assert row.signer_telegram_user_id is None
+        rows = dict(_certificate_rows(db, row))
+        assert rows["Способ подписания"] == "личный кабинет, вход через Яндекс ID"
+        assert rows["Почта подписанта (подтверждена Яндексом)"] == world["email"]
+    finally:
+        db.close()
+
+
+def test_account_signs_nda_for_its_own_lead_only(world) -> None:
+    client = TestClient(app)
+    account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+    details = {
+        "client_account_id": account_id,
+        "signer_full_name": "Анна Петрова",
+        "signer_contact": world["email"],
+        "signer_identity_document": "45 01 123456, выдан ОВД 01.02.2010",
+        "signer_org": "",
+    }
+    # Чужой лид (из Telegram с той же почтой) — отказ.
+    foreign = client.post("/api/v1/nda/personal-data-consent/preview",
+                          json={"lead_id": world["ids"]["telegram"], **details}, headers=world["bot"])
+    assert foreign.status_code in (200, 403)
+    denied = client.post("/api/v1/nda/personal-data-consent/accept",
+                         json={"lead_id": world["ids"]["telegram"], "document_hash": "0" * 64,
+                               "pdn_consent_accepted": True, **details}, headers=world["bot"])
+    assert denied.status_code == 403
+
+    lead_id = world["ids"]["site"]
+    preview = client.post("/api/v1/nda/personal-data-consent/preview", json={"lead_id": lead_id, **details},
+                          headers=world["bot"])
+    assert preview.status_code == 200, preview.text
+    consent = client.post("/api/v1/nda/personal-data-consent/accept",
+                          json={"lead_id": lead_id, "document_hash": preview.json()["hash"],
+                                "pdn_consent_accepted": True, "channel": "miniapp", **details},
+                          headers=world["bot"])
+    assert consent.status_code == 201, consent.text
+    consent_id = consent.json()["consent_id"]
+    nda = client.post("/api/v1/nda/document/preview",
+                      json={"lead_id": lead_id, "client_account_id": account_id, "pdn_consent_id": consent_id},
+                      headers=world["bot"])
+    assert nda.status_code == 200, nda.text
+    assert "Яндекс ID" in nda.json()["text"]
+    signed = client.post("/api/v1/nda/sign",
+                         json={"lead_id": lead_id, "client_account_id": account_id, "pdn_consent_id": consent_id,
+                               "document_hash": nda.json()["hash"], "channel": "miniapp"},
+                         headers=world["bot"])
+    assert signed.status_code == 201, signed.text
+    db = SessionLocal()
+    try:
+        from core_api.models import NdaSignature
+
+        row = db.scalar(select(NdaSignature).where(NdaSignature.lead_id == lead_id))
+        assert str(row.signer_account_id) == account_id
+        assert row.signer_email == world["email"]
+    finally:
+        db.close()
+
+
+def test_account_opens_its_act_and_reports_payment(world) -> None:
+    client = TestClient(app)
+    account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+    act = world["ids"]["act"]
+    document = client.get(f"/api/v1/work-acts/{act}/document?client_account_id={account_id}", headers=world["bot"])
+    assert document.status_code == 200
+    claimed = client.post(f"/api/v1/work-acts/{act}/claim-paid",
+                          json={"client_account_id": account_id, "channel": "miniapp"}, headers=world["bot"])
+    assert claimed.status_code == 200
+    assert claimed.json()["status"] == "claimed_paid"
+
+
+def test_request_without_any_client_is_rejected(world) -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/client-portal/summary", headers=world["bot"])
+    assert response.status_code == 400
+    unknown = client.get(f"/api/v1/client-portal/summary?client_account_id={uuid4()}", headers=world["bot"])
+    assert unknown.status_code == 401
+
+
+def test_documents_for_a_client_without_telegram_go_to_the_cabinet(world) -> None:
+    """Клиенту без Telegram «отправить» = опубликовать в кабинете; без почты — некуда."""
+    client = TestClient(app)
+    admin_name = f"pytest.cabinet.{uuid4().hex}"
+    admin = {"X-API-Key": _key(Scope.admin, admin_name)}
+    db = SessionLocal()
+    try:
+        site = db.get(Lead, world["ids"]["site"])
+        draft = _agreement(site.id, None, status=ServiceAgreementStatus.draft, signed_at=None)
+        silent = Lead(name="Без контакта", contact="+7 900 000-00-00", source=LeadSource.website_form)
+        db.add_all([draft, silent])
+        db.flush()
+        silent_draft = _agreement(silent.id, None, status=ServiceAgreementStatus.draft, signed_at=None)
+        signed = _agreement(site.id, None)
+        db.add_all([silent_draft, signed])
+        db.flush()
+        act = WorkAct(act_number=f"AC-CAB-{uuid4().hex[:6].upper()}", agreement_id=signed.id, lead_id=site.id,
+                      description_text="Работа", amount_minor=500_000)
+        db.add(act)
+        db.commit()
+        ids = {"draft": str(draft.id), "silent": str(silent.id), "silent_draft": str(silent_draft.id), "act": str(act.id)}
+    finally:
+        db.close()
+    try:
+        card = client.get(f"/api/v1/lawyer/clients/{world['ids']['site']}", headers=admin).json()
+        row = next(a for a in card["agreements"] if a["agreement_id"] == ids["draft"])
+        assert row["delivery"] == "cabinet" and row["cabinet_email"] == world["email"]
+
+        delivered = client.post(f"/api/v1/service-agreements/{ids['draft']}/deliver", headers=admin)
+        assert delivered.status_code == 200, delivered.text
+        assert delivered.json()["delivered_via"] == "cabinet"
+        assert delivered.json()["status"] == "sent"
+
+        account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+        summary = client.get(f"/api/v1/client-portal/summary?client_account_id={account_id}", headers=world["bot"]).json()
+        assert ids["draft"] in {a["id"] for a in summary["agreements"]}
+
+        sent_act = client.post(f"/api/v1/work-acts/{ids['act']}/send", headers=admin)
+        assert sent_act.status_code == 200, sent_act.text
+        assert sent_act.json()["delivered_via"] == "cabinet"
+
+        nowhere = client.post(f"/api/v1/service-agreements/{ids['silent_draft']}/deliver", headers=admin)
+        assert nowhere.status_code == 409
+        assert nowhere.json()["detail"] == "Client has no Telegram or email"
+    finally:
+        _cleanup([admin_name], [ids["silent"]])
+
+
+def test_agreement_for_a_site_client_is_composed_for_the_cabinet(world, monkeypatch) -> None:
+    """Составить договор клиенту без Telegram можно, если есть почта для кабинета."""
+    from core_api.models import ConflictCheckStatus, NdaSignature
+    from core_api.routers import service_agreements as api
+    from test_practice import _AGREEMENT_BODY, _OPERATOR
+
+    monkeypatch.setattr(api, "get_settings", lambda: _OPERATOR)
+    client = TestClient(app)
+    admin_name = f"pytest.cabinet.compose.{uuid4().hex}"
+    admin = {"X-API-Key": _key(Scope.admin, admin_name)}
+    db = SessionLocal()
+    try:
+        silent = Lead(name="Без почты", contact="+7 900 000-00-01", source=LeadSource.website_form)
+        db.add(silent)
+        db.flush()
+        intakes = {}
+        for key, lead_id in (("site", world["ids"]["site"]), ("silent", silent.id)):
+            intake = LegalIntake(lead_id=lead_id, description="Проверить договор аренды.",
+                                 status=LegalIntakeStatus.accepted, conflict_status=ConflictCheckStatus.clear)
+            db.add(intake)
+            db.add(NdaSignature(lead_id=lead_id, document_version="test", document_hash="b" * 64))
+            db.flush()
+            intakes[key] = str(intake.id)
+        db.commit()
+        silent_id = str(silent.id)
+    finally:
+        db.close()
+    try:
+        card = client.get(f"/api/v1/lawyer/clients/{world['ids']['site']}", headers=admin).json()
+        assert card["cabinet_email"] == world["email"]
+
+        created = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["site"], **_AGREEMENT_BODY})
+        assert created.status_code == 201, created.text
+
+        nowhere = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["silent"], **_AGREEMENT_BODY})
+        assert nowhere.status_code == 409
+        assert nowhere.json()["detail"] == "Client has no Telegram or email"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(NdaSignature).where(NdaSignature.lead_id.in_([world["ids"]["site"], silent_id])))
+            db.commit()
+        finally:
+            db.close()
+        _cleanup([admin_name], [silent_id])

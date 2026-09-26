@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import and_, false, or_, select
 from sqlalchemy.orm import Session
 
+from core_api import document_requests
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_principal import resolve
 from core_api.db import get_db
 from core_api.models import (
     ActorType,
@@ -151,16 +154,20 @@ def sync_telegram_profile(
 
 @router.get("/summary")
 def summary(
-    telegram_user_id: int = Query(gt=0),
+    telegram_user_id: int | None = Query(default=None, gt=0),
+    client_account_id: uuid.UUID | None = Query(default=None),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Всё по клиенту для кабинета — по Telegram или по учётной записи (см. client_principal)."""
     _ = identity
+    principal = resolve(db, telegram_user_id=telegram_user_id, client_account_id=client_account_id)
+    telegram_user_id = principal.telegram_user_id
     leads = db.scalars(
         select(Lead)
-        .where(Lead.telegram_user_id == telegram_user_id)
+        .where(Lead.id.in_(principal.lead_ids))
         .order_by(Lead.created_at.desc())
-    ).all()
+    ).all() if principal.lead_ids else []
     lead_ids = [row.id for row in leads]
     intakes = db.scalars(
         select(LegalIntake)
@@ -180,10 +187,18 @@ def summary(
                 "file_size": row.file_size, "mime_type": row.mime_type,
                 "created_at": _iso(row.created_at),
             })
+    # Документы, адресованные Telegram клиента, и документы его дел без Telegram.
+    owned = []
+    if telegram_user_id is not None:
+        owned.append(ServiceAgreement.client_telegram_user_id == telegram_user_id)
+    if lead_ids:
+        owned.append(
+            and_(ServiceAgreement.client_telegram_user_id.is_(None), ServiceAgreement.lead_id.in_(lead_ids))
+        )
     agreements = db.scalars(
         select(ServiceAgreement)
         .where(
-            ServiceAgreement.client_telegram_user_id == telegram_user_id,
+            or_(*owned) if owned else false(),
             ServiceAgreement.status.not_in(
                 {ServiceAgreementStatus.draft, ServiceAgreementStatus.superseded}
             ),
@@ -213,7 +228,8 @@ def summary(
     nda = db.scalar(
         select(NdaSignature)
         .where(or_(NdaSignature.telegram_user_id == telegram_user_id,
-                   NdaSignature.lead_id.in_(lead_ids)))
+                   NdaSignature.lead_id.in_(lead_ids)) if telegram_user_id is not None
+               else NdaSignature.lead_id.in_(lead_ids))
         .order_by(NdaSignature.signed_at.desc())
         .limit(1)
     ) if lead_ids else None
@@ -222,8 +238,13 @@ def summary(
         if nda and nda.pdn_consent_id
         else None
     )
+    # Что юрист просит прислать; отменённые пункты клиенту не показываем.
+    requested = document_requests.for_intakes(db, [row.id for row in intakes], with_cancelled=False)
     return {
         "client": {
+            "via": "account" if principal.account_id else "telegram",
+            "email": principal.email,
+            "telegram_linked": telegram_user_id is not None,
             "lead_id": str(leads[0].id) if leads else None,
             "name": next((row.name for row in leads if row.name), None),
             "phone": next((row.phone for row in leads if row.phone), None),
@@ -244,6 +265,7 @@ def summary(
             "deadline": row.deadline, "deadline_at": _iso(row.deadline_at),
             "status": row.status.value, "without_agreement": row.without_agreement,
             "created_at": _iso(row.created_at), "documents": documents.get(row.id, []),
+            "document_requests": requested.get(row.id, []),
         } for row in intakes],
         "agreements": [{
             "id": str(row.id), "intake_id": str(row.intake_id) if row.intake_id else None,

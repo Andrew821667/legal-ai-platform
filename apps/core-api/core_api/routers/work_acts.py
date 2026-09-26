@@ -19,12 +19,15 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
+from core_api.service_agreement import account_signing_allowed
+from core_api.client_principal import ClientRef, Principal, cabinet_email, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api import client_reviews, npd_limit, payment_qr, telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
+    Lead,
     Scope,
     ServiceAgreement,
     ServiceAgreementStatus,
@@ -290,9 +293,21 @@ def send_act(
     if item.status != WorkActStatus.draft or item.cancelled_at:
         raise HTTPException(status_code=409, detail="Act is not a draft")
     agreement = db.get(ServiceAgreement, item.agreement_id)
-    if agreement is None or not agreement.client_telegram_user_id:
+    if agreement is None:
         raise HTTPException(status_code=409, detail="Client has no Telegram")
     _freeze_document(item, agreement)
+    if not agreement.client_telegram_user_id:
+        # Клиент без Telegram: акт — в его кабинете (вход через Яндекс ID с этой почтой).
+        email = cabinet_email(db.get(Lead, agreement.lead_id) if agreement.lead_id else None)
+        if email is None:
+            raise HTTPException(status_code=409, detail="Client has no Telegram or email")
+        item.status = WorkActStatus.sent
+        item.sent_at = _now()
+        db.add(item)
+        _audit(db, identity, item, "work_act.send", {"channel": "cabinet"})
+        db.commit()
+        db.refresh(item)
+        return {**_payload(item), "delivered_via": "cabinet", "cabinet_email": email}
 
     token = _client_bot_token()
     if not token:
@@ -396,8 +411,7 @@ def remind_payment(
     return {"act_id": str(item.id), "last_reminded_at": now.isoformat()}
 
 
-class ClaimPaid(BaseModel):
-    telegram_user_id: int = Field(gt=0)
+class ClaimPaid(ClientRef):
     channel: str = Field(default="telegram_bot", pattern=r"^(telegram_bot|miniapp)$")
 
 
@@ -412,7 +426,10 @@ def claim_paid(
     оплату видит только юрист, он и переводит статус в paid отдельно."""
     item = _get(db, act_id, lock=True)
     agreement = db.get(ServiceAgreement, item.agreement_id)
-    if agreement is None or agreement.client_telegram_user_id != payload.telegram_user_id:
+    principal = resolve(db, telegram_user_id=payload.telegram_user_id, client_account_id=payload.client_account_id)
+    if agreement is None or not principal.owns(
+        lead_id=agreement.lead_id, client_telegram_user_id=agreement.client_telegram_user_id
+    ):
         # Тот же id акта не должен уходить в paid по чужому клику — даже
         # заявление о нём принимаем только от адресата.
         raise HTTPException(status_code=403, detail="Not the client of this act")
@@ -528,16 +545,25 @@ def record_receipt(
     return _payload(item)
 
 
-def _assert_client(db: Session, item: WorkAct, telegram_user_id: int) -> None:
+def _assert_client(
+    db: Session,
+    item: WorkAct,
+    telegram_user_id: int | None = None,
+    client_account_id: uuid.UUID | None = None,
+) -> Principal:
+    """Клиенту — только свой акт (по Telegram или учётной записи) и не черновик."""
     agreement = db.get(ServiceAgreement, item.agreement_id)
-    if agreement is None or agreement.client_telegram_user_id != telegram_user_id:
+    if agreement is None:
+        raise HTTPException(status_code=404, detail="Act not found")
+    principal = resolve(db, telegram_user_id=telegram_user_id, client_account_id=client_account_id)
+    if not principal.owns(lead_id=agreement.lead_id, client_telegram_user_id=agreement.client_telegram_user_id):
         raise HTTPException(status_code=404, detail="Act not found")
     if item.status == WorkActStatus.draft:
         raise HTTPException(status_code=404, detail="Act not found")
+    return principal
 
 
-class ActClientAction(BaseModel):
-    telegram_user_id: int = Field(gt=0)
+class ActClientAction(ClientRef):
     document_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     callback_id: str = Field(min_length=1, max_length=255)
     text: str | None = Field(default=None, max_length=4000)
@@ -547,12 +573,13 @@ class ActClientAction(BaseModel):
 @router.get("/{act_id}/document")
 def act_document(
     act_id: uuid.UUID,
-    telegram_user_id: int = Query(gt=0),
+    telegram_user_id: int | None = Query(default=None, gt=0),
+    client_account_id: uuid.UUID | None = Query(default=None),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, act_id)
-    _assert_client(db, item, telegram_user_id)
+    _assert_client(db, item, telegram_user_id, client_account_id)
     return {**_payload(item), "text": item.document_text, "payment": payment_details()}
 
 
@@ -560,6 +587,7 @@ def act_document(
 def act_payment_qr(
     act_id: uuid.UUID,
     telegram_user_id: int | None = Query(default=None, gt=0),
+    client_account_id: uuid.UUID | None = Query(default=None),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -570,9 +598,9 @@ def act_payment_qr(
     """
     item = _get(db, act_id)
     if identity.scope == Scope.bot:
-        if telegram_user_id is None:
+        if telegram_user_id is None and client_account_id is None:
             raise HTTPException(status_code=400, detail="telegram_user_id is required")
-        _assert_client(db, item, telegram_user_id)
+        _assert_client(db, item, telegram_user_id, client_account_id)
     if item.cancelled_at or item.status not in (WorkActStatus.sent, WorkActStatus.claimed_paid):
         raise HTTPException(status_code=409, detail="Act is not awaiting payment")
     agreement = db.get(ServiceAgreement, item.agreement_id)
@@ -637,7 +665,7 @@ def client_action(
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, act_id, lock=True)
-    _assert_client(db, item, payload.telegram_user_id)
+    principal = _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.cancelled_at or not item.document_hash or item.document_hash != payload.document_hash:
         raise HTTPException(status_code=409, detail="Act is unavailable or document changed")
     if action == "viewed":
@@ -654,10 +682,16 @@ def client_action(
                 return _payload(item)
             raise HTTPException(status_code=409, detail="Act already accepted; contact the operator")
         if action == "accept":
+            # Приёмка — юридически значимое действие по договору: после входа
+            # через Яндекс ID — только если редакция договора называет этот способ.
+            agreement = db.get(ServiceAgreement, item.agreement_id)
+            if principal.via_email and (agreement is None or not account_signing_allowed(agreement.document_version)):
+                raise HTTPException(status_code=409, detail="This revision can only be signed in Telegram")
             if item.objected_at:
                 raise HTTPException(status_code=409, detail="Resolve objections and issue a new act first")
             item.accepted_at = _now()
-            item.accepted_by_telegram_user_id = payload.telegram_user_id
+            item.accepted_by_telegram_user_id = principal.telegram_user_id
+            item.accepted_by_account_id = principal.account_id
             item.acceptance_callback_id = payload.callback_id
             if payload.channel == "miniapp":
                 queue_notice(
@@ -685,7 +719,9 @@ def client_action(
     else:
         raise HTTPException(status_code=404, detail="Unknown act action")
     _audit(db, identity, item, f"work_act.{action}", {
-        "telegram_user_id": payload.telegram_user_id, "document_hash": item.document_hash,
+        "telegram_user_id": principal.telegram_user_id,
+        "client_account_id": str(principal.account_id) if principal.account_id else None,
+        "document_hash": item.document_hash,
         "callback_id": payload.callback_id,
     })
     db.commit()

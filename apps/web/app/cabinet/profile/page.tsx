@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 const METHOD_LABEL: Record<string, string> = {
   oidc: "Telegram Login",
   legacy: "Telegram (виджет)",
+  yandex: "Яндекс ID",
 };
 
 export default async function CabinetProfilePage() {
@@ -42,6 +43,7 @@ export default async function CabinetProfilePage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">{displayName}</h1>
           {profile?.un ? <p className="text-sm text-slate-500">@{profile.un}</p> : null}
+          {profile?.email ? <p className="text-sm text-slate-500">{profile.email}</p> : null}
         </div>
       </div>
 

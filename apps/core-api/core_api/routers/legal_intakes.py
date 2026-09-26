@@ -11,11 +11,12 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.staff import real_client
 from core_api.auth import ApiKeyIdentity, require_scopes
+from core_api.client_principal import resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.intake_assistant import next_turn
-from core_api import smoke
+from core_api import document_requests, smoke
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
@@ -125,6 +126,7 @@ def create_legal_intake(
         telegram_user_id=payload.telegram_user_id,
         name=payload.name.strip() if payload.name else None,
         contact=payload.contact.strip(),
+        email=payload.email.strip().lower() if payload.email else None,
         company=payload.company.strip() if payload.company else None,
         segment=_segment_for(payload.client_type),
         status=LeadStatus.new,
@@ -163,6 +165,9 @@ def create_legal_intake(
         deadline=payload.deadline.strip() if payload.deadline else None,
         region=payload.region.strip() if payload.region else None,
         source_context=payload.source_context.strip() if payload.source_context else None,
+        package_id=payload.package_id,
+        package_title=(payload.package_title or "").strip() or None if payload.package_id else None,
+        package_price_text=(payload.package_price_text or "").strip() or None if payload.package_id else None,
     )
     db.add(item)
     db.flush()
@@ -182,6 +187,7 @@ def create_legal_intake(
             "source": lead.source.value,
             "consent_version": payload.consent_version,
             "consent_at": payload.consent_at.isoformat(),
+            "package_id": item.package_id,
         },
     )
     if restored_from_archive:
@@ -489,8 +495,16 @@ def record_document(
     lead = db.get(Lead, item.lead_id)
     if lead is None or _signature_for_lead(db, lead) is None:
         raise HTTPException(status_code=409, detail="NDA must be signed before uploading documents")
-    if payload.get("telegram_user_id") is not None and payload["telegram_user_id"] != lead.telegram_user_id:
-        raise HTTPException(status_code=404, detail="Legal intake not found")
+    # Клиент — владелец дела: по Telegram или по учётной записи (client_principal).
+    if payload.get("telegram_user_id") is not None or payload.get("client_account_id"):
+        try:
+            account_id = uuid.UUID(str(payload["client_account_id"])) if payload.get("client_account_id") else None
+            telegram_user_id = int(payload["telegram_user_id"]) if payload.get("telegram_user_id") is not None else None
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="Invalid client reference") from exc
+        principal = resolve(db, telegram_user_id=telegram_user_id, client_account_id=account_id)
+        if item.lead_id not in principal.lead_ids:
+            raise HTTPException(status_code=404, detail="Legal intake not found")
 
     file_id = str(payload.get("telegram_file_id") or "").strip()[:255]
     if not file_id:
@@ -506,6 +520,15 @@ def record_document(
         nda_signed_at_upload=True,
     )
     db.add(row)
+    db.flush()
+    # Файл, загруженный в пункт списка «юрист просит», закрывает этот пункт.
+    fulfilled = False
+    if payload.get("request_id"):
+        try:
+            request_id = uuid.UUID(str(payload["request_id"]))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid request_id") from exc
+        fulfilled = document_requests.fulfill(db, item.id, request_id, row.id)
     write_audit(
         db,
         actor_type=ActorType.api_key,
@@ -513,7 +536,7 @@ def record_document(
         action="legal_intake.document",
         target_type="legal_intake",
         target_id=item.id,
-        details={"nda_signed": row.nda_signed_at_upload},
+        details={"nda_signed": row.nda_signed_at_upload, "request_fulfilled": fulfilled},
     )
     db.commit()
     return MessageResponse(message="recorded")
