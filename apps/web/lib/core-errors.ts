@@ -24,10 +24,15 @@ const EXACT: Record<string, string> = {
   "Link not found": "Связь не найдена.",
   "Delivery not found": "Отправка не найдена.",
   "Template not found": "Заготовка не найдена.",
+  "Document request not found": "Пункт запроса не найден.",
+  "These documents are already requested": "Эти документы уже запрошены и ждут клиента.",
+  "Package already has a template": "К этому пакету уже привязана другая заготовка — сначала отвяжите её.",
 
   // Договор
   "Client has no Telegram": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
   "Client has no Telegram dialog": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
+  "Client has no Telegram or email":
+    "У клиента нет ни Telegram, ни почты — отправить некуда. Попросите клиента оставить почту или написать в бот.",
   "Bot token is not configured": "Сервер не настроен: нет токена бота.",
   "NDA must be signed first": "Сначала клиент должен подписать соглашение о конфиденциальности.",
   "NDA must be signed before uploading documents": "Документы принимаются после подписания NDA.",
@@ -75,6 +80,10 @@ const EXACT: Record<string, string> = {
   "Describe objections": "Опишите замечания.",
   "Not the client of this act": "Этот акт выставлен другому клиенту.",
   "Payment reminder was already sent today": "Сегодня уже напоминали — следующее напоминание можно завтра.",
+  "This revision can only be signed in Telegram":
+    "Эту редакцию можно подписать только в Telegram. Попросите юриста прислать новую редакцию — её можно будет подписать в кабинете.",
+  "Client account does not own this lead": "Это обращение оставлено с другой почтой.",
+  "Consent belongs to another client": "Согласие дано другим клиентом.",
   "Receipt is recorded for a paid act": "Чек записывается только для оплаченного акта.",
   "Receipt link is required to send it": "Чтобы отправить чек клиенту, вставьте ссылку на него из «Мой налог».",
 

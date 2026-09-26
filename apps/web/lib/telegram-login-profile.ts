@@ -25,7 +25,9 @@ export type ClientProfileCookie = {
   un?: string;
   photo?: string;
   phoneMasked?: string;
-  method: "oidc" | "legacy";
+  /** yandex — вход через Яндекс ID (профиль из куки учётной записи, не client_profile). */
+  method: "oidc" | "legacy" | "yandex";
+  email?: string;
 };
 
 function safeInt(value: unknown): number | null {

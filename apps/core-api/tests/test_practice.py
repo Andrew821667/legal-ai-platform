@@ -27,6 +27,7 @@ from core_api.models import (
     ServiceAgreementMessage,
 )
 from core_api.security import generate_api_key, hash_api_key
+from core_api.service_agreement import agreement_version
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
@@ -155,7 +156,7 @@ def test_engineering_agreement_requires_nda_but_not_conflict_check(monkeypatch) 
         assert agreement["template_kind"] == "software_development"
         assert agreement["text"].startswith("ДОГОВОР НА РАЗРАБОТКУ ПРОГРАММНОГО ОБЕСПЕЧЕНИЯ")
         assert "статья 1296" in agreement["text"]
-        assert agreement["version"] == "2026-09-12.1"
+        assert agreement["version"] == agreement_version("software_development")
         assert agreement["client_name"] == "Пётр Петров"
         assert agreement["client_org"] == "ООО Ромашка"
     finally:
@@ -193,7 +194,7 @@ def test_legal_agreement_still_requires_nda_and_clear_conflict(monkeypatch) -> N
         assert created.status_code == 201, created.text
         assert created.json()["template_kind"] == "legal_services"
         assert created.json()["text"].startswith("ДОГОВОР ВОЗМЕЗДНОГО ОКАЗАНИЯ ЮРИДИЧЕСКИХ УСЛУГ")
-        assert created.json()["version"] == "2026-09-10.1"
+        assert created.json()["version"] == agreement_version("legal_services")
     finally:
         _cleanup(names, ready["lead_id"])
 

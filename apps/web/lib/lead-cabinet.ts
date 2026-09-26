@@ -8,10 +8,14 @@
  * иначе форма могла бы приписать заявку чужому аккаунту.
  */
 
-export type CabinetLeadSession = { telegramUserId: number } | null;
+/** Вход через Telegram — его ID; через Яндекс ID — подтверждённая почта учётной записи. */
+export type CabinetLeadSession = { telegramUserId: number } | { accountEmail: string } | null;
 
-export function cabinetLeadFields(session: CabinetLeadSession): { telegram_user_id?: number } {
-  return session ? { telegram_user_id: session.telegramUserId } : {};
+export function cabinetLeadFields(session: CabinetLeadSession): { telegram_user_id?: number; email?: string } {
+  if (!session) return {};
+  // Почта учётной записи — в email лида: по ней кабинет находит дело, даже
+  // если в форме клиент оставил телефон.
+  return "telegramUserId" in session ? { telegram_user_id: session.telegramUserId } : { email: session.accountEmail };
 }
 
 /** source_context у обычной формы — адрес страницы (для аналитики landing).
@@ -23,5 +27,6 @@ export function cabinetSourceContext(session: CabinetLeadSession, fallback: stri
 
 /** Доп. пометки в notes — видны юристу в карточке лида. */
 export function cabinetNoteTags(session: CabinetLeadSession): string[] {
-  return session ? ["channel=cabinet", "telegram_verified=1"] : [];
+  if (!session) return [];
+  return ["channel=cabinet", "telegramUserId" in session ? "telegram_verified=1" : "yandex_verified=1"];
 }

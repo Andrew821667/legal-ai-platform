@@ -2,7 +2,13 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { isTrustedAssistantOrigin, trustedHostsFor } from "@/lib/assistant-security";
-import { CLIENT_SESSION_COOKIE, clientSessionSecret, verifyClientSessionToken } from "@/lib/client-session";
+import {
+  CLIENT_ACCOUNT_COOKIE,
+  CLIENT_SESSION_COOKIE,
+  clientSessionSecret,
+  openClientAccount,
+  verifyClientSessionToken,
+} from "@/lib/client-session";
 import { cabinetLeadFields, cabinetNoteTags, cabinetSourceContext, type CabinetLeadSession } from "@/lib/lead-cabinet";
 import {
   evaluateLeadSubmission,
@@ -13,7 +19,7 @@ import {
   resolveLeadClientIp,
   verifyTurnstileToken,
 } from "@/lib/lead-security";
-import { addStarterOfferToMessage, getStarterOffer } from "@/lib/starter-offers";
+import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/starter-offers";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -96,9 +102,18 @@ export async function POST(request: NextRequest) {
   // страницах сайта куки не имеет — session остаётся null, и весь путь ниже
   // не меняется по сравнению с тем, что было.
   const clientSecret = clientSessionSecret();
-  const session: CabinetLeadSession = clientSecret
+  // Вход через Telegram — его ID; через Яндекс ID — почта учётной записи.
+  const telegramSession = clientSecret
     ? verifyClientSessionToken(request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "", clientSecret)
     : null;
+  const accountSession = !telegramSession && clientSecret
+    ? openClientAccount(request.cookies.get(CLIENT_ACCOUNT_COOKIE)?.value || "", clientSecret)
+    : null;
+  const session: CabinetLeadSession = telegramSession
+    ? { telegramUserId: telegramSession.telegramUserId }
+    : accountSession?.email
+      ? { accountEmail: accountSession.email }
+      : null;
   if (session) {
     // SameSite=Lax уже не отправляет эту куку на cross-site form-POST;
     // Origin-проверка — независимый от браузера второй слой, применяем её
@@ -259,6 +274,7 @@ export async function POST(request: NextRequest) {
     consent_accepted: true,
     consent_version: "website_pdn_transborder_v1",
     consent_at: consentAt,
+    ...packageFields(starterOffer),
   };
   const response = await fetch(`${CORE_API_URL}/api/v1/${isCase ? "legal-intakes" : "leads"}`, {
     method: "POST",

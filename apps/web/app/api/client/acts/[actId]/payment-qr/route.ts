@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
+import { clientQuery } from "@/lib/client-ref";
 import { clientCoreGetFile } from "@/lib/client-core";
 
 /** Платёжный QR своего акта — ядро само проверит, что акт этого клиента и ждёт оплаты. */
@@ -12,5 +13,5 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ actId: 
   if (auth instanceof Response) return auth;
   const { actId } = await ctx.params;
   if (!UUID.test(actId)) return Response.json({ detail: "Акт не найден." }, { status: 404 });
-  return clientCoreGetFile(`/api/v1/work-acts/${actId}/payment-qr?telegram_user_id=${auth.telegramUserId}`);
+  return clientCoreGetFile(`/api/v1/work-acts/${actId}/payment-qr?${clientQuery(auth)}`);
 }

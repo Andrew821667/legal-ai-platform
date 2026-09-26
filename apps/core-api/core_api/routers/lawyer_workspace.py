@@ -25,12 +25,14 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import case_stage, client_reviews, npd_limit, practice_funnel, telegram_delivery
+from core_api import anonymization, case_stage, client_reviews, document_requests, npd_limit, practice_funnel, telegram_delivery
+from core_api.client_principal import cabinet_email
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
     ActorType,
+    AgreementTemplate,
     AuditLog,
     ClientReview,
     ContractJob,
@@ -114,6 +116,19 @@ def _worked_without_agreement(intakes: list[tuple[bool, LegalIntakeStatus]]) -> 
     worked = any(flag for flag, _ in intakes)
     awaiting_terms = any(not flag and status not in _LIVE_INTAKE_EXCLUDED for flag, status in intakes)
     return worked and not awaiting_terms
+
+
+def _package_for(db: Session, item: LegalIntake) -> dict | None:
+    """Пакет, выбранный клиентом на сайте, и заготовка юриста под него."""
+    if not item.package_id:
+        return None
+    template_id = db.scalar(select(AgreementTemplate.id).where(AgreementTemplate.package_id == item.package_id))
+    return {
+        "id": item.package_id,
+        "title": item.package_title,
+        "price_text": item.package_price_text,
+        "template_id": str(template_id) if template_id else None,
+    }
 
 
 def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
@@ -812,6 +827,7 @@ def client_card(
 
     clarifications: dict[uuid.UUID, list[dict]] = {}
     documents: dict[uuid.UUID, list[dict]] = {}
+    requested = document_requests.for_intakes(db, intake_ids)
     if intake_ids:
         for row in db.execute(
             select(IntakeClarification)
@@ -925,9 +941,15 @@ def client_card(
             supplements.setdefault(item.parent_agreement_id, []).append(item)
     agreements = [item for item in agreements if item.parent_agreement_id is None]
 
+    # Куда уйдёт документ: в Telegram, в кабинет (клиент без Telegram — вход
+    # через Яндекс ID с этой почтой) или некуда.
+    card_cabinet_email = cabinet_email(lead)
+
     def _agreement_row(item: ServiceAgreement) -> dict:
         return {
             "agreement_id": str(item.id),
+            "delivery": "telegram" if item.client_telegram_user_id else ("cabinet" if card_cabinet_email else "none"),
+            "cabinet_email": card_cabinet_email if not item.client_telegram_user_id else None,
             # Без этого при втором обращении клиента нельзя понять, к чему
             # относится договор: на экране они лежат одним списком.
             "intake_id": str(item.intake_id) if item.intake_id else None,
@@ -991,6 +1013,8 @@ def client_card(
         "email": lead.email,
         "phone": lead.phone,
         "telegram_user_id": lead.telegram_user_id,
+        # Почта, по которой клиент без Telegram увидит документы в кабинете.
+        "cabinet_email": card_cabinet_email,
         "source": lead.source.value if lead.source else None,
         "created_at": _iso(lead.created_at),
         "nda": (
@@ -1026,10 +1050,12 @@ def client_card(
                 "description": item.description,
                 "internal_note": item.internal_note,
                 "without_agreement": item.without_agreement,
+                "package": _package_for(db, item),
                 "outreach_sent_at": _iso(item.outreach_sent_at),
                 "outreach_blocked_reason": item.outreach_blocked_reason,
                 "clarifications": clarifications.get(item.id, []),
                 "documents": documents.get(item.id, []),
+                "document_requests": requested.get(item.id, []),
                 "links": _intake_links_for(db, item.id),
                 # У постоянного клиента с двумя делами этап в шапке — по
                 # последнему договору; у каждого обращения — свой, по его договорам.
@@ -1641,10 +1667,23 @@ def archive(
             "created_at": _iso(lead.created_at),
             "archived_at": _iso(lead.archived_at),
             "is_test": is_staff(lead.telegram_user_id),
+            # Когда персональные данные обезличатся по сроку (152-ФЗ) — или уже.
+            "anonymize_on": _iso(anonymization.planned_date(db, lead)),
+            "anonymized_at": _iso(lead.anonymized_at),
             **_client_footprint(db, lead.id),
         }
         for lead in leads
     ]
+
+
+@router.get("/anonymization")
+def anonymization_preview(
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Сколько клиентов и NDA ждут обезличивания по сроку — только числа."""
+    _ = identity
+    return anonymization.preview(db)
 
 
 @router.post("/clients/{lead_id}/archive")

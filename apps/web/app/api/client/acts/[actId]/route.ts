@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
+import { clientFields, clientQuery } from "@/lib/client-ref";
 import { clientCoreGet, clientCorePost } from "@/lib/client-core";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ actId: 
   if (auth instanceof Response) return auth;
   const { actId } = await ctx.params;
   if (!UUID.test(actId)) return Response.json({ detail: "Акт не найден." }, { status: 404 });
-  return clientCoreGet(`/api/v1/work-acts/${actId}/document?telegram_user_id=${auth.telegramUserId}`);
+  return clientCoreGet(`/api/v1/work-acts/${actId}/document?${clientQuery(auth)}`);
 }
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ actId: string }> }) {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ actId:
   const payload = {
     ...body,
     action: undefined,
-    telegram_user_id: auth.telegramUserId,
+    ...clientFields(auth),
     callback_id: `miniapp:${randomUUID()}`,
     channel: "miniapp",
   };
