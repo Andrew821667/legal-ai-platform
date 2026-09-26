@@ -22,6 +22,7 @@ import security
 import utils
 from config import get_config
 from .helpers import notify_admin_new_lead
+from .start_payloads import channel_post_context_block
 from .markup import consultation_cta_markup as _consultation_cta_markup
 from .user_cta_actions import offer_lead_magnet
 from .user_message_helpers import (
@@ -42,6 +43,7 @@ async def _stream_response_text(
     response_stage: str,
     cta_variant: str,
     cta_shown: bool,
+    post_context: str = "",
 ) -> str:
     full_response = ""
     sent_message = None
@@ -68,6 +70,9 @@ async def _stream_response_text(
         )
     if topic_memory_context:
         funnel_context = f"{topic_memory_context}\n\n{funnel_context}"
+    # Пост канала, из которого пришёл собеседник (кнопка «Ассистент» под постом).
+    if post_context:
+        funnel_context = f"{post_context}\n\n{funnel_context}"
     if core_context:
         funnel_context = f"{core_context}\n\n{funnel_context}"
     async for chunk in ai_brain.ai_brain.generate_response_stream(
@@ -337,6 +342,7 @@ async def process_ai_response(
         response_stage=response_stage,
         cta_variant=cta_variant,
         cta_shown=cta_shown,
+        post_context=channel_post_context_block(getattr(context, "user_data", None)),
     )
 
     if intent_result.context_override is None:

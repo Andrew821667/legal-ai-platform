@@ -3,9 +3,11 @@ Handlers for /start payload entrypoints and referral bridges.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
+import time
 import urllib.error
 import urllib.request
 from typing import Dict
@@ -21,8 +23,12 @@ logger = logging.getLogger(__name__)
 config = get_config()
 
 _READER_START_PAYLOAD_RE = re.compile(r"^readerq_(?P<post_id>[0-9a-fA-F-]{36})$")
-# Кнопка «Спросить юриста» прямо под постом в канале (news/publish.py).
+# Кнопка «Ассистент AI Verdict» прямо под постом в канале (news/publish.py).
 _CHANNEL_START_PAYLOAD_RE = re.compile(r"^chq_(?P<post_id>[0-9a-fA-F-]{36})$")
+# Пост, из которого человек пришёл: ассистент отвечает с опорой на него.
+CHANNEL_POST_CONTEXT_KEY = "channel_post_context"
+CHANNEL_POST_CONTEXT_TTL_SECONDS = 24 * 3600
+CHANNEL_POST_EVENT = "channel_post_start"
 _CONTRACT_START_PAYLOAD_RE = re.compile(
     r"^contract_(?P<entry>demo|checklist|sample_report|consultation|cabinet)$"
 )
@@ -165,6 +171,85 @@ async def handle_reader_referral_start(
     return True
 
 
+def _plain_excerpt(text: str, limit: int = 1500) -> str:
+    """Текст поста без разметки — для контекста ассистента."""
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    plain = " ".join(html.unescape(plain).split())
+    return plain[:limit].rstrip() + ("…" if len(plain) > limit else "")
+
+
+def channel_post_greeting(title: str) -> str:
+    about = f" «{title}»" if title else ""
+    return (
+        f"Здравствуйте! Я Ассистент AI Verdict. Вы пришли из поста{about}.\n\n"
+        "Спросите, что важно именно вам: как это касается вашей ситуации или бизнеса, "
+        "что делать дальше, как применить или автоматизировать похожее у себя. Отвечу с учётом "
+        "материала, а если понадобится юрист или разработчик — передам ему вашу задачу."
+    )
+
+
+async def handle_channel_post_start(
+    *,
+    message,
+    context,
+    user_data: Dict,
+    user,
+    post_id: str,
+) -> bool:
+    """Кнопка под постом в канале — разговор с Ассистентом по этому посту.
+
+    Платформа многопрофильная: по посту спрашивают и о праве, и об
+    автоматизации, поэтому здесь не приём заявки к юристу, а тот же умный
+    ассистент (RAG, память темы, контекст дел), что и в обычном диалоге, —
+    только он знает, какой пост человек читал. Заявка появится, когда
+    человек сам оставит контакт; метку «из канала» ей проставит квалификация
+    (lead_qualifier) по событию channel_post_start.
+    """
+    post = fetch_post_context(post_id)
+    title = (post.get("title") or "").strip()
+    database.db.track_event(
+        user_data["id"],
+        CHANNEL_POST_EVENT,
+        payload={"post_id": post_id, "post_title": title, "rubric": post.get("rubric") or ""},
+    )
+    if context is not None and isinstance(getattr(context, "user_data", None), dict):
+        context.user_data[CHANNEL_POST_CONTEXT_KEY] = {
+            "post_id": post_id,
+            "title": title,
+            "rubric": (post.get("rubric") or "").strip(),
+            "source_url": (post.get("source_url") or "").strip(),
+            "excerpt": _plain_excerpt(post.get("text") or ""),
+            "at": time.time(),
+        }
+    greeting = channel_post_greeting(title)
+    # Приветствие — в историю диалога: модель видит, с чего начался разговор.
+    database.db.add_message(user_data["id"], "assistant", greeting)
+    await utils.safe_reply_text(message, greeting, action=CHANNEL_POST_EVENT)
+    return True
+
+
+def channel_post_context_block(user_store: Dict | None, now: float | None = None) -> str:
+    """Блок контекста для ассистента: из какого поста пришёл собеседник (сутки после перехода)."""
+    post = (user_store or {}).get(CHANNEL_POST_CONTEXT_KEY)
+    if not isinstance(post, dict):
+        return ""
+    if (now or time.time()) - float(post.get("at") or 0) > CHANNEL_POST_CONTEXT_TTL_SECONDS:
+        return ""
+    lines = ["Собеседник пришёл из поста в Telegram-канале AI Verdict."]
+    if post.get("title"):
+        lines.append(f"Заголовок поста: {post['title']}")
+    if post.get("rubric"):
+        lines.append(f"Рубрика: {post['rubric']}")
+    if post.get("excerpt"):
+        lines.append(f"Текст поста (фрагмент): {post['excerpt']}")
+    lines.append(
+        "Если вопрос связан с постом — отвечай с опорой на него и на знания платформы, "
+        "не пересказывай пост целиком. Помни, что платформа многопрофильная: право, "
+        "автоматизация и их сочетание."
+    )
+    return "\n".join(lines)
+
+
 def contract_payload_magnet(entry: str) -> str:
     mapping = {
         "demo": "demo",
@@ -263,13 +348,12 @@ async def process_pending_start_payload(
 
     channel_match = _CHANNEL_START_PAYLOAD_RE.match(payload)
     if channel_match:
-        return await handle_reader_referral_start(
+        return await handle_channel_post_start(
             message=message,
             context=context,
             user_data=user_data,
             user=user,
             post_id=channel_match.group("post_id"),
-            origin="channel",
         )
 
     match = _READER_START_PAYLOAD_RE.match(payload)

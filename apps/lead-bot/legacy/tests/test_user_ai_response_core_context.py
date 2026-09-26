@@ -214,3 +214,34 @@ async def test_no_topic_memory_leaves_funnel_context_unchanged(monkeypatch):
     )
 
     assert captured["funnel_context"].startswith("Текущий этап: discover.")
+
+
+@pytest.mark.asyncio
+async def test_channel_post_context_reaches_the_model(monkeypatch):
+    """Пришёл по кнопке «Ассистент» под постом — модель знает, какой пост он читал."""
+    monkeypatch.setattr(user_ai_response.config, "STREAMING_PREVIEW", False)
+    monkeypatch.setattr(user_ai_response.platform_context, "build_core_context_block", lambda telegram_id: "")
+    _stub_sales_intent(monkeypatch)
+    captured = {}
+
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+        captured["funnel_context"] = funnel_context
+        yield "Ответ"
+
+    monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "generate_response_stream", _fake_stream)
+
+    async def _send_action(**kwargs):
+        return None
+
+    await user_ai_response._stream_response_text(
+        original_message=SimpleNamespace(chat=SimpleNamespace(send_action=_send_action)),
+        user_data={"telegram_id": 1, "first_name": "Анна"},
+        user_first_name="Анна",
+        conversation_history=[],
+        response_stage="discover",
+        cta_variant="A",
+        cta_shown=False,
+        post_context="Собеседник пришёл из поста в Telegram-канале AI Verdict.\nЗаголовок поста: Суд и ИИ",
+    )
+    assert captured["funnel_context"].startswith("Собеседник пришёл из поста")
+    assert "Текущий этап: discover." in captured["funnel_context"]

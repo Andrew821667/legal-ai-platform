@@ -105,31 +105,41 @@ async def test_process_pending_start_payload_ignores_unknown_payload(monkeypatch
 
 
 @pytest.mark.anyio
-async def test_channel_post_button_creates_channel_lead(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Кнопка «Спросить юриста» под постом: свой текст и метка канала,
-    чтобы статистика бота-читателя не смешивалась с каналом."""
+async def test_channel_post_button_opens_the_assistant_with_post_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Кнопка «Ассистент AI Verdict» под постом: разговор с умным ассистентом,
+    а не приём заявки к юристу. Заявки и уведомления юристу на клик нет."""
     context = SimpleNamespace(user_data={"pending_start_payload": "chq_22222222-2222-2222-2222-222222222222"})
-    captured: dict[str, object] = {}
+    captured: dict[str, object] = {"leads": 0, "notices": 0, "history": []}
 
-    monkeypatch.setattr(start_payloads, "fetch_post_context", lambda post_id: {"title": "Суд и ИИ"})
     monkeypatch.setattr(
-        user_handlers.database.db,
-        "create_new_lead",
-        lambda local_user_id, payload: captured.setdefault("payload", payload) and 789,
+        start_payloads,
+        "fetch_post_context",
+        lambda post_id: {"title": "Суд и ИИ", "text": "<b>Суды</b> начали применять ИИ &amp; проверять доказательства.", "rubric": "Право"},
     )
+
+    def _no_lead(*args, **kwargs):
+        captured["leads"] += 1  # type: ignore[operator]
+        return 1
+
+    monkeypatch.setattr(user_handlers.database.db, "create_new_lead", _no_lead)
     monkeypatch.setattr(
         user_handlers.database.db,
         "track_event",
-        lambda local_user_id, event_type, payload=None, lead_id=None: captured.setdefault("event", event_type),
+        lambda local_user_id, event_type, payload=None, lead_id=None: captured.update(event=event_type, event_payload=payload),
+    )
+    monkeypatch.setattr(
+        user_handlers.database.db,
+        "add_message",
+        lambda local_user_id, role, text: captured["history"].append((role, text)),  # type: ignore[union-attr]
     )
 
-    async def _fake_notify(*args, **kwargs) -> None:
-        return None
+    async def _notify(*args, **kwargs) -> None:
+        captured["notices"] += 1  # type: ignore[operator]
 
     async def _fake_reply(message_obj, text: str, **kwargs) -> None:
         captured["reply"] = text
 
-    monkeypatch.setattr(start_payloads, "notify_admin_new_lead", _fake_notify)
+    monkeypatch.setattr(start_payloads, "notify_admin_new_lead", _notify)
     monkeypatch.setattr(user_handlers.utils, "safe_reply_text", _fake_reply)
 
     processed = await user_handlers.process_pending_start_payload(
@@ -137,10 +147,17 @@ async def test_channel_post_button_creates_channel_lead(monkeypatch: pytest.Monk
     )
 
     assert processed is True
-    payload = captured["payload"]
-    assert payload["cta_variant"] == "channel_post"  # type: ignore[index]
-    assert payload["notes"].startswith("[CHANNEL_POST]")  # type: ignore[index]
-    assert "[READER_REFERRAL]" not in payload["notes"]  # type: ignore[index]
-    assert payload["name"] == "Клиент из канала"  # type: ignore[index]
+    assert captured["leads"] == 0 and captured["notices"] == 0
+    reply = captured["reply"]
+    assert "Ассистент AI Verdict" in reply and "«Суд и ИИ»" in reply  # type: ignore[operator]
+    assert "заявка создана" not in reply  # type: ignore[operator]
     assert captured["event"] == "channel_post_start"
-    assert "из поста в канале" in captured["reply"]  # type: ignore[operator]
+    assert captured["event_payload"]["post_id"] == "22222222-2222-2222-2222-222222222222"  # type: ignore[index]
+    assert captured["history"] == [("assistant", reply)]
+
+    block = start_payloads.channel_post_context_block(context.user_data)
+    assert "Суд и ИИ" in block and "Суды начали применять ИИ & проверять" in block
+    assert "<b>" not in block
+    # Через сутки пост уже не подмешивается в ответы.
+    stale = context.user_data[start_payloads.CHANNEL_POST_CONTEXT_KEY]["at"] + 25 * 3600
+    assert start_payloads.channel_post_context_block(context.user_data, now=stale) == ""

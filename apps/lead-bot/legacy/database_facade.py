@@ -781,6 +781,12 @@ class DatabaseFacadeMixin:
 
     # === REPORTING / FUNNEL ===
 
+    def last_event_payload(self, user_id: int, event_type: str, within_days: int = 30) -> Optional[Dict]:
+        """Данные последнего события этого типа за N дней (атрибуция источника)."""
+        return database_reporting.last_event_payload(
+            self.get_connection, user_id=user_id, event_type=event_type, within_days=within_days
+        )
+
     def track_event(
         self,
         user_id: int,

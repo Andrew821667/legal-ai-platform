@@ -50,7 +50,7 @@ SOURCES: list[tuple[str, str]] = [
 ]
 
 READER_REFERRAL_MARK = "[READER_REFERRAL]"
-# Кнопка «Спросить юриста» прямо под постом в канале (news/publish.py).
+# Кнопка «Ассистент AI Verdict» прямо под постом в канале (news/publish.py).
 CHANNEL_POST_MARK = "[CHANNEL_POST]"
 CHANNEL_CTA = {"reader_referral", "channel_post"}
 

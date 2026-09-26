@@ -465,12 +465,12 @@ def _retryable_publish_patch(post: dict[str, Any], exc: Exception, *, now_utc: d
 _POST_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
-def _ask_lawyer_markup(post_id: object) -> str | None:
-    """Кнопка «Спросить юриста» под постом — в бота-ассистента с номером поста.
+def _assistant_markup(post_id: object) -> str | None:
+    """Кнопка «Ассистент AI Verdict» под постом — в бота-ассистента с номером поста.
 
-    Раньше из поста к юристу вела цепочка через бота-читателя, и на каждом
-    шаге люди терялись, а воронка не видела, что клиент пришёл из канала.
-    Бот по метке chq_<id> подхватывает тему поста и помечает лид «из канала».
+    Бот по метке chq_<id> открывает разговор с умным ассистентом (RAG, память
+    темы, контекст дел) и подмешивает ему этот пост; заявка появится, когда
+    человек сам оставит контакт, и будет помечена «из канала».
     """
     if not settings.news_channel_ask_button_enabled:
         return None
@@ -478,7 +478,7 @@ def _ask_lawyer_markup(post_id: object) -> str | None:
     username = settings.news_helper_bot_username.strip().lstrip("@")
     if not username or not _POST_ID_RE.match(post_id):
         return None
-    label = (settings.news_channel_ask_button_label or "").strip() or "Спросить юриста"
+    label = (settings.news_channel_ask_button_label or "").strip() or "🤖 Ассистент AI Verdict"
     url = f"https://t.me/{username}?start=chq_{post_id}"
     return json.dumps({"inline_keyboard": [[{"text": label, "url": url}]]}, ensure_ascii=False)
 
@@ -810,7 +810,7 @@ def main(*, allow_idle_fallback: bool = True) -> int:
                 strict_quality=True,
             )
             message_id = _send_to_telegram(
-                normalized_text, post.get("media_urls"), reply_markup=_ask_lawyer_markup(post_id)
+                normalized_text, post.get("media_urls"), reply_markup=_assistant_markup(post_id)
             )
             patch_payload: dict[str, Any] = {
                 "status": "posted",
