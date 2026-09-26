@@ -336,3 +336,33 @@ def get_ab_cta_report(
         return {"window_days": days, "variants": variants, "total": total}
     finally:
         conn.close()
+
+
+def last_event_payload(
+    get_connection: Callable[[], sqlite3.Connection],
+    *,
+    user_id: int,
+    event_type: str,
+    within_days: int,
+) -> dict | None:
+    """Данные последнего события этого типа у пользователя за N дней — или None."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        row = cursor.execute(
+            """
+            SELECT event_payload FROM analytics_events
+            WHERE user_id = ? AND event_type = ? AND created_at >= datetime('now', ?)
+            ORDER BY id DESC LIMIT 1
+            """,
+            (user_id, event_type, f"-{int(within_days)} days"),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    try:
+        payload = json.loads(row[0] or "{}")
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}

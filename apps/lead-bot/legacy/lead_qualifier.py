@@ -15,6 +15,25 @@ class LeadQualifier:
     def __init__(self, db: database.Database):
         self.db = db
 
+    def _channel_attribution(self, user_id: int, notes: Optional[str]) -> Dict:
+        lookup = getattr(self.db, "last_event_payload", None)
+        if lookup is None:
+            return {}
+        try:
+            post = lookup(user_id, "channel_post_start", 30)
+        except Exception as error:  # noqa: BLE001 — атрибуция не должна ломать заявку
+            logger.warning("Channel attribution lookup failed for user %s: %s", user_id, error)
+            return {}
+        if post is None:
+            return {}
+        mark = f"[CHANNEL_POST] post_id={post.get('post_id', '')}"
+        if post.get("post_title"):
+            mark += f" title={post['post_title']}"
+        return {
+            "cta_variant": "channel_post",
+            "notes": f"{notes}\n{mark}" if notes else mark,
+        }
+
     def process_lead_data(self, user_id: int, extracted_data: Dict) -> Optional[int]:
         """
         Обработка и сохранение данных лида
@@ -98,6 +117,11 @@ class LeadQualifier:
 
             if not has_contact and not existing_has_contact and not existing_lead:
                 return None
+
+            # Пришёл по кнопке «Ассистент» под постом канала — новая заявка
+            # помечается «из канала», чтобы воронка видела этот источник.
+            if not existing_lead:
+                lead_data.update(self._channel_attribution(user_id, lead_data.get('notes')))
 
             # Сохраняем или обновляем лид
             lead_id = self.db.create_or_update_lead(user_id, lead_data)

@@ -65,10 +65,12 @@ class Settings(BaseSettings):
     lead_bot_username: str = "AI_Verdict_Popov_Andrew"
     news_helper_bot_username: str = "legal_ai_helper_new_bot"
     news_helper_bot_label: str = "Ассистент AI Verdict"
-    # Кнопка под постом в канале — сразу в бота-ассистента с номером поста:
-    # вопрос по материалу в один клик, и видно, какой пост привёл клиента.
+    # Кнопка под постом в канале — в Ассистента AI Verdict с номером поста:
+    # вопрос по материалу в один клик, ассистент знает пост, воронка — источник.
+    # Платформа многопрофильная (право и автоматизация), поэтому «Ассистент», а
+    # не «юрист».
     news_channel_ask_button_enabled: bool = True
-    news_channel_ask_button_label: str = "💬 Спросить юриста"
+    news_channel_ask_button_label: str = "🤖 Ассистент AI Verdict"
     tz_name: str = "Europe/Moscow"
     openai_api_key: str = ""
     deepseek_api_key: str = ""
