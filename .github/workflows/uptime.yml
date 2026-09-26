@@ -1,0 +1,82 @@
+# Внешний мониторинг: сайт и ядро за ним — снаружи, каждые 10 минут.
+#
+# Mac mini стоит дома: пропал свет или интернет — сайт и боты лежат, а
+# проверка после деплоя срабатывает только при деплое. Эта — с серверов
+# GitHub, вне России, поэтому до Telegram доходит без прокси.
+#
+# Сообщение — при падении и при восстановлении, не каждые 10 минут: прошлое
+# состояние берём из результата предыдущего запуска (упал = failure).
+# Секреты: UPTIME_TELEGRAM_BOT_TOKEN, UPTIME_TELEGRAM_CHAT_ID. Без них
+# проверка работает, но молча (видно только по красным запускам).
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Previous state
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list -R "$GITHUB_REPOSITORY" --workflow uptime.yml --status completed --limit 1 --json conclusion -q '.[0].conclusion' 2>/dev/null || true)
+          echo "conclusion=${prev:-success}" >> "$GITHUB_OUTPUT"
+
+      - name: Check site
+        id: check
+        run: |
+          set -u
+          problems=""
+          probe() {
+            local url="$1" expected="$2" code attempt
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$url" || true)
+              [ "$code" = "$expected" ] && return 0
+              sleep 30
+            done
+            problems="$problems"$'\n'"— $url: ответ ${code:-нет} вместо $expected"
+            return 1
+          }
+          probe "https://ai-verdict.ru/" 200 || true
+          probe "https://ai-verdict.ru/api/health" 200 || true
+          probe "https://ai-verdict.ru/api/client/summary" 401 || true
+          if [ -n "$problems" ]; then
+            { echo "problems<<EOF"; printf '%s\n' "$problems"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+            echo "down=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "down=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify on change
+        env:
+          TOKEN: ${{ secrets.UPTIME_TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.UPTIME_TELEGRAM_CHAT_ID }}
+          DOWN: ${{ steps.check.outputs.down }}
+          PREVIOUS: ${{ steps.previous.outputs.conclusion }}
+          PROBLEMS: ${{ steps.check.outputs.problems }}
+        run: |
+          text=""
+          if [ "$DOWN" = "true" ] && [ "$PREVIOUS" = "success" ]; then
+            text="ai-verdict.ru недоступен снаружи (проверка $(date -u -d '+3 hours' '+%H:%M') МСК):${PROBLEMS}"$'\n\n'"Проверьте Mac mini: питание, интернет, docker."
+          elif [ "$DOWN" = "false" ] && [ "$PREVIOUS" = "failure" ]; then
+            text="ai-verdict.ru снова доступен ($(date -u -d '+3 hours' '+%H:%M') МСК)."
+          fi
+          if [ -n "$text" ] && [ -n "$TOKEN" ] && [ -n "$CHAT" ]; then
+            curl -s --max-time 20 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${CHAT}" --data-urlencode "text=${text}" -o /dev/null
+          fi
+          [ "$DOWN" = "true" ] && exit 1 || exit 0
