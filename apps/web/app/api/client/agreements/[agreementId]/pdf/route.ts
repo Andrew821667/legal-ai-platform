@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
+import { clientQuery } from "@/lib/client-ref";
 import { clientCoreGetFile } from "@/lib/client-core";
 
 /** PDF своего договора — ядро само проверит, что он этого клиента и не черновик. */
@@ -13,6 +14,6 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ agreeme
   const { agreementId } = await ctx.params;
   if (!UUID.test(agreementId)) return Response.json({ detail: "Договор не найден." }, { status: 404 });
   return clientCoreGetFile(
-    `/api/v1/service-agreements/${agreementId}/pdf?telegram_user_id=${auth.telegramUserId}`,
+    `/api/v1/service-agreements/${agreementId}/pdf?${clientQuery(auth)}`,
   );
 }

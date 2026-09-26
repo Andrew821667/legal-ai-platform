@@ -27,7 +27,11 @@ type Act = {
   kind?: "act" | "advance";
 };
 type Summary = {
-  client: { lead_id?: string | null; name?: string | null; has_cases: boolean };
+  client: {
+    lead_id?: string | null; name?: string | null; has_cases: boolean;
+    /** account — вход через Яндекс ID: дела найдены по почте, не по Telegram. */
+    via?: "account" | "telegram"; email?: string | null;
+  };
   nda: { signed: boolean; signed_at?: string | null; signer_full_name?: string | null; pdn_consent_at?: string | null };
   cases: Case[]; agreements: Agreement[]; acts: Act[];
 };
@@ -148,7 +152,11 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
     <header>
       <p className="text-sm text-slate-400">Личный кабинет</p>
       <h2 className="text-2xl font-semibold text-white">Добро пожаловать</h2>
-      <p className="mt-1 text-sm text-slate-300">Вы вошли через Telegram, но пока ни одно обращение не связано с вашим аккаунтом.</p>
+      <p className="mt-1 text-sm text-slate-300">
+        {data.client.via === "account"
+          ? `Вы вошли с Яндекс ID (${data.client.email || "почта аккаунта"}), но с этой почтой пока нет обращений. Оставьте задачу ниже — она сразу появится здесь.`
+          : "Вы вошли через Telegram, но пока ни одно обращение не связано с вашим аккаунтом."}
+      </p>
     </header>
     {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</p> : null}
     {emptyState(() => void load())}
@@ -158,7 +166,11 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
     <header>
       <p className="text-sm text-slate-400">Личный кабинет</p>
       <h2 className="text-2xl font-semibold text-white">{data.client.name ? `${data.client.name}, ваши дела` : "Мои дела"}</h2>
-      <p className="mt-1 text-sm text-slate-300">Здесь видны только обращения, связанные с вашим Telegram-аккаунтом.</p>
+      <p className="mt-1 text-sm text-slate-300">
+        {data.client.via === "account"
+          ? `Здесь видны обращения, оставленные с почтой ${data.client.email || "вашего аккаунта Яндекса"}.`
+          : "Здесь видны только обращения, связанные с вашим Telegram-аккаунтом."}
+      </p>
     </header>
 
     {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</p> : null}

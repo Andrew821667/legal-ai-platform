@@ -872,3 +872,29 @@ curl -s -X POST "$CORE_API_URL/api/v1/contract-jobs/finalize-exhausted-new?limit
 - Бот буферизует лиды: проверить файл SQLite и доступность Core API.
 - Нет worker heartbeat: проверить процесс на MacBook и сеть.
 - Проверить живость worker'ов API-методом: `GET /api/v1/workers/status`.
+
+## Вход в кабинет через Яндекс ID
+
+Telegram в России без VPN не открывается, поэтому главный вход в кабинет —
+Яндекс ID. Клиент — учётная запись в ядре (`client_accounts`): почта,
+подтверждённая Яндексом, и, если есть, Telegram. По почте клиенту видны только
+дела без Telegram (заявки с сайта с этой почтой); дела из Telegram с той же
+почтой в контактах — нет, иначе вписанная в боте чужая почта открыла бы её
+владельцу чужие договоры.
+
+Регистрация приложения (владелец, один раз):
+1. https://oauth.yandex.ru/client/new → «Веб-сервисы».
+2. Redirect URI: `https://ai-verdict.ru/cabinet/callback/yandex` (побайтно).
+3. Доступы: «Доступ к адресу электронной почты» и «Доступ к логину, имени и
+   фамилии».
+4. ClientID — в `.env` строкой `YANDEX_OAUTH_CLIENT_ID=…` (дописать `>>`),
+   секрет — только через скрытый ввод:
+   ```bash
+   ssh -t legalai-prod 'ENV_FILE=/Users/legalai/projects/legal-ai-platform/.env ~/rotate-env-key.sh YANDEX_OAUTH_CLIENT_SECRET'
+   ```
+5. `web` пересоздать (`up -d --force-recreate web`): `restart` env_file не перечитывает.
+
+Пока подпись и приёмка определены в NDA (п.6) через Telegram, клиент с
+Яндекс ID видит дела, документы, задаёт вопросы, заполняет реквизиты и
+сообщает об оплате, но подписать договор, NDA или принять акт — нет (ядро
+отвечает 409). Это снимет новая редакция п.6 NDA.
