@@ -21,6 +21,7 @@ from core_api.routers import (
     contract_jobs,
     events,
     health,
+    lawyer_calendar,
     lawyer_workspace,
     leads,
     legal_intakes,
@@ -86,6 +87,7 @@ app.include_router(workers.router)
 app.include_router(telegram_ops.router)
 app.include_router(reviews.router)
 app.include_router(agreement_templates.router)
+app.include_router(lawyer_calendar.router)
 app.include_router(admin.router)
 
 
