@@ -26,7 +26,7 @@ const TIMEOUT_MS = 15_000;
  */
 export const TELEGRAM_DELIVERY_TIMEOUT_MS = 60_000;
 
-type Method = "GET" | "POST" | "PATCH" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function coreCall(
   method: Method,
@@ -84,6 +84,10 @@ export function corePost(
   options: { timeoutMs?: number } = {},
 ): Promise<NextResponse> {
   return coreCall("POST", path, payload, options.timeoutMs);
+}
+
+export function corePut(path: string, payload: unknown): Promise<NextResponse> {
+  return coreCall("PUT", path, payload);
 }
 
 export function corePatch(path: string, payload: unknown): Promise<NextResponse> {

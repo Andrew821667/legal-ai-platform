@@ -15,11 +15,13 @@ from core_api.routers import (
     admin,
     agreement_drafts,
     agreement_templates,
+    client_auth,
     automation_controls,
     client_notices,
     client_portal,
     contract_ai_bridge,
     contract_jobs,
+    document_requests,
     events,
     health,
     lawyer_workspace,
@@ -85,9 +87,11 @@ app.include_router(client_notices.router)
 app.include_router(client_portal.router)
 app.include_router(workers.router)
 app.include_router(telegram_ops.router)
+app.include_router(client_auth.router)
 app.include_router(reviews.router)
 app.include_router(agreement_templates.router)
 app.include_router(agreement_drafts.router)
+app.include_router(document_requests.router)
 app.include_router(admin.router)
 
 

@@ -27,3 +27,10 @@ test("cabinetNoteTags — без сессии пустой список", () => 
 test("cabinetNoteTags — с сессией отмечает канал и подтверждённый Telegram", () => {
   assert.deepEqual(cabinetNoteTags({ telegramUserId: 1 }), ["channel=cabinet", "telegram_verified=1"]);
 });
+
+test("вход через Яндекс ID — почта учётной записи в email лида и своя отметка", () => {
+  const session = { accountEmail: "anna@yandex.ru" };
+  assert.deepEqual(cabinetLeadFields(session), { email: "anna@yandex.ru" });
+  assert.deepEqual(cabinetNoteTags(session), ["channel=cabinet", "yandex_verified=1"]);
+  assert.equal(cabinetSourceContext(session, "/"), "cabinet");
+});

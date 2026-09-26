@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { draftToTemplate, templateToDraft } from "./agreement-template.ts";
+import { draftToTemplate, templateToDraft, templateWithPackage } from "./agreement-template.ts";
 
 const template = {
   template_id: "t1",
@@ -37,4 +37,15 @@ test("без имени, с пустой формой или неверной с
   assert.equal(draftToTemplate(templateToDraft(template), " ", "legal").ok, false);
   assert.equal(draftToTemplate({}, "Пустая", null).ok, false);
   assert.equal(draftToTemplate({ subject: "Тема", amount: "много" }, "Имя", null).ok, false);
+});
+
+test("заготовка привязывается к пакету сайта, остальное не меняется", () => {
+  const body = templateWithPackage(template, "legal_contract_review");
+  assert.equal(body.package_id, "legal_contract_review");
+  assert.equal(body.subject, "Правовой анализ договора");
+  assert.equal(body.amount_minor, 1_500_000);
+  assert.equal(templateWithPackage(template, "").package_id, null);
+  const saved = draftToTemplate(templateToDraft(template), "Проверка", "legal", "legal_contract_review");
+  assert.equal(saved.value.package_id, "legal_contract_review");
+  assert.equal(draftToTemplate(templateToDraft(template), "Проверка", "legal").value.package_id, null);
 });

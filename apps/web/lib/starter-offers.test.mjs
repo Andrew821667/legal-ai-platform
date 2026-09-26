@@ -6,6 +6,8 @@ import {
   engineeringStarterOffers,
   getStarterOffer,
   legalStarterOffers,
+  packageFields,
+  packagesForPractice,
 } from "./starter-offers.ts";
 
 test("keeps three distinct offers for each practice", () => {
@@ -36,4 +38,15 @@ test("rejects an offer from the wrong practice", () => {
 test("ignores an unknown offer id", () => {
   assert.equal(getStarterOffer("made_up_offer"), undefined);
   assert.equal(addStarterOfferToMessage("Текст", "made_up_offer"), "Текст");
+});
+
+test("пакет уходит в ядро снимком: id, название и цена, которые видел клиент", () => {
+  assert.deepEqual(packageFields(getStarterOffer("legal_contract_review")), {
+    package_id: "legal_contract_review",
+    package_title: "Экспресс-проверка договора",
+    package_price_text: "от 7 900 ₽",
+  });
+  assert.deepEqual(packageFields(undefined), {});
+  assert.equal(packagesForPractice("legal").length, 3);
+  assert.equal(packagesForPractice("hybrid").length, 6);
 });
