@@ -56,6 +56,7 @@ KIND_LABELS = {
     "receipt": "Чек клиенту",
     "review_request": "Просьба оценить работу",
     "agreement_reminder": "Напоминание о договоре",
+    "document_request": "Запрос документов",
 }
 
 _TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")

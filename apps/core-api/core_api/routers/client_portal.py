@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, false, or_, select
 from sqlalchemy.orm import Session
 
+from core_api import document_requests
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_principal import resolve
@@ -237,6 +238,8 @@ def summary(
         if nda and nda.pdn_consent_id
         else None
     )
+    # Что юрист просит прислать; отменённые пункты клиенту не показываем.
+    requested = document_requests.for_intakes(db, [row.id for row in intakes], with_cancelled=False)
     return {
         "client": {
             "via": "account" if principal.account_id else "telegram",
@@ -262,6 +265,7 @@ def summary(
             "deadline": row.deadline, "deadline_at": _iso(row.deadline_at),
             "status": row.status.value, "without_agreement": row.without_agreement,
             "created_at": _iso(row.created_at), "documents": documents.get(row.id, []),
+            "document_requests": requested.get(row.id, []),
         } for row in intakes],
         "agreements": [{
             "id": str(row.id), "intake_id": str(row.intake_id) if row.intake_id else None,

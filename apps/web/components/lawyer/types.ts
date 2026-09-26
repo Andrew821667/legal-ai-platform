@@ -1,3 +1,4 @@
+import type { DocumentRequestRow } from "@/lib/document-requests";
 import type { StageKey } from "@/lib/lawyer-clients";
 
 export type TodayItem = {
@@ -130,6 +131,8 @@ export type IntakeCard = StageFields & {
   outreach_blocked_reason: string | null;
   clarifications: Clarification[];
   documents: IntakeDocumentRow[];
+  /** Что юрист попросил у клиента (см. lib/document-requests). */
+  document_requests?: DocumentRequestRow[];
   links: IntakeLinkRow[];
 };
 

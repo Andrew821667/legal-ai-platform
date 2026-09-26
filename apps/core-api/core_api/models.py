@@ -1116,6 +1116,35 @@ class IntakeDocument(Base):
     )
 
 
+class DocumentRequest(Base):
+    """Документ, который юрист попросил у клиента по обращению.
+
+    Раньше просьба жила в переписке: «пришлите паспорт, договор и переписку»,
+    а что из этого уже пришло, юрист сверял по памяти. Здесь у каждого пункта
+    есть статус: ждём, получен (и каким файлом), отменён. Клиент видит тот
+    же список в кабинете и загружает файл прямо в нужный пункт.
+    """
+
+    __tablename__ = "document_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("legal_intakes.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # open — ждём; received — получен; cancelled — больше не нужен. Строкой, а
+    # не enum базы: набор может расти без миграции типа.
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open", server_default="open")
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("intake_documents.id", ondelete="SET NULL"), nullable=True
+    )
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_document_requests_intake", "intake_id", "created_at"),)
+
+
 class SpecialConsultationProduct(Base):
     __tablename__ = "special_consultation_products"
 

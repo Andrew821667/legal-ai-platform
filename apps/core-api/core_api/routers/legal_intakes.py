@@ -16,7 +16,7 @@ from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.intake_assistant import next_turn
-from core_api import smoke
+from core_api import document_requests, smoke
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
@@ -520,6 +520,15 @@ def record_document(
         nda_signed_at_upload=True,
     )
     db.add(row)
+    db.flush()
+    # Файл, загруженный в пункт списка «юрист просит», закрывает этот пункт.
+    fulfilled = False
+    if payload.get("request_id"):
+        try:
+            request_id = uuid.UUID(str(payload["request_id"]))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid request_id") from exc
+        fulfilled = document_requests.fulfill(db, item.id, request_id, row.id)
     write_audit(
         db,
         actor_type=ActorType.api_key,
@@ -527,7 +536,7 @@ def record_document(
         action="legal_intake.document",
         target_type="legal_intake",
         target_id=item.id,
-        details={"nda_signed": row.nda_signed_at_upload},
+        details={"nda_signed": row.nda_signed_at_upload, "request_fulfilled": fulfilled},
     )
     db.commit()
     return MessageResponse(message="recorded")

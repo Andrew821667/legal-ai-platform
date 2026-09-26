@@ -6,6 +6,7 @@ import ActionButton from "./ActionButton";
 import { footprintText } from "./ArchiveView";
 import ConfirmButton, { ConfirmPanel } from "./ConfirmButton";
 import AgreementForm from "./AgreementForm";
+import DocumentRequestsBlock from "./DocumentRequestsBlock";
 import AmountBox from "./AmountBox";
 import DeadlineBox from "./DeadlineBox";
 import DocumentRow from "./DocumentRow";
@@ -773,6 +774,14 @@ function Intake({
           </ul>
         </div>
       ) : null}
+
+      <DocumentRequestsBlock
+        intakeId={item.intake_id}
+        practice={item.practice}
+        rows={item.document_requests || []}
+        initData={initData}
+        onChanged={onChanged}
+      />
 
       {signed ? null : withoutAgreement && !agreementAnyway ? (
         <button type="button" onClick={() => setAgreementAnyway(true)} className="lw-btn-quiet mt-3 w-full">
