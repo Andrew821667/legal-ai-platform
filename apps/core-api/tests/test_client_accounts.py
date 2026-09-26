@@ -264,3 +264,52 @@ def test_documents_for_a_client_without_telegram_go_to_the_cabinet(world) -> Non
         assert nowhere.json()["detail"] == "Client has no Telegram or email"
     finally:
         _cleanup([admin_name], [ids["silent"]])
+
+
+def test_agreement_for_a_site_client_is_composed_for_the_cabinet(world, monkeypatch) -> None:
+    """Составить договор клиенту без Telegram можно, если есть почта для кабинета."""
+    from core_api.models import ConflictCheckStatus, NdaSignature
+    from core_api.routers import service_agreements as api
+    from test_practice import _AGREEMENT_BODY, _OPERATOR
+
+    monkeypatch.setattr(api, "get_settings", lambda: _OPERATOR)
+    client = TestClient(app)
+    admin_name = f"pytest.cabinet.compose.{uuid4().hex}"
+    admin = {"X-API-Key": _key(Scope.admin, admin_name)}
+    db = SessionLocal()
+    try:
+        silent = Lead(name="Без почты", contact="+7 900 000-00-01", source=LeadSource.website_form)
+        db.add(silent)
+        db.flush()
+        intakes = {}
+        for key, lead_id in (("site", world["ids"]["site"]), ("silent", silent.id)):
+            intake = LegalIntake(lead_id=lead_id, description="Проверить договор аренды.",
+                                 status=LegalIntakeStatus.accepted, conflict_status=ConflictCheckStatus.clear)
+            db.add(intake)
+            db.add(NdaSignature(lead_id=lead_id, document_version="test", document_hash="b" * 64))
+            db.flush()
+            intakes[key] = str(intake.id)
+        db.commit()
+        silent_id = str(silent.id)
+    finally:
+        db.close()
+    try:
+        card = client.get(f"/api/v1/lawyer/clients/{world['ids']['site']}", headers=admin).json()
+        assert card["cabinet_email"] == world["email"]
+
+        created = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["site"], **_AGREEMENT_BODY})
+        assert created.status_code == 201, created.text
+
+        nowhere = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["silent"], **_AGREEMENT_BODY})
+        assert nowhere.status_code == 409
+        assert nowhere.json()["detail"] == "Client has no Telegram or email"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(NdaSignature).where(NdaSignature.lead_id.in_([world["ids"]["site"], silent_id])))
+            db.commit()
+        finally:
+            db.close()
+        _cleanup([admin_name], [silent_id])
