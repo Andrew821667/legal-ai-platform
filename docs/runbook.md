@@ -722,6 +722,42 @@ ssh -t legalai-prod '~/rotate-env-key.sh LAWYER_SESSION_SECRET'
 секретов вендоров» выше). Все ранее выданные ссылки — включая утерянную —
 перестают работать разом.
 
+## Статистика Метрики в воронке
+Воронка рабочего места («Деньги» → «Воронка») начинается с тех, кто уже
+написал. Блок «Сайт» над ней берёт из Метрики посетителей и визиты по
+источникам трафика и отправки формы — по целям `lead_form_submit` и
+`starter_offer_submit` — и сопоставляет их с заявками с сайта в ядре. Данные
+кэшируются на 30 минут. Сбой Метрики воронку не прячет, а только показывает
+причину. Без токена — строка-подсказка.
+
+**Выпустить токен (один раз).**
+1. На https://oauth.yandex.ru/client/new — приложение «AI Verdict Метрика»:
+   платформа «Веб-сервисы», Redirect URI `https://oauth.yandex.ru/verification_code`,
+   доступ «Яндекс.Метрика → Получение статистики, чтение параметров своих и
+   доверенных счётчиков» (`metrika:read`). Входить под аккаунтом, которому
+   доступен счётчик 110733908.
+2. Открыть `https://oauth.yandex.ru/authorize?response_type=token&client_id=<ClientID приложения>`,
+   разрешить — Яндекс покажет токен на странице.
+3. Записать на проде скрытым вводом и пересоздать web:
+```bash
+ssh legalai-prod 'cd ~/projects/legal-ai-platform && grep -q "^YM_ACCESS_TOKEN=" .env || printf "YM_ACCESS_TOKEN=\n" >> .env'
+ssh -t legalai-prod 'ENV_FILE=/Users/legalai/projects/legal-ai-platform/.env ~/rotate-env-key.sh YM_ACCESS_TOKEN'
+ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
+  && cd /Users/legalai/projects/legal-ai-platform \
+  && IMG=$(docker inspect -f "{{.Config.Image}}" legal-ai-web) \
+  && WEB_IMAGE="$IMG" docker compose -p compose --env-file .env \
+     -f infra/compose/docker-compose.prod.yml up -d --no-build --force-recreate web'
+```
+Образ задан явно по той же причине, что в «Смене секретов вендоров»: иначе
+compose возьмёт `legal-ai-web:local` вместо работающего.
+Токен Яндекса живёт год. «Метрика не приняла токен» в блоке — выпустить новый
+по шагу 2.
+
+**Цели.** Если в блоке «Цели lead_form_submit в счётчике нет» — в Метрике
+«Цели» → «Добавить цель» → «JavaScript-событие», идентификатор
+`lead_form_submit` (и отдельно `starter_offer_submit`). Сайт шлёт их при
+отправке заявки (`apps/web/lib/lead-attribution.ts`).
+
 ## Вход клиента в личный кабинет через Telegram (/cabinet)
 
 Тот же принцип, что у автономного входа юриста выше (stateless-кука,

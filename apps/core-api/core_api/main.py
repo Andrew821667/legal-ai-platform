@@ -13,6 +13,7 @@ from core_api.config import get_settings
 from core_api.logging_config import setup_logging
 from core_api.routers import (
     admin,
+    agreement_drafts,
     agreement_templates,
     client_auth,
     automation_controls,
@@ -89,6 +90,7 @@ app.include_router(telegram_ops.router)
 app.include_router(client_auth.router)
 app.include_router(reviews.router)
 app.include_router(agreement_templates.router)
+app.include_router(agreement_drafts.router)
 app.include_router(document_requests.router)
 app.include_router(admin.router)
 
