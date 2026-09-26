@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 import CalendarSubscribe from "./CalendarSubscribe";
+import ConsultationsBlock from "./ConsultationsBlock";
+import { whenLabel } from "@/lib/consultation";
 import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, OUTREACH_REASON, days, intakeTitle, label, shortDate, shortDay } from "./labels";
@@ -45,6 +47,9 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return `${"⭐".repeat(item.score || 0)} «${item.review_text || ""}» — акт № ${item.act_number}`;
     case "act_claimed_paid":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
+    case "consultation_claimed":
+    case "consultation_receipt":
+      return `${item.starts_at ? whenLabel(item.starts_at) : ""} — ${formatRub(item.amount_minor ?? null)}, код ${item.code || "—"}`;
     case "act_overdue":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}${
         item.last_reminded_at ? ` · напоминали ${shortDate(item.last_reminded_at)}` : ""
@@ -98,7 +103,8 @@ export default function TodayView({
         <p className="mt-3 text-lw-sm text-lw-muted">
           Здесь только то, что стоит из-за вас. Все клиенты — на соседней вкладке.
         </p>
-        <div className="mt-4 text-left">
+        <div className="mt-4 space-y-4 text-left">
+          <ConsultationsBlock initData={initData} onChanged={onChanged} version={today.generated_at} />
           <CalendarSubscribe initData={initData} />
         </div>
       </Card>
@@ -152,17 +158,72 @@ export default function TodayView({
                 {section.key === "review_moderation" && item.review_id ? (
                   <ReviewActions item={item} initData={initData} onChanged={onChanged} />
                 ) : null}
+                {(section.key === "consultation_claimed" || section.key === "consultation_receipt") && item.slot_id ? (
+                  <ConsultationActions item={item} receipt={section.key === "consultation_receipt"} initData={initData} onChanged={onChanged} />
+                ) : null}
               </li>
             ))}
           </ul>
         </section>
       ))}
+      <ConsultationsBlock initData={initData} onChanged={onChanged} version={today.generated_at} />
       <CalendarSubscribe initData={initData} />
     </div>
   );
 }
 
 /** Показать отзыв на сайте или оставить только для себя. */
+/** Консультация: «Оплата пришла» после сверки с банком; «Чек выдан» после «Мой налог». */
+function ConsultationActions({
+  item,
+  receipt,
+  initData,
+  onChanged,
+}: {
+  item: TodayItem;
+  receipt: boolean;
+  initData: string;
+  onChanged?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [ref, setRef] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const run = async (action: "confirm" | "receipt") => {
+    setBusy(true);
+    setNote(null);
+    try {
+      await lawyerAction(`/api/lawyer/consultations/${item.slot_id}/${action}`, initData, action === "receipt" ? { ref } : {});
+      onChanged?.();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Не получилось");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+      {receipt ? (
+        <>
+          <input
+            value={ref}
+            onChange={(event) => setRef(event.target.value)}
+            placeholder="Ссылка на чек (необязательно)"
+            className="lw-input min-w-0 flex-1 !py-1.5"
+          />
+          <button type="button" disabled={busy} onClick={() => run("receipt")} className="lw-btn-quiet !px-3 !py-1.5 !text-lw-sm">
+            {busy ? "Отмечаю…" : "Чек выдан"}
+          </button>
+        </>
+      ) : (
+        <button type="button" disabled={busy} onClick={() => run("confirm")} className="lw-btn-quiet !px-3 !py-1.5 !text-lw-sm">
+          {busy ? "Подтверждаю…" : "Оплата пришла"}
+        </button>
+      )}
+      {note ? <span className="text-lw-sm text-lw-danger">{note}</span> : null}
+    </div>
+  );
+}
+
 function ReviewActions({
   item,
   initData,

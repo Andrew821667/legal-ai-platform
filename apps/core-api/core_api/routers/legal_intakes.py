@@ -16,7 +16,7 @@ from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
 from core_api.intake_assistant import next_turn
-from core_api import document_requests, smoke
+from core_api import consultations, document_requests, smoke
 from core_api.lead_notifications import notify_new_legal_intake
 from core_api.models import (
     ActorType,
@@ -171,6 +171,15 @@ def create_legal_intake(
     )
     db.add(item)
     db.flush()
+    # Запись на консультацию: время бронируется в той же транзакции. Занято —
+    # 409, и ни клиент, ни обращение не создаются.
+    slot = None
+    if payload.consultation_slot_id is not None:
+        try:
+            slot = consultations.hold(db, payload.consultation_slot_id, lead, item, datetime.now(timezone.utc))
+        except consultations.SlotUnavailable as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Consultation slot is taken") from exc
     write_audit(
         db,
         actor_type=ActorType.api_key,
@@ -188,6 +197,7 @@ def create_legal_intake(
             "consent_version": payload.consent_version,
             "consent_at": payload.consent_at.isoformat(),
             "package_id": item.package_id,
+            "consultation_slot_id": str(slot.id) if slot is not None else None,
         },
     )
     if restored_from_archive:
@@ -205,6 +215,8 @@ def create_legal_intake(
     db.refresh(item)
 
     result = _payload(item, lead)
+    if slot is not None:
+        result.consultation = consultations.booking(slot)
     if idempotency_key:
         store_response(
             db,

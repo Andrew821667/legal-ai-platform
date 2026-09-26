@@ -29,6 +29,7 @@ const pages: SitemapPage[] = [
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/services", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help", lastModified: practiceUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
+  { path: "/consultation", lastModified: practiceUpdatedAt, changeFrequency: "daily", priority: 0.85 },
   { path: "/legal-help/business", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/individuals", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/regions", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.8 },

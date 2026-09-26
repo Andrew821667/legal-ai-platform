@@ -34,6 +34,7 @@ const legalAreas = new Set([
   "debt_bankruptcy",
   "other",
 ]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const urgencyLevels = new Set(["urgent", "high", "normal", "no_deadline"]);
 
 type IntakeBody = {
@@ -48,6 +49,8 @@ type IntakeBody = {
   region?: string;
   source_context?: string;
   starter_offer_id?: string;
+  /** Запись на консультацию: время бронируется вместе с обращением. */
+  consultation_slot_id?: string;
   consentAccepted?: boolean;
   utm_source?: string;
   utm_medium?: string;
@@ -95,7 +98,12 @@ export async function POST(request: NextRequest) {
 
   const contact = clean(payload.contact, 255);
   const rawDescription = clean(payload.description, 4000);
-  const starterOffer = getStarterOffer(payload.starter_offer_id, "legal");
+  const slotId = typeof payload.consultation_slot_id === "string" ? payload.consultation_slot_id.trim() : "";
+  if (slotId && !UUID.test(slotId)) {
+    return NextResponse.json({ detail: "Выберите время консультации заново." }, { status: 400 });
+  }
+  // Запись на время — всегда пакет «Консультация юриста»: цена и формат те же.
+  const starterOffer = getStarterOffer(slotId ? "legal_consultation" : payload.starter_offer_id, "legal");
   const description = addStarterOfferToMessage(
     rawDescription || "",
     starterOffer?.id,
@@ -184,11 +192,18 @@ export async function POST(request: NextRequest) {
       utm_content: clean(payload.utm_content, 255),
       utm_term: clean(payload.utm_term, 255),
       ...packageFields(starterOffer),
+      ...(slotId ? { consultation_slot_id: slotId } : {}),
     }),
     cache: "no-store",
   });
   const raw = await coreResponse.text();
   if (!coreResponse.ok) {
+    if (slotId && coreResponse.status === 409) {
+      return NextResponse.json(
+        { detail: "Это время только что заняли — выберите другое.", slot_taken: true },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ detail: parseCoreError(raw) }, { status: coreResponse.status });
   }
 
@@ -198,6 +213,8 @@ export async function POST(request: NextRequest) {
     ok: true,
     intake_id: data.id,
     status: data.status,
+    // Ключ страницы брони: по нему клиент видит запись, QR и «Я оплатил».
+    ...(data.consultation?.access_token ? { booking_token: data.consultation.access_token } : {}),
     message: "Обращение принято. Юрист изучит описание и свяжется с вами для уточнения задачи.",
   });
 }

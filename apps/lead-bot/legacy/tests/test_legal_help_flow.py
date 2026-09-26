@@ -8,17 +8,16 @@ from handlers import legal_help
 
 
 def test_legal_help_client_type_markup() -> None:
-    values = [
-        button.callback_data
-        for row in legal_help.legal_help_client_type_markup().inline_keyboard
-        for button in row
-    ]
+    buttons = [button for row in legal_help.legal_help_client_type_markup().inline_keyboard for button in row]
+    values = [button.callback_data for button in buttons if button.callback_data]
     assert values == [
         "legal_client:company",
         "legal_client:entrepreneur",
         "legal_client:individual",
         "legal_client:unknown",
     ]
+    # Запись на консультацию по времени — ссылкой на сайт.
+    assert [button.url for button in buttons if button.url] == [legal_help.config.CONSULTATION_BOOKING_URL]
 
 
 @pytest.mark.anyio

@@ -363,6 +363,11 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
             lines.append(f"Регион: {item.region}")
         if item.deadline:
             lines.append(f"Ближайший срок: {item.deadline}")
+        from core_api import consultations
+
+        booked = consultations.for_intake(db, item.id)
+        if booked is not None:
+            lines.append(f"Запись на консультацию: {consultations.when_text(booked)} — ждёт оплаты")
         lines.extend(["", "Краткое описание:", item.description[:600]])
         intake_payload = {
             "description": item.description,

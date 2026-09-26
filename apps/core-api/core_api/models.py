@@ -1148,6 +1148,52 @@ class DocumentRequest(Base):
     __table_args__ = (Index("ix_document_requests_intake", "intake_id", "created_at"),)
 
 
+class ConsultationSlot(Base):
+    """Время юриста для платной консультации и бронь клиента на него.
+
+    free — свободно; held — клиент выбрал и оплачивает (держится
+    CONSULTATION_HOLD_MINUTES); claimed — клиент сообщил об оплате; confirmed —
+    юрист увидел поступление; cancelled — юрист закрыл это время. Бронь
+    живёт в той же строке: у одного времени не бывает двух клиентов.
+    """
+
+    __tablename__ = "consultation_slots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_min: Mapped[int] = mapped_column(Integer, nullable=False, default=60, server_default="60")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="free", server_default="free")
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="SET NULL"), nullable=True
+    )
+    intake_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("legal_intakes.id", ondelete="SET NULL"), nullable=True
+    )
+    price_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Код в назначении платежа — по нему юрист находит перевод в банке.
+    code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Ключ страницы брони: клиент без входа видит по нему свою запись и QR.
+    access_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    held_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    receipt_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    receipt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_consultation_slots_status", "status", "starts_at"),
+        # Одно время — один живой слот (как в миграции 0049).
+        Index(
+            "uq_consultation_slots_live_start",
+            "starts_at",
+            unique=True,
+            postgresql_where=sa_text("status <> 'cancelled'"),
+        ),
+    )
+
+
 class SpecialConsultationProduct(Base):
     __tablename__ = "special_consultation_products"
 

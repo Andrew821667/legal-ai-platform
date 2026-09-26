@@ -177,12 +177,22 @@ export default function LegalHelpPage() {
                 <p className="mt-3 text-2xl font-semibold text-amber-300">{offer.price}</p>
                 <p className="mt-4 text-sm leading-6 text-slate-200">{offer.description}</p>
                 <p className="mt-4 text-sm leading-6 text-slate-400">{offer.note}</p>
-                <StarterOfferButton
-                  offerId={offer.id}
-                  targetId="legal-help-form"
-                  label="Выбрать этот формат"
-                  className="mt-6 inline-flex justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 lg:mt-auto"
-                />
+                {offer.id === "legal_consultation" ? (
+                  // Консультацию можно сразу записать на время и оплатить.
+                  <Link
+                    href="/consultation"
+                    className="mt-6 inline-flex justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 lg:mt-auto"
+                  >
+                    Записаться на время
+                  </Link>
+                ) : (
+                  <StarterOfferButton
+                    offerId={offer.id}
+                    targetId="legal-help-form"
+                    label="Выбрать этот формат"
+                    className="mt-6 inline-flex justify-center rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 lg:mt-auto"
+                  />
+                )}
               </article>
             ))}
           </div>

@@ -50,3 +50,14 @@ test("лента: события на весь день с напоминани�
   assert.match(unfolded, /SUMMARY:Срок по делу: Договоры и сделки · №ABC/);
   assert.match(unfolded, /DTSTAMP:20260926T100000Z/);
 });
+
+test("консультация — событие со временем и напоминанием за час", () => {
+  const ics = buildIcs(
+    [{ uid: "consultation-1", kind: "consultation", date: "2026-10-01", title: "Консультация · код K-ABC123",
+       lead_id: null, starts_at: "2026-10-01T12:00:00+00:00", duration_min: 60 }],
+    { now: new Date("2026-09-26T10:00:00Z"), origin: "https://ai-verdict.ru" },
+  ).replace(/\r\n /g, "");
+  assert.match(ics, /DTSTART:20261001T120000Z\r\nDTEND:20261001T130000Z/);
+  assert.match(ics, /TRIGGER:-PT1H/);
+  assert.doesNotMatch(ics, /VALUE=DATE/);
+});

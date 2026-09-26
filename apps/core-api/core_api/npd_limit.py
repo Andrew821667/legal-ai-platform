@@ -44,7 +44,10 @@ def _income(db: Session, since: datetime) -> int:
         .where(WorkAct.paid_at >= since)
         .where(real_client(Lead.telegram_user_id))
     )
-    return int(total or 0)
+    # Оплаченные консультации — тоже доход самозанятого (consultations.py).
+    from core_api.consultations import income_since
+
+    return int(total or 0) + income_since(db, since)
 
 
 def level(used_pct: int) -> str:

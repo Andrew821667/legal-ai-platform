@@ -37,6 +37,10 @@ export type TodayItem = {
   retryable?: boolean;
   attempts?: number;
   last_error?: string | null;
+  // Консультации: «клиент сообщил об оплате», «чек не выдан»
+  slot_id?: string;
+  starts_at?: string | null;
+  code?: string | null;
   // Акты: «клиент сообщил об оплате», «не оплачен в срок»
   act_id?: string;
   act_number?: string;

@@ -20,6 +20,7 @@ from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff
 from core_api.models import (
+    ConsultationSlot,
     ClientReview,
     Lead,
     LegalIntake,
@@ -231,6 +232,21 @@ def today(
     acts_claimed = [(a, lead) for a, lead in open_acts if a.status == WorkActStatus.claimed_paid]
     acts_overdue = [(a, lead) for a, lead in open_acts if _overdue(a, now)]
 
+    # 8а. Консультации: клиент сказал «оплатил» — сверить; оплачена, а чека нет.
+    consultation_rows = db.execute(
+        select(ConsultationSlot, Lead)
+        .outerjoin(Lead, Lead.id == ConsultationSlot.lead_id)
+        .where(
+            or_(
+                ConsultationSlot.status == "claimed",
+                and_(ConsultationSlot.status == "confirmed", ConsultationSlot.receipt_at.is_(None)),
+            )
+        )
+        .order_by(ConsultationSlot.starts_at)
+    ).all()
+    consultation_claimed = [(s, lead) for s, lead in consultation_rows if s.status == "claimed"]
+    consultation_receipt = [(s, lead) for s, lead in consultation_rows if s.status == "confirmed"]
+
     # 9. Не ушло в Telegram: не ушло совсем или повтор затянулся. Раньше такие
     #    сбои оседали в логе, и о них никто не знал.
     undelivered = db.execute(
@@ -417,6 +433,42 @@ def today(
                         "days_waiting": _days_since(a.claimed_paid_at),
                     }
                     for a, lead in acts_claimed
+                ],
+            },
+            {
+                "key": "consultation_claimed",
+                "title": "Консультация: клиент сообщил об оплате",
+                "hint": "Найдите перевод по коду в назначении платежа и подтвердите — клиенту придёт подтверждение.",
+                "items": [
+                    {
+                        "slot_id": str(s.id),
+                        "lead_id": str(s.lead_id) if s.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "starts_at": _iso(s.starts_at),
+                        "code": s.code,
+                        "amount_minor": s.price_minor,
+                        "days_waiting": _days_since(s.claimed_at),
+                    }
+                    for s, lead in consultation_claimed
+                ],
+            },
+            {
+                "key": "consultation_receipt",
+                "title": "Чек за консультацию не выдан",
+                "hint": "Оплата подтверждена — выдайте чек в «Мой налог» и отметьте его.",
+                "items": [
+                    {
+                        "slot_id": str(s.id),
+                        "lead_id": str(s.lead_id) if s.lead_id else None,
+                        "client": _lead_title(lead),
+                        "is_test": is_staff(lead.telegram_user_id if lead else None),
+                        "starts_at": _iso(s.starts_at),
+                        "code": s.code,
+                        "amount_minor": s.price_minor,
+                        "days_waiting": _days_since(s.confirmed_at),
+                    }
+                    for s, lead in consultation_receipt
                 ],
             },
             {

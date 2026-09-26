@@ -24,6 +24,18 @@ const EXACT: Record<string, string> = {
   "Link not found": "Связь не найдена.",
   "Delivery not found": "Отправка не найдена.",
   "Template not found": "Заготовка не найдена.",
+  "Booking not found": "Запись не найдена или время бронирования истекло.",
+  "Consultation slot not found": "Время не найдено.",
+
+  // Консультации
+  "Consultation slot is taken": "Это время уже заняли — выберите другое.",
+  "Booking is already paid": "Оплата уже подтверждена.",
+  "Paid booking is cancelled by the lawyer": "После сообщения об оплате отменить запись может только юрист — напишите ему.",
+  "Consultation slot is booked": "На это время записан клиент — сначала снимите бронь.",
+  "Consultation is not awaiting payment": "Эта запись не ждёт оплаты.",
+  "Consultation slot is not booked": "На это время никто не записан.",
+  "Receipt is recorded for a paid consultation": "Чек отмечается после подтверждения оплаты.",
+  "Consultation slot already exists": "Это время уже открыто.",
   "Document request not found": "Пункт запроса не найден.",
   "These documents are already requested": "Эти документы уже запрошены и ждут клиента.",
   "Package already has a template": "К этому пакету уже привязана другая заготовка — сначала отвяжите её.",

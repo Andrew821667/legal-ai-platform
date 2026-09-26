@@ -276,6 +276,10 @@ class Config:
         self.CASE_MANAGEMENT_BOT_USERNAME: str = os.getenv(
             'CASE_MANAGEMENT_BOT_USERNAME', ''
         ).strip().lstrip('@')
+        # Запись на платную консультацию по времени (сайт, /consultation).
+        self.CONSULTATION_BOOKING_URL: str = os.getenv(
+            'CONSULTATION_BOOKING_URL', 'https://ai-verdict.ru/consultation'
+        ).strip()
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
             'TRANSBORDER_CONSENT_URL',

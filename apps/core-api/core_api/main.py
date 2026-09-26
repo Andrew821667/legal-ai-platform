@@ -20,6 +20,7 @@ from core_api.routers import (
     client_notices,
     client_portal,
     contract_ai_bridge,
+    consultations,
     contract_jobs,
     document_requests,
     events,
@@ -91,6 +92,8 @@ app.include_router(telegram_ops.router)
 app.include_router(client_auth.router)
 app.include_router(reviews.router)
 app.include_router(agreement_templates.router)
+app.include_router(consultations.public)
+app.include_router(consultations.lawyer)
 app.include_router(lawyer_calendar.router)
 app.include_router(agreement_drafts.router)
 app.include_router(document_requests.router)

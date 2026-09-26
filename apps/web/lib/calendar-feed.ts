@@ -19,6 +19,9 @@ export type CalendarEvent = {
   date: string;
   title: string;
   lead_id: string | null;
+  /** Событие со временем (консультация): начало в ISO и длительность. */
+  starts_at?: string;
+  duration_min?: number;
 };
 
 const LABEL = "calendar-feed:v1:";
@@ -76,6 +79,11 @@ function nextDay(iso: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+function stampOf(iso: string): string | null {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : stamp(date);
+}
+
 function stamp(now: Date): string {
   return now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
@@ -98,10 +106,28 @@ export function buildIcs(events: CalendarEvent[], options: { now: Date; origin: 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(event.date)) continue;
     const url = event.lead_id ? `${origin}/lawyer?client=${encodeURIComponent(event.lead_id)}` : `${origin}/lawyer`;
     const title = escapeText(event.title);
+    const start = event.starts_at ? stampOf(event.starts_at) : null;
+    lines.push("BEGIN:VEVENT", `UID:${event.uid}@ai-verdict.ru`, `DTSTAMP:${stamp(options.now)}`);
+    if (start && event.starts_at) {
+      // Консультация: точное время и напоминание за час; занятое время в календаре.
+      const end = new Date(new Date(event.starts_at).getTime() + (event.duration_min || 60) * 60_000);
+      lines.push(
+        `DTSTART:${start}`,
+        `DTEND:${stamp(end)}`,
+        `SUMMARY:${title}`,
+        `DESCRIPTION:${escapeText(`Карточка клиента: ${url}`)}`,
+        `URL:${url}`,
+        "TRANSP:OPAQUE",
+        "BEGIN:VALARM",
+        "ACTION:DISPLAY",
+        `DESCRIPTION:Через час: ${title}`,
+        "TRIGGER:-PT1H",
+        "END:VALARM",
+        "END:VEVENT",
+      );
+      continue;
+    }
     lines.push(
-      "BEGIN:VEVENT",
-      `UID:${event.uid}@ai-verdict.ru`,
-      `DTSTAMP:${stamp(options.now)}`,
       `DTSTART;VALUE=DATE:${compactDate(event.date)}`,
       `DTEND;VALUE=DATE:${compactDate(nextDay(event.date))}`,
       `SUMMARY:${title}`,
