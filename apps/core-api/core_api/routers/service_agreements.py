@@ -24,7 +24,7 @@ from core_api.client_proposal import (
     build_summary,
 )
 from core_api.service_agreement import account_signing_allowed
-from core_api.client_principal import ClientRef, Principal, resolve
+from core_api.client_principal import ClientRef, Principal, cabinet_email, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
@@ -359,8 +359,10 @@ def create_agreement(
     lead = db.get(Lead, intake.lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
-    if lead.telegram_user_id is None:
-        raise HTTPException(status_code=409, detail="Client has no Telegram dialog")
+    # Клиент без Telegram (заявка с сайта) получит договор в кабинете по почте
+    # из заявки (см. deliver); без почты договор отправить некуда.
+    if lead.telegram_user_id is None and cabinet_email(lead) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
     nda = _nda_for_lead(db, lead)
     # NDA подтверждает личность и фиксирует режим материалов до договора.
     # Поэтому он обязателен для любой практики платформы.
@@ -534,8 +536,10 @@ def create_supplement(
             status_code=409,
             detail="Only a signed agreement takes a supplement; change an unsigned one with a new revision",
         )
-    if not parent.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+    if not parent.client_telegram_user_id and cabinet_email(
+        db.get(Lead, parent.lead_id) if parent.lead_id else None
+    ) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
 
     supplements = db.execute(
         select(ServiceAgreement)
@@ -1180,7 +1184,18 @@ def deliver_agreement(
     if item.status != ServiceAgreementStatus.draft:
         raise HTTPException(status_code=409, detail="Agreement is not a draft")
     if not item.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+        # Клиент без Telegram (заявка с сайта): документ публикуется в его
+        # кабинете — он увидит его после входа через Яндекс ID с этой почтой.
+        email = cabinet_email(db.get(Lead, item.lead_id) if item.lead_id else None)
+        if email is None:
+            raise HTTPException(status_code=409, detail="Client has no Telegram or email")
+        item.status = ServiceAgreementStatus.sent
+        item.sent_at = datetime.now(timezone.utc)
+        db.add(item)
+        _audit(db, identity, item, "service_agreement.deliver", {"channel": "cabinet"})
+        db.commit()
+        db.refresh(item)
+        return {**_payload(item), "delivered_via": "cabinet", "cabinet_email": email}
 
     token = _client_bot_token()
     if not token:
@@ -1209,7 +1224,7 @@ def deliver_agreement(
     _audit(db, identity, item, "service_agreement.deliver")
     db.commit()
     db.refresh(item)
-    return _payload(item)
+    return {**_payload(item), "delivered_via": "telegram"}
 
 
 @router.post("/{agreement_id}/replies/deliver", status_code=status.HTTP_201_CREATED)

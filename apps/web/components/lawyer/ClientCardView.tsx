@@ -350,7 +350,8 @@ export default function ClientCardView({
                 onChanged={onChanged}
                 agreements={card.agreements.filter((a) => a.intake_id === item.intake_id)}
                 ndaSigned={Boolean(card.nda)}
-                hasDialog={card.telegram_user_id !== null}
+                // Куда уйдёт договор: в Telegram или, у заявки с сайта, в кабинет по почте.
+                hasDialog={card.telegram_user_id !== null || Boolean(card.cabinet_email)}
                 ownProgress={card.intakes.length > 1}
                 insideTelegram={insideTelegram}
                 currentLeadId={card.lead_id}
@@ -532,20 +533,36 @@ export function Agreement({
         </a>
       )}
 
+      {item.delivery === "cabinet" && (item.status === "sent" || item.status === "viewed") ? (
+        <p className="mt-2 rounded-lg bg-lw-blue-soft p-2 text-lw-sm text-lw-ink">
+          Опубликован в кабинете: у клиента нет Telegram. Сообщите ему — ai-verdict.ru/cabinet → «Войти с
+          Яндекс ID» с почтой {item.cabinet_email}.
+        </p>
+      ) : null}
+
       {item.status === "draft" ? (
         <div className="mt-3 border-t border-lw-border pt-3">
-          <ActionButton
-            label="Отправить клиенту"
-            done={
-              supplement
-                ? "Отправлено. Клиент получил допсоглашение."
-                : "Отправлено. Клиент получил проект договора."
-            }
-            onRun={async () => {
-              await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
-              onChanged();
-            }}
-          />
+          {item.delivery === "none" ? (
+            <p className="text-lw-sm text-lw-warning">
+              У клиента нет ни Telegram, ни почты — отправить некуда. Попросите клиента оставить почту или
+              написать в бот.
+            </p>
+          ) : (
+            <ActionButton
+              label={item.delivery === "cabinet" ? "Опубликовать в кабинете клиента" : "Отправить клиенту"}
+              done={
+                item.delivery === "cabinet"
+                  ? `Опубликовано. Сообщите клиенту: ai-verdict.ru/cabinet → «Войти с Яндекс ID» с почтой ${item.cabinet_email}.`
+                  : supplement
+                    ? "Отправлено. Клиент получил допсоглашение."
+                    : "Отправлено. Клиент получил проект договора."
+              }
+              onRun={async () => {
+                await lawyerAction(`/api/lawyer/agreements/${item.agreement_id}/deliver`, initData);
+                onChanged();
+              }}
+            />
+          )}
         </div>
       ) : null}
 
@@ -630,7 +647,7 @@ function Intake({
     : !ndaSigned
       ? "Договор нельзя составить, пока клиент не подписал соглашение о конфиденциальности."
       : !hasDialog
-        ? "У клиента нет диалога в Telegram — отправить договор будет некуда."
+        ? "У клиента нет ни Telegram, ни почты для кабинета — отправить договор будет некуда."
         : null;
 
   const markConflict = async (status: "clear" | "conflict") => {

@@ -216,3 +216,100 @@ def test_request_without_any_client_is_rejected(world) -> None:
     assert response.status_code == 400
     unknown = client.get(f"/api/v1/client-portal/summary?client_account_id={uuid4()}", headers=world["bot"])
     assert unknown.status_code == 401
+
+
+def test_documents_for_a_client_without_telegram_go_to_the_cabinet(world) -> None:
+    """Клиенту без Telegram «отправить» = опубликовать в кабинете; без почты — некуда."""
+    client = TestClient(app)
+    admin_name = f"pytest.cabinet.{uuid4().hex}"
+    admin = {"X-API-Key": _key(Scope.admin, admin_name)}
+    db = SessionLocal()
+    try:
+        site = db.get(Lead, world["ids"]["site"])
+        draft = _agreement(site.id, None, status=ServiceAgreementStatus.draft, signed_at=None)
+        silent = Lead(name="Без контакта", contact="+7 900 000-00-00", source=LeadSource.website_form)
+        db.add_all([draft, silent])
+        db.flush()
+        silent_draft = _agreement(silent.id, None, status=ServiceAgreementStatus.draft, signed_at=None)
+        signed = _agreement(site.id, None)
+        db.add_all([silent_draft, signed])
+        db.flush()
+        act = WorkAct(act_number=f"AC-CAB-{uuid4().hex[:6].upper()}", agreement_id=signed.id, lead_id=site.id,
+                      description_text="Работа", amount_minor=500_000)
+        db.add(act)
+        db.commit()
+        ids = {"draft": str(draft.id), "silent": str(silent.id), "silent_draft": str(silent_draft.id), "act": str(act.id)}
+    finally:
+        db.close()
+    try:
+        card = client.get(f"/api/v1/lawyer/clients/{world['ids']['site']}", headers=admin).json()
+        row = next(a for a in card["agreements"] if a["agreement_id"] == ids["draft"])
+        assert row["delivery"] == "cabinet" and row["cabinet_email"] == world["email"]
+
+        delivered = client.post(f"/api/v1/service-agreements/{ids['draft']}/deliver", headers=admin)
+        assert delivered.status_code == 200, delivered.text
+        assert delivered.json()["delivered_via"] == "cabinet"
+        assert delivered.json()["status"] == "sent"
+
+        account_id = _login(client, world["bot"], world["email"]).json()["client_account_id"]
+        summary = client.get(f"/api/v1/client-portal/summary?client_account_id={account_id}", headers=world["bot"]).json()
+        assert ids["draft"] in {a["id"] for a in summary["agreements"]}
+
+        sent_act = client.post(f"/api/v1/work-acts/{ids['act']}/send", headers=admin)
+        assert sent_act.status_code == 200, sent_act.text
+        assert sent_act.json()["delivered_via"] == "cabinet"
+
+        nowhere = client.post(f"/api/v1/service-agreements/{ids['silent_draft']}/deliver", headers=admin)
+        assert nowhere.status_code == 409
+        assert nowhere.json()["detail"] == "Client has no Telegram or email"
+    finally:
+        _cleanup([admin_name], [ids["silent"]])
+
+
+def test_agreement_for_a_site_client_is_composed_for_the_cabinet(world, monkeypatch) -> None:
+    """Составить договор клиенту без Telegram можно, если есть почта для кабинета."""
+    from core_api.models import ConflictCheckStatus, NdaSignature
+    from core_api.routers import service_agreements as api
+    from test_practice import _AGREEMENT_BODY, _OPERATOR
+
+    monkeypatch.setattr(api, "get_settings", lambda: _OPERATOR)
+    client = TestClient(app)
+    admin_name = f"pytest.cabinet.compose.{uuid4().hex}"
+    admin = {"X-API-Key": _key(Scope.admin, admin_name)}
+    db = SessionLocal()
+    try:
+        silent = Lead(name="Без почты", contact="+7 900 000-00-01", source=LeadSource.website_form)
+        db.add(silent)
+        db.flush()
+        intakes = {}
+        for key, lead_id in (("site", world["ids"]["site"]), ("silent", silent.id)):
+            intake = LegalIntake(lead_id=lead_id, description="Проверить договор аренды.",
+                                 status=LegalIntakeStatus.accepted, conflict_status=ConflictCheckStatus.clear)
+            db.add(intake)
+            db.add(NdaSignature(lead_id=lead_id, document_version="test", document_hash="b" * 64))
+            db.flush()
+            intakes[key] = str(intake.id)
+        db.commit()
+        silent_id = str(silent.id)
+    finally:
+        db.close()
+    try:
+        card = client.get(f"/api/v1/lawyer/clients/{world['ids']['site']}", headers=admin).json()
+        assert card["cabinet_email"] == world["email"]
+
+        created = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["site"], **_AGREEMENT_BODY})
+        assert created.status_code == 201, created.text
+
+        nowhere = client.post("/api/v1/service-agreements", headers=admin,
+                              json={"intake_id": intakes["silent"], **_AGREEMENT_BODY})
+        assert nowhere.status_code == 409
+        assert nowhere.json()["detail"] == "Client has no Telegram or email"
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(NdaSignature).where(NdaSignature.lead_id.in_([world["ids"]["site"], silent_id])))
+            db.commit()
+        finally:
+            db.close()
+        _cleanup([admin_name], [silent_id])

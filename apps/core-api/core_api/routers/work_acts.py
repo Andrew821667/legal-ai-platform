@@ -20,13 +20,14 @@ from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
 from core_api.service_agreement import account_signing_allowed
-from core_api.client_principal import ClientRef, Principal, resolve
+from core_api.client_principal import ClientRef, Principal, cabinet_email, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api import client_reviews, npd_limit, payment_qr, telegram_delivery
 from core_api.lead_notifications import _post_telegram_message
 from core_api.models import (
     ActorType,
+    Lead,
     Scope,
     ServiceAgreement,
     ServiceAgreementStatus,
@@ -292,9 +293,21 @@ def send_act(
     if item.status != WorkActStatus.draft or item.cancelled_at:
         raise HTTPException(status_code=409, detail="Act is not a draft")
     agreement = db.get(ServiceAgreement, item.agreement_id)
-    if agreement is None or not agreement.client_telegram_user_id:
+    if agreement is None:
         raise HTTPException(status_code=409, detail="Client has no Telegram")
     _freeze_document(item, agreement)
+    if not agreement.client_telegram_user_id:
+        # Клиент без Telegram: акт — в его кабинете (вход через Яндекс ID с этой почтой).
+        email = cabinet_email(db.get(Lead, agreement.lead_id) if agreement.lead_id else None)
+        if email is None:
+            raise HTTPException(status_code=409, detail="Client has no Telegram or email")
+        item.status = WorkActStatus.sent
+        item.sent_at = _now()
+        db.add(item)
+        _audit(db, identity, item, "work_act.send", {"channel": "cabinet"})
+        db.commit()
+        db.refresh(item)
+        return {**_payload(item), "delivered_via": "cabinet", "cabinet_email": email}
 
     token = _client_bot_token()
     if not token:

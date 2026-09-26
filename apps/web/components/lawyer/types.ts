@@ -135,6 +135,10 @@ export type AgreementMessage = { role: string; text: string; created_at: string 
 
 export type AgreementCard = {
   agreement_id: string;
+  /** Куда уйдёт документ: Telegram, кабинет (клиент без Telegram, вход через Яндекс ID) или некуда. */
+  delivery?: "telegram" | "cabinet" | "none";
+  /** Почта, с которой клиент без Telegram увидит документ в кабинете. */
+  cabinet_email?: string | null;
   intake_id: string | null;
   /** Заполнено у допсоглашения — ссылка на договор, к которому оно. */
   parent_agreement_id?: string | null;
@@ -213,6 +217,8 @@ export type ClientCard = StageFields & {
   email: string | null;
   phone: string | null;
   telegram_user_id: number | null;
+  /** Почта, по которой клиент без Telegram видит документы в кабинете. */
+  cabinet_email?: string | null;
   source: string | null;
   created_at: string | null;
   nda: {

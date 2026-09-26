@@ -28,6 +28,8 @@ const EXACT: Record<string, string> = {
   // Договор
   "Client has no Telegram": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
   "Client has no Telegram dialog": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
+  "Client has no Telegram or email":
+    "У клиента нет ни Telegram, ни почты — отправить некуда. Попросите клиента оставить почту или написать в бот.",
   "Bot token is not configured": "Сервер не настроен: нет токена бота.",
   "NDA must be signed first": "Сначала клиент должен подписать соглашение о конфиденциальности.",
   "NDA must be signed before uploading documents": "Документы принимаются после подписания NDA.",

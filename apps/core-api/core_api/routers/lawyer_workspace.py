@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api import case_stage, client_reviews, npd_limit, practice_funnel, telegram_delivery
+from core_api.client_principal import cabinet_email
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
@@ -925,9 +926,15 @@ def client_card(
             supplements.setdefault(item.parent_agreement_id, []).append(item)
     agreements = [item for item in agreements if item.parent_agreement_id is None]
 
+    # Куда уйдёт документ: в Telegram, в кабинет (клиент без Telegram — вход
+    # через Яндекс ID с этой почтой) или некуда.
+    card_cabinet_email = cabinet_email(lead)
+
     def _agreement_row(item: ServiceAgreement) -> dict:
         return {
             "agreement_id": str(item.id),
+            "delivery": "telegram" if item.client_telegram_user_id else ("cabinet" if card_cabinet_email else "none"),
+            "cabinet_email": card_cabinet_email if not item.client_telegram_user_id else None,
             # Без этого при втором обращении клиента нельзя понять, к чему
             # относится договор: на экране они лежат одним списком.
             "intake_id": str(item.intake_id) if item.intake_id else None,
@@ -991,6 +998,8 @@ def client_card(
         "email": lead.email,
         "phone": lead.phone,
         "telegram_user_id": lead.telegram_user_id,
+        # Почта, по которой клиент без Telegram увидит документы в кабинете.
+        "cabinet_email": card_cabinet_email,
         "source": lead.source.value if lead.source else None,
         "created_at": _iso(lead.created_at),
         "nda": (
