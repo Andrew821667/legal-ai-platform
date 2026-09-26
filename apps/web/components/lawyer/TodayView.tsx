@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import CalendarSubscribe from "./CalendarSubscribe";
 import { Card, Pill } from "./ui";
 import type { Tone } from "./ui";
 import { AGREEMENT_STATUS, OUTREACH_REASON, days, intakeTitle, label, shortDate, shortDay } from "./labels";
@@ -97,6 +98,9 @@ export default function TodayView({
         <p className="mt-3 text-lw-sm text-lw-muted">
           Здесь только то, что стоит из-за вас. Все клиенты — на соседней вкладке.
         </p>
+        <div className="mt-4 text-left">
+          <CalendarSubscribe initData={initData} />
+        </div>
       </Card>
     );
   }
@@ -153,6 +157,7 @@ export default function TodayView({
           </ul>
         </section>
       ))}
+      <CalendarSubscribe initData={initData} />
     </div>
   );
 }
