@@ -572,7 +572,16 @@ FRESH_DUMP=1 BACKUP_DIR=/Users/andrej/backups/legal-ai ./infra/scripts/restore_d
 ./infra/scripts/restore_postgres.sh /path/to/legal_ai_YYYYMMDD_HHMMSS.dump
 ```
 Дампы лежат на том же диске, что и база: от ошибки или порчи данных они
-спасают, от потери машины — нет. Копию стоит уносить на другой носитель.
+спасают, от потери машины — нет. Поэтому каждый дамп копируется на NAS
+(WD My Cloud, 192.168.0.83) и хранится там 60 дней. Настройка — один раз,
+пароль вводится скрытно и сохраняется в `~andrej/.config/legalai/nas.env`
+(права 600); на NAS — отдельный пользователь с доступом только к папке бэкапов:
+```bash
+ssh -t legalai-prod 'sudo -u andrej -i /Users/legalai/projects/legal-ai-platform/infra/scripts/setup_nas_backup.sh'
+```
+Итог каждого бэкапа пишется в `service_health` (key=`backup`). Ядро в своём
+такте сообщит владельцу, если дампа нет больше 26 часов или копия на NAS не
+удалась; строка о бэкапе есть и в сводке за неделю.
 Паспортные данные в дампе — шифротекст; `PII_ENCRYPTION_KEY` хранится отдельно
 от дампов (см. раздел про ключ шифрования).
 

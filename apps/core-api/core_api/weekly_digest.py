@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from core_api import anonymization, practice_funnel
+from core_api import anonymization, backup_health, practice_funnel
 from core_api.client_notices import queue_notice
 from core_api.config import get_settings
 from core_api.db import SessionLocal
@@ -140,6 +140,9 @@ def build(db: Session, now: datetime) -> str:
         lines.extend(tasks)
     else:
         lines.append("Задач, которые ждут вас, нет.")
+    backup = backup_health.digest_line(db, now)
+    if backup:
+        lines += ["", backup]
     retention = anonymization.digest_line(db, now)
     if retention:
         lines += ["", retention]
