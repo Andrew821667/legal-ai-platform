@@ -104,13 +104,6 @@ export default function AgreementForm({
       }}
     >
       <p className="text-lw-base font-medium text-lw-ink">{title}</p>
-      {pkg && !pkg.template_id ? (
-        <p className="rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-muted">
-          Клиент заказал на сайте «{pkg.title || pkg.id}»{pkg.price_text ? ` — ${pkg.price_text}` : ""}. Заготовки
-          под этот пакет нет: заполните условия и сохраните их как заготовку с этим пакетом — следующий такой
-          договор соберётся сам.
-        </p>
-      ) : null}
       <TemplateBar
         pkg={pkg}
         practice={practice}

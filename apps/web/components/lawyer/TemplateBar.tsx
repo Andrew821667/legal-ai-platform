@@ -113,11 +113,13 @@ export default function TemplateBar({
   };
 
   const current = templates.find((t) => t.template_id === selected) || null;
-  const packageSelect = (value: string, onChange: (id: string) => void, emptyLabel: string) => (
+  // Заготовки под пакет клиента ещё нет — подсказать, как завести её один раз.
+  const packageWithoutTemplate = Boolean(pkg && !pkg.template_id && !templates.some((t) => t.package_id === pkg.id));
+  const packageSelect = (value: string, onChange: (id: string) => void, emptyLabel: string, wide = false) => (
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="lw-input !w-auto min-w-0 flex-1 !py-2"
+      className={`lw-input !py-2 ${wide ? "basis-full" : "!w-auto min-w-0 flex-1"}`}
       aria-label="Пакет на сайте"
     >
       <option value="">{emptyLabel}</option>
@@ -144,6 +146,13 @@ export default function TemplateBar({
 
   return (
     <div className="rounded-xl bg-lw-cell p-3">
+      {packageWithoutTemplate && pkg ? (
+        <p className="mb-2 text-lw-sm text-lw-muted">
+          Клиент заказал на сайте «{pkg.title || pkg.id}»{pkg.price_text ? ` — ${pkg.price_text}` : ""}. Заготовки под
+          этот пакет нет: заполните условия и сохраните их как заготовку с этим пакетом — следующий такой договор
+          соберётся сам.
+        </p>
+      ) : null}
       {templates.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -184,7 +193,7 @@ export default function TemplateBar({
             className="lw-input min-w-0 flex-1 !py-2"
             maxLength={120}
           />
-          {packageSelect(packageId, setPackageId, "Без пакета сайта")}
+          {packageSelect(packageId, setPackageId, "Без пакета сайта", true)}
           <button type="button" onClick={() => void save()} className="lw-btn !px-4 !py-2 !text-[15px]">
             Сохранить
           </button>
