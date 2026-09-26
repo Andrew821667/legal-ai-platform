@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from core_api import agreement_reminders, client_reviews, telegram_delivery, weekly_digest
+from core_api import agreement_reminders, client_reviews, deletion_log, telegram_delivery, weekly_digest
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.models import Scope
 
@@ -29,4 +29,6 @@ def tick(identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admi
     # Сводка идёт через очередь уведомлений — её доставляет бот своей дорогой,
     # поэтому от связи ядра с Telegram она не зависит.
     result["weekly_digest"] = weekly_digest.maybe_queue()
+    # Удаления мимо приложения (psql, скрипт) — сразу владельцу.
+    result["deletions"] = deletion_log.watch()
     return result
