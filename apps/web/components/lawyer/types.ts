@@ -1,5 +1,6 @@
 import type { DocumentRequestRow } from "@/lib/document-requests";
 import type { StageKey } from "@/lib/lawyer-clients";
+import type { SiteStats } from "@/lib/metrika-funnel";
 
 export type TodayItem = {
   /** Раздел «Отзыв ждёт решения». */
@@ -266,6 +267,8 @@ export type Funnel = {
   stages: { key: FunnelStageKey; title: string; count: number; from_previous_pct: number | null }[];
   sources: { key: string; title: string; counts: Record<FunnelStageKey, number>; paid_minor: number }[];
   paid_minor: number;
+  /** Сайт по Метрике: посетители и отправки формы (см. lib/metrika-funnel). */
+  site?: SiteStats;
 };
 
 export type Finance = {

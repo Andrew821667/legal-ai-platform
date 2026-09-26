@@ -28,6 +28,10 @@ const EXACT: Record<string, string> = {
   "These documents are already requested": "Эти документы уже запрошены и ждут клиента.",
   "Package already has a template": "К этому пакету уже привязана другая заготовка — сначала отвяжите её.",
 
+  // Черновик условий
+  "Terms draft is not configured": "Черновик условий недоступен: на сервере не настроен ключ модели.",
+  "Model did not return a terms draft": "Модель не предложила условия — попробуйте ещё раз или заполните форму сами.",
+
   // Договор
   "Client has no Telegram": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
   "Client has no Telegram dialog": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
