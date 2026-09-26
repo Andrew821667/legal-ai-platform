@@ -70,7 +70,8 @@ def is_due(now: datetime) -> bool:
 def build(db: Session, now: datetime) -> str:
     # Лениво: роутер рабочего места импортирует много, а считать деньги и
     # задачи надо ровно так же, как экран, — не второй копией.
-    from core_api.routers.lawyer_workspace import _counted_acts, _not_archived_agreement, _overdue, today
+    from core_api.routers.lawyer_workspace.money import _counted_acts, _not_archived_agreement, _overdue
+    from core_api.routers.lawyer_workspace.today import today
 
     until = week_start(now)
     since = until - timedelta(days=7)
