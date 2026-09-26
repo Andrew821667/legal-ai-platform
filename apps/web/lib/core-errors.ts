@@ -25,6 +25,10 @@ const EXACT: Record<string, string> = {
   "Delivery not found": "Отправка не найдена.",
   "Template not found": "Заготовка не найдена.",
 
+  // Черновик условий
+  "Terms draft is not configured": "Черновик условий недоступен: на сервере не настроен ключ модели.",
+  "Model did not return a terms draft": "Модель не предложила условия — попробуйте ещё раз или заполните форму сами.",
+
   // Договор
   "Client has no Telegram": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
   "Client has no Telegram dialog": "У клиента нет диалога с ботом в Telegram — отправить некуда.",

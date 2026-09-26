@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import { AGREEMENT_FIELDS } from "@/lib/agreement-draft";
 import { formatRub, parseRublesInput } from "@/lib/money";
+import { mergeTermsDraft, termsDraftSummary } from "@/lib/terms-draft";
+import type { TermsDraftResponse } from "@/lib/terms-draft";
 import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import TemplateBar from "./TemplateBar";
 import { lawyerAction } from "./useTelegram";
@@ -17,6 +19,10 @@ import { lawyerAction } from "./useTelegram";
  *
  * Введённое сохраняется в браузере до отправки: шесть полей, набранных между
  * встречами, слишком дорого терять из-за случайного касания «Отмена».
+ *
+ * «Предложить условия по обращению» раскладывает описание клиента по полям
+ * формы — только пустым: набранное юристом важнее. Стоимость и оплата
+ * приходят лишь из заготовки, иначе остаются юристу.
  */
 
 const draftKey = (intakeId: string) => `lawyer.agreement.${intakeId}`;
@@ -44,6 +50,8 @@ export default function AgreementForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [draftNote, setDraftNote] = useState<{ summary: string; notes: string[] } | null>(null);
 
   const title = again ? "Составить новую редакцию" : "Составить договор";
 
@@ -79,6 +87,23 @@ export default function AgreementForm({
     writeDraft(draftKey(intakeId), next);
   };
 
+  const proposeTerms = async () => {
+    setDrafting(true);
+    setError(null);
+    setDraftNote(null);
+    try {
+      const draft = await lawyerAction<TermsDraftResponse>(`/api/lawyer/intakes/${intakeId}/terms-draft`, initData);
+      const merge = mergeTermsDraft(values, draft);
+      setValues(merge.values);
+      writeDraft(draftKey(intakeId), merge.values);
+      setDraftNote({ summary: termsDraftSummary(merge, draft.template), notes: draft.notes || [] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось предложить условия");
+    } finally {
+      setDrafting(false);
+    }
+  };
+
   return (
     <form
       className="lw-card mt-3 space-y-3 p-4"
@@ -109,6 +134,28 @@ export default function AgreementForm({
           writeDraft(draftKey(intakeId), draft);
         }}
       />
+      <div>
+        <button
+          type="button"
+          onClick={() => void proposeTerms()}
+          disabled={drafting || busy}
+          className="lw-btn-quiet w-full"
+        >
+          {drafting ? "Модель читает обращение… до минуты" : "Предложить условия по обращению"}
+        </button>
+        {draftNote ? (
+          <div className="mt-2 rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-muted">
+            <p>{draftNote.summary}</p>
+            {draftNote.notes.length ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {draftNote.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       {again ? (
         <p className="text-lw-sm text-lw-warning">
           Прежняя редакция станет заменённой, как только новая будет составлена.
