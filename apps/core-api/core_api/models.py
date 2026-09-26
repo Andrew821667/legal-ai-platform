@@ -362,6 +362,9 @@ class Lead(Base):
     # Из архива — восстановить или удалить совсем. Сам вернулся с новым
     # обращением — снова в списке.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Когда персональные данные клиента обезличены по сроку хранения
+    # (core_api/anonymization.py); запись остаётся для итогов и воронки.
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
