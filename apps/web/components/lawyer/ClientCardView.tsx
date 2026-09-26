@@ -350,7 +350,8 @@ export default function ClientCardView({
                 onChanged={onChanged}
                 agreements={card.agreements.filter((a) => a.intake_id === item.intake_id)}
                 ndaSigned={Boolean(card.nda)}
-                hasDialog={card.telegram_user_id !== null}
+                // Куда уйдёт договор: в Telegram или, у заявки с сайта, в кабинет по почте.
+                hasDialog={card.telegram_user_id !== null || Boolean(card.cabinet_email)}
                 ownProgress={card.intakes.length > 1}
                 insideTelegram={insideTelegram}
                 currentLeadId={card.lead_id}
@@ -646,7 +647,7 @@ function Intake({
     : !ndaSigned
       ? "Договор нельзя составить, пока клиент не подписал соглашение о конфиденциальности."
       : !hasDialog
-        ? "У клиента нет диалога в Telegram — отправить договор будет некуда."
+        ? "У клиента нет ни Telegram, ни почты для кабинета — отправить договор будет некуда."
         : null;
 
   const markConflict = async (status: "clear" | "conflict") => {
