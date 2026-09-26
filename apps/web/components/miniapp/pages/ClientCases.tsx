@@ -9,6 +9,8 @@ type Case = {
   id: string; practice: string; legal_area: string; category?: string | null;
   description: string; status: string; without_agreement: boolean; created_at: string;
   documents: { id: string; file_name?: string | null; created_at?: string | null }[];
+  /** Что юрист просит прислать по этому делу. */
+  document_requests?: { request_id: string; title: string; note?: string | null; status: string }[];
 };
 type Agreement = {
   id: string; intake_id?: string | null; number: string; revision: number; status: string;
@@ -338,13 +340,16 @@ function PaymentQr({ actId }: { actId: string }) {
 function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned: boolean; onUploaded: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const upload = async (file: File) => {
+  const requested = item.document_requests || [];
+  const waiting = requested.filter((r) => r.status === "open").length;
+  const upload = async (file: File, requestId?: string, title?: string) => {
     setBusy(true); setNote(null);
     try {
       const form = new FormData();
       form.set("file", file);
+      if (requestId) form.set("request_id", requestId);
       await request(`/api/client/cases/${item.id}/documents`, { method: "POST", body: form });
-      setNote({ ok: true, text: `«${file.name}» передан юристу.` });
+      setNote({ ok: true, text: title ? `«${file.name}» передан юристу как «${title}».` : `«${file.name}» передан юристу.` });
       onUploaded();
     } catch (e) {
       setNote({ ok: false, text: e instanceof Error ? e.message : "Не удалось загрузить файл" });
@@ -352,11 +357,30 @@ function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned:
       setBusy(false);
     }
   };
+  const accept = ".pdf,.doc,.docx,.rtf,.odt,.txt,.xls,.xlsx,.csv,.ods,.jpg,.jpeg,.png,.heic,.webp,.zip";
   return <div className="mt-3 space-y-2">
+    {requested.length ? <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+      <p className="text-sm font-semibold text-slate-100">
+        Юрист просит документы{waiting ? ` — осталось ${waiting} из ${requested.length}` : " — всё получено, спасибо"}
+      </p>
+      <ul className="mt-2 space-y-2">
+        {requested.map((r) => <li key={r.request_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className={r.status === "received" ? "text-slate-400 line-through" : "text-slate-100"}>
+            {r.status === "received" ? "✓ " : "• "}{r.title}
+            {r.note && r.status !== "received" ? <span className="block text-xs text-slate-400">{r.note}</span> : null}
+          </span>
+          {r.status === "open" && ndaSigned ? <label className={`inline-flex cursor-pointer items-center rounded-lg border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-100 ${busy ? "opacity-50" : ""}`}>
+            <input type="file" className="hidden" disabled={busy} accept={accept}
+              onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file, r.request_id, r.title); }} />
+            Загрузить
+          </label> : null}
+        </li>)}
+      </ul>
+    </div> : null}
     <p className="text-xs text-slate-400">Документы: {item.documents.length}</p>
     {item.documents.length ? <ul className="space-y-1 text-xs text-slate-300">{item.documents.slice(-5).map((doc) => <li key={doc.id} className="truncate">📎 {doc.file_name || "файл"}</li>)}</ul> : null}
     {ndaSigned ? <label className={`inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-100 ${busy ? "opacity-50" : ""}`}>
-      <input type="file" className="hidden" disabled={busy} accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.xls,.xlsx,.csv,.ods,.jpg,.jpeg,.png,.heic,.webp,.zip"
+      <input type="file" className="hidden" disabled={busy} accept={accept}
         onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file); }} />
       {busy ? "Загружаю…" : "Загрузить документ"}
     </label> : <p className="text-xs text-slate-400">Документы принимаются после подписания NDA.</p>}

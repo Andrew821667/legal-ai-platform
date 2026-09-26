@@ -30,7 +30,11 @@ const recent = new Map<string, number[]>();
 type Summary = {
   client?: { name?: string | null };
   nda?: { signed?: boolean };
-  cases?: { id: string; category?: string | null }[];
+  cases?: {
+    id: string;
+    category?: string | null;
+    document_requests?: { request_id: string; title: string; status: string }[];
+  }[];
 };
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ intakeId: string }> }) {
@@ -42,6 +46,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) return Response.json({ detail: "Выберите файл." }, { status: 400 });
+  // Пункт списка «юрист просит», в который загружен файл; ядро закроет его.
+  const requestId = String(form?.get("request_id") || "");
+  if (requestId && !UUID.test(requestId)) return Response.json({ detail: "Пункт запроса не найден." }, { status: 404 });
   const check = checkUpload({ name: file.name, size: file.size });
   if (!check.ok) return Response.json({ detail: check.detail }, { status: 400 });
 
@@ -50,6 +57,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
   const summary = (await summaryResponse.json().catch(() => ({}))) as Summary;
   const matter = (summary.cases || []).find((item) => item.id === intakeId);
   if (!matter) return Response.json({ detail: "Обращение не найдено." }, { status: 404 });
+  const requested = requestId
+    ? (matter.document_requests || []).find((item) => item.request_id === requestId && item.status !== "cancelled")
+    : undefined;
+  if (requestId && !requested) return Response.json({ detail: "Пункт запроса не найден." }, { status: 404 });
   if (!summary.nda?.signed) {
     return Response.json({ detail: "Документы принимаются после подписания NDA." }, { status: 409 });
   }
@@ -70,7 +81,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
       lawyerChat,
       { name: check.name, type: file.type || "application/octet-stream", bytes: new Uint8Array(await file.arrayBuffer()) },
       `Документ от клиента через кабинет: ${summary.client?.name || "клиент"}` +
-        (matter.category ? ` · ${matter.category}` : ""),
+        (matter.category ? ` · ${matter.category}` : "") +
+        (requested ? ` — по запросу «${requested.title}»` : ""),
     );
   } catch (error) {
     const detail = error instanceof TelegramFileError ? error.message : "Не удалось передать файл юристу";
@@ -85,5 +97,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ intake
     file_name: check.name,
     file_size: file.size,
     mime_type: file.type || null,
+    ...(requestId ? { request_id: requestId } : {}),
   });
 }

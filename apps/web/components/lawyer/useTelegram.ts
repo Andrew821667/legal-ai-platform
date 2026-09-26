@@ -99,7 +99,7 @@ export async function lawyerAction<T>(
   path: string,
   initData: string,
   payload?: unknown,
-  method: "POST" | "PUT" | "DELETE" = "POST",
+  method: "POST" | "PUT" | "PATCH" | "DELETE" = "POST",
 ): Promise<T> {
   const response = await fetch(path, {
     method,

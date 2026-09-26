@@ -24,6 +24,8 @@ const EXACT: Record<string, string> = {
   "Link not found": "Связь не найдена.",
   "Delivery not found": "Отправка не найдена.",
   "Template not found": "Заготовка не найдена.",
+  "Document request not found": "Пункт запроса не найден.",
+  "These documents are already requested": "Эти документы уже запрошены и ждут клиента.",
   "Package already has a template": "К этому пакету уже привязана другая заготовка — сначала отвяжите её.",
 
   // Договор

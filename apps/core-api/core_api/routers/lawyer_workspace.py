@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
-from core_api import case_stage, client_reviews, npd_limit, practice_funnel, telegram_delivery
+from core_api import case_stage, client_reviews, document_requests, npd_limit, practice_funnel, telegram_delivery
 from core_api.client_principal import cabinet_email
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -827,6 +827,7 @@ def client_card(
 
     clarifications: dict[uuid.UUID, list[dict]] = {}
     documents: dict[uuid.UUID, list[dict]] = {}
+    requested = document_requests.for_intakes(db, intake_ids)
     if intake_ids:
         for row in db.execute(
             select(IntakeClarification)
@@ -1054,6 +1055,7 @@ def client_card(
                 "outreach_blocked_reason": item.outreach_blocked_reason,
                 "clarifications": clarifications.get(item.id, []),
                 "documents": documents.get(item.id, []),
+                "document_requests": requested.get(item.id, []),
                 "links": _intake_links_for(db, item.id),
                 # У постоянного клиента с двумя делами этап в шапке — по
                 # последнему договору; у каждого обращения — свой, по его договорам.
