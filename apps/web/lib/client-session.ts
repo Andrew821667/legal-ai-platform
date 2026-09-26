@@ -1,4 +1,5 @@
 import { mintSessionToken, verifySessionToken, type SessionTokenResult } from "./session-token.ts";
+import { openCookieValue, sealCookieValue } from "./signed-cookie.ts";
 
 /**
  * Сессия личного кабинета клиента — stateless-кука по образцу lawyer_session,
@@ -75,4 +76,43 @@ export type CookieOptions = {
  */
 export function clientCookieOptions(maxAge: number, path = "/"): CookieOptions {
   return { httpOnly: true, secure: true, sameSite: "lax", path, maxAge };
+}
+
+/**
+ * Сессия клиента, вошедшего без Telegram (Яндекс ID): учётная запись в ядре.
+ *
+ * Отдельная кука, а не client_session: у той формат <tgId>.<issuedAt>.<hmac>,
+ * и числовой Telegram ID в ней — сам клиент. Здесь клиент — id учётной записи.
+ * Подписана тем же секретом, что client_profile и client_oauth, поэтому в теле
+ * есть kind: подписанную куку другого назначения за сессию не выдать.
+ */
+export const CLIENT_ACCOUNT_COOKIE = "client_account";
+
+export type ClientAccountSession = { accountId: string; email: string | null; name: string | null };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function sealClientAccount(session: ClientAccountSession, secret: string, now?: number): string {
+  return sealCookieValue(
+    { kind: "client_account", aid: session.accountId, em: session.email, nm: session.name },
+    secret,
+    now,
+  );
+}
+
+export function openClientAccount(raw: string, secret: string, now?: number): ClientAccountSession | null {
+  const value = openCookieValue<{ kind?: unknown; aid?: unknown; em?: unknown; nm?: unknown }>(
+    raw,
+    secret,
+    CLIENT_SESSION_MAX_AGE_SECONDS,
+    now,
+  );
+  if (!value || value.kind !== "client_account" || typeof value.aid !== "string" || !UUID.test(value.aid)) {
+    return null;
+  }
+  return {
+    accountId: value.aid,
+    email: typeof value.em === "string" ? value.em : null,
+    name: typeof value.nm === "string" ? value.nm : null,
+  };
 }

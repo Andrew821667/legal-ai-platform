@@ -362,6 +362,9 @@ class Lead(Base):
     # Из архива — восстановить или удалить совсем. Сам вернулся с новым
     # обращением — снова в списке.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Когда персональные данные клиента обезличены по сроку хранения
+    # (core_api/anonymization.py); запись остаётся для итогов и воронки.
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("ix_leads_last_activity_at", "last_activity_at"),
@@ -413,6 +416,10 @@ class NdaPersonalDataConsent(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_contact: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -456,6 +463,10 @@ class NdaSignature(Base):
     # Кем подписано: аккаунт Telegram подтверждает канал, но не личность.
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Данные, которые подписант ввёл сам.
     #
@@ -583,6 +594,10 @@ class ServiceAgreement(Base):
     client_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -657,6 +672,59 @@ class ClientReview(Base):
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ClientAccount(Base):
+    """Клиент как учётная запись: подтверждённый email и, если есть, Telegram.
+
+    Telegram в России заблокирован, и опознавать клиента только по нему
+    нельзя. Email подтверждён Яндекс ID; Telegram
+    привязывается, когда клиент входит и так.
+    """
+
+    __tablename__ = "client_accounts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
+    yandex_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeletionLog(Base):
+    """Что и кем удалено из таблиц с делами клиентов — пишет триггер в базе (deletion_log.py).
+
+    Без содержимого строки: удаление персональных данных должно их удалять.
+    """
+
+    __tablename__ = "deletion_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    table_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    row_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lead_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    db_user: Mapped[str] = mapped_column(String(64), nullable=False, server_default=sa_text("session_user"))
+    application_name: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, server_default=sa_text("current_setting('application_name', true)")
+    )
+    client_addr: Mapped[str | None] = mapped_column(String(64), nullable=True, server_default=sa_text("inet_client_addr()::text"))
+    txid: Mapped[int | None] = mapped_column(BigInteger, nullable=True, server_default=sa_text("txid_current()"))
+
+
+def _create_deletion_triggers(target, connection, **kw) -> None:
+    """Триггеры журнала удалений — после создания всех таблиц (схема в тестах)."""
+    if connection.dialect.name != "postgresql":
+        return
+    from core_api.deletion_log import all_statements
+
+    for statement in all_statements():
+        connection.exec_driver_sql(statement)
+
+
+event.listen(Base.metadata, "after_create", _create_deletion_triggers)
+
+
 class ClientNotice(Base):
     __tablename__ = "client_notices"
 
@@ -698,6 +766,9 @@ class AgreementTemplate(Base):
     price_text: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     payment_terms: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Пакет услуг сайта (lib/starter-offers.ts), которому соответствует
+    # заготовка: по обращению с этим пакетом форма договора заполняется ею.
+    package_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     # Чаще используемые — выше в списке.
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -839,6 +910,8 @@ class WorkAct(Base):
     receipt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # act — акт выполненных работ; advance — счёт на предоплату: тот же
     # платёжный документ, но без приёмки работы.
+    # Приёмка в кабинете после входа через Яндекс ID.
+    accepted_by_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="act", server_default="act")
     # Когда бот попросил клиента оценить работу (см. review_requests).
     review_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -895,6 +968,11 @@ class LegalIntake(Base):
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     region: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_context: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Пакет услуг, выбранный на сайте: снимок на момент заказа — цена на сайте
+    # может поменяться, а клиент видел эту.
+    package_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    package_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    package_price_text: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[LegalIntakeStatus] = mapped_column(
         Enum(LegalIntakeStatus, name="legal_intake_status_enum"),
         nullable=False,
@@ -1039,6 +1117,35 @@ class IntakeDocument(Base):
     __table_args__ = (
         Index("ix_intake_documents_intake", "intake_id", "created_at"),
     )
+
+
+class DocumentRequest(Base):
+    """Документ, который юрист попросил у клиента по обращению.
+
+    Раньше просьба жила в переписке: «пришлите паспорт, договор и переписку»,
+    а что из этого уже пришло, юрист сверял по памяти. Здесь у каждого пункта
+    есть статус: ждём, получен (и каким файлом), отменён. Клиент видит тот
+    же список в кабинете и загружает файл прямо в нужный пункт.
+    """
+
+    __tablename__ = "document_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intake_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("legal_intakes.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # open — ждём; received — получен; cancelled — больше не нужен. Строкой, а
+    # не enum базы: набор может расти без миграции типа.
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open", server_default="open")
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("intake_documents.id", ondelete="SET NULL"), nullable=True
+    )
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_document_requests_intake", "intake_id", "created_at"),)
 
 
 class SpecialConsultationProduct(Base):

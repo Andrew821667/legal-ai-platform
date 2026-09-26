@@ -23,6 +23,8 @@ from core_api.client_proposal import (
     build_reply_text,
     build_summary,
 )
+from core_api.service_agreement import account_signing_allowed
+from core_api.client_principal import ClientRef, Principal, cabinet_email, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
@@ -96,8 +98,7 @@ class DeliveryData(BaseModel):
     callback_id: str = Field(min_length=1, max_length=255)
 
 
-class ClientAction(BaseModel):
-    telegram_user_id: int
+class ClientAction(ClientRef):
     document_hash: str = Field(min_length=64, max_length=64)
     message_id: int | None = None
     callback_id: str = Field(min_length=1, max_length=255)
@@ -110,15 +111,13 @@ class AgreementSign(ClientAction):
     authority_basis: str | None = Field(default=None, max_length=500)
 
 
-class AgreementDecline(BaseModel):
-    telegram_user_id: int
+class AgreementDecline(ClientRef):
     reason: str | None = Field(default=None, max_length=1000)
     callback_id: str = Field(min_length=1, max_length=255)
     channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
 
-class AgreementClientDetails(BaseModel):
-    telegram_user_id: int = Field(gt=0)
+class AgreementClientDetails(ClientRef):
     client_type: Literal["person", "organization"]
     full_name: str = Field(min_length=5, max_length=255)
     contact: str = Field(min_length=3, max_length=255)
@@ -165,6 +164,7 @@ class AgreementClientDetails(BaseModel):
 class AgreementMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     telegram_user_id: int | None = None
+    client_account_id: uuid.UUID | None = None
     channel: Literal["telegram_bot", "miniapp"] = "telegram_bot"
 
 
@@ -216,9 +216,17 @@ def _get(
     return item
 
 
-def _assert_client(item: ServiceAgreement, telegram_user_id: int) -> None:
-    if item.client_telegram_user_id != telegram_user_id:
+def _assert_client(
+    db: Session,
+    item: ServiceAgreement,
+    telegram_user_id: int | None = None,
+    client_account_id: uuid.UUID | None = None,
+) -> Principal:
+    """Клиент — владелец документа: по Telegram или по учётной записи (client_principal)."""
+    principal = resolve(db, telegram_user_id=telegram_user_id, client_account_id=client_account_id)
+    if not principal.owns(lead_id=item.lead_id, client_telegram_user_id=item.client_telegram_user_id):
         raise HTTPException(status_code=403, detail="Agreement belongs to another client")
+    return principal
 
 
 def _client_details_text(client: dict) -> str:
@@ -351,8 +359,10 @@ def create_agreement(
     lead = db.get(Lead, intake.lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
-    if lead.telegram_user_id is None:
-        raise HTTPException(status_code=409, detail="Client has no Telegram dialog")
+    # Клиент без Telegram (заявка с сайта) получит договор в кабинете по почте
+    # из заявки (см. deliver); без почты договор отправить некуда.
+    if lead.telegram_user_id is None and cabinet_email(lead) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
     nda = _nda_for_lead(db, lead)
     # NDA подтверждает личность и фиксирует режим материалов до договора.
     # Поэтому он обязателен для любой практики платформы.
@@ -526,8 +536,10 @@ def create_supplement(
             status_code=409,
             detail="Only a signed agreement takes a supplement; change an unsigned one with a new revision",
         )
-    if not parent.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+    if not parent.client_telegram_user_id and cabinet_email(
+        db.get(Lead, parent.lead_id) if parent.lead_id else None
+    ) is None:
+        raise HTTPException(status_code=409, detail="Client has no Telegram or email")
 
     supplements = db.execute(
         select(ServiceAgreement)
@@ -670,14 +682,15 @@ def list_for_client(
 def get_agreement(
     agreement_id: uuid.UUID,
     telegram_user_id: int | None = Query(default=None),
+    client_account_id: uuid.UUID | None = Query(default=None),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, agreement_id)
     if identity.scope == Scope.bot:
-        if telegram_user_id is None:
+        if telegram_user_id is None and client_account_id is None:
             raise HTTPException(status_code=400, detail="telegram_user_id is required")
-        _assert_client(item, telegram_user_id)
+        _assert_client(db, item, telegram_user_id, client_account_id)
         if item.status == ServiceAgreementStatus.draft:
             raise HTTPException(status_code=404, detail="Agreement not found")
     return _payload(item, include_text=True)
@@ -715,8 +728,18 @@ def _certificate_rows(db: Session, item: ServiceAgreement) -> list[tuple[str, st
         rows += [
             ("Подписан", msk(item.signed_at)),
             ("Подписант", item.signer_full_name or "—"),
-            ("Telegram ID подписанта", str(item.signer_telegram_user_id or "—")),
         ]
+        if item.signer_telegram_user_id:
+            rows += [
+                ("Способ подписания", "Telegram-бот"),
+                ("Telegram ID подписанта", str(item.signer_telegram_user_id)),
+            ]
+        elif item.signer_account_id:
+            rows += [
+                ("Способ подписания", "личный кабинет, вход через Яндекс ID"),
+                ("Почта подписанта (подтверждена Яндексом)", item.signer_email or "—"),
+                ("Учётная запись в системе", str(item.signer_account_id)),
+            ]
         if item.signer_telegram_username:
             rows.append(("Аккаунт Telegram", f"@{item.signer_telegram_username}"))
         if item.signer_org:
@@ -734,9 +757,9 @@ def _certificate_rows(db: Session, item: ServiceAgreement) -> list[tuple[str, st
 
 _CERTIFICATE_NOTE = (
     "Лист сформирован автоматически {now} из журнала системы AI Verdict и в текст документа не "
-    "входит. Подписанием считается подтверждение Заказчиком в Telegram-боте или личном кабинете "
-    "из своей учётной записи Telegram в порядке, установленном договором (раздел об электронном "
-    "взаимодействии и подписи). Контрольная сумма SHA-256 вычисляется от точного текста документа "
+    "входит. Подписанием считается подтверждение Заказчиком в Telegram-боте или в личном кабинете "
+    "из своей учётной записи Telegram или Яндекс ID в порядке, установленном договором (раздел об "
+    "электронном взаимодействии и подписи). Контрольная сумма SHA-256 вычисляется от точного текста документа "
     "в кодировке UTF-8: её совпадение подтверждает, что текст не менялся после формирования."
 )
 
@@ -745,6 +768,7 @@ _CERTIFICATE_NOTE = (
 def agreement_pdf(
     agreement_id: uuid.UUID,
     telegram_user_id: int | None = Query(default=None),
+    client_account_id: uuid.UUID | None = Query(default=None),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -756,9 +780,9 @@ def agreement_pdf(
 
     item = _get(db, agreement_id)
     if identity.scope == Scope.bot:
-        if telegram_user_id is None:
+        if telegram_user_id is None and client_account_id is None:
             raise HTTPException(status_code=400, detail="telegram_user_id is required")
-        _assert_client(item, telegram_user_id)
+        _assert_client(db, item, telegram_user_id, client_account_id)
         if item.status == ServiceAgreementStatus.draft:
             raise HTTPException(status_code=404, detail="Agreement not found")
     title = _document_title(item)
@@ -817,7 +841,7 @@ def mark_viewed(
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, agreement_id, lock=True)
-    _assert_client(item, payload.telegram_user_id)
+    _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status not in {ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed}:
         raise HTTPException(status_code=409, detail="Agreement is not available for viewing")
     if not (item.client_snapshot or {}).get("details_complete"):
@@ -848,7 +872,7 @@ def complete_client_details(
         return JSONResponse(status_code=code, content=body)
 
     item = _get(db, agreement_id, lock=True)
-    _assert_client(item, payload.telegram_user_id)
+    _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status != ServiceAgreementStatus.sent:
         raise HTTPException(status_code=409, detail="Agreement draft is not awaiting details")
     if (item.client_snapshot or {}).get("details_complete"):
@@ -974,9 +998,13 @@ def sign_agreement(
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, agreement_id, lock=True)
-    _assert_client(item, payload.telegram_user_id)
+    principal = _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status == ServiceAgreementStatus.signed:
         return {**_payload(item), "already_signed": True}
+    # Подпись после входа через Яндекс ID допускает только редакция договора,
+    # где этот способ назван (раздел об электронной подписи с 2026-09-25).
+    if principal.via_email and not account_signing_allowed(item.document_version):
+        raise HTTPException(status_code=409, detail="This revision can only be signed in Telegram")
     if item.status != ServiceAgreementStatus.viewed:
         raise HTTPException(status_code=409, detail="Agreement must be viewed before signing")
     if payload.document_hash.lower() != item.document_hash:
@@ -992,7 +1020,9 @@ def sign_agreement(
 
     item.status = ServiceAgreementStatus.signed
     item.signed_at = _now()
-    item.signer_telegram_user_id = payload.telegram_user_id
+    item.signer_telegram_user_id = principal.telegram_user_id
+    item.signer_account_id = principal.account_id
+    item.signer_email = principal.email if principal.via_email else None
     item.signer_telegram_username = payload.telegram_username
     item.signer_full_name = client.get("full_name")
     item.signer_contact = client.get("contact")
@@ -1027,7 +1057,7 @@ def decline_agreement(
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, agreement_id, lock=True)
-    _assert_client(item, payload.telegram_user_id)
+    _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status not in {ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed}:
         raise HTTPException(status_code=409, detail="Agreement cannot be declined")
     item.status = ServiceAgreementStatus.declined
@@ -1058,15 +1088,15 @@ def add_question(
     db: Session = Depends(get_db),
 ) -> dict:
     item = _get(db, agreement_id, lock=True)
-    if payload.telegram_user_id is None:
+    if payload.telegram_user_id is None and payload.client_account_id is None:
         raise HTTPException(status_code=422, detail="telegram_user_id is required")
-    _assert_client(item, payload.telegram_user_id)
+    principal = _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status not in {ServiceAgreementStatus.sent, ServiceAgreementStatus.viewed}:
         raise HTTPException(status_code=409, detail="Agreement is not open for questions")
     msg = ServiceAgreementMessage(
         agreement_id=item.id,
         role=ServiceAgreementMessageRole.client,
-        telegram_user_id=payload.telegram_user_id,
+        telegram_user_id=principal.telegram_user_id,
         text=payload.text.strip(),
     )
     db.add(msg)
@@ -1154,7 +1184,18 @@ def deliver_agreement(
     if item.status != ServiceAgreementStatus.draft:
         raise HTTPException(status_code=409, detail="Agreement is not a draft")
     if not item.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+        # Клиент без Telegram (заявка с сайта): документ публикуется в его
+        # кабинете — он увидит его после входа через Яндекс ID с этой почтой.
+        email = cabinet_email(db.get(Lead, item.lead_id) if item.lead_id else None)
+        if email is None:
+            raise HTTPException(status_code=409, detail="Client has no Telegram or email")
+        item.status = ServiceAgreementStatus.sent
+        item.sent_at = datetime.now(timezone.utc)
+        db.add(item)
+        _audit(db, identity, item, "service_agreement.deliver", {"channel": "cabinet"})
+        db.commit()
+        db.refresh(item)
+        return {**_payload(item), "delivered_via": "cabinet", "cabinet_email": email}
 
     token = _client_bot_token()
     if not token:
@@ -1183,7 +1224,7 @@ def deliver_agreement(
     _audit(db, identity, item, "service_agreement.deliver")
     db.commit()
     db.refresh(item)
-    return _payload(item)
+    return {**_payload(item), "delivered_via": "telegram"}
 
 
 @router.post("/{agreement_id}/replies/deliver", status_code=status.HTTP_201_CREATED)

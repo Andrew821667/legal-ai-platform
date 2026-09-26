@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
+import { clientFields } from "@/lib/client-ref";
 import { clientCoreGet, clientCorePost } from "@/lib/client-core";
 
 export async function GET(request: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   const { action: _, ...payload } = data;
   return clientCorePost(path, {
     ...payload,
-    telegram_user_id: auth.telegramUserId,
+    ...clientFields(auth),
     channel: "miniapp",
   });
 }

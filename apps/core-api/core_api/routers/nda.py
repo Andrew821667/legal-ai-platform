@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
+from core_api.client_principal import resolve
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import (
@@ -148,8 +150,33 @@ def _telegram_user_id(payload: dict, lead: Lead) -> int | None:
     return telegram_user_id
 
 
+@dataclass(frozen=True)
+class _Signer:
+    """Кто действует: Telegram ID или учётная запись (вход через Яндекс ID)."""
+
+    telegram_user_id: int | None
+    account_id: uuid.UUID | None = None
+    email: str | None = None
+
+
+def _client_owner(db: Session, payload: dict, lead: Lead) -> _Signer:
+    """Лид принадлежит тому, кто действует: по учётной записи — если лид среди
+    её дел (client_principal), иначе — по Telegram, как раньше."""
+    raw_account = payload.get("client_account_id")
+    if raw_account:
+        try:
+            account_id = uuid.UUID(str(raw_account))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="client_account_id must be a UUID") from exc
+        principal = resolve(db, client_account_id=account_id)
+        if lead.id not in principal.lead_ids:
+            raise HTTPException(status_code=403, detail="Client account does not own this lead")
+        return _Signer(principal.telegram_user_id, account_id, principal.email)
+    return _Signer(_telegram_user_id(payload, lead))
+
+
 def _consent_from_payload(
-    db: Session, payload: dict, lead: Lead, telegram_user_id: int | None
+    db: Session, payload: dict, lead: Lead, signer: _Signer
 ) -> NdaPersonalDataConsent:
     try:
         consent_id = uuid.UUID(str(payload.get("pdn_consent_id") or ""))
@@ -158,7 +185,10 @@ def _consent_from_payload(
     consent = db.get(NdaPersonalDataConsent, consent_id)
     if consent is None or consent.lead_id != lead.id or consent.revoked_at is not None:
         raise HTTPException(status_code=422, detail="valid personal data consent is required")
-    if telegram_user_id is not None and consent.telegram_user_id != telegram_user_id:
+    if signer.account_id is not None:
+        if consent.signer_account_id != signer.account_id:
+            raise HTTPException(status_code=403, detail="Consent belongs to another client")
+    elif signer.telegram_user_id is not None and consent.telegram_user_id != signer.telegram_user_id:
         raise HTTPException(status_code=403, detail="Consent belongs to another Telegram user")
     return consent
 
@@ -205,7 +235,7 @@ def accept_personal_data_consent(
 ) -> dict:
     """Фиксирует отдельное от NDA согласие на обработку данных."""
     lead = _lead_from_payload(db, payload)
-    telegram_user_id = _telegram_user_id(payload, lead)
+    signer = _client_owner(db, payload, lead)
     data = _signer_data(payload)
     if payload.get("pdn_consent_accepted") is not True:
         raise HTTPException(status_code=422, detail="personal data consent is required")
@@ -240,7 +270,9 @@ def accept_personal_data_consent(
     row = NdaPersonalDataConsent(
         lead_id=lead.id,
         accepted_at=datetime.now(timezone.utc),
-        telegram_user_id=telegram_user_id or lead.telegram_user_id,
+        telegram_user_id=signer.telegram_user_id or lead.telegram_user_id,
+        signer_account_id=signer.account_id,
+        signer_email=signer.email,
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_full_name=data["signer_full_name"],
         signer_contact=data["signer_contact"],
@@ -281,8 +313,8 @@ def preview_nda_document(
     """Персонализированная редакция NDA после отдельного согласия."""
     _ = identity
     lead = _lead_from_payload(db, payload)
-    telegram_user_id = _telegram_user_id(payload, lead)
-    consent = _consent_from_payload(db, payload, lead, telegram_user_id)
+    signer = _client_owner(db, payload, lead)
+    consent = _consent_from_payload(db, payload, lead, signer)
     data = {
         "signer_full_name": consent.signer_full_name,
         "signer_contact": consent.signer_contact,
@@ -341,7 +373,7 @@ def sign_nda(
     """
     lead = _lead_from_payload(db, payload)
     lead_id = lead.id
-    telegram_user_id = _telegram_user_id(payload, lead)
+    signer = _client_owner(db, payload, lead)
 
     existing = _signature_for_lead(db, lead)
     if existing is not None:
@@ -354,7 +386,7 @@ def sign_nda(
             "intake_id": _intake_id_for_lead(db, lead.id),
         }
 
-    consent = _consent_from_payload(db, payload, lead, telegram_user_id)
+    consent = _consent_from_payload(db, payload, lead, signer)
     data = {
         "signer_full_name": consent.signer_full_name,
         "signer_contact": consent.signer_contact,
@@ -382,7 +414,9 @@ def sign_nda(
 
     row = NdaSignature(
         lead_id=lead_id,
-        telegram_user_id=telegram_user_id or lead.telegram_user_id,
+        telegram_user_id=signer.telegram_user_id or lead.telegram_user_id,
+        signer_account_id=signer.account_id,
+        signer_email=signer.email,
         telegram_username=str(payload.get("telegram_username") or "")[:255] or None,
         signer_name=str(payload.get("signer_name") or lead.name or "")[:255] or None,
         signer_full_name=consent.signer_full_name,

@@ -111,10 +111,15 @@ function ActRow({
   act,
   initData,
   onChanged,
+  delivery = "telegram",
+  cabinetEmail = null,
 }: {
   act: WorkAct;
   initData: string;
   onChanged: () => void;
+  /** Куда уйдёт акт — как у договора: Telegram, кабинет (Яндекс ID) или некуда. */
+  delivery?: "telegram" | "cabinet" | "none";
+  cabinetEmail?: string | null;
 }) {
   return (
     <div className="rounded-xl bg-lw-cell p-3">
@@ -135,16 +140,24 @@ function ActRow({
 
       {act.status === "draft" ? (
         <div className="mt-2">
-          <ActionButton
-            label="Отправить клиенту"
-            busy="Отправляю…"
-            done="Отправлен"
-            tone="quiet"
-            onRun={async () => {
-              await lawyerAction(`/api/lawyer/acts/${act.act_id}/send`, initData);
-              onChanged();
-            }}
-          />
+          {delivery === "none" ? (
+            <p className="text-lw-sm text-lw-warning">У клиента нет ни Telegram, ни почты — отправить некуда.</p>
+          ) : (
+            <ActionButton
+              label={delivery === "cabinet" ? "Опубликовать в кабинете клиента" : "Отправить клиенту"}
+              busy="Отправляю…"
+              done={
+                delivery === "cabinet"
+                  ? `Опубликован. Сообщите клиенту: ai-verdict.ru/cabinet → «Войти с Яндекс ID» с почтой ${cabinetEmail}.`
+                  : "Отправлен"
+              }
+              tone="quiet"
+              onRun={async () => {
+                await lawyerAction(`/api/lawyer/acts/${act.act_id}/send`, initData);
+                onChanged();
+              }}
+            />
+          )}
         </div>
       ) : null}
       {act.status === "sent" ? (
@@ -351,7 +364,14 @@ export default function WorkActBox({
       {agreement.acts.length > 0 ? (
         <div className="space-y-2">
           {agreement.acts.map((act) => (
-            <ActRow key={act.act_id} act={act} initData={initData} onChanged={onChanged} />
+            <ActRow
+              key={act.act_id}
+              act={act}
+              initData={initData}
+              onChanged={onChanged}
+              delivery={agreement.delivery}
+              cabinetEmail={agreement.cabinet_email}
+            />
           ))}
         </div>
       ) : null}

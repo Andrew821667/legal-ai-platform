@@ -91,6 +91,25 @@ export function getStarterOffer(
   return !practice || offer.practice === practice ? offer : undefined;
 }
 
+/**
+ * Пакет для обращения в ядре: id и снимок того, что клиент видел. По id
+ * рабочее место находит заготовку юриста под пакет и собирает договор.
+ */
+export function packageFields(offer: StarterOffer | undefined): {
+  package_id?: string;
+  package_title?: string;
+  package_price_text?: string;
+} {
+  return offer ? { package_id: offer.id, package_title: offer.title, package_price_text: offer.price } : {};
+}
+
+/** Пакеты, к которым можно привязать заготовку этой практики. */
+export function packagesForPractice(practice: string | null | undefined): StarterOffer[] {
+  if (practice === "legal") return legalStarterOffers;
+  if (practice === "engineering") return engineeringStarterOffers;
+  return [...legalStarterOffers, ...engineeringStarterOffers];
+}
+
 export function addStarterOfferToMessage(
   message: string,
   id: unknown,

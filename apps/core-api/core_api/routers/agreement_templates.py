@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core_api.auth import ApiKeyIdentity, require_scopes
@@ -34,6 +35,8 @@ class TemplateIn(BaseModel):
     price_text: str = Field(default="", max_length=500)
     amount_minor: int | None = Field(default=None, ge=0, le=10**13)
     payment_terms: str = Field(default="", max_length=2000)
+    # Пакет услуг сайта, которому соответствует заготовка; пусто — ни одному.
+    package_id: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]*$")
 
 
 def _payload(row: AgreementTemplate) -> dict:
@@ -49,6 +52,7 @@ def _payload(row: AgreementTemplate) -> dict:
         "amount_minor": row.amount_minor,
         "payment_terms": row.payment_terms,
         "use_count": row.use_count,
+        "package_id": row.package_id,
     }
 
 
@@ -66,6 +70,17 @@ def _apply(row: AgreementTemplate, payload: TemplateIn) -> None:
         if isinstance(value, str) and not isinstance(value, Practice):
             value = value.strip()
         setattr(row, key, value)
+    row.package_id = payload.package_id or None
+
+
+def _commit(db: Session) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # Уникальность пакета: вторая заготовка на тот же пакет сделала бы
+        # выбор формы договора гаданием.
+        raise HTTPException(status_code=409, detail="Package already has a template") from exc
 
 
 @router.get("")
@@ -95,7 +110,7 @@ def create_template(
     row = AgreementTemplate()
     _apply(row, payload)
     db.add(row)
-    db.commit()
+    _commit(db)
     return _payload(row)
 
 
@@ -109,7 +124,7 @@ def update_template(
     _ = identity
     row = _get(db, template_id)
     _apply(row, payload)
-    db.commit()
+    _commit(db)
     return _payload(row)
 
 

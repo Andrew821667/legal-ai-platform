@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { trustedHostsFor, isTrustedAssistantOrigin } from "./assistant-security";
-import { checkClientSessionCookie } from "./client-access";
-import { CLIENT_SESSION_COOKIE, clientSessionSecret } from "./client-session";
+import { checkClientAccountCookie, checkClientSessionCookie } from "./client-access";
+import { CLIENT_ACCOUNT_COOKIE, CLIENT_SESSION_COOKIE, clientSessionSecret } from "./client-session";
 import {
   getMiniAppBotTokens,
   TELEGRAM_INIT_DATA_HEADER,
   verifyTelegramWebAppInitDataWithAny,
 } from "./telegram-initdata";
 
-export type ClientContext = { telegramUserId: number; via: "initdata" | "cookie" };
+/**
+ * Клиент — по Telegram (мини-апп или вход через Telegram) либо по учётной
+ * записи (вход через Яндекс ID, Telegram в России заблокирован). В ядро
+ * уходит одно из двух — см. lib/client-ref.ts.
+ */
+export type ClientContext =
+  | { telegramUserId: number; accountId: null; via: "initdata" | "cookie" }
+  | { telegramUserId: null; accountId: string; via: "account" };
 
 /**
  * Два независимых пути входа, тот же принцип, что requireLawyer в
@@ -41,15 +48,30 @@ export function requireClient(request: NextRequest): ClientContext | NextRespons
         { status: 401 },
       );
     }
-    return { telegramUserId: auth.telegramUserId, via: "initdata" };
+    return { telegramUserId: auth.telegramUserId, accountId: null, via: "initdata" };
   }
 
-  const cookieResult = checkClientSessionCookie({
-    cookie: request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "",
-    secret: clientSessionSecret(),
-  });
-  if (!cookieResult.ok) {
-    return NextResponse.json({ detail: cookieResult.detail }, { status: cookieResult.status });
+  const secret = clientSessionSecret();
+  const sessionCookie = request.cookies.get(CLIENT_SESSION_COOKIE)?.value || "";
+  const accountCookie = request.cookies.get(CLIENT_ACCOUNT_COOKIE)?.value || "";
+  let context: ClientContext | null = null;
+  if (sessionCookie) {
+    const result = checkClientSessionCookie({ cookie: sessionCookie, secret });
+    if (result.ok) {
+      context = { telegramUserId: result.telegramUserId, accountId: null, via: "cookie" };
+    } else if (!accountCookie) {
+      return NextResponse.json({ detail: result.detail }, { status: result.status });
+    }
+  }
+  if (!context && accountCookie) {
+    const result = checkClientAccountCookie({ cookie: accountCookie, secret });
+    if (!result.ok) {
+      return NextResponse.json({ detail: result.detail }, { status: result.status });
+    }
+    context = { telegramUserId: null, accountId: result.accountId, via: "account" };
+  }
+  if (!context) {
+    return NextResponse.json({ detail: "Войдите в личный кабинет." }, { status: 401 });
   }
 
   // CSRF-подстраховка для cookie-пути: SameSite=Lax уже не отправляет куку на
@@ -61,5 +83,5 @@ export function requireClient(request: NextRequest): ClientContext | NextRespons
     }
   }
 
-  return { telegramUserId: cookieResult.telegramUserId, via: "cookie" };
+  return context;
 }

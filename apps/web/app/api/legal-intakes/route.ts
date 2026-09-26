@@ -10,7 +10,7 @@ import {
   resolveLeadClientIp,
   verifyTurnstileToken,
 } from "@/lib/lead-security";
-import { addStarterOfferToMessage, getStarterOffer } from "@/lib/starter-offers";
+import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/starter-offers";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
       utm_campaign: clean(payload.utm_campaign, 255),
       utm_content: clean(payload.utm_content, 255),
       utm_term: clean(payload.utm_term, 255),
+      ...packageFields(starterOffer),
     }),
     cache: "no-store",
   });
