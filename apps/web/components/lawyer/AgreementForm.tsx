@@ -6,6 +6,7 @@ import { AGREEMENT_FIELDS } from "@/lib/agreement-draft";
 import { formatRub, parseRublesInput } from "@/lib/money";
 import { dropDraft, readDraft, writeDraft } from "./draft-storage";
 import TemplateBar from "./TemplateBar";
+import type { IntakePackage } from "./types";
 import { lawyerAction } from "./useTelegram";
 
 /**
@@ -27,6 +28,7 @@ export default function AgreementForm({
   again,
   startOpen = false,
   practice = null,
+  pkg = null,
   onCreated,
 }: {
   intakeId: string;
@@ -36,6 +38,8 @@ export default function AgreementForm({
   startOpen?: boolean;
   /** Практика обращения — для подбора заготовок. */
   practice?: string | null;
+  /** Пакет, выбранный клиентом на сайте: по нему подставляется заготовка. */
+  pkg?: IntakePackage | null;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(startOpen);
@@ -100,7 +104,15 @@ export default function AgreementForm({
       }}
     >
       <p className="text-lw-base font-medium text-lw-ink">{title}</p>
+      {pkg && !pkg.template_id ? (
+        <p className="rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-muted">
+          Клиент заказал на сайте «{pkg.title || pkg.id}»{pkg.price_text ? ` — ${pkg.price_text}` : ""}. Заготовки
+          под этот пакет нет: заполните условия и сохраните их как заготовку с этим пакетом — следующий такой
+          договор соберётся сам.
+        </p>
+      ) : null}
       <TemplateBar
+        pkg={pkg}
         practice={practice}
         values={values}
         initData={initData}

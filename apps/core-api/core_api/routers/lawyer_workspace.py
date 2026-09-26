@@ -32,6 +32,7 @@ from core_api.db import get_db
 from core_api.staff import is_staff, real_client, staff_telegram_ids
 from core_api.models import (
     ActorType,
+    AgreementTemplate,
     AuditLog,
     ClientReview,
     ContractJob,
@@ -115,6 +116,19 @@ def _worked_without_agreement(intakes: list[tuple[bool, LegalIntakeStatus]]) -> 
     worked = any(flag for flag, _ in intakes)
     awaiting_terms = any(not flag and status not in _LIVE_INTAKE_EXCLUDED for flag, status in intakes)
     return worked and not awaiting_terms
+
+
+def _package_for(db: Session, item: LegalIntake) -> dict | None:
+    """Пакет, выбранный клиентом на сайте, и заготовка юриста под него."""
+    if not item.package_id:
+        return None
+    template_id = db.scalar(select(AgreementTemplate.id).where(AgreementTemplate.package_id == item.package_id))
+    return {
+        "id": item.package_id,
+        "title": item.package_title,
+        "price_text": item.package_price_text,
+        "template_id": str(template_id) if template_id else None,
+    }
 
 
 def _intake_links_for(db: Session, intake_id: uuid.UUID) -> list[dict]:
@@ -1033,6 +1047,7 @@ def client_card(
                 "description": item.description,
                 "internal_note": item.internal_note,
                 "without_agreement": item.without_agreement,
+                "package": _package_for(db, item),
                 "outreach_sent_at": _iso(item.outreach_sent_at),
                 "outreach_blocked_reason": item.outreach_blocked_reason,
                 "clarifications": clarifications.get(item.id, []),

@@ -729,6 +729,12 @@ function Intake({
         </div>
       ) : null}
 
+      {item.package ? (
+        <p className="mt-3 rounded-xl bg-lw-blue-soft px-3 py-2 text-lw-sm text-lw-ink">
+          Пакет с сайта: <b>{item.package.title || item.package.id}</b>
+          {item.package.price_text ? ` · ${item.package.price_text}` : ""}
+        </p>
+      ) : null}
       <RichText text={item.description} className="mt-3" />
 
       {item.clarifications.length > 0 ? (
@@ -780,6 +786,7 @@ function Intake({
           again={openAgreement}
           startOpen={agreementAnyway}
           practice={item.practice}
+          pkg={item.package}
           onCreated={onChanged}
         />
       )}

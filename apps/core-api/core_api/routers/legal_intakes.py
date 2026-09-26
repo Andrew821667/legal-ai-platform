@@ -165,6 +165,9 @@ def create_legal_intake(
         deadline=payload.deadline.strip() if payload.deadline else None,
         region=payload.region.strip() if payload.region else None,
         source_context=payload.source_context.strip() if payload.source_context else None,
+        package_id=payload.package_id,
+        package_title=(payload.package_title or "").strip() or None if payload.package_id else None,
+        package_price_text=(payload.package_price_text or "").strip() or None if payload.package_id else None,
     )
     db.add(item)
     db.flush()
@@ -184,6 +187,7 @@ def create_legal_intake(
             "source": lead.source.value,
             "consent_version": payload.consent_version,
             "consent_at": payload.consent_at.isoformat(),
+            "package_id": item.package_id,
         },
     )
     if restored_from_archive:

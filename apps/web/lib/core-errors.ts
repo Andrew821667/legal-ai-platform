@@ -24,6 +24,7 @@ const EXACT: Record<string, string> = {
   "Link not found": "Связь не найдена.",
   "Delivery not found": "Отправка не найдена.",
   "Template not found": "Заготовка не найдена.",
+  "Package already has a template": "К этому пакету уже привязана другая заготовка — сначала отвяжите её.",
 
   // Договор
   "Client has no Telegram": "У клиента нет диалога с ботом в Telegram — отправить некуда.",
