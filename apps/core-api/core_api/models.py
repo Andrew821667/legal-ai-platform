@@ -413,6 +413,10 @@ class NdaPersonalDataConsent(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_contact: Mapped[str] = mapped_column(String(255), nullable=False)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -456,6 +460,10 @@ class NdaSignature(Base):
     # Кем подписано: аккаунт Telegram подтверждает канал, но не личность.
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Данные, которые подписант ввёл сам.
     #
@@ -583,6 +591,10 @@ class ServiceAgreement(Base):
     client_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     signer_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Подпись в личном кабинете после входа через Яндекс ID (п.6 NDA с 2026-09-25):
+    # учётная запись и подтверждённая Яндексом почта вместо Telegram ID.
+    signer_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    signer_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     signer_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     signer_org: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -858,6 +870,8 @@ class WorkAct(Base):
     receipt_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # act — акт выполненных работ; advance — счёт на предоплату: тот же
     # платёжный документ, но без приёмки работы.
+    # Приёмка в кабинете после входа через Яндекс ID.
+    accepted_by_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="act", server_default="act")
     # Когда бот попросил клиента оценить работу (см. review_requests).
     review_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

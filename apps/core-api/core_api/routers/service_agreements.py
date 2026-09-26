@@ -23,6 +23,7 @@ from core_api.client_proposal import (
     build_reply_text,
     build_summary,
 )
+from core_api.service_agreement import account_signing_allowed
 from core_api.client_principal import ClientRef, Principal, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -723,8 +724,18 @@ def _certificate_rows(db: Session, item: ServiceAgreement) -> list[tuple[str, st
         rows += [
             ("Подписан", msk(item.signed_at)),
             ("Подписант", item.signer_full_name or "—"),
-            ("Telegram ID подписанта", str(item.signer_telegram_user_id or "—")),
         ]
+        if item.signer_telegram_user_id:
+            rows += [
+                ("Способ подписания", "Telegram-бот"),
+                ("Telegram ID подписанта", str(item.signer_telegram_user_id)),
+            ]
+        elif item.signer_account_id:
+            rows += [
+                ("Способ подписания", "личный кабинет, вход через Яндекс ID"),
+                ("Почта подписанта (подтверждена Яндексом)", item.signer_email or "—"),
+                ("Учётная запись в системе", str(item.signer_account_id)),
+            ]
         if item.signer_telegram_username:
             rows.append(("Аккаунт Telegram", f"@{item.signer_telegram_username}"))
         if item.signer_org:
@@ -742,9 +753,9 @@ def _certificate_rows(db: Session, item: ServiceAgreement) -> list[tuple[str, st
 
 _CERTIFICATE_NOTE = (
     "Лист сформирован автоматически {now} из журнала системы AI Verdict и в текст документа не "
-    "входит. Подписанием считается подтверждение Заказчиком в Telegram-боте или личном кабинете "
-    "из своей учётной записи Telegram в порядке, установленном договором (раздел об электронном "
-    "взаимодействии и подписи). Контрольная сумма SHA-256 вычисляется от точного текста документа "
+    "входит. Подписанием считается подтверждение Заказчиком в Telegram-боте или в личном кабинете "
+    "из своей учётной записи Telegram или Яндекс ID в порядке, установленном договором (раздел об "
+    "электронном взаимодействии и подписи). Контрольная сумма SHA-256 вычисляется от точного текста документа "
     "в кодировке UTF-8: её совпадение подтверждает, что текст не менялся после формирования."
 )
 
@@ -986,11 +997,10 @@ def sign_agreement(
     principal = _assert_client(db, item, payload.telegram_user_id, payload.client_account_id)
     if item.status == ServiceAgreementStatus.signed:
         return {**_payload(item), "already_signed": True}
-    # Подпись определена в NDA (п.6) как нажатие кнопки в Telegram. Для входа
-    # через Яндекс ID нужна новая редакция этого пункта — до неё подписывать
-    # можно только из Telegram.
-    if principal.via_email:
-        raise HTTPException(status_code=409, detail="Signing without Telegram is not available yet")
+    # Подпись после входа через Яндекс ID допускает только редакция договора,
+    # где этот способ назван (раздел об электронной подписи с 2026-09-25).
+    if principal.via_email and not account_signing_allowed(item.document_version):
+        raise HTTPException(status_code=409, detail="This revision can only be signed in Telegram")
     if item.status != ServiceAgreementStatus.viewed:
         raise HTTPException(status_code=409, detail="Agreement must be viewed before signing")
     if payload.document_hash.lower() != item.document_hash:
@@ -1007,6 +1017,8 @@ def sign_agreement(
     item.status = ServiceAgreementStatus.signed
     item.signed_at = _now()
     item.signer_telegram_user_id = principal.telegram_user_id
+    item.signer_account_id = principal.account_id
+    item.signer_email = principal.email if principal.via_email else None
     item.signer_telegram_username = payload.telegram_username
     item.signer_full_name = client.get("full_name")
     item.signer_contact = client.get("contact")

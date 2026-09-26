@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_notices import queue_notice
+from core_api.service_agreement import account_signing_allowed
 from core_api.client_principal import ClientRef, Principal, resolve
 from core_api.config import get_settings
 from core_api.db import get_db
@@ -668,14 +669,16 @@ def client_action(
                 return _payload(item)
             raise HTTPException(status_code=409, detail="Act already accepted; contact the operator")
         if action == "accept":
-            # Приёмка — юридически значимое действие, как подпись: её способ
-            # определён в NDA (п.6) через Telegram. До новой редакции — только оттуда.
-            if principal.via_email:
-                raise HTTPException(status_code=409, detail="Signing without Telegram is not available yet")
+            # Приёмка — юридически значимое действие по договору: после входа
+            # через Яндекс ID — только если редакция договора называет этот способ.
+            agreement = db.get(ServiceAgreement, item.agreement_id)
+            if principal.via_email and (agreement is None or not account_signing_allowed(agreement.document_version)):
+                raise HTTPException(status_code=409, detail="This revision can only be signed in Telegram")
             if item.objected_at:
                 raise HTTPException(status_code=409, detail="Resolve objections and issue a new act first")
             item.accepted_at = _now()
             item.accepted_by_telegram_user_id = principal.telegram_user_id
+            item.accepted_by_account_id = principal.account_id
             item.acceptance_callback_id = payload.callback_id
             if payload.channel == "miniapp":
                 queue_notice(
