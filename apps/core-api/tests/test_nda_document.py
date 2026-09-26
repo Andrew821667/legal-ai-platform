@@ -117,3 +117,12 @@ def test_personal_data_consent_is_a_separate_document() -> None:
     assert "683302758241" in consent
     assert "45 01 123456" not in consent
     assert "{version}" in PDN_CONSENT_TEXT
+
+
+def test_signature_clause_names_both_ways() -> None:
+    """С 2026-09-25 подпись — и в Telegram-боте, и в кабинете после входа через Яндекс ID:
+    Telegram в России заблокирован. Фиксируется и способ подписания."""
+    flat = " ".join(render_nda_text("ИП Иванов").split())
+    assert "Telegram-боте Исполнителя" in flat
+    assert "после входа через сервис Яндекс ID" in flat
+    assert "способа подписания" in flat

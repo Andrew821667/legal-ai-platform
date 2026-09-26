@@ -24,6 +24,9 @@ else:
         max_overflow=settings.db_max_overflow,
         pool_timeout=settings.db_pool_timeout_seconds,
         pool_recycle=settings.db_pool_recycle_seconds,
+        # Имя приложения видно в журнале удалений (deletion_log): удалило ли
+        # строку ядро или кто-то вручную через psql.
+        connect_args={"application_name": "legal-ai-core-api"},
     )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 

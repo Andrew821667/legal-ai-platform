@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireClient } from "@/lib/client-auth";
-import { CLIENT_PROFILE_COOKIE, CLIENT_SESSION_MAX_AGE_SECONDS, clientSessionSecret } from "@/lib/client-session";
+import {
+  CLIENT_ACCOUNT_COOKIE,
+  CLIENT_PROFILE_COOKIE,
+  CLIENT_SESSION_MAX_AGE_SECONDS,
+  clientSessionSecret,
+  openClientAccount,
+} from "@/lib/client-session";
 import { openCookieValue } from "@/lib/signed-cookie";
 import type { ClientProfileCookie } from "@/lib/telegram-login-profile";
 
@@ -16,6 +22,18 @@ export async function GET(request: NextRequest) {
   const auth = requireClient(request);
   if (auth instanceof NextResponse) {
     return NextResponse.json({ signed_in: false });
+  }
+
+  if (auth.via === "account") {
+    const secret = clientSessionSecret();
+    const account = secret ? openClientAccount(request.cookies.get(CLIENT_ACCOUNT_COOKIE)?.value || "", secret) : null;
+    return NextResponse.json({
+      signed_in: true,
+      telegram_user_id: null,
+      via: auth.via,
+      email: account?.email ?? null,
+      profile: account?.name ? { first_name: account.name, last_name: null, username: null, photo_url: null } : null,
+    });
   }
 
   let profile: ClientProfileCookie | null = null;

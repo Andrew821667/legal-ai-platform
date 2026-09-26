@@ -238,6 +238,9 @@ class LegalIntakeCreate(BaseModel):
     telegram_user_id: int | None = Field(default=None, gt=0)
     name: str | None = Field(default=None, max_length=120)
     contact: str = Field(min_length=3, max_length=255)
+    # Почта учётной записи клиента (вход через Яндекс ID) — чтобы дело сразу
+    # было видно ему в кабинете, даже если в форме он оставил телефон.
+    email: str | None = Field(default=None, max_length=254)
     company: str | None = Field(default=None, max_length=255)
     client_type: LegalClientType = LegalClientType.unknown
     legal_area: LegalArea = LegalArea.other
@@ -260,6 +263,10 @@ class LegalIntakeCreate(BaseModel):
     utm_campaign: str | None = Field(default=None, max_length=255)
     utm_content: str | None = Field(default=None, max_length=255)
     utm_term: str | None = Field(default=None, max_length=255)
+    # Пакет услуг с сайта: id из каталога сайта и то, что клиент видел.
+    package_id: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]+$")
+    package_title: str | None = Field(default=None, max_length=255)
+    package_price_text: str | None = Field(default=None, max_length=64)
 
 
     @model_validator(mode="after")
