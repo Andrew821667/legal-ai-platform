@@ -763,6 +763,9 @@ class AgreementTemplate(Base):
     price_text: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     payment_terms: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Пакет услуг сайта (lib/starter-offers.ts), которому соответствует
+    # заготовка: по обращению с этим пакетом форма договора заполняется ею.
+    package_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     # Чаще используемые — выше в списке.
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -962,6 +965,11 @@ class LegalIntake(Base):
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     region: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_context: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Пакет услуг, выбранный на сайте: снимок на момент заказа — цена на сайте
+    # может поменяться, а клиент видел эту.
+    package_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    package_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    package_price_text: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[LegalIntakeStatus] = mapped_column(
         Enum(LegalIntakeStatus, name="legal_intake_status_enum"),
         nullable=False,

@@ -263,6 +263,10 @@ class LegalIntakeCreate(BaseModel):
     utm_campaign: str | None = Field(default=None, max_length=255)
     utm_content: str | None = Field(default=None, max_length=255)
     utm_term: str | None = Field(default=None, max_length=255)
+    # Пакет услуг с сайта: id из каталога сайта и то, что клиент видел.
+    package_id: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]+$")
+    package_title: str | None = Field(default=None, max_length=255)
+    package_price_text: str | None = Field(default=None, max_length=64)
 
 
     @model_validator(mode="after")

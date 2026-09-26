@@ -124,6 +124,8 @@ export type IntakeCard = StageFields & {
   description: string;
   internal_note: string | null;
   without_agreement: boolean;
+  /** Пакет, выбранный клиентом на сайте, и заготовка юриста под него. */
+  package?: IntakePackage | null;
   outreach_sent_at: string | null;
   outreach_blocked_reason: string | null;
   clarifications: Clarification[];
@@ -341,4 +343,11 @@ export type ArchiveRow = {
   acts: number;
   nda_signed: boolean;
   is_test?: boolean;
+};
+
+export type IntakePackage = {
+  id: string;
+  title: string | null;
+  price_text: string | null;
+  template_id: string | null;
 };

@@ -19,7 +19,7 @@ import {
   resolveLeadClientIp,
   verifyTurnstileToken,
 } from "@/lib/lead-security";
-import { addStarterOfferToMessage, getStarterOffer } from "@/lib/starter-offers";
+import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/starter-offers";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -274,6 +274,7 @@ export async function POST(request: NextRequest) {
     consent_accepted: true,
     consent_version: "website_pdn_transborder_v1",
     consent_at: consentAt,
+    ...packageFields(starterOffer),
   };
   const response = await fetch(`${CORE_API_URL}/api/v1/${isCase ? "legal-intakes" : "leads"}`, {
     method: "POST",
