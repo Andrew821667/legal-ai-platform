@@ -7,6 +7,12 @@ export interface LeadSecurityPayload {
   contact?: string;
   segment?: string;
   message?: string;
+  /** Текст обращения из формы юрпомощи и записи на консультацию. */
+  description?: string;
+  /** Выбранное время консультации: другое время — другая заявка. */
+  consultation_slot_id?: string;
+  starter_offer_id?: string;
+  source_context?: string;
   offer?: string;
   practice?: string;
   utm_source?: string;
@@ -177,6 +183,13 @@ export function buildLeadFingerprint(
       segment: cleanFingerprintValue(payload.segment, 40),
       name: cleanFingerprintValue(payload.name, 120),
       message: cleanFingerprintValue(payload.message, 4000),
+      // Формы юрпомощи и записи присылают текст в description, а не в message:
+      // без него две разные заявки одного человека за день считались дублем,
+      // и вторая — например, запись на консультацию — молча не создавалась.
+      description: cleanFingerprintValue(payload.description, 4000),
+      consultation_slot_id: cleanFingerprintValue(payload.consultation_slot_id, 64),
+      starter_offer_id: cleanFingerprintValue(payload.starter_offer_id, 64),
+      source_context: cleanFingerprintValue(payload.source_context, 255),
       landing_page: cleanFingerprintValue(payload.landing_page, 512),
       utm_source: cleanFingerprintValue(payload.utm_source, 255),
       utm_medium: cleanFingerprintValue(payload.utm_medium, 255),

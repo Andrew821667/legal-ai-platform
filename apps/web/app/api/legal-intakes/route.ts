@@ -130,6 +130,14 @@ export async function POST(request: NextRequest) {
   );
   recordLeadAttempt(protection, cfg, nowMs);
 
+  // Повтор той же записи на то же время (двойной клик): «принято» без ссылки на
+  // бронь оставило бы клиента без записи — просим открыть бронь или выбрать заново.
+  if (slotId && protection.action === "duplicate") {
+    return NextResponse.json(
+      { detail: "Эта запись уже отправлена. Откройте страницу брони или выберите время заново.", slot_taken: true },
+      { status: 409 },
+    );
+  }
   if (protection.action === "silent_drop" || protection.action === "duplicate") {
     return NextResponse.json({
       ok: true,
