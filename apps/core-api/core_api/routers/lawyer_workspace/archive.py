@@ -80,7 +80,7 @@ def _lead_or_404(db: Session, lead_id: uuid.UUID) -> Lead:
 
 @router.get("/archive")
 def archive(
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """Клиенты в архиве — последние убранные первыми."""
