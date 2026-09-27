@@ -280,6 +280,10 @@ class Config:
         self.CONSULTATION_BOOKING_URL: str = os.getenv(
             'CONSULTATION_BOOKING_URL', 'https://ai-verdict.ru/consultation'
         ).strip()
+        # Платный первый шаг инженерной практики (сайт).
+        self.AUTOMATION_DIAGNOSTIC_URL: str = os.getenv(
+            'AUTOMATION_DIAGNOSTIC_URL', 'https://ai-verdict.ru/engineering/automation-diagnostic'
+        ).strip()
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
             'TRANSBORDER_CONSENT_URL',

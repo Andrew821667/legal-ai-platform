@@ -24,6 +24,7 @@ from .constants import (
     BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
     BUSINESS_PENDING_CONTACT_KEY,
     append_inline_url_row,
+    build_consultation_cta_menu,
     build_quick_nav_menu,
     build_start_inline_menu,
     build_workspace_inline_menu,
@@ -42,8 +43,8 @@ def transborder_consent_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
 
 
-def consultation_cta_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSULTATION_CTA_MENU)
+def consultation_cta_markup(intent: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(build_consultation_cta_menu(intent) if intent else CONSULTATION_CTA_MENU)
 
 
 def documents_markup() -> InlineKeyboardMarkup:
@@ -241,6 +242,16 @@ def contact_visibility_choice_markup() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
         ]
     )
+
+
+def consultation_choice_markup() -> InlineKeyboardMarkup:
+    """«Консультация юриста»: записаться с оплатой на сайте или оставить контакт."""
+    rows = []
+    booking_url = getattr(config, "CONSULTATION_BOOKING_URL", "")
+    if booking_url:
+        rows.append([InlineKeyboardButton("📅 Записаться к юристу — 4 900 ₽", url=booking_url)])
+    rows.extend(list(row) for row in contact_visibility_choice_markup().inline_keyboard)
+    return InlineKeyboardMarkup(rows)
 
 
 def offer_profile_markup(selected_profile: str | None = None) -> InlineKeyboardMarkup:

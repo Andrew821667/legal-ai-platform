@@ -1,12 +1,12 @@
-"""Интент-роутер: тихий откат к продажной воронке при любом сбое/сомнении,
-своя инструкция для явно классифицированных не-продажных сообщений."""
+"""Интент-роутер: при любом сбое или сомнении — вопрос-развилка (unclear),
+а не продажная воронка; своя инструкция для явно классифицированных сообщений."""
 import pytest
 
 import intent_router
 
 
 @pytest.mark.asyncio
-async def test_llm_failure_falls_back_to_sales_conversation(monkeypatch):
+async def test_llm_failure_asks_fork_question(monkeypatch):
     async def _boom(history):
         raise RuntimeError("llm down")
 
@@ -14,12 +14,13 @@ async def test_llm_failure_falls_back_to_sales_conversation(monkeypatch):
 
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
-    assert result.intent == "sales_conversation"
-    assert result.context_override is None
+    assert result.intent == "unclear"
+    assert "вопрос-развилку" in result.context_override
+    assert not intent_router.is_confident_sales(result)
 
 
 @pytest.mark.asyncio
-async def test_none_response_falls_back_to_sales_conversation(monkeypatch):
+async def test_none_response_asks_fork_question(monkeypatch):
     async def _none(history):
         return None
 
@@ -27,7 +28,7 @@ async def test_none_response_falls_back_to_sales_conversation(monkeypatch):
 
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
-    assert result.intent == "sales_conversation" and result.context_override is None
+    assert result.intent == "unclear" and result.context_override
 
 
 @pytest.mark.asyncio
@@ -39,7 +40,7 @@ async def test_unknown_intent_value_falls_back(monkeypatch):
 
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
-    assert result.intent == "sales_conversation" and result.context_override is None
+    assert result.intent == "unclear" and result.context_override
 
 
 @pytest.mark.asyncio
@@ -51,8 +52,8 @@ async def test_low_confidence_falls_back_even_with_known_intent(monkeypatch):
 
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
-    assert result.intent == "sales_conversation"
-    assert result.context_override is None
+    assert result.intent == "unclear"
+    assert "Не спрашивай про размер команды" in result.context_override
 
 
 @pytest.mark.asyncio
@@ -84,9 +85,9 @@ async def test_each_non_sales_intent_gets_its_own_override(monkeypatch, intent):
 
 
 @pytest.mark.asyncio
-async def test_continuing_own_matter_without_core_context_falls_back(monkeypatch):
+async def test_continuing_own_matter_without_core_context_does_not_invent(monkeypatch):
     """Модель решила «продолжение дела», но своих данных о человеке нет —
-    не рискуем подставить неверный кадр."""
+    подробностей не выдумываем и продажную воронку не ведём."""
 
     async def _fake(history):
         return {"intent": "continuing_own_matter", "confidence": 0.95}
@@ -96,7 +97,8 @@ async def test_continuing_own_matter_without_core_context_falls_back(monkeypatch
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
     assert result.intent == "continuing_own_matter"
-    assert result.context_override is None
+    assert "Не выдумывай" in result.context_override
+    assert not intent_router.is_confident_sales(result)
 
 
 @pytest.mark.asyncio
@@ -124,6 +126,7 @@ async def test_sales_conversation_intent_gives_no_override(monkeypatch):
 
     assert result.intent == "sales_conversation"
     assert result.context_override is None
+    assert intent_router.is_confident_sales(result)
 
 
 @pytest.mark.asyncio
@@ -136,4 +139,4 @@ async def test_non_numeric_confidence_treated_as_zero(monkeypatch):
     result = await intent_router.classify(conversation_history=[], has_core_context=False)
 
     assert result.confidence == 0.0
-    assert result.intent == "sales_conversation"
+    assert result.intent == "unclear"
