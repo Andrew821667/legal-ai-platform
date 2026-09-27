@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,8 +64,11 @@ class Settings(BaseSettings):
     news_telegram_ingest_evening_slot: str = "16:30"
     news_telegram_ingest_morning_options: str = "06:30,07:00,07:30,08:30,09:30"
     news_telegram_ingest_evening_options: str = "15:30,16:00,16:30,17:30,18:30"
-    lead_bot_username: str = "AI_Verdict_Popov_Andrew"
     news_helper_bot_username: str = "legal_ai_helper_new_bot"
+    # Reader-бот — отдельный бот мониторинга и изучения контента, не ассистент.
+    # Та же переменная, что у самого reader-бота; сайт берёт
+    # NEXT_PUBLIC_READER_BOT_USERNAME — если задана только она, берём её.
+    reader_bot_username: str = ""
     news_helper_bot_label: str = "Ассистент AI Verdict"
     # Кнопка под постом в канале — в Ассистента AI Verdict с номером поста:
     # вопрос по материалу в один клик, ассистент знает пост, воронка — источник.
@@ -287,10 +292,12 @@ class Settings(BaseSettings):
         return [item.strip() for item in self.news_longread_topics.split(",") if item.strip()]
 
     @property
-    def lead_bot_url(self) -> str:
-        username = self.lead_bot_username.strip().lstrip("@")
-        if not username:
-            return ""
+    def reader_bot_url(self) -> str:
+        username = (
+            self.reader_bot_username
+            or os.getenv("NEXT_PUBLIC_READER_BOT_USERNAME", "")
+            or "legal_ai_news_reader_bot"
+        ).strip().lstrip("@")
         return f"https://t.me/{username}"
 
     @property
