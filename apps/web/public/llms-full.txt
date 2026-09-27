@@ -1,6 +1,6 @@
 # AI Verdict — extended machine-readable overview
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-09-27
 Canonical website: https://ai-verdict.ru/
 Primary language: Russian (`ru-RU`)
 Primary service area: Russia
@@ -85,6 +85,8 @@ Main directions:
 - services for individuals: https://ai-verdict.ru/legal-help/individuals
 - regional and agricultural legal assistance: https://ai-verdict.ru/legal-help/regions
 
+The consultation booking workflow is a transactional step, not a separate source of legal information. The authoritative public page for the service, scope and price is https://ai-verdict.ru/legal-help/online-consultation.
+
 Scope and safeguards:
 
 - public materials provide initial orientation and do not replace advice based on a specific case;
@@ -111,6 +113,12 @@ The team starts with the process and measurable result. AI is not added when ord
 
 Related architecture page: https://ai-verdict.ru/solutions
 
+Commercial engineering entry points:
+
+- process automation and integration diagnostic: https://ai-verdict.ru/engineering/automation-diagnostic
+- Telegram bot prototype and development: https://ai-verdict.ru/engineering/telegram-bots
+- RAG systems and AI knowledge bases built on company data: https://ai-verdict.ru/engineering/ai-rag
+
 ## Products and channels
 
 - Contract AI product page: https://ai-verdict.ru/contract-ai-system
@@ -130,6 +138,10 @@ Contract AI is a separate product entry point. Legal services and engineering pr
 - Legal AI implementation: https://ai-verdict.ru/guides/legal-ai-implementation
 - Legal AI data security: https://ai-verdict.ru/guides/legal-ai-data-security
 - AI for legal documents: https://ai-verdict.ru/guides/ai-legal-documents
+- Online lawyer consultation: price and format: https://ai-verdict.ru/guides/online-lawyer-consultation-price
+- Preparing a business process for automation: https://ai-verdict.ru/guides/business-process-automation-audit
+- Contract review by a lawyer: price and deliverables: https://ai-verdict.ru/guides/contract-review-lawyer-price
+- Preparing a response to a counterparty claim: https://ai-verdict.ru/guides/response-to-counterparty-claim
 - Practical cases: https://ai-verdict.ru/content-cases
 
 ## Entity, authorship and policies

@@ -10,8 +10,9 @@ export const metadata: Metadata = createPageMetadata({
   title: "Запись на консультацию юриста",
   description:
     "Выберите удобное время онлайн-консультации юриста AI Verdict и оплатите по QR: до 60 минут и письменный план дальнейших действий.",
-  path: "/consultation",
-  keywords: ["консультация юриста", "записаться к юристу", "онлайн консультация юриста"],
+  path: "/legal-help/online-consultation",
+  index: false,
+  follow: true,
 });
 
 const offer = starterOffers.legal_consultation;

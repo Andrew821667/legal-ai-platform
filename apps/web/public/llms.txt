@@ -38,14 +38,23 @@
 - Legal services for business: https://ai-verdict.ru/legal-help/business
 - Legal services for individuals: https://ai-verdict.ru/legal-help/individuals
 - Online legal consultation: https://ai-verdict.ru/legal-help/online-consultation
+- Contract review and transaction support: https://ai-verdict.ru/legal-help/contracts
+- Claims and dispute work: https://ai-verdict.ru/legal-help/litigation
 - Regional and agricultural legal assistance: https://ai-verdict.ru/legal-help/regions
 - Engineering development and integrations: https://ai-verdict.ru/engineering
+- Automation and integration diagnostic: https://ai-verdict.ru/engineering/automation-diagnostic
+- Telegram bot development: https://ai-verdict.ru/engineering/telegram-bots
+- RAG systems and AI knowledge bases: https://ai-verdict.ru/engineering/ai-rag
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Contract AI product: https://ai-verdict.ru/contract-ai-system
 - Russian AI legislation comments: https://ai-verdict.ru/ai-law
 - Federal Law No. 243-FZ AI comment: https://ai-verdict.ru/ai-law/243-fz-ai-support-2026
 - Legal AI guides: https://ai-verdict.ru/guides
 - AI for legal documents: https://ai-verdict.ru/guides/ai-legal-documents
+- Online lawyer consultation: price and format: https://ai-verdict.ru/guides/online-lawyer-consultation-price
+- Preparing a process for automation: https://ai-verdict.ru/guides/business-process-automation-audit
+- Contract review by a lawyer: price and deliverables: https://ai-verdict.ru/guides/contract-review-lawyer-price
+- Responding to a counterparty claim: https://ai-verdict.ru/guides/response-to-counterparty-claim
 - Team and responsible author: https://ai-verdict.ru/team
 - AI policy: https://ai-verdict.ru/ai-policy
 
