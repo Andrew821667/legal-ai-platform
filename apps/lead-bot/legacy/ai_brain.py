@@ -11,6 +11,7 @@ import json
 from openai import AsyncOpenAI, OpenAI
 from config import get_config
 config = get_config()
+import pii
 import prompts
 import company_knowledge
 import database
@@ -18,6 +19,37 @@ import knowledge_engine
 import utils
 
 logger = logging.getLogger(__name__)
+
+
+def _new_masker(known_names: tuple[str, ...] = ()) -> "pii.Masker | None":
+    """Обезличивание перед моделью (pii.py): персональные данные к вендору не уходят."""
+    if not getattr(config, "LLM_PII_MASKING_ENABLED", True):
+        return None
+    return pii.Masker(known_names=tuple(name for name in known_names if name))
+
+
+def _restore_args(masker: "pii.Masker | None", value: Any) -> Any:
+    """Аргументы инструмента: модель видела метки, инструменту нужны настоящие значения."""
+    if masker is None:
+        return value
+    if isinstance(value, str):
+        return masker.restore(value)
+    if isinstance(value, dict):
+        return {key: _restore_args(masker, item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_args(masker, item) for item in value]
+    return value
+
+
+def _masked_dialog_messages(system_prompt: str, conversation_text: str, masker: "pii.Masker | None") -> list[dict]:
+    """Служебные запросы (извлечение данных, намерение, темы): диалог — обезличенный."""
+    if masker is not None:
+        conversation_text = masker.mask(conversation_text)
+    messages = [{"role": "system", "content": system_prompt}]
+    if masker is not None and masker.mapping:
+        messages.append({"role": "system", "content": pii.MASK_NOTE})
+    messages.append({"role": "user", "content": f"Диалог:\n{conversation_text}"})
+    return messages
 
 # ── Prompt-injection protection ──────────────────────────────────────
 _INJECTION_PATTERNS = [
@@ -278,6 +310,7 @@ class AIBrain:
         funnel_context: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        known_names: tuple[str, ...] = (),
     ) -> AsyncGenerator[str, None]:
         """
         Генерация ответа с потоковой передачей (streaming) от OpenAI
@@ -327,6 +360,19 @@ class AIBrain:
             # Защита от prompt injection: напоминание модели оставаться в роли
             messages.append({"role": "system", "content": _ANTI_INJECTION_SUFFIX})
 
+            # Персональные данные — метками: история, контекст клиента, посты.
+            # Наши неизменные промпты и база знаний компании идут как есть.
+            masker = _new_masker(known_names)
+            if masker is not None:
+                static = {prompts.SYSTEM_PROMPT, _ANTI_INJECTION_SUFFIX, knowledge_context}
+                for message in messages:
+                    content = message.get("content")
+                    if isinstance(content, str) and content not in static:
+                        message["content"] = masker.mask(content)
+                if masker.mapping:
+                    messages.insert(1, {"role": "system", "content": pii.MASK_NOTE})
+            restorer = pii.StreamRestorer(masker) if masker is not None else None
+
             active_tools = tools if (tools and tool_executor) else None
 
             # Раунд — один запрос к модели. Больше одного нужен только когда модель
@@ -356,7 +402,9 @@ class AIBrain:
                 async for chunk in response:
                     delta = chunk.choices[0].delta
                     if delta.content:
-                        yield delta.content
+                        text = restorer.feed(delta.content) if restorer is not None else delta.content
+                        if text:
+                            yield text
                     for tc in (delta.tool_calls or []):
                         slot = tool_call_chunks.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
                         if tc.id:
@@ -367,6 +415,10 @@ class AIBrain:
                             slot["arguments"] += tc.function.arguments
                     if chunk.choices[0].finish_reason:
                         finish_reason = chunk.choices[0].finish_reason
+                if restorer is not None:
+                    tail = restorer.flush()
+                    if tail:
+                        yield tail
 
                 if finish_reason == "length":
                     logger.warning("⚠️ Response was truncated due to max_tokens limit!")
@@ -394,11 +446,17 @@ class AIBrain:
                             parsed_args = json.loads(slot["arguments"]) if slot["arguments"] else {}
                         except json.JSONDecodeError:
                             parsed_args = {}
+                        parsed_args = _restore_args(masker, parsed_args)
                         try:
                             result_text = await tool_executor(slot["name"], parsed_args)
                         except Exception as tool_error:
                             logger.warning("Tool executor raised for %s: %s", slot["name"], tool_error)
                             result_text = "Инструмент временно недоступен."
+                        if masker is not None and isinstance(result_text, str):
+                            had_marks = bool(masker.mapping)
+                            result_text = masker.mask(result_text)
+                            if masker.mapping and not had_marks:
+                                messages.insert(1, {"role": "system", "content": pii.MASK_NOTE})
                         messages.append({
                             "role": "tool",
                             "tool_call_id": slot["id"],
@@ -418,7 +476,11 @@ class AIBrain:
             logger.error(f"Error generating streaming response: {e}")
             yield "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз или свяжитесь с нашей командой напрямую."
 
-    async def extract_lead_data_async(self, conversation_history: List[Dict[str, str]]) -> Optional[Dict]:
+    async def extract_lead_data_async(
+        self,
+        conversation_history: List[Dict[str, str]],
+        known_names: tuple[str, ...] = (),
+    ) -> Optional[Dict]:
         """
         Async-вариант извлечения данных лида.
         Используется в async handlers, чтобы не блокировать event loop.
@@ -431,10 +493,8 @@ class AIBrain:
                 for msg in conversation_history
             ])
 
-            messages = [
-                {"role": "system", "content": prompts.EXTRACT_DATA_PROMPT},
-                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
-            ]
+            masker = _new_masker(known_names)
+            messages = _masked_dialog_messages(prompts.EXTRACT_DATA_PROMPT, conversation_text, masker)
 
             logger.debug("Extracting lead data from conversation (async)")
 
@@ -446,6 +506,8 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content or ""
+            if masker is not None:
+                response_text = masker.restore(response_text)
             logger.debug("Received async extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             lead_data = _parse_lead_data_response(response_text)
@@ -466,7 +528,11 @@ class AIBrain:
             logger.error(f"Error extracting lead data (async): {e}")
             return None
 
-    async def classify_intent_async(self, conversation_history: List[Dict[str, str]]) -> Optional[Dict]:
+    async def classify_intent_async(
+        self,
+        conversation_history: List[Dict[str, str]],
+        known_names: tuple[str, ...] = (),
+    ) -> Optional[Dict]:
         """
         Классифицирует намерение последнего сообщения клиента: продолжает своё дело,
         описывает новую задачу, спрашивает про платформу или просто знакомится — в
@@ -485,10 +551,8 @@ class AIBrain:
                 for msg in limited_history
             ])
 
-            messages = [
-                {"role": "system", "content": prompts.INTENT_ROUTER_PROMPT},
-                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
-            ]
+            masker = _new_masker(known_names)
+            messages = _masked_dialog_messages(prompts.INTENT_ROUTER_PROMPT, conversation_text, masker)
 
             logger.debug("Classifying message intent")
 
@@ -500,6 +564,8 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content or ""
+            if masker is not None:
+                response_text = masker.restore(response_text)
             data = json.loads(_strip_fenced_json(response_text))
             if not isinstance(data, dict):
                 logger.warning("Intent classification returned non-dict JSON: %s", type(data))
@@ -514,7 +580,11 @@ class AIBrain:
             logger.warning(f"Error classifying intent: {e}")
             return None
 
-    async def summarize_topics_async(self, conversation_history: List[Dict[str, str]]) -> Optional[str]:
+    async def summarize_topics_async(
+        self,
+        conversation_history: List[Dict[str, str]],
+        known_names: tuple[str, ...] = (),
+    ) -> Optional[str]:
         """
         Короткая память тем разговора (пункт 4 плана «умный ассистент») — не
         квалификация лида, а о чём человек вообще спрашивал, чтобы при
@@ -530,10 +600,8 @@ class AIBrain:
                 for msg in limited_history
             ])
 
-            messages = [
-                {"role": "system", "content": prompts.TOPIC_MEMORY_PROMPT},
-                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
-            ]
+            masker = _new_masker(known_names)
+            messages = _masked_dialog_messages(prompts.TOPIC_MEMORY_PROMPT, conversation_text, masker)
 
             response = await self.async_client.chat.completions.create(
                 model=self.model,
@@ -543,6 +611,8 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content or ""
+            if masker is not None:
+                response_text = masker.restore(response_text)
             data = json.loads(_strip_fenced_json(response_text))
             if not isinstance(data, dict):
                 return None
@@ -608,6 +678,14 @@ class AIBrain:
 
             # Защита от prompt injection: напоминание модели оставаться в роли
             messages.append({"role": "system", "content": _ANTI_INJECTION_SUFFIX})
+            masker = _new_masker()
+            if masker is not None:
+                static = {prompts.SYSTEM_PROMPT, _ANTI_INJECTION_SUFFIX, knowledge_context}
+                for message in messages:
+                    if isinstance(message.get("content"), str) and message["content"] not in static:
+                        message["content"] = masker.mask(message["content"])
+                if masker.mapping:
+                    messages.insert(1, {"role": "system", "content": pii.MASK_NOTE})
 
             logger.debug(f"Sending request to OpenAI with {len(messages)} messages (RAG: {bool(rag_context)})")
 
@@ -621,6 +699,8 @@ class AIBrain:
             )
 
             assistant_message = response.choices[0].message.content
+            if masker is not None and assistant_message:
+                assistant_message = masker.restore(assistant_message)
             finish_reason = response.choices[0].finish_reason
 
             # Предупреждение если ответ обрезан
@@ -654,10 +734,8 @@ class AIBrain:
                 for msg in conversation_history
             ])
 
-            messages = [
-                {"role": "system", "content": prompts.EXTRACT_DATA_PROMPT},
-                {"role": "user", "content": f"Диалог:\n{conversation_text}"}
-            ]
+            masker = _new_masker()
+            messages = _masked_dialog_messages(prompts.EXTRACT_DATA_PROMPT, conversation_text, masker)
 
             logger.debug("Extracting lead data from conversation")
 
@@ -670,6 +748,8 @@ class AIBrain:
             )
 
             response_text = response.choices[0].message.content or ""
+            if masker is not None:
+                response_text = masker.restore(response_text)
             logger.debug("Received extraction response: %s", utils.mask_sensitive_data(response_text[:100]))
 
             lead_data = _parse_lead_data_response(response_text)

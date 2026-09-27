@@ -34,6 +34,15 @@ config = get_config()
 logger = logging.getLogger(__name__)
 
 
+def _known_names(user_data: dict) -> tuple[str, ...]:
+    """Имя собеседника из профиля — чтобы обезличить его в тексте перед моделью."""
+    return tuple(
+        str(value)
+        for value in (user_data.get("first_name"), user_data.get("last_name"), user_data.get("username"))
+        if value
+    )
+
+
 async def _stream_response_text(
     *,
     original_message: Message,
@@ -80,6 +89,7 @@ async def _stream_response_text(
         funnel_context=funnel_context,
         tools=assistant_tools.TOOLS_SCHEMA,
         tool_executor=assistant_tools.executor_for(user_data.get("telegram_id")),
+        known_names=_known_names(user_data),
     ):
         full_response += chunk
         chunk_buffer += chunk
@@ -220,7 +230,9 @@ def _schedule_topic_memory_update(*, user_data: dict, conversation_history: list
 
     async def _update_topic_memory() -> None:
         try:
-            summary = await ai_brain.ai_brain.summarize_topics_async(list(conversation_history))
+            summary = await ai_brain.ai_brain.summarize_topics_async(
+                list(conversation_history), known_names=_known_names(user_data)
+            )
             if summary:
                 database.db.update_topic_memory(user_db_id, summary)
         except (sqlite3.Error, KeyError, ValueError, AttributeError) as error:
@@ -244,7 +256,9 @@ def _schedule_post_response_lead_processing(
 
     async def _post_response_lead_processing() -> None:
         try:
-            extracted = await ai_brain.ai_brain.extract_lead_data_async(list(conversation_history))
+            extracted = await ai_brain.ai_brain.extract_lead_data_async(
+                list(conversation_history), known_names=_known_names(user_data)
+            )
             if not extracted:
                 return
 

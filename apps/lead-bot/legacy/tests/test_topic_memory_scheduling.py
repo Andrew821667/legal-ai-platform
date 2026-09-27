@@ -12,7 +12,7 @@ from handlers import user_ai_response
 async def test_schedule_topic_memory_update_stores_summary(monkeypatch):
     calls = []
 
-    async def _fake_summarize(history):
+    async def _fake_summarize(history, **kwargs):
         return "Интересовался ценами на проверку договоров."
 
     monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "summarize_topics_async", _fake_summarize)
@@ -34,7 +34,7 @@ async def test_schedule_topic_memory_update_stores_summary(monkeypatch):
 async def test_schedule_topic_memory_update_skips_write_when_no_summary(monkeypatch):
     calls = []
 
-    async def _fake_summarize(history):
+    async def _fake_summarize(history, **kwargs):
         return None
 
     monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "summarize_topics_async", _fake_summarize)
@@ -48,7 +48,7 @@ async def test_schedule_topic_memory_update_skips_write_when_no_summary(monkeypa
 
 @pytest.mark.asyncio
 async def test_schedule_topic_memory_update_swallows_llm_failure(monkeypatch):
-    async def _boom(history):
+    async def _boom(history, **kwargs):
         raise RuntimeError("llm down")
 
     monkeypatch.setattr(user_ai_response.ai_brain.ai_brain, "summarize_topics_async", _boom)
@@ -59,7 +59,7 @@ async def test_schedule_topic_memory_update_swallows_llm_failure(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_schedule_topic_memory_update_swallows_db_failure(monkeypatch):
-    async def _fake_summarize(history):
+    async def _fake_summarize(history, **kwargs):
         return "Тема"
 
     def _boom_write(user_id, summary):

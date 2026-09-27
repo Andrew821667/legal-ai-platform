@@ -128,6 +128,8 @@ class Settings(BaseSettings):
     # провайдера (OPENAI_BASE_URL ведёт на api.deepseek.com), и переиспользовать
     # их значило бы сломать генерацию новостей.
     intake_analysis_enabled: bool = True
+    # Обезличивание текста перед любой отправкой в языковую модель (shared.pii).
+    llm_pii_masking_enabled: bool = True
     intake_analysis_api_key: str = ""
     intake_analysis_base_url: str = "https://api.openai.com/v1"
     intake_analysis_model: str = "gpt-5.6-sol"

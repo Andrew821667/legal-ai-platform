@@ -103,4 +103,5 @@ def analyze_intake(
         proxy_url=proxy_url,
         timeout=timeout,
         max_output_tokens=max_output_tokens,
+        known_names=tuple(str(name) for name in intake.get("known_names") or ()),
     )

@@ -58,6 +58,9 @@ class Config:
         if not self.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY не установлен в переменных окружения")
         self.OPENAI_BASE_URL: str = os.getenv('OPENAI_BASE_URL', '').strip()
+        # Обезличивание текста перед отправкой в модель (pii.py): персональные
+        # данные к вендору не уходят. Выключатель — на крайний случай.
+        self.LLM_PII_MASKING_ENABLED: bool = os.getenv('LLM_PII_MASKING_ENABLED', 'true').strip().lower() not in ('0', 'false', 'no')
 
         # Ключ для чата (ai_brain.py) — отдельно от OPENAI_API_KEY. Раньше
         # это была одна и та же переменная: удобно, пока OPENAI_BASE_URL
