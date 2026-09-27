@@ -5,6 +5,7 @@ import Link from "next/link";
 import { UserRound } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
 import { ROUTES, contractAIEntryHref, contractAIEntryIsExternal } from "@/lib/links";
+import { starterOffers } from "@/lib/starter-offers";
 import { isLightOpsTheme } from "@/lib/visualTheme";
 
 export default function Header() {
@@ -77,7 +78,7 @@ export default function Header() {
       }`}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-6 h-20">
+        <div className="flex items-center justify-between gap-4 h-20">
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center gap-3 group">
               <BrandMark className="transition-transform duration-300 group-hover:scale-105" />
@@ -88,7 +89,7 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden xl:flex items-center gap-6">
+          <div className="hidden xl:flex items-center gap-3">
             {mainNavigation.map((item) => (
               <Link
                 key={item.name}
@@ -143,6 +144,17 @@ export default function Header() {
             </Link>
           </div>
 
+          {/* Платная консультация — главный платный вход; раньше до записи
+              добирались только через раздел юрпомощи. */}
+          <div className="hidden xl:block">
+            <Link
+              href="/consultation"
+              className="inline-flex items-center whitespace-nowrap rounded-lg border border-amber-500/60 px-3 py-3 text-sm font-semibold text-amber-300 transition-colors hover:border-amber-400 hover:text-amber-200"
+            >
+              Юрист · {starterOffers.legal_consultation.price}
+            </Link>
+          </div>
+
           {/* Desktop CTA Button */}
           <div className="hidden xl:block">
             {contractAIActionExternal ? (
@@ -150,16 +162,16 @@ export default function Header() {
                 href={contractAIActionHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-4 py-3 rounded-lg transition-all transform hover:scale-105"
+                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-3 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Открыть сервис проверки договоров →
+                Проверить договор →
               </a>
             ) : (
               <Link
                 href={contractAIActionHref}
-                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-4 py-3 rounded-lg transition-all transform hover:scale-105"
+                className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-3 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Открыть сервис проверки договоров →
+                Проверить договор →
               </Link>
             )}
           </div>
@@ -237,6 +249,13 @@ export default function Header() {
                   Открыть сервис проверки договоров →
                 </Link>
               )}
+              <Link
+                href="/consultation"
+                className="mt-2 block rounded-lg border border-amber-500/60 px-4 py-3 text-center font-semibold text-amber-300 transition-colors hover:border-amber-400"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Консультация юриста — {starterOffers.legal_consultation.price}
+              </Link>
               <Link
                 href={ROUTES.cabinet}
                 prefetch={false}
