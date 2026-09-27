@@ -22,6 +22,7 @@ from news.pipeline import (
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
+    dedupe_headlines,
     default_pillar_targets,
     extract_domain,
     generation_theme_keys,
@@ -466,7 +467,7 @@ def _build_weekly_review_candidate(now_utc: datetime, posted_items: list[dict[st
     return ArticleCandidate(
         source_url="internal://weekly-review",
         article_url=f"internal://weekly-review/{year}-W{week}",
-        title=f"Обзор недели по Legal AI и автоматизации юрфункции (W{week})",
+        title=f"Обзор недели {start_of_week:%d.%m}–{week_end:%d.%m}: Legal AI и автоматизация юрфункции",
         summary=(
             f"Дата итогового обзора: {week_end.isoformat()}.\n"
             f"Это weekly_review по материалам с начала недели ({start_of_week.isoformat()} — {week_end.isoformat()}).\n"
@@ -518,9 +519,12 @@ def _build_practice_candidate(now_utc: datetime, selected_articles: list[Article
     return ArticleCandidate(
         source_url="internal://practice",
         article_url=f"internal://practice/{now_utc.date().isoformat()}",
-        title="Практика недели: где Legal AI упирается в реальную работу",
+        # Заголовок — от главного сигнала недели: общий «Практика недели: где Legal AI
+        # упирается…» модель переносила в каждый субботний пост.
+        title=materials[0].title,
         summary=(
             "Сделай субботний практический пост по сигналам недели. "
+            "Заголовок — о конкретном узком месте из этих сигналов, без слов «Практика недели». "
             "Нужен короткий, плотный разбор повторяющегося узкого места во внедрении Legal AI, договорной автоматизации или работе юрфункции. "
             "Никакого юмора и иронической подачи: только практическая ситуация, где ломается процесс, и что из этого взять в работу.\n"
             + "\n".join(lines)
@@ -649,6 +653,11 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         recent_pillar_counts=recent_pillar_counts,
         target_pillar_shares=default_pillar_targets(),
     )
+
+    selected_articles, same_headlines = dedupe_headlines(selected_articles)
+    if same_headlines:
+        logger.info("same_headline_articles_dropped", extra={"count": same_headlines})
+        prefiltered_duplicates += same_headlines
 
     if not selected_articles:
         return GenerationRunResult(

@@ -846,6 +846,37 @@ def choose_top_articles(
     return selected
 
 
+_HEADLINE_OUTLET_RE = re.compile(r"\s+[-–—|]\s+[^-–—|]{2,60}$")
+_HEADLINE_NOISE_RE = re.compile(r"[^0-9a-zа-яё]+")
+
+
+def headline_key(title: str) -> str:
+    """Заголовок без хвоста издания: Google News даёт «Заголовок - Издание»."""
+    text = (title or "").strip().lower()
+    text = _HEADLINE_OUTLET_RE.sub("", text)
+    return _HEADLINE_NOISE_RE.sub(" ", text).strip()
+
+
+def dedupe_headlines(articles: list[ArticleCandidate]) -> tuple[list[ArticleCandidate], int]:
+    """Один сюжет — одна статья: тот же заголовок в других изданиях отбрасываем.
+
+    Раньше такие копии доходили до модели и отсекались только после генерации
+    поста (сравнением текстов) — лишний вызов модели на каждую копию.
+    """
+    seen: set[str] = set()
+    kept: list[ArticleCandidate] = []
+    dropped = 0
+    for article in articles:
+        key = headline_key(article.title)
+        if key and key in seen:
+            dropped += 1
+            continue
+        if key:
+            seen.add(key)
+        kept.append(article)
+    return kept, dropped
+
+
 def tokenize(text: str) -> set[str]:
     terms = {
         token.lower()
