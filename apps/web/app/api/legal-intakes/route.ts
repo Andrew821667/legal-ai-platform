@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import { CONSULTATION_OFFER_VERSION } from "@/lib/consultation-offer";
 import {
   evaluateLeadSubmission,
   getLeadSecurityConfig,
@@ -52,6 +53,7 @@ type IntakeBody = {
   /** Запись на консультацию: время бронируется вместе с обращением. */
   consultation_slot_id?: string;
   consentAccepted?: boolean;
+  offerAccepted?: boolean;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -118,6 +120,10 @@ export async function POST(request: NextRequest) {
   if (payload.consentAccepted !== true) {
     return NextResponse.json({ detail: "Нужно согласие на обработку персональных данных." }, { status: 400 });
   }
+  // Запись с оплатой — договор по оферте: без ознакомления с ней не записываем.
+  if (slotId && payload.offerAccepted !== true) {
+    return NextResponse.json({ detail: "Подтвердите, что ознакомились с офертой на консультацию." }, { status: 400 });
+  }
 
   const cfg = getLeadSecurityConfig();
   const normalizedContact = normalizeLeadContact(contact);
@@ -161,6 +167,7 @@ export async function POST(request: NextRequest) {
     `ip_hash=${ipHash}`,
     `ua_hash=${uaHash}`,
     starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
+    slotId ? `offer_version=${CONSULTATION_OFFER_VERSION}` : undefined,
   ].filter(Boolean).join("\n");
 
   const coreResponse = await fetch(`${CORE_API_URL}/api/v1/legal-intakes`, {
