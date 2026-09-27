@@ -86,16 +86,8 @@ test("tracks selection and submission by starter offer id", () => {
     delete globalThis.window;
   }
 
-  assert.ok(calls.some((call) =>
-    call[0] === "gtag" &&
-    call[2] === "starter_offer_select" &&
-    call[3].starter_offer_id === "engineering_rag_service"
-  ));
-  assert.ok(calls.some((call) =>
-    call[0] === "gtag" &&
-    call[2] === "starter_offer_submit" &&
-    call[3].starter_offer_id === "engineering_rag_service"
-  ));
+  // Google Analytics убран: цели уходят только в Яндекс Метрику.
+  assert.ok(!calls.some((call) => call[0] === "gtag"));
   assert.ok(calls.some((call) =>
     call[0] === "ym" &&
     call[3] === "starter_offer_submit" &&

@@ -14,8 +14,8 @@ import {
 const MODE = cookieConsentMode(process.env.NEXT_PUBLIC_COOKIE_CONSENT_MODE);
 
 /**
- * Баннер cookies веб-аналитики. Пока посетитель не выбрал, в режиме opt_in
- * счётчики не загружаются (см. AnalyticsGate). Справа снизу — кнопка
+ * Баннер cookies веб-аналитики. В уведомительном режиме счётчик работает, пока
+ * посетитель не откажется; в режиме opt_in — только после «Принять» (см. AnalyticsGate). Справа снизу — кнопка
  * ассистента, поэтому на телефоне баннер оставляет ей место.
  */
 export default function CookieConsentBanner() {
@@ -40,8 +40,8 @@ export default function CookieConsentBanner() {
     >
       <p>
         {MODE === "notice"
-          ? "Мы используем cookies Яндекс Метрики и Google Analytics, чтобы понимать, какие страницы полезны. Можно отказаться."
-          : "Разрешите cookies Яндекс Метрики и Google Analytics — так мы понимаем, какие страницы полезны. Без разрешения счётчики не включаются."}{" "}
+          ? "Мы используем cookies Яндекс Метрики, чтобы понимать, какие страницы полезны. Можно отказаться."
+          : "Разрешите cookies Яндекс Метрики — так мы понимаем, какие страницы полезны. Без разрешения счётчик не включается."}{" "}
         <Link href="/privacy#cookies" className="text-amber-700 underline underline-offset-2">
           Подробнее
         </Link>

@@ -115,7 +115,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         {/* Счётчики — после согласия на cookies (баннер в AppShell). */}
-        <AnalyticsGate gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} ymId={yandexMetrikaId} />
+        <AnalyticsGate ymId={yandexMetrikaId} />
 
         <AppShell>{children}</AppShell>
       </body>

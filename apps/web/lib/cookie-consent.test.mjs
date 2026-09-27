@@ -22,10 +22,10 @@ test("без согласия счётчики молчат, в уведомит
   assert.equal(analyticsAllowed("notice", "declined"), false);
 });
 
-test("режим по умолчанию — opt_in", () => {
-  assert.equal(cookieConsentMode(undefined), "opt_in");
-  assert.equal(cookieConsentMode("NOTICE"), "notice");
-  assert.equal(cookieConsentMode("что-то"), "opt_in");
+test("режим по умолчанию — уведомительный", () => {
+  assert.equal(cookieConsentMode(undefined), "notice");
+  assert.equal(cookieConsentMode("OPT_IN"), "opt_in");
+  assert.equal(cookieConsentMode("что-то"), "notice");
 });
 
 test("выбор сохраняется, мусор и сломанное хранилище — как «не выбрано»", () => {

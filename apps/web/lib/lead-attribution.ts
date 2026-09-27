@@ -11,7 +11,6 @@ export type LeadAttribution = {
 
 declare global {
   interface Window {
-    gtag?: (...args: unknown[]) => void;
     ym?: (...args: unknown[]) => void;
   }
 }
@@ -114,11 +113,6 @@ export function trackLeadConversion(
     starter_offer_id: starterOfferId,
   };
 
-  window.gtag?.("event", "generate_lead", params);
-  if (starterOfferId) {
-    window.gtag?.("event", "starter_offer_submit", params);
-  }
-
   const rawId = process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908";
   const counterId = Number(rawId);
   if (Number.isFinite(counterId)) {
@@ -138,8 +132,6 @@ export function trackStarterOfferSelection(offer: StarterOffer): void {
     starter_offer_practice: offer.practice,
     starter_offer_price: offer.price,
   };
-
-  window.gtag?.("event", "starter_offer_select", params);
 
   const rawId = process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908";
   const counterId = Number(rawId);

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import GoogleAnalytics from "@/components/GoogleAnalytics";
 import YandexMetrika from "@/components/YandexMetrika";
 import {
   COOKIE_CONSENT_EVENT,
@@ -14,8 +13,11 @@ import {
 
 const MODE = cookieConsentMode(process.env.NEXT_PUBLIC_COOKIE_CONSENT_MODE);
 
-/** Счётчики — только когда посетитель разрешил (или в уведомительном режиме не отказался). */
-export default function AnalyticsGate({ gaId, ymId }: { gaId?: string; ymId?: string }) {
+/**
+ * Счётчик Яндекс Метрики — если посетитель не отказался (в режиме opt_in — только
+ * после согласия). Google Analytics убран: данные посетителей не уходят за рубеж.
+ */
+export default function AnalyticsGate({ ymId }: { ymId?: string }) {
   const [consent, setConsent] = useState<CookieConsent | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -28,10 +30,5 @@ export default function AnalyticsGate({ gaId, ymId }: { gaId?: string; ymId?: st
   }, []);
 
   if (!ready || !analyticsAllowed(MODE, consent)) return null;
-  return (
-    <>
-      {gaId ? <GoogleAnalytics measurementId={gaId} /> : null}
-      {ymId ? <YandexMetrika counterId={ymId} /> : null}
-    </>
-  );
+  return ymId ? <YandexMetrika counterId={ymId} /> : null;
 }
