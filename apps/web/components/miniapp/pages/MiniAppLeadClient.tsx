@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMiniAppState, type MiniAppAudience } from "@/components/miniapp/MiniAppStateProvider";
 import { leadBotDeepLink } from "@/lib/links";
+import PdConsentText from "@/components/PdConsentText";
 
 type LeadOffer = "consultation" | "checklist" | "demo" | "sample_report" | "unknown";
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -375,11 +376,7 @@ export default function MiniAppLeadPage() {
             className="mt-1 h-4 w-4 rounded border-slate-600 text-amber-500"
           />
           <span className="text-xs leading-5 text-slate-300">
-            Я согласен на обработку данных для рассмотрения заявки и связи со мной. Подробнее в{" "}
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-300 underline">
-              политике конфиденциальности
-            </a>
-            .
+            <PdConsentText linkClassName="font-semibold text-amber-300 underline" />
           </span>
         </label>
 

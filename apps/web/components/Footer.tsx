@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import CookieSettingsLink from "@/components/CookieSettingsLink";
 import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import { PLATFORM_PARTS } from "@/lib/platformParts";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
@@ -290,6 +292,7 @@ export default function Footer() {
             <Link href="/ai-policy" className="text-slate-400 hover:text-amber-500 transition-colors">
               AI policy
             </Link>
+            <CookieSettingsLink className="text-slate-400 hover:text-amber-500 transition-colors" />
           </div>
         </div>
       </div>

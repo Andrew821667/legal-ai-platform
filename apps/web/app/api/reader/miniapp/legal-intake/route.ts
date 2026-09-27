@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyMiniAppRequest } from "@/lib/telegram-webapp-auth";
+import { PD_CONSENT_VERSION } from "@/lib/pd-consent";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
       region: clean(payload.region, 255),
       source_context: practice === "legal" ? "miniapp_legal_help" : `miniapp_${practice}_help`,
       consent_accepted: true,
-      consent_version: "miniapp_legal_intake_v1",
+      consent_version: PD_CONSENT_VERSION,
       consent_at: consentAt,
       notes: "telegram_verified=1",
       utm_source: "miniapp",

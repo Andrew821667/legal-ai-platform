@@ -27,21 +27,32 @@ export default function TransborderConsentPage() {
   return (
     <LegalPageFrame
       title="Согласие на трансграничную передачу данных"
-      description="Условия использования внешних AI-сервисов и трансграничной передачи данных при включении AI-режима."
+      description="Какие данные и кому передаются за рубеж: сервисы ИИ для разбора обращений и ответов ассистента, веб-аналитика, Telegram."
       updatedAt={LEGAL_UPDATED_AT}
     >
       <section className="rounded-xl bg-white p-8 shadow-sm">
-        <h2 className="mb-4 text-2xl font-bold text-slate-900">1. Когда это согласие нужно</h2>
-        <div className="space-y-4 text-slate-700">
-          <p>
-            Это согласие относится к сценариям, где {LEGAL_BRAND} использует внешние AI-сервисы для
-            анализа запроса, текста сообщения или подготовительных материалов пользователя.
-          </p>
-          <p>
-            Если AI-режим не включается, базовые сценарии сайта и бота остаются доступны без
-            трансграничной передачи данных.
-          </p>
-        </div>
+        <h2 className="mb-4 text-2xl font-bold text-slate-900">1. Когда данные передаются за рубеж</h2>
+        <ul className="list-disc space-y-2 pl-6 text-slate-700">
+          <li>
+            <strong>Юридические обращения</strong> через формы сайта, личного кабинета и Mini App: текст обращения
+            передаётся сервису ИИ <strong>OpenAI (США)</strong> для предварительного разбора, который готовится юристу.
+            Согласие даётся в самой форме.
+          </li>
+          <li>
+            <strong>Переписка с ассистентом</strong> в Telegram и на сайте: сообщения передаются сервису ИИ{" "}
+            <strong>DeepSeek (КНР)</strong> для подготовки ответа. В Telegram-боте это отдельный шаг — согласие на
+            AI-режим.
+          </li>
+          <li>
+            <strong>Веб-аналитика Google Analytics (США)</strong> — только после согласия на cookies в баннере сайта.
+          </li>
+          <li>
+            <strong>Telegram</strong>: сообщения в боте и Mini App проходят через инфраструктуру мессенджера.
+          </li>
+        </ul>
+        <p className="mt-4 text-slate-700">
+          Паспортные данные и реквизиты документов, удостоверяющих личность, сервисам ИИ не передаются.
+        </p>
       </section>
 
       <section className="rounded-xl bg-white p-8 shadow-sm">
@@ -68,9 +79,15 @@ export default function TransborderConsentPage() {
       <section className="rounded-xl bg-white p-8 shadow-sm">
         <h2 className="mb-4 text-2xl font-bold text-slate-900">4. Что будет, если не соглашаться</h2>
         <ul className="list-disc space-y-2 pl-6 text-slate-700">
-          <li>вы сможете пользоваться меню и базовыми информационными сценариями;</li>
-          <li>сможете оставить заявку и перейти в ручную обработку командой;</li>
-          <li>AI-разбор и AI-ответ по содержанию сообщения будут отключены.</li>
+          <li>в Telegram-боте останутся меню и базовые информационные сценарии, AI-ответы будут отключены;</li>
+          <li>
+            формы обращений на сайте без этого согласия не отправляются — напишите юристу напрямую по{" "}
+            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-amber-700 underline">
+              {LEGAL_CONTACT_EMAIL}
+            </a>{" "}
+            или позвоните: такое обращение обрабатывается без сервисов ИИ;
+          </li>
+          <li>без согласия на cookies счётчики аналитики не включаются.</li>
         </ul>
       </section>
 

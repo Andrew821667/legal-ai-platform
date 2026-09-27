@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
             Настоящая Политика конфиденциальности определяет порядок обработки и защиты персональных данных пользователей сайта ai-verdict.ru
           </p>
           <p className="text-sm text-slate-500 mt-4">
-            Последнее обновление: 14 сентября 2026 года
+            Последнее обновление: 27 сентября 2026 года
           </p>
         </div>
 
@@ -64,7 +64,8 @@ export default function PrivacyPolicy() {
             </p>
             
             <p className="text-slate-700">
-              1.4. Используя Сайт, вы соглашаетесь с условиями настоящей Политики конфиденциальности.
+              1.4. Политика — общедоступный документ (ч. 2 ст. 18.1 152-ФЗ). Согласие на обработку персональных
+              данных даётся отдельно: в форме обращения, в Telegram-боте или в баннере cookies.
             </p>
           </section>
 
@@ -140,7 +141,7 @@ export default function PrivacyPolicy() {
           </section>
 
           {/* 5. Как мы используем cookies */}
-          <section className="mb-8 bg-white rounded-xl p-8 shadow-sm">
+          <section id="cookies" className="mb-8 bg-white rounded-xl p-8 shadow-sm">
             <h2 className="text-2xl font-bold text-slate-900 mb-4">5. Cookies и аналитика</h2>
             
             <p className="text-slate-700 mb-4">
@@ -155,8 +156,8 @@ export default function PrivacyPolicy() {
             </ul>
             
             <p className="text-slate-700 mb-4">
-              5.2. Вы можете отключить cookies в настройках вашего браузера, однако это может ограничить 
-              функциональность Сайта.
+              5.2. Счётчики веб-аналитики включаются только после вашего согласия в баннере cookies. Изменить выбор
+              можно ссылкой «Настройки cookies» внизу Сайта; cookies также можно отключить в настройках браузера.
             </p>
             
             <p className="text-slate-700">
@@ -164,7 +165,7 @@ export default function PrivacyPolicy() {
             </p>
             
             <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li><strong>Google Analytics 4:</strong> анализ трафика и поведения пользователей</li>
+              <li><strong>Google Analytics 4 (Google, США):</strong> анализ трафика и поведения пользователей; данные передаются за рубеж</li>
               <li><strong>Yandex Metrika:</strong> анализ посещаемости и источников трафика без Вебвизора и записи содержимого форм</li>
             </ul>
           </section>
@@ -189,16 +190,26 @@ export default function PrivacyPolicy() {
             
             <ul className="list-disc pl-6 text-slate-700 space-y-2">
               <li><strong>Провайдер хостинга:</strong> инфраструктура, через которую размещается сайт и его серверные функции</li>
-              <li><strong>Google (Analytics):</strong> веб-аналитика</li>
-              <li><strong>Yandex (Metrika):</strong> веб-аналитика (Россия)</li>
-              <li><strong>Telegram:</strong> коммуникация через бот</li>
-              <li><strong>OpenAI-compatible AI providers:</strong> обработка текста запроса в AI-режиме, если пользователь явно включает такой сценарий</li>
+              <li><strong>Google (Analytics), США:</strong> веб-аналитика — после согласия на cookies</li>
+              <li><strong>Yandex (Metrika), Россия:</strong> веб-аналитика — после согласия на cookies</li>
+              <li><strong>Telegram:</strong> переписка через бот и Mini App</li>
+              <li><strong>OpenAI, США:</strong> текст юридического обращения из форм сайта, личного кабинета и Mini App — для предварительного разбора, который готовится юристу</li>
+              <li><strong>DeepSeek, КНР:</strong> сообщения в переписке с ассистентом в Telegram и на Сайте — для подготовки ответа</li>
             </ul>
 
             <p className="mt-4 text-slate-700">
               6.3. Реквизиты документа, удостоверяющего личность, не передаются системам искусственного
               интеллекта, веб-аналитике или рекламным системам. Они доступны только уполномоченным лицам,
               которым нужны для оформления документов и работы по обращению.
+            </p>
+
+            <p className="mt-4 text-slate-700">
+              6.4. Передача данных OpenAI и Google (США), DeepSeek (КНР) является трансграничной. Она выполняется на
+              основании вашего согласия: в форме обращения, в Telegram-боте (AI-режим) или в баннере cookies.
+              Подробнее — в{" "}
+              <a href="/transborder-consent" className="text-amber-600 hover:text-amber-700">условиях трансграничной передачи</a>.
+              Не указывайте в описании обращения паспортные данные, сведения о здоровье и данные третьих лиц без
+              необходимости.
             </p>
           </section>
 

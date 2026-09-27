@@ -11,6 +11,7 @@ import {
   verifyTurnstileToken,
 } from "@/lib/lead-security";
 import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/starter-offers";
+import { PD_CONSENT_VERSION } from "@/lib/pd-consent";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
       region: clean(payload.region, 255),
       source_context: clean(payload.source_context, 255) || landing,
       consent_accepted: true,
-      consent_version: "website_legal_intake_v1",
+      consent_version: PD_CONSENT_VERSION,
       consent_at: consentAt,
       notes,
       utm_source: clean(payload.utm_source, 255),

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import PdConsentText from "@/components/PdConsentText";
 import { useRouter } from "next/navigation";
 import { CalendarClock } from "lucide-react";
 
@@ -210,8 +211,7 @@ export default function ConsultationBooking() {
           <label className="flex items-start gap-3 text-sm text-slate-300">
             <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1" />
             <span>
-              Согласен на обработку данных для записи и связи со мной. Подробнее в{" "}
-              <Link href="/privacy" className="text-amber-300 underline underline-offset-2">политике конфиденциальности</Link>.
+              <PdConsentText linkClassName="text-amber-300 underline underline-offset-2" />
             </span>
           </label>
           {challengeRequired && TURNSTILE_SITE_KEY ? (

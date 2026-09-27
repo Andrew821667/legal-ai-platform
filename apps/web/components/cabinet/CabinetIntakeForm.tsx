@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { getLeadHoneypotFieldName } from "@/lib/lead-security";
+import PdConsentText from "@/components/PdConsentText";
 
 const TURNSTILE_SITE_KEY = (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "").trim();
 const TURNSTILE_CHALLENGE_MODE = (process.env.NEXT_PUBLIC_LEAD_FORM_CHALLENGE_MODE || "off").trim().toLowerCase();
@@ -133,7 +134,7 @@ export default function CabinetIntakeForm({ prefillContact, onCreated }: { prefi
       <label className="flex items-start gap-3 text-sm text-slate-300">
         <input type="checkbox" checked={consentAccepted} onChange={(e) => setConsentAccepted(e.target.checked)} className="mt-1 h-4 w-4" />
         <span>
-          Согласен(на) на обработку персональных данных. <a href="/privacy" target="_blank" className="text-amber-300 underline">Политика конфиденциальности</a>.
+          <PdConsentText linkClassName="text-amber-300 underline" />
         </span>
       </label>
 

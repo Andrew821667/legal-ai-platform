@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
-import GoogleAnalytics from "@/components/GoogleAnalytics";
-import YandexMetrika from "@/components/YandexMetrika";
+import AnalyticsGate from "@/components/AnalyticsGate";
 import StructuredData from "@/components/StructuredData";
 import { LEGAL_OPERATOR_NAME, reportLegalProfileWarnings } from "@/lib/legalProfile";
 import { SEO_SITE_URL } from "@/lib/seo";
@@ -115,11 +114,8 @@ export default function RootLayout({
         <StructuredData siteUrl={siteUrl} />
       </head>
       <body className="antialiased">
-        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
-          <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
-        )}
-
-        <YandexMetrika counterId={yandexMetrikaId} />
+        {/* Счётчики — после согласия на cookies (баннер в AppShell). */}
+        <AnalyticsGate gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} ymId={yandexMetrikaId} />
 
         <AppShell>{children}</AppShell>
       </body>
