@@ -43,7 +43,9 @@ export default async function GuidePage({ params }: GuidePageProps) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${guide.updatedAt}T00:00:00.000Z`));
-  const relatedGuides = guides.filter((item) => item.slug !== guide.slug);
+  const relatedGuides = guides.filter((item) => item.slug !== guide.slug && (
+    item.practice === guide.practice || (guide.slug === "how-to-start-ai-adoption" && item.slug === "legal-ai-implementation")
+  ));
   const relatedService = guide.slug === "ai-contract-review-process"
     ? { href: "/services/contracts-ai", label: "Автоматизация договорной работы" }
     : guide.slug === "ai-legal-documents"
@@ -54,12 +56,24 @@ export default async function GuidePage({ params }: GuidePageProps) {
       ? { href: "/engineering", label: "Безопасная архитектура и интеграции" }
     : guide.slug === "online-lawyer-consultation-price"
       ? { href: "/legal-help/online-consultation", label: "Онлайн-консультация юриста — 4 900 ₽" }
+    : guide.slug === "which-legal-help-do-i-need"
+      ? { href: "/legal-help", label: "Юридические услуги для бизнеса и частных клиентов" }
     : guide.slug === "business-process-automation-audit"
       ? { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации — 7 900 ₽" }
+    : guide.slug === "how-to-start-ai-adoption"
+      ? { href: "/engineering/automation-diagnostic", label: "Диагностика процесса перед внедрением ИИ" }
     : guide.slug === "contract-review-lawyer-price"
       ? { href: "/legal-help/contracts", label: "Проверка договора юристом — от 7 900 ₽" }
     : guide.slug === "response-to-counterparty-claim"
       ? { href: "/legal-help/litigation", label: "Претензия или ответ — от 9 900 ₽" }
+    : guide.slug === "check-contract-before-signing"
+      ? { href: "/legal-help/contracts", label: "Проверка договора юристом" }
+    : guide.slug === "check-apartment-before-purchase"
+      ? { href: "/legal-help/real-estate", label: "Юрист по недвижимости" }
+    : guide.slug === "telegram-bot-development-cost"
+      ? { href: "/engineering/telegram-bots", label: "Разработка Telegram-бота" }
+    : guide.slug === "prepare-data-for-rag"
+      ? { href: "/engineering/ai-rag", label: "Разработка AI/RAG-системы" }
       : { href: "/solutions", label: "Решения для юридической автоматизации" };
   const cta = guide.cta || {
     heading: "Нужно разобрать ваш процесс?",
@@ -71,7 +85,7 @@ export default async function GuidePage({ params }: GuidePageProps) {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "TechArticle",
+        "@type": guide.practice === "legal" ? "Article" : "TechArticle",
         "@id": `${canonicalUrl}#article`,
         headline: guide.title,
         description: guide.description,
@@ -116,7 +130,9 @@ export default async function GuidePage({ params }: GuidePageProps) {
             <Link href="/guides" className="hover:text-amber-800">Руководства</Link> / {guide.title}
           </nav>
           <header className="mt-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">Практическое руководство</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">
+              {guide.practice === "legal" ? "Юридическая практика" : guide.practice === "engineering" ? "Инженерная практика" : "Legal AI"}
+            </p>
             <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">{guide.title}</h1>
             <p className="mt-6 text-lg leading-relaxed text-slate-700">{guide.excerpt}</p>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
@@ -148,7 +164,7 @@ export default async function GuidePage({ params }: GuidePageProps) {
 
         {guide.sources?.length ? (
           <section className="mt-12 border-t border-slate-200 pt-8">
-            <h2 className="text-xl font-bold">Официальный источник</h2>
+            <h2 className="text-xl font-bold">{guide.sources.length > 1 ? "Официальные источники" : "Официальный источник"}</h2>
             <ul className="mt-4 space-y-2 text-sm text-slate-700">
               {guide.sources.map((source) => (
                 <li key={source.href}>

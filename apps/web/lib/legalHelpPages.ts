@@ -398,6 +398,11 @@ export const legalHelpPages: Record<string, LegalHelpPage> = {
       { question: "Работаете дистанционно?", answer: "Первичный анализ и подготовка документов возможны дистанционно. Необходимость очного участия зависит от сделки, региона, органа или суда." },
     ],
     related: ["contracts", "litigation", "inheritance"],
+    resource: {
+      href: "/guides/check-apartment-before-purchase",
+      label: "Как проверить квартиру перед покупкой",
+      description: "ЕГРН, документы продавца, права третьих лиц, договор и порядок расчётов до передачи денег.",
+    },
     clientType: "unknown",
     area: "real_estate",
   },
