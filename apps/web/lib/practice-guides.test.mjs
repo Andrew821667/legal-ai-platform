@@ -25,3 +25,22 @@ test("practice guides have distinct intent and a matching service route", () => 
     if (practice === "legal") assert.ok(guide.sources?.length);
   }
 });
+
+test("general legal guide supports the main legal services page", () => {
+  const guide = guides.find((item) => item.slug === "which-legal-help-do-i-need");
+  assert.ok(guide);
+  assert.equal(guide.practice, "legal");
+  assert.equal(guide.cta?.href, "/legal-help");
+  assert.ok(guide.sections.length >= 4);
+  assert.ok(guide.checklist.length >= 5);
+});
+
+test("introductory AI guide leads to process diagnosis", () => {
+  const guide = guides.find((item) => item.slug === "how-to-start-ai-adoption");
+  assert.ok(guide);
+  assert.equal(guide.practice, "engineering");
+  assert.equal(guide.cta?.href, "/engineering/automation-diagnostic");
+  assert.ok(guide.sections.length >= 4);
+  assert.ok(guide.checklist.length >= 5);
+  assert.ok(guide.sources?.length);
+});

@@ -5,16 +5,16 @@ import { createPageMetadata } from "@/lib/seo";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata = createPageMetadata({
-  title: "Практические руководства: юридические задачи и разработка AI",
+  title: "Практические руководства: юридическая помощь и внедрение ИИ",
   description:
-    "Руководства AI Verdict по юридическим задачам, разработке Telegram-ботов и RAG, а также внедрению ИИ в юридическую работу. Чек-листы и переход к профильным услугам.",
+    "Руководства AI Verdict по юридическим задачам и внедрению ИИ в бизнес: выбор формата помощи, первого AI-сценария, разработка Telegram-ботов и RAG.",
   path: "/guides",
   keywords: ["юридические руководства", "разработка Telegram-ботов", "RAG для бизнеса", "Legal AI"],
 });
 
 const groups = [
   { id: "legal", title: "Юридическая практика", description: "Договоры, претензии, консультации и сделки: что проверить до решения и когда нужен юрист.", href: "/legal-help", label: "Юридические услуги" },
-  { id: "engineering", title: "Инженерная практика", description: "Оценка разработки, подготовка данных и выбор первого рабочего сценария.", href: "/engineering", label: "Разработка и интеграции" },
+  { id: "engineering", title: "Инженерная практика", description: "Внедрение ИИ, оценка разработки, подготовка данных и выбор первого рабочего сценария.", href: "/engineering", label: "Разработка и интеграции" },
   { id: "platform", title: "Legal AI и автоматизация", description: "Применение ИИ в юридической работе: контроль качества, документы, данные и пилоты.", href: "/legal-ai", label: "Обзор Legal AI" },
 ] as const;
 

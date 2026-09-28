@@ -542,6 +542,7 @@ export const serviceDetails: Record<string, ServiceDetail> = {
       { question: "Диагностика подходит для AI-проекта?", answer: "Да. Она помогает проверить источники данных, роли, критерии качества и понять, где AI даёт пользу, а где достаточно правил или обычной интеграции." },
     ],
     related: [
+      { href: "/guides/how-to-start-ai-adoption", label: "С чего начать внедрение ИИ", description: "Как выбрать первую задачу, проверить данные и решить, нужен ли готовый инструмент или разработка." },
       { href: "/guides/business-process-automation-audit", label: "Как подготовить процесс к автоматизации", description: "Участники, данные, интеграции, исключения и метрика первого этапа." },
       { href: "/engineering", label: "Инженерная практика", description: "Разработка программ, AI-сервисов и интеграций." },
       { href: "/engineering/telegram-bots", label: "Telegram-боты для бизнеса", description: "Прототип одного сквозного пользовательского сценария." },

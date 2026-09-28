@@ -99,7 +99,7 @@ export default function LegalHelpPage() {
         "@type": "WebPage",
         "@id": canonicalUrl,
         name: "Юридические услуги для бизнеса и частных клиентов",
-        dateModified: "2026-09-21",
+        dateModified: "2026-09-28",
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
@@ -228,7 +228,7 @@ export default function LegalHelpPage() {
 
       <section className="border-t border-slate-800 bg-slate-950/60">
         <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-semibold text-white">Что проверить до обращения к юристу</h2>
+          <h2 className="text-3xl font-semibold text-white">Как подготовиться к обращению к юристу</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
             Практические материалы помогают собрать факты и вопросы. Они не заменяют разбор конкретной ситуации.
           </p>

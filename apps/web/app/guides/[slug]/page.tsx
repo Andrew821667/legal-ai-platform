@@ -43,7 +43,9 @@ export default async function GuidePage({ params }: GuidePageProps) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${guide.updatedAt}T00:00:00.000Z`));
-  const relatedGuides = guides.filter((item) => item.slug !== guide.slug && item.practice === guide.practice);
+  const relatedGuides = guides.filter((item) => item.slug !== guide.slug && (
+    item.practice === guide.practice || (guide.slug === "how-to-start-ai-adoption" && item.slug === "legal-ai-implementation")
+  ));
   const relatedService = guide.slug === "ai-contract-review-process"
     ? { href: "/services/contracts-ai", label: "Автоматизация договорной работы" }
     : guide.slug === "ai-legal-documents"
@@ -54,8 +56,12 @@ export default async function GuidePage({ params }: GuidePageProps) {
       ? { href: "/engineering", label: "Безопасная архитектура и интеграции" }
     : guide.slug === "online-lawyer-consultation-price"
       ? { href: "/legal-help/online-consultation", label: "Онлайн-консультация юриста — 4 900 ₽" }
+    : guide.slug === "which-legal-help-do-i-need"
+      ? { href: "/legal-help", label: "Юридические услуги для бизнеса и частных клиентов" }
     : guide.slug === "business-process-automation-audit"
       ? { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации — 7 900 ₽" }
+    : guide.slug === "how-to-start-ai-adoption"
+      ? { href: "/engineering/automation-diagnostic", label: "Диагностика процесса перед внедрением ИИ" }
     : guide.slug === "contract-review-lawyer-price"
       ? { href: "/legal-help/contracts", label: "Проверка договора юристом — от 7 900 ₽" }
     : guide.slug === "response-to-counterparty-claim"
