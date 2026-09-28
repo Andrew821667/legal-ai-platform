@@ -8,6 +8,7 @@ import LegalHelpForm from "@/components/LegalHelpForm";
 import LegalHelpTrust from "@/components/LegalHelpTrust";
 import PageFAQ from "@/components/PageFAQ";
 import StarterOfferButton from "@/components/StarterOfferButton";
+import { guides } from "@/lib/guidesData";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
 import { legalStarterOffers } from "@/lib/starter-offers";
 import { isLightOpsTheme } from "@/lib/visualTheme";
@@ -222,6 +223,23 @@ export default function LegalHelpPage() {
           <Link href="/legal-help/regions" className="mt-4 inline-flex font-semibold text-amber-300 hover:text-amber-200">
             Открыть региональные направления →
           </Link>
+        </div>
+      </section>
+
+      <section className="border-t border-slate-800 bg-slate-950/60">
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-semibold text-white">Что проверить до обращения к юристу</h2>
+          <p className="mt-3 max-w-3xl text-slate-300">
+            Практические материалы помогают собрать факты и вопросы. Они не заменяют разбор конкретной ситуации.
+          </p>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {guides.filter((guide) => guide.practice === "legal").map((guide) => (
+              <Link key={guide.slug} href={`/guides/${guide.slug}`} className="rounded-xl border border-slate-700 bg-slate-900 p-6 hover:border-amber-400">
+                <h3 className="text-lg font-semibold text-amber-300">{guide.title} →</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{guide.excerpt}</p>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 

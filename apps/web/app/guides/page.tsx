@@ -5,12 +5,18 @@ import { createPageMetadata } from "@/lib/seo";
 import HeroBackdrop from "@/components/HeroBackdrop";
 
 export const metadata = createPageMetadata({
-  title: "Legal AI и ИИ для юристов: практические руководства",
+  title: "Практические руководства: юридические задачи и разработка AI",
   description:
-    "Материалы об ИИ в юридической сфере: выбор нейросети для юриста, юридические документы, договоры, внедрение Legal AI и безопасность данных.",
+    "Руководства AI Verdict по юридическим задачам, разработке Telegram-ботов и RAG, а также внедрению ИИ в юридическую работу. Чек-листы и переход к профильным услугам.",
   path: "/guides",
-  keywords: ["Legal AI", "ИИ для юристов", "нейросеть для юриста", "ИИ для юридических документов"],
+  keywords: ["юридические руководства", "разработка Telegram-ботов", "RAG для бизнеса", "Legal AI"],
 });
+
+const groups = [
+  { id: "legal", title: "Юридическая практика", description: "Договоры, претензии, консультации и сделки: что проверить до решения и когда нужен юрист.", href: "/legal-help", label: "Юридические услуги" },
+  { id: "engineering", title: "Инженерная практика", description: "Оценка разработки, подготовка данных и выбор первого рабочего сценария.", href: "/engineering", label: "Разработка и интеграции" },
+  { id: "platform", title: "Legal AI и автоматизация", description: "Применение ИИ в юридической работе: контроль качества, документы, данные и пилоты.", href: "/legal-ai", label: "Обзор Legal AI" },
+] as const;
 
 export default function GuidesPage() {
   return (
@@ -20,16 +26,37 @@ export default function GuidesPage() {
         <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">База знаний</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-semibold text-white md:text-5xl">
-            Практические руководства по Legal AI
+            Практические руководства AI Verdict
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-slate-200">
-            Без обещаний заменить юриста: разбираем выбор инструмента, процессы, метрики пилота, контроль качества и требования к данным.
+            Материалы по юридическим задачам, инженерной разработке и применению ИИ. В каждом — конкретный вопрос, границы самостоятельной работы и профильный следующий шаг.
           </p>
-          <Link href="/legal-ai" className="mt-6 inline-flex font-semibold text-slate-700 underline decoration-amber-600 underline-offset-4 hover:text-amber-800">
-            Начать с обзора ИИ в юридической сфере →
-          </Link>
         </div>
       </section>
+
+      {groups.map((group) => (
+        <section key={group.id} className="border-b border-slate-800">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-semibold text-white">{group.title}</h2>
+            <p className="mt-3 max-w-3xl text-slate-300">{group.description}</p>
+            <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {guides.filter((guide) => guide.practice === group.id).map((guide) => (
+                <article key={guide.slug} className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900 p-6">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{guide.readingTime}</p>
+                  <h3 className="mt-3 text-xl font-semibold text-white">{guide.title}</h3>
+                  <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-300">{guide.excerpt}</p>
+                  <Link href={`/guides/${guide.slug}`} className="mt-6 font-semibold text-amber-400 hover:text-amber-300">
+                    Читать руководство →
+                  </Link>
+                </article>
+              ))}
+            </div>
+            <Link href={group.href} className="mt-8 inline-flex font-semibold text-amber-400 hover:text-amber-300">
+              {group.label} →
+            </Link>
+          </div>
+        </section>
+      ))}
 
       <section className="border-b border-slate-700 bg-slate-900/70">
         <div className="mx-auto grid max-w-6xl gap-5 px-4 py-9 sm:px-6 md:grid-cols-[1fr_auto] md:items-center lg:px-8">
@@ -49,21 +76,6 @@ export default function GuidesPage() {
           >
             Открыть комментарии →
           </Link>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {guides.map((guide) => (
-            <article key={guide.slug} className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900 p-6">
-              <p className="text-xs uppercase tracking-wide text-slate-400">{guide.readingTime}</p>
-              <h2 className="mt-3 text-xl font-semibold text-white">{guide.title}</h2>
-              <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-300">{guide.excerpt}</p>
-              <Link href={`/guides/${guide.slug}`} className="mt-6 font-semibold text-amber-400 hover:text-amber-300">
-                Читать руководство →
-              </Link>
-            </article>
-          ))}
         </div>
       </section>
     </main>
