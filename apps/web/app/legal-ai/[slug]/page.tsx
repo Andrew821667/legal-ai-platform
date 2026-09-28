@@ -167,6 +167,45 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         </div>
       </section>
 
+      {topic.slug === "prompts-for-lawyers" ? (
+        <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-semibold text-white">Когда одного промпта уже мало</h2>
+          <p className="mt-4 max-w-4xl leading-7 text-slate-300">
+            Шаблон удобен для разовой черновой задачи. Если нужен проверенный договор, постоянный поток документов
+            или поиск по закрытым материалам, выберите подходящий рабочий маршрут.
+          </p>
+          <ul className="mt-8 grid gap-5 md:grid-cols-3">
+            <li className="rounded-xl border border-slate-700 bg-slate-900 p-6">
+              <h3 className="text-xl font-semibold text-amber-300">Проверить один договор</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Юрист разберёт условия, риски и возможные правки. Экспресс-проверка — от 7 900 ₽.
+              </p>
+              <Link href="/legal-help/contracts" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+                Состав юридической проверки →
+              </Link>
+            </li>
+            <li className="rounded-xl border border-slate-700 bg-slate-900 p-6">
+              <h3 className="text-xl font-semibold text-amber-300">Обрабатывать поток договоров</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Посмотрите Contract AI: интерфейс для первичного анализа, замечаний и контроля результата юристом.
+              </p>
+              <Link href="/contract-ai-system" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+                Возможности Contract AI →
+              </Link>
+            </li>
+            <li className="rounded-xl border border-slate-700 bg-slate-900 p-6">
+              <h3 className="text-xl font-semibold text-amber-300">Искать по внутренней базе</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Спроектируем AI/RAG-контур с источниками, ролями и проверяемыми ответами — от 79 000 ₽.
+              </p>
+              <Link href="/engineering/ai-rag" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+                Формат AI/RAG-проекта →
+              </Link>
+            </li>
+          </ul>
+        </section>
+      ) : null}
+
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-2xl font-semibold text-white">Как формулируют этот запрос</h2>
         <p className="mt-3 max-w-4xl leading-7 text-slate-300">
