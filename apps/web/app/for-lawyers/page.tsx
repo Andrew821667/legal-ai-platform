@@ -259,7 +259,15 @@ export default function ForLawyersPage() {
             legal intake и поиск по внутренней базе знаний. Система готовит проверяемый материал, а решение остается
             за юристом.
           </p>
-          <Link href="/legal-ai" className="mt-6 inline-flex font-semibold text-slate-700 underline decoration-amber-600 underline-offset-4 hover:text-amber-800">
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link href={ROUTES.contractAI} className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 transition-colors hover:bg-amber-400">
+              Посмотреть контрактную систему
+            </Link>
+            <a href="#for-lawyers-cta" className="rounded-lg border border-sky-400/70 px-5 py-3 font-semibold text-sky-100 transition-colors hover:border-sky-300 hover:text-white">
+              Обсудить внедрение
+            </a>
+          </div>
+          <Link href="/legal-ai" className="mt-6 inline-flex font-semibold text-sky-300 underline decoration-sky-400 underline-offset-4 hover:text-sky-200">
             Что такое ИИ в юридической сфере и как он применяется →
           </Link>
         </div>
@@ -395,7 +403,7 @@ export default function ForLawyersPage() {
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-800/40">
+      <section id="for-lawyers-cta" className="border-y border-slate-800 bg-slate-800/40 scroll-mt-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <h2 className="text-3xl font-semibold text-white">Как запускаем внедрение</h2>
           <ol className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
