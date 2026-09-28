@@ -24,7 +24,7 @@ export default function YandexMetrika({ counterId }: YandexMetrikaProps) {
       {/* Yandex.Metrika counter */}
       <Script
         id="yandex-metrika"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function(m,e,t,r,i,k,a){
@@ -35,7 +35,7 @@ export default function YandexMetrika({ counterId }: YandexMetrikaProps) {
               }
               k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
             })
-            (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+            (window, document, "script", "https://mc.yandex.ru/metrika/tag.js?id=${counterId}", "ym");
 
             ym(${counterId}, "init", {
               ssr:true,
