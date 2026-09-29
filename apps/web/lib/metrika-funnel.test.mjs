@@ -43,30 +43,30 @@ test("период — по московской дате, как считает
   assert.deepEqual(dates, { date1: "2026-08-28", date2: "2026-09-27" });
 });
 
-test("цели заявки находятся по идентификатору события, остальные — нет", () => {
-  assert.deepEqual(leadGoalIds(GOALS), [101, 102]);
+test("отправки считает по общей цели, не прибавляя стартовый пакет второй раз", () => {
+  assert.deepEqual(leadGoalIds(GOALS), [101]);
   assert.deepEqual(leadGoalIds(null), []);
   assert.deepEqual(leadGoalIds({ goals: [{ id: "x", conditions: [{ url: "lead_form_submit" }] }] }), []);
 });
 
-test("запрос — визиты, люди и достижения целей по источникам, без выборки", () => {
-  const url = new URL(statsUrl(config, { date1: "2026-08-28", date2: "2026-09-27" }, [101, 102]));
-  assert.equal(url.searchParams.get("metrics"), "ym:s:visits,ym:s:users,ym:s:goal101reaches,ym:s:goal102reaches");
+test("запрос — визиты, люди и одна цель заявки по источникам, без выборки", () => {
+  const url = new URL(statsUrl(config, { date1: "2026-08-28", date2: "2026-09-27" }, [101]));
+  assert.equal(url.searchParams.get("metrics"), "ym:s:visits,ym:s:users,ym:s:goal101reaches");
   assert.equal(url.searchParams.get("dimensions"), "ym:s:lastTrafficSource");
   assert.equal(url.searchParams.get("accuracy"), "full");
   assert.equal(url.searchParams.get("ids"), "110733908");
 });
 
-test("разбор: итоги, источники по визитам, отправки формы — сумма целей", () => {
-  const stats = parseStats(DATA, 2, { date1: "a", date2: "b" });
+test("разбор: итоги, источники по визитам, отправки формы без дубля", () => {
+  const stats = parseStats(DATA, 1, { date1: "a", date2: "b" });
   assert.equal(stats.status, "ok");
   assert.equal(stats.visits, 120);
   assert.equal(stats.users, 90);
-  assert.equal(stats.formSubmits, 5);
+  assert.equal(stats.formSubmits, 4);
   assert.deepEqual(
     stats.sources.map((s) => [s.title, s.visits, s.formSubmits]),
     [
-      ["Поиск", 80, 4],
+      ["Поиск", 80, 3],
       ["Прямые заходы", 30, 1],
       ["Новый вид", 10, 0],
     ],
@@ -85,7 +85,7 @@ test("загрузка: токен в заголовке, цели, затем �
   };
   const stats = await loadSiteStats(config, 30, new Date("2026-09-26T10:00:00Z"), fake);
   assert.equal(stats.status, "ok");
-  assert.equal(stats.formSubmits, 5);
+  assert.equal(stats.formSubmits, 4);
   assert.equal(calls.length, 2);
   assert.ok(calls.every((c) => c.auth === "OAuth test-token"));
   assert.ok(!calls.some((c) => c.url.includes("test-token")), "токен не в адресе");
