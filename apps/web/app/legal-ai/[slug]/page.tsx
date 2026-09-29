@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import HeroBackdrop from "@/components/HeroBackdrop";
 import LegalAiRoiCalculator from "@/components/LegalAiRoiCalculator";
+import TrackedServiceLink from "@/components/TrackedServiceLink";
 import { LEGAL_OPERATOR_NAME } from "@/lib/legalProfile";
 import { getLegalAiTopic, LEGAL_AI_REVIEWED_AT, legalAiTopics } from "@/lib/legalAiTopics";
 import { createPageMetadata, SEO_SITE_URL } from "@/lib/seo";
@@ -180,27 +181,27 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Юрист разберёт условия, риски и возможные правки. Экспресс-проверка — от 7 900 ₽.
               </p>
-              <Link href="/legal-help/contracts" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/legal-help/contracts" route="legal_contract_review" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
                 Состав юридической проверки →
-              </Link>
+              </TrackedServiceLink>
             </li>
             <li className="rounded-xl border border-slate-700 bg-slate-900 p-6">
               <h3 className="text-xl font-semibold text-amber-300">Обрабатывать поток договоров</h3>
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Посмотрите Contract AI: интерфейс для первичного анализа, замечаний и контроля результата юристом.
               </p>
-              <Link href="/contract-ai-system" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/contract-ai-system" route="contract_ai" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
                 Возможности Contract AI →
-              </Link>
+              </TrackedServiceLink>
             </li>
             <li className="rounded-xl border border-slate-700 bg-slate-900 p-6">
               <h3 className="text-xl font-semibold text-amber-300">Искать по внутренней базе</h3>
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Спроектируем AI/RAG-контур с источниками, ролями и проверяемыми ответами — от 79 000 ₽.
               </p>
-              <Link href="/engineering/ai-rag" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/engineering/ai-rag" route="engineering_rag_service" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
                 Формат AI/RAG-проекта →
-              </Link>
+              </TrackedServiceLink>
             </li>
           </ul>
         </section>
