@@ -92,6 +92,7 @@ from handlers.service_agreements import handle_admin_callback as handle_service_
 from handlers.service_agreements import handle_client_callback as handle_service_agreement_client_callback
 from handlers.work_acts import handle_admin_callback as handle_work_act_admin_callback
 from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
+from handlers.client_link import link_command
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from telegram_ui import inline_button as InlineKeyboardButton
@@ -1202,6 +1203,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("documents", documents_command))
+    application.add_handler(CommandHandler("link", link_command))
     application.add_handler(CommandHandler("privacy", privacy_command))
     application.add_handler(CommandHandler("transborder_consent", transborder_consent_command))
     application.add_handler(CommandHandler("user_agreement", user_agreement_command))

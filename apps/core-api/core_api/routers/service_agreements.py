@@ -1020,7 +1020,9 @@ def sign_agreement(
 
     item.status = ServiceAgreementStatus.signed
     item.signed_at = _now()
-    item.signer_telegram_user_id = principal.telegram_user_id
+    # Способ подписи — способ входа: после Яндекс ID привязанный Telegram
+    # в подпись не пишется, иначе лист сведений назвал бы её «Telegram-бот».
+    item.signer_telegram_user_id = None if principal.via_email else principal.telegram_user_id
     item.signer_account_id = principal.account_id
     item.signer_email = principal.email if principal.via_email else None
     item.signer_telegram_username = payload.telegram_username

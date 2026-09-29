@@ -27,6 +27,13 @@ const EXACT: Record<string, string> = {
   "Booking not found": "Запись не найдена или время бронирования истекло.",
   "Consultation slot not found": "Время не найдено.",
 
+  // Объединение с Telegram (кабинет, вход через Яндекс ID)
+  invalid_code: "Код не подошёл или истёк. Запросите новый в боте командой /link и введите его в течение 10 минут.",
+  telegram_linked_elsewhere:
+    "Этот Telegram уже объединён с другой учётной записью сайта. Отвяжите его там или напишите нам в бот.",
+  account_has_other_telegram: "К вашей учётной записи уже привязан другой Telegram — сначала отвяжите его.",
+  "Client account not found": "Учётная запись не найдена. Войдите ещё раз.",
+
   // Консультации
   "Consultation slot is taken": "Это время уже заняли — выберите другое.",
   "Booking is already paid": "Оплата уже подтверждена.",

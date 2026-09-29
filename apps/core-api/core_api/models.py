@@ -644,8 +644,8 @@ class ClientAccount(Base):
     """Клиент как учётная запись: подтверждённый email и, если есть, Telegram.
 
     Telegram в России заблокирован, и опознавать клиента только по нему
-    нельзя. Email подтверждён Яндекс ID; Telegram
-    привязывается, когда клиент входит и так.
+    нельзя. Email подтверждён Яндекс ID; Telegram привязывается только с
+    согласия клиента и доказательством владения им (routers/client_auth.py).
     """
 
     __tablename__ = "client_accounts"
@@ -653,10 +653,30 @@ class ClientAccount(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True)
     telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     yandex_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClientLinkCode(Base):
+    """Одноразовый код бота: владелец Telegram разрешает объединить его с учётной записью сайта.
+
+    Код видит только тот, кто написал боту со своего Telegram, — ввод кода в
+    кабинете доказывает владение обоими входами. Хранится хеш; строка живёт до
+    использования или истечения срока.
+    """
+
+    __tablename__ = "client_link_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class DeletionLog(Base):

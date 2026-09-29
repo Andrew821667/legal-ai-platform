@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import { UserRound } from "lucide-react";
 
 import CabinetProfileClient from "@/components/cabinet/CabinetProfileClient";
-import { readClientSession } from "@/lib/client-session-server";
-import { EXTERNAL_LINKS, ROUTES } from "@/lib/links";
+import CabinetTelegramLink from "@/components/cabinet/CabinetTelegramLink";
+import { fetchClientAccount } from "@/lib/client-core";
+import { readClientSession, type ClientSession } from "@/lib/client-session-server";
+import { EXTERNAL_LINKS, leadBotDeepLink, ROUTES } from "@/lib/links";
 
 export const metadata: Metadata = {
   title: "Профиль | Личный кабинет",
@@ -18,6 +20,40 @@ const METHOD_LABEL: Record<string, string> = {
   legacy: "Telegram (виджет)",
   yandex: "Яндекс ID",
 };
+
+function yandexLoginEnabled(): boolean {
+  return Boolean(
+    (process.env.YANDEX_OAUTH_CLIENT_ID || "").trim() && (process.env.YANDEX_OAUTH_CLIENT_SECRET || "").trim(),
+  );
+}
+
+/** Блок «Telegram»: объединить вход через Яндекс ID с Telegram или отвязать. */
+async function TelegramBlock({ session }: { session: ClientSession }) {
+  const accountId = session.accountId ?? session.otherAccount?.accountId ?? null;
+  if (!accountId) {
+    if (!yandexLoginEnabled()) return null;
+    return (
+      <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        Можно входить и через Яндекс ID — без VPN.{" "}
+        <a href="/cabinet/login/yandex?next=/cabinet/profile" className="font-semibold text-amber-700 underline">
+          Войти через Яндекс ID
+        </a>{" "}
+        — и мы предложим объединить входы.
+      </p>
+    );
+  }
+  const account = await fetchClientAccount(accountId);
+  if (!account) return null;
+  if (account.telegram_user_id) {
+    // Вошёл через Telegram, а учётная запись привязана к другому — не наше дело показывать.
+    if (session.telegramUserId && account.telegram_user_id !== session.telegramUserId) return null;
+    return <CabinetTelegramLink mode="linked" username={account.telegram_username} linkedAt={account.telegram_linked_at} />;
+  }
+  if (session.telegramUserId) {
+    return <CabinetTelegramLink mode="sessions" email={account.email} />;
+  }
+  return <CabinetTelegramLink mode="code" email={account.email} botLinkUrl={leadBotDeepLink("link")} />;
+}
 
 export default async function CabinetProfilePage() {
   const session = await readClientSession();
@@ -52,6 +88,10 @@ export default async function CabinetProfilePage() {
         <p className="text-sm text-slate-600">
           Способ входа: <span className="font-medium text-slate-900">{METHOD_LABEL[profile?.method || "oidc"]}</span>
         </p>
+      </div>
+
+      <div className="mt-6">
+        <TelegramBlock session={session} />
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">

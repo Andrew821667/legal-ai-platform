@@ -368,6 +368,10 @@ async def process_pending_start_payload(
                 user=user,
                 intake_id=case_match.group("intake_id"),
             )
+        from .client_link import LINK_START_PAYLOAD, send_link_code
+
+        if payload == LINK_START_PAYLOAD:
+            return await send_link_code(message, user)
         if payload == LEGAL_HELP_START_PAYLOAD:
             from .legal_help import prompt_legal_help_client_type
 

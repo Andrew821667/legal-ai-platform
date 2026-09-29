@@ -146,6 +146,17 @@ class CoreApiBridge:
         telegram_user_id = result.get("telegram_user_id")
         return int(telegram_user_id) if isinstance(telegram_user_id, int) else None
 
+    def issue_link_code(self, *, telegram_user_id: int, telegram_username: str | None) -> dict[str, Any] | None:
+        """Одноразовый код, которым владелец Telegram объединяет его с кабинетом
+        на сайте. None — ядро недоступно; {"linked": True, ...} — уже объединён."""
+        if not self.enabled:
+            return None
+        result = self._post_read(
+            "/api/v1/client-auth/telegram-link-codes",
+            {"telegram_user_id": int(telegram_user_id), "telegram_username": telegram_username or None},
+        )
+        return result if isinstance(result, dict) else None
+
     def _post(
         self,
         path: str,

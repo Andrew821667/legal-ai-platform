@@ -32,7 +32,7 @@ type Summary = {
   client: {
     lead_id?: string | null; name?: string | null; has_cases: boolean;
     /** account — вход через Яндекс ID: дела найдены по почте, не по Telegram. */
-    via?: "account" | "telegram"; email?: string | null;
+    via?: "account" | "telegram"; email?: string | null; telegram_linked?: boolean;
   };
   nda: { signed: boolean; signed_at?: string | null; signer_full_name?: string | null; pdn_consent_at?: string | null };
   cases: Case[]; agreements: Agreement[]; acts: Act[];
@@ -170,8 +170,12 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
       <h2 className="text-2xl font-semibold text-white">{data.client.name ? `${data.client.name}, ваши дела` : "Мои дела"}</h2>
       <p className="mt-1 text-sm text-slate-300">
         {data.client.via === "account"
-          ? `Здесь видны обращения, оставленные с почтой ${data.client.email || "вашего аккаунта Яндекса"}.`
-          : "Здесь видны только обращения, связанные с вашим Telegram-аккаунтом."}
+          ? data.client.telegram_linked
+            ? `Здесь видны обращения из Telegram и оставленные с почтой ${data.client.email || "вашего аккаунта Яндекса"}.`
+            : `Здесь видны обращения, оставленные с почтой ${data.client.email || "вашего аккаунта Яндекса"}.`
+          : data.client.email
+            ? `Здесь видны обращения из Telegram и оставленные с почтой ${data.client.email}.`
+            : "Здесь видны только обращения, связанные с вашим Telegram-аккаунтом."}
       </p>
     </header>
 

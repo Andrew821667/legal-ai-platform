@@ -170,6 +170,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{consent_text}\n\n"
                     "После подтверждения согласия сразу переведу вас в сервис проверки договоров Contract_AI_System."
                 )
+            elif start_payload == "link":
+                consent_text = (
+                    f"{consent_text}\n\n"
+                    "После подтверждения пришлю код для объединения с кабинетом на сайте."
+                )
             elif start_payload == LEGAL_HELP_START_PAYLOAD:
                 consent_text = (
                     f"{consent_text}\n\n"

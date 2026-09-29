@@ -16,6 +16,8 @@ export type ClientSession = {
   telegramUserId: number | null;
   accountId: string | null;
   profile: ClientProfileCookie | null;
+  /** Вошёл через Telegram, а в этом же браузере открыт и вход через Яндекс ID. */
+  otherAccount?: { accountId: string; email: string | null } | null;
 };
 
 /**
@@ -46,5 +48,11 @@ export async function readClientSession(): Promise<ClientSession | null> {
     CLIENT_SESSION_MAX_AGE_SECONDS,
   );
 
-  return { telegramUserId: verified.telegramUserId, accountId: null, profile };
+  const account = openClientAccount(store.get(CLIENT_ACCOUNT_COOKIE)?.value || "", secret);
+  return {
+    telegramUserId: verified.telegramUserId,
+    accountId: null,
+    profile,
+    otherAccount: account ? { accountId: account.accountId, email: account.email } : null,
+  };
 }

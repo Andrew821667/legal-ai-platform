@@ -100,7 +100,11 @@ export function sealClientAccount(session: ClientAccountSession, secret: string,
   );
 }
 
-export function openClientAccount(raw: string, secret: string, now?: number): ClientAccountSession | null {
+export function openClientAccount(
+  raw: string,
+  secret: string,
+  now?: number,
+): (ClientAccountSession & { issuedAt: number }) | null {
   const value = openCookieValue<{ kind?: unknown; aid?: unknown; em?: unknown; nm?: unknown }>(
     raw,
     secret,
@@ -114,5 +118,6 @@ export function openClientAccount(raw: string, secret: string, now?: number): Cl
     accountId: value.aid,
     email: typeof value.em === "string" ? value.em : null,
     name: typeof value.nm === "string" ? value.nm : null,
+    issuedAt: value.iat,
   };
 }

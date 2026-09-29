@@ -690,7 +690,7 @@ def client_action(
             if item.objected_at:
                 raise HTTPException(status_code=409, detail="Resolve objections and issue a new act first")
             item.accepted_at = _now()
-            item.accepted_by_telegram_user_id = principal.telegram_user_id
+            item.accepted_by_telegram_user_id = None if principal.via_email else principal.telegram_user_id
             item.accepted_by_account_id = principal.account_id
             item.acceptance_callback_id = payload.callback_id
             if payload.channel == "miniapp":

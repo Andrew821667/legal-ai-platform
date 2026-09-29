@@ -10,8 +10,13 @@ const secret = "s".repeat(32);
 const id = "0b6f6f0e-8f4a-4d7e-9a61-2f6d1c0a9b11";
 
 test("кука учётной записи: открывается своим секретом, не чужим", () => {
-  const raw = sealClientAccount({ accountId: id, email: "a@ya.ru", name: "Анна" }, secret);
-  assert.deepEqual(openClientAccount(raw, secret), { accountId: id, email: "a@ya.ru", name: "Анна" });
+  const raw = sealClientAccount({ accountId: id, email: "a@ya.ru", name: "Анна" }, secret, 1_000_000);
+  assert.deepEqual(openClientAccount(raw, secret, 1_000_100), {
+    accountId: id,
+    email: "a@ya.ru",
+    name: "Анна",
+    issuedAt: 1_000_000,
+  });
   assert.equal(openClientAccount(raw, "x".repeat(32)), null);
 });
 
