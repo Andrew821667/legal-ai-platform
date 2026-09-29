@@ -23,6 +23,7 @@ from .helpers import notify_admin_new_lead
 from .markup import (
     business_phone_format_text as _business_phone_format_text,
     clear_business_contact_state as _clear_business_contact_state,
+    consultation_choice_markup as _consultation_choice_markup,
     consultation_contact_markup as _consultation_contact_markup,
     contact_visibility_choice_markup as _contact_visibility_choice_markup,
     personal_mode_markup as _personal_mode_markup,
@@ -207,6 +208,28 @@ async def maybe_handle_contact_actions(
             "Не удалось определить пользователя. Нажмите /start и повторите.",
             None,
             action="contact_action_no_user",
+        )
+        return True
+
+    if state.callback_data == "menu_consultation":
+        # Цена и формат — сразу, дальше клиент сам выбирает: записаться с
+        # оплатой на сайте или оставить контакт (телефон либо Telegram).
+        # Раньше кнопка без объяснений просила номер телефона.
+        _clear_business_contact_state(context)
+        context.user_data[BUSINESS_PENDING_CONTACT_KEY] = {
+            "source": "consultation",
+            "lead_magnet_type": "consultation",
+            "notes": "Клиент открыл «Консультация юриста» и оставил контакт для согласования времени.",
+            "pain_point": "Запрос консультации юриста",
+        }
+        await responder.reply_html(
+            content.menu_response_by_key(
+                "menu_consultation",
+                lead=state.lead,
+                selected_profile=state.selected_profile,
+            ),
+            _consultation_choice_markup(),
+            action="menu_consultation_reply",
         )
         return True
 

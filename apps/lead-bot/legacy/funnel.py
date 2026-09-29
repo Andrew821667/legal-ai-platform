@@ -12,14 +12,14 @@ STAGES = ("discover", "diagnose", "qualify", "propose", "handoff")
 _STAGE_INDEX = {name: idx for idx, name in enumerate(STAGES)}
 
 
+# Только явная просьба о человеке. «Консультац», «встреч» и «как начать»
+# отсюда убраны: «нужна консультация по договору аренды» — это вопрос, на
+# который ассистент должен ответить, а не сразу передать диалог команде.
 _HANDOFF_HINTS = (
     "свяжите",
     "поговорить с человеком",
     "живой человек",
-    "консультац",
     "созвон",
-    "встреч",
-    "как начать",
     "когда можем начать",
 )
 
@@ -87,6 +87,12 @@ _FAST_TRACK_HINTS = (
     "готов созвониться",
     "можно созвон",
     "готов обсудить",
+)
+
+# Тексты-заглушки ai_brain при сбое модели или инструмента.
+_ERROR_REPLY_MARKERS = (
+    "произошла ошибка при обработке",
+    "не получилось получить ответ инструмента",
 )
 
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
@@ -213,9 +219,15 @@ def build_stage_context(stage: str, cta_variant: str, cta_shown: bool) -> str:
         lines.append("Цель: предложить один релевантный формат решения и закрыть на действие.")
         if not cta_shown:
             if variant == "A":
-                lines.append("В конце добавь мягкий переход к консультации 30 минут без запроса контактов в тексте.")
+                lines.append(
+                    "В конце добавь мягкий переход к следующему шагу: диагностика автоматизации — 7 900 ₽, "
+                    "засчитывается в бюджет проекта. Без запроса контактов в тексте."
+                )
             else:
-                lines.append("В конце добавь мягкий переход: быстрый аудит процесса + консультация 30 минут, без запроса контактов.")
+                lines.append(
+                    "В конце добавь мягкий переход: быстрый аудит процесса — диагностика автоматизации "
+                    "за 7 900 ₽ (засчитывается в бюджет проекта), без запроса контактов."
+                )
     else:
         lines.append("Цель: подтвердить передачу команде и зафиксировать следующий контакт.")
         lines.append("Ответ должен быть коротким и конкретным.")
@@ -227,12 +239,13 @@ def is_cta_shown(response_text: str, variant: str) -> bool:
     text = (response_text or "").lower()
     if variant == "B":
         return (
-            ("аудит" in text and "консультац" in text)
+            ("аудит" in text and ("консультац" in text or "диагностик" in text))
             or ("быстрый аудит" in text)
             or ("мини-аудит" in text and ("email" in text or "телефон" in text))
         )
     return (
         ("консультац" in text and "30" in text)
+        or ("диагностик" in text and "7 900" in text)
         or ("созвон" in text and "консультац" in text)
         or ("мини-аудит" in text and ("email" in text or "телефон" in text))
     )
@@ -272,10 +285,10 @@ def _first_qualification_question(lead_data: Optional[Dict]) -> str:
             "4) 500K+"
         )
     if not (lead_data.get("email") or lead_data.get("phone")):
-        return "Если готовы к следующему шагу, можем перейти к консультации 30 минут по вашему кейсу."
+        return "Если готовы к следующему шагу, можем обсудить ваш процесс с командой."
 
     return (
-        "Если ок, следующий шаг: мини-аудит процесса + консультация 30 минут.\n"
+        "Если ок, следующий шаг: диагностика процесса — 7 900 ₽, засчитывается в бюджет проекта.\n"
         "Подойдет такой формат?"
     )
 
@@ -295,20 +308,14 @@ def enforce_leadgen_response(
     if not text:
         return text
 
-    normalized_stage = normalize_stage(stage)
-    user_lower = (user_message or "").lower()
-    text_lower = text.lower()
+    # Заглушка при сбое ИИ: вопрос квалификации к ней только сбивает с толку.
+    if _contains_any(text.lower(), _ERROR_REPLY_MARKERS):
+        return text
 
+    normalized_stage = normalize_stage(stage)
     additions: list[str] = []
     has_structured_options = bool(re.search(r"(^|\n)\s*[1-9][).]\s", text))
     has_question = "?" in text
-    pain_signal = _contains_any(user_lower, _PAIN_HINTS)
-
-    if pain_signal and "типич" not in text_lower and "узкое место" not in text_lower:
-        additions.append(
-            "Это типичный сигнал разрозненного процесса: часть заявок теряется между каналами, "
-            "а контроль сроков и статусов становится непрозрачным."
-        )
 
     if normalized_stage in ("discover", "diagnose") and not has_structured_options and not has_question:
         additions.append(
