@@ -8,7 +8,7 @@ import HeroBackdrop from "@/components/HeroBackdrop";
 const pageTitle = "ИИ для юристов: инструменты, нейросети и сценарии";
 const pageDescription =
   "ИИ для юристов и юридических отделов: как выбрать инструмент для договоров, документов, правового поиска, RAG, судебной работы и безопасного пилота.";
-const reviewedAt = "2026-09-11";
+const reviewedAt = "2026-09-29";
 
 export const metadata: Metadata = createPageMetadata({
   title: pageTitle,
@@ -354,6 +354,43 @@ export default function ForLawyersPage() {
               <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section id="internal-contract-analysis" className="scroll-mt-24 border-y border-slate-800 bg-slate-800/40">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-800">Внутренняя проверка Contract AI</p>
+          <h2 className="mt-3 text-3xl font-semibold text-white">Что мы изменили после неудачного разбора договора</h2>
+          <p className="mt-5 max-w-4xl leading-7 text-slate-300">
+            В ранней версии анализатор видел короткий фрагмент пункта без сведений о типе договора, сторонах и предмете.
+            На внутреннем тесте некоторые пункты получали оценку 0 из 10, а вместо объяснения риска — пустой или общий ответ.
+            Такой результат нельзя передать юристу как готовую проверку.
+          </p>
+          <div className="mt-8 grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+              <h3 className="text-xl font-semibold text-amber-300">Что исправили</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                К анализируемому фрагменту добавили контекст договора: его тип, стороны и предмет. Результат должен
+                указывать исходный пункт и конкретное замечание. Юрист отдельно подтверждает вывод или отклоняет его.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+              <h3 className="text-xl font-semibold text-amber-300">Как проверяем на примере</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                В синтетическом договоре поставки пункт о форс-мажоре освобождает стороны от ответственности, но не
+                описывает уведомление и последствия длительного события. Это повод для вопроса юристу, а не
+                автоматическая правка: значимость условия зависит от конкретной сделки.
+              </p>
+            </div>
+          </div>
+          <p className="mt-5 max-w-4xl text-sm leading-6 text-slate-400">
+            Это случай из разработки и контрольный пример на тестовом документе, не клиентский кейс и не заявка на
+            измеренную точность системы. Для своего договора нужен отдельный анализ с проверкой специалистом.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-5 text-sm font-semibold">
+            <Link href={ROUTES.contractAI} className="text-amber-300 hover:text-amber-200">Посмотреть Contract AI →</Link>
+            <Link href="/legal-help/contracts" className="text-sky-800 hover:text-sky-900">Заказать проверку договора юристом →</Link>
+          </div>
         </div>
       </section>
 
