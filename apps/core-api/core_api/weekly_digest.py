@@ -130,6 +130,38 @@ def build(db: Session, now: datetime) -> str:
         tail = f", из них просрочено {len(overdue)}" if overdue else ""
         lines.append(f"Ждут оплаты: {len(open_acts)} на {_rub(sum(a.amount_minor for a in open_acts))}{tail}")
 
+    # Деньги по источникам — чтобы видеть, какой вход приносит оплату, а не
+    # только клиентов. Консультации (запись с сайта) — в той же сумме.
+    revenue = practice_funnel.revenue_by_source(db, since=since, until=until)
+    if revenue["total_minor"]:
+        parts = ", ".join(
+            f"{titles[key].lower()} — {_rub(minor)}"
+            for key, _ in practice_funnel.SOURCES
+            if (minor := revenue["by_source"].get(key))
+        )
+        lines.append(f"Выручка: {_rub(revenue['total_minor'])} ({parts})")
+    consultations = revenue["consultations"]
+    if consultations["count"]:
+        lines.append(f"Консультаций оплачено: {consultations['count']} на {_rub(consultations['minor'])}")
+
+    # Допродажи — допсоглашения к действующим договорам.
+    extra_count, extra_minor = db.execute(
+        select(func.count(), func.coalesce(func.sum(ServiceAgreement.amount_minor), 0))
+        .where(ServiceAgreement.parent_agreement_id.is_not(None))
+        .where(_not_archived_agreement())
+        .where(ServiceAgreement.status == ServiceAgreementStatus.signed)
+        .where(ServiceAgreement.signed_at >= since, ServiceAgreement.signed_at < until)
+    ).one()
+    if extra_count:
+        lines.append(f"Допсоглашений подписано: {extra_count}" + (f" на {_rub(int(extra_minor))}" if extra_minor else ""))
+
+    variants = practice_funnel.cta_variants(db, since=since, until=until)
+    if variants:
+        ab = "; ".join(
+            f"{name} — {row['leads']} → обращений {row['intakes']}" for name, row in sorted(variants.items())
+        )
+        lines.append(f"Призыв в боте (A/B): {ab}")
+
     tasks = []
     for section in today(identity=None, db=db)["sections"]:
         count = sum(1 for item in section["items"] if not item.get("is_test"))

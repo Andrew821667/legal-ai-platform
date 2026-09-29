@@ -8,6 +8,7 @@ import { CalendarClock } from "lucide-react";
 
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { groupByDay, timeLabel, whenLabel, type FreeSlot } from "@/lib/consultation";
+import { CONSULTATION_OFFER_PATH } from "@/lib/consultation-offer";
 import { getLeadAttribution, trackLeadConversion } from "@/lib/lead-attribution";
 import { formatRub } from "@/lib/money";
 
@@ -32,6 +33,7 @@ export default function ConsultationBooking() {
   const [contact, setContact] = useState("");
   const [description, setDescription] = useState("");
   const [consent, setConsent] = useState(false);
+  const [offerAccepted, setOfferAccepted] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [challengeRequired, setChallengeRequired] = useState(CHALLENGE_MODE === "always");
   const [challengeToken, setChallengeToken] = useState("");
@@ -71,6 +73,7 @@ export default function ConsultationBooking() {
     if (!selected) return setError("Выберите время.");
     if (description.trim().length < 20) return setError("Опишите вопрос хотя бы в нескольких предложениях.");
     if (!consent) return setError("Нужно согласие на обработку персональных данных.");
+    if (!offerAccepted) return setError("Подтвердите, что ознакомились с офертой на консультацию.");
     if (challengeRequired && TURNSTILE_SITE_KEY && !challengeToken) {
       return setError("Подтвердите, что заявку отправляет человек.");
     }
@@ -89,6 +92,7 @@ export default function ConsultationBooking() {
           consultation_slot_id: selected.slot_id,
           source_context: "consultation_booking",
           consentAccepted: consent,
+          offerAccepted,
           turnstile_token: challengeToken,
           _started_at_ms: startedAtMs,
           [HONEYPOT_FIELD_NAME]: honeypot,
@@ -212,6 +216,21 @@ export default function ConsultationBooking() {
             <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1" />
             <span>
               <PdConsentText linkClassName="text-amber-300 underline underline-offset-2" />
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={offerAccepted}
+              onChange={(event) => setOfferAccepted(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              Ознакомлен с{" "}
+              <Link href={CONSULTATION_OFFER_PATH} target="_blank" className="text-amber-300 underline underline-offset-2">
+                офертой на консультацию
+              </Link>{" "}
+              и принимаю её условия; договор заключается оплатой.
             </span>
           </label>
           {challengeRequired && TURNSTILE_SITE_KEY ? (

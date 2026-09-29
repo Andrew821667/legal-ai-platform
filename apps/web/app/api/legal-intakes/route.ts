@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import { CONSULTATION_OFFER_VERSION } from "@/lib/consultation-offer";
 import {
   evaluateLeadSubmission,
   getLeadSecurityConfig,
@@ -15,11 +16,11 @@ import { PD_CONSENT_VERSION } from "@/lib/pd-consent";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
+// Публичный маршрут — только ключ бота: запасной ключ администратора открыл бы
+// при сбое конфигурации всё ядро (см. аудит периметра).
 const CORE_API_BOT_KEY =
   process.env.CORE_API_BOT_KEY ||
   process.env.API_KEY_BOT ||
-  process.env.CORE_API_ADMIN_KEY ||
-  process.env.API_KEY_ADMIN ||
   "";
 
 const clientTypes = new Set(["company", "entrepreneur", "individual", "unknown"]);
@@ -53,6 +54,7 @@ type IntakeBody = {
   /** Запись на консультацию: время бронируется вместе с обращением. */
   consultation_slot_id?: string;
   consentAccepted?: boolean;
+  offerAccepted?: boolean;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -119,6 +121,10 @@ export async function POST(request: NextRequest) {
   if (payload.consentAccepted !== true) {
     return NextResponse.json({ detail: "Нужно согласие на обработку персональных данных." }, { status: 400 });
   }
+  // Запись с оплатой — договор по оферте: без ознакомления с ней не записываем.
+  if (slotId && payload.offerAccepted !== true) {
+    return NextResponse.json({ detail: "Подтвердите, что ознакомились с офертой на консультацию." }, { status: 400 });
+  }
 
   const cfg = getLeadSecurityConfig();
   const normalizedContact = normalizeLeadContact(contact);
@@ -131,6 +137,14 @@ export async function POST(request: NextRequest) {
   );
   recordLeadAttempt(protection, cfg, nowMs);
 
+  // Повтор той же записи на то же время (двойной клик): «принято» без ссылки на
+  // бронь оставило бы клиента без записи — просим открыть бронь или выбрать заново.
+  if (slotId && protection.action === "duplicate") {
+    return NextResponse.json(
+      { detail: "Эта запись уже отправлена. Откройте страницу брони или выберите время заново.", slot_taken: true },
+      { status: 409 },
+    );
+  }
   if (protection.action === "silent_drop" || protection.action === "duplicate") {
     return NextResponse.json({
       ok: true,
@@ -162,6 +176,7 @@ export async function POST(request: NextRequest) {
     `ip_hash=${ipHash}`,
     `ua_hash=${uaHash}`,
     starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
+    slotId ? `offer_version=${CONSULTATION_OFFER_VERSION}` : undefined,
   ].filter(Boolean).join("\n");
 
   const coreResponse = await fetch(`${CORE_API_URL}/api/v1/legal-intakes`, {

@@ -16,6 +16,7 @@ from core_api.config import get_settings
 from core_api.db import SessionLocal
 from core_api.models import (
     ClientNotice,
+    ConsultationSlot,
     Lead,
     LeadSource,
     LegalIntake,
@@ -130,3 +131,59 @@ def test_queued_once_a_week(monkeypatch) -> None:
     monkeypatch.setenv("WEEKLY_DIGEST_ENABLED", "false")
     get_settings.cache_clear()
     assert weekly_digest.maybe_queue(monday_morning + timedelta(days=7)) == {"skipped": "disabled"}
+
+
+def test_digest_shows_money_by_source_upsell_and_ab() -> None:
+    # Отдельная неделя в будущем — чтобы суммы не смешивались с данными других тестов.
+    now = datetime(2031, 1, 15, 12, tzinfo=MSK)
+    last_week = weekly_digest.week_start(now) - timedelta(days=5)
+    created: list[str] = []
+    slot_id = None
+    db = SessionLocal()
+    try:
+        tg = 9_700_000_000 + int(uuid4().hex[:5], 16)
+        site = Lead(name="С сайта", contact="+79990000000", source=LeadSource.website_form, created_at=last_week)
+        bot_a = Lead(
+            name="Вариант A", contact="@a", telegram_user_id=tg, source=LeadSource.telegram_bot,
+            cta_variant="A", created_at=last_week,
+        )
+        bot_b = Lead(
+            name="Вариант B", contact="@b", telegram_user_id=tg + 1, source=LeadSource.telegram_bot,
+            cta_variant="B", created_at=last_week,
+        )
+        db.add_all([site, bot_a, bot_b])
+        db.flush()
+        created += [str(site.id), str(bot_a.id), str(bot_b.id)]
+        db.add(LegalIntake(lead_id=bot_a.id, description="Обращение варианта A.", status=LegalIntakeStatus.accepted))
+        main = _agreement(site.id, None, amount_minor=10_000_000)
+        db.add(main)
+        db.flush()
+        # Допсоглашение к действующему договору — допродажа недели.
+        db.add(_agreement(site.id, None, parent_agreement_id=main.id, amount_minor=2_000_000, signed_at=last_week))
+        db.add(
+            WorkAct(
+                act_number=f"AC-RV-{uuid4().hex[:6].upper()}", agreement_id=main.id, lead_id=site.id,
+                description_text="Работа", amount_minor=5_000_000, status=WorkActStatus.paid,
+                sent_at=last_week, paid_at=last_week,
+            )
+        )
+        slot = ConsultationSlot(
+            starts_at=last_week, status="confirmed", lead_id=bot_a.id, price_minor=490_000, confirmed_at=last_week,
+        )
+        db.add(slot)
+        db.commit()
+        slot_id = slot.id
+
+        text = weekly_digest.build(db, now)
+    finally:
+        if slot_id is not None:
+            db.execute(delete(ConsultationSlot).where(ConsultationSlot.id == slot_id))
+            db.commit()
+        db.close()
+    try:
+        assert "Выручка: 54 900 ₽ (форма на сайте — 50 000 ₽, бот напрямую — 4 900 ₽)" in text
+        assert "Консультаций оплачено: 1 на 4 900 ₽" in text
+        assert "Допсоглашений подписано: 1 на 20 000 ₽" in text
+        assert "Призыв в боте (A/B): A — 1 → обращений 1; B — 1 → обращений 0" in text
+    finally:
+        _cleanup([], created)

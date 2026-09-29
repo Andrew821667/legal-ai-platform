@@ -44,7 +44,7 @@ router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
 @router.get("/clients/{lead_id}")
 def client_card(
     lead_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Всё по клиенту в одном ответе.

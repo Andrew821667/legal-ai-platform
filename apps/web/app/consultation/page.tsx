@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import ConsultationBooking from "@/components/consultation/ConsultationBooking";
+import { CONSULTATION_OFFER_PATH } from "@/lib/consultation-offer";
 import { createPageMetadata } from "@/lib/seo";
 import { starterOffers } from "@/lib/starter-offers";
 import { isLightOpsTheme } from "@/lib/visualTheme";
@@ -43,10 +44,18 @@ export default function ConsultationPage() {
             <li>Консультация — до 60 минут онлайн (видеосвязь или телефон) и короткий письменный план после неё.</li>
             <li>Время закрепляется за вами на время оплаты; запись подтверждается, когда юрист получит оплату.</li>
             <li>Если юрист не сможет провести консультацию, он предложит другое время или вернёт оплату полностью.</li>
-            <li>Перенести консультацию по вашей просьбе можно не позднее чем за 24 часа до начала.</li>
+            <li>Перенос консультации по вашей просьбе — по согласованию с юристом.</li>
+            <li>До начала консультации от неё можно отказаться и вернуть оплату — условия в оферте.</li>
             <li>{offer.note}</li>
             <li>После оплаты юрист направит чек «Мой налог».</li>
           </ul>
+          <p className="mt-3">
+            Полные условия —{" "}
+            <Link href={CONSULTATION_OFFER_PATH} className="text-amber-300 underline underline-offset-2">
+              в оферте на консультацию
+            </Link>
+            .
+          </p>
           <p className="mt-3">
             Если вопрос требует подготовки документов или представительства, юрист предложит договор отдельно. Общий
             порядок работы — на странице{" "}

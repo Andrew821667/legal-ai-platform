@@ -54,6 +54,8 @@ jobs:
           probe "https://ai-verdict.ru/" 200 || true
           probe "https://ai-verdict.ru/api/health" 200 || true
           probe "https://ai-verdict.ru/api/client/summary" 401 || true
+          # Такт ядра (напоминания, сводка, проверка бэкапа) дёргает бот: сайт жив, а задачи стоят.
+          probe "https://ai-verdict.ru/api/health/tick" 200 || true
           if [ -n "$problems" ]; then
             { echo "problems<<EOF"; printf '%s\n' "$problems"; echo "EOF"; } >> "$GITHUB_OUTPUT"
             echo "down=true" >> "$GITHUB_OUTPUT"
@@ -71,7 +73,7 @@ jobs:
         run: |
           text=""
           if [ "$DOWN" = "true" ] && [ "$PREVIOUS" = "success" ]; then
-            text="ai-verdict.ru недоступен снаружи (проверка $(date -u -d '+3 hours' '+%H:%M') МСК):${PROBLEMS}"$'\n\n'"Проверьте Mac mini: питание, интернет, docker."
+            text="ai-verdict.ru: проблема (проверка $(date -u -d '+3 hours' '+%H:%M') МСК):${PROBLEMS}"$'\n\n'"Проверьте Mac mini: питание, интернет, docker. Если не отвечает только /api/health/tick — не работает бот-ассистент (legal-ai-lead-bot), который запускает такт ядра."
           elif [ "$DOWN" = "false" ] && [ "$PREVIOUS" = "failure" ]; then
             text="ai-verdict.ru снова доступен ($(date -u -d '+3 hours' '+%H:%M') МСК)."
           fi

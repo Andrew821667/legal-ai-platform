@@ -73,6 +73,12 @@ class Config:
         # эмбеддингам нужен свой адрес, а не общий с чатом — иначе запрос эмбеддинга
         # уходит на DeepSeek и падает 404 на каждом сообщении (было так до 16.09).
         self.EMBEDDING_BASE_URL: str = os.getenv('EMBEDDING_BASE_URL', 'https://api.openai.com/v1').strip()
+        # RAG по «похожим диалогам» подмешивал в промпт переписки других
+        # клиентов — выключен (ai_brain._rag_context_for). База знаний компании
+        # работает независимо от этого флага.
+        self.RAG_SIMILAR_DIALOGS_ENABLED: bool = os.getenv(
+            'RAG_SIMILAR_DIALOGS_ENABLED', 'false'
+        ).strip().lower() in ('1', 'true', 'yes')
         self.EMBEDDING_MODEL: str = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small').strip()
         # OpenAI блокирует запросы с российских IP (403
         # unsupported_country_region_territory) — с хоста прод-сервера
@@ -279,6 +285,10 @@ class Config:
         # Запись на платную консультацию по времени (сайт, /consultation).
         self.CONSULTATION_BOOKING_URL: str = os.getenv(
             'CONSULTATION_BOOKING_URL', 'https://ai-verdict.ru/consultation'
+        ).strip()
+        # Платный первый шаг инженерной практики (сайт).
+        self.AUTOMATION_DIAGNOSTIC_URL: str = os.getenv(
+            'AUTOMATION_DIAGNOSTIC_URL', 'https://ai-verdict.ru/engineering/automation-diagnostic'
         ).strip()
         self.PRIVACY_POLICY_URL: str = os.getenv('PRIVACY_POLICY_URL', 'https://ai-verdict.ru/privacy')
         self.TRANSBORDER_CONSENT_URL: str = os.getenv(
