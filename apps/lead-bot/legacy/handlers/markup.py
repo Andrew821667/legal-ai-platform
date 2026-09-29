@@ -14,7 +14,6 @@ from .constants import (
     build_admin_reply_menu,
     build_client_reply_menu,
     CONSENT_PDN_MENU,
-    CONSENT_TRANSBORDER_MENU,
     CONSULTATION_CTA_MENU,
     DOCUMENTS_MENU,
     PERSONAL_MODE_RETURN_MENU,
@@ -24,6 +23,7 @@ from .constants import (
     BUSINESS_AWAITING_CONTACT_SOURCE_KEY,
     BUSINESS_PENDING_CONTACT_KEY,
     append_inline_url_row,
+    build_consultation_cta_menu,
     build_quick_nav_menu,
     build_start_inline_menu,
     build_workspace_inline_menu,
@@ -38,12 +38,8 @@ def pdn_consent_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSENT_PDN_MENU)
 
 
-def transborder_consent_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
-
-
-def consultation_cta_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSULTATION_CTA_MENU)
+def consultation_cta_markup(intent: str | None = None) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(build_consultation_cta_menu(intent) if intent else CONSULTATION_CTA_MENU)
 
 
 def documents_markup() -> InlineKeyboardMarkup:
@@ -53,7 +49,7 @@ def documents_markup() -> InlineKeyboardMarkup:
 WEB_OPEN_LABELS = {
     "contract_ai": "Открыть Contract AI",
     "privacy": "Открыть политику ПД",
-    "transborder": "Открыть условия передачи",
+    "transborder": "Открыть страницу об обезличивании",
     "user_agreement": "Открыть соглашение",
     "ai_policy": "Открыть политику ИИ",
     "marketing_consent": "Открыть согласие на рассылки",
@@ -241,6 +237,16 @@ def contact_visibility_choice_markup() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("💬 Связаться в Telegram", callback_data="menu_contact_telegram_only")],
         ]
     )
+
+
+def consultation_choice_markup() -> InlineKeyboardMarkup:
+    """«Консультация юриста»: записаться с оплатой на сайте или оставить контакт."""
+    rows = []
+    booking_url = getattr(config, "CONSULTATION_BOOKING_URL", "")
+    if booking_url:
+        rows.append([InlineKeyboardButton("📅 Записаться к юристу — 4 900 ₽", url=booking_url)])
+    rows.extend(list(row) for row in contact_visibility_choice_markup().inline_keyboard)
+    return InlineKeyboardMarkup(rows)
 
 
 def offer_profile_markup(selected_profile: str | None = None) -> InlineKeyboardMarkup:

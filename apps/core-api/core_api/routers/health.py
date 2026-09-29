@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 
 import psutil
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from core_api import core_tick
 from core_api.auth import get_api_key_identity
 from core_api.db import get_db
 from core_api.models import Scope
@@ -32,6 +34,16 @@ def _has_ops_scope(request: Request, db: Session) -> bool:
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/health/tick")
+def health_tick(db: Session = Depends(get_db)) -> JSONResponse:
+    """Идёт ли такт ядра (напоминания, сводка, проверка бэкапа) — для внешнего мониторинга.
+
+    Только «да/нет»: какие шаги упали, видно в рабочем месте и логах, не снаружи.
+    """
+    fresh = core_tick.is_fresh(db)
+    return JSONResponse({"ok": fresh}, status_code=200 if fresh else 503)
 
 
 @router.get("/health/detailed")

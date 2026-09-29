@@ -376,6 +376,8 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
             "urgency": _LEGAL_URGENCY_LABELS[item.urgency.value],
             "deadline": item.deadline,
             "region": item.region,
+            # Для обезличивания перед моделью: имя и организация клиента.
+            "known_names": [value for value in (lead.name, lead.company) if value],
         }
         lines.append(f"\nID: {item.id}")
         text = "\n".join(lines)

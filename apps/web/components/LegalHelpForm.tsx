@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import PdConsentText from "@/components/PdConsentText";
 import { AlertTriangle, Send } from "lucide-react";
 
 import TurnstileWidget from "@/components/TurnstileWidget";
@@ -307,8 +307,7 @@ export default function LegalHelpForm({
               className="mt-1 h-4 w-4 rounded border-slate-600 text-amber-500"
             />
             <span>
-              Я согласен на обработку данных для рассмотрения обращения и связи со мной. Подробнее в{" "}
-              <Link href="/privacy" className="text-amber-300 underline">политике конфиденциальности</Link>.
+              <PdConsentText linkClassName="text-amber-300 underline" />
             </span>
           </label>
 

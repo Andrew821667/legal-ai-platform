@@ -8,6 +8,7 @@ import PracticeIntersection from "@/components/PracticeIntersection";
 import ProductProof from "@/components/ProductProof";
 import ClientReviews from "@/components/ClientReviews";
 import { isLightOpsTheme } from "@/lib/visualTheme";
+import { starterOffers } from "@/lib/starter-offers";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata({
@@ -113,7 +114,31 @@ export default function Home() {
             Разбираем действующий процесс, находим ручные потери и собираем рабочее решение: от правил и маршрутов
             согласования до AI, интерфейсов и интеграций. Отдельные юридические и программные задачи тоже берем в работу.
           </p>
-          <div className="mt-7 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+          {/* Два платных входа с ценой: человеку с правовой задачей не нужно
+              искать запись через раздел об автоматизации. */}
+          <div className="mt-7 grid max-w-3xl gap-3 sm:grid-cols-2">
+            <Link
+              href="/consultation"
+              className="rounded-xl border border-amber-500/60 bg-slate-900/70 p-4 transition-colors hover:border-amber-400"
+            >
+              <span className="block text-sm font-semibold text-amber-300">Нужен юрист</span>
+              <span className="mt-1 block font-semibold text-white">
+                Консультация онлайн — {starterOffers.legal_consultation.price}
+              </span>
+              <span className="mt-1 block text-sm text-slate-300">До 60 минут и письменный план. Время выбираете сами.</span>
+            </Link>
+            <Link
+              href={ROUTES.automationDiagnostic}
+              className="rounded-xl border border-slate-600 bg-slate-900/70 p-4 transition-colors hover:border-amber-400"
+            >
+              <span className="block text-sm font-semibold text-amber-300">Автоматизация или разработка</span>
+              <span className="mt-1 block font-semibold text-white">
+                Диагностика процесса — {starterOffers.engineering_diagnostic.price}
+              </span>
+              <span className="mt-1 block text-sm text-slate-300">Технический план; стоимость засчитывается в проект.</span>
+            </Link>
+          </div>
+          <div className="mt-5 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <a
               href="#lead-form"
               className="w-full rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 transition-colors hover:bg-amber-400 sm:w-auto"

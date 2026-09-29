@@ -23,7 +23,6 @@ from .markup import (
     profile_panel_markup as _profile_panel_markup,
     quick_nav_markup_for as _quick_nav_markup_for,
     start_markup_for as _start_markup_for,
-    transborder_consent_markup as _transborder_consent_markup,
     web_open_markup as _web_open_markup,
     workspace_markup_for as _workspace_markup_for,
 )
@@ -303,28 +302,17 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
 
 
 async def transborder_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /transborder_consent - условия и управление согласием."""
+    """Команда /transborder_consent — как данные обезличиваются перед сервисами ИИ.
+
+    Согласия на трансграничную передачу больше нет: сервисы ИИ получают только
+    обезличенный текст (pii.py). Команда оставлена — на неё ссылаются документы.
+    """
     _ = context
-    user = update.effective_user
-    user_data = database.db.get_local_user_by_telegram_id(user.id)
-    if not user_data:
-        await utils.safe_reply_text(update.message, "Сначала выполните /start.", action="transborder_no_user")
-        return
-    consent_state = database.db.get_user_consent_state(user_data["id"])
-    message = content.transborder_policy_text()
-    if bool(consent_state.get("transborder_consent")):
-        await utils.safe_reply_html(
-            update.message,
-            f"{message}\n\n<b>Статус:</b> ✅ согласие активно.",
-            reply_markup=_web_open_markup("transborder"),
-            action="transborder_status_active",
-        )
-        return
     await utils.safe_reply_html(
         update.message,
-        f"{message}\n\n<b>Статус:</b> ❌ согласие не дано.",
-        reply_markup=_transborder_consent_markup(),
-        action="transborder_status_missing",
+        content.transborder_policy_text(),
+        reply_markup=_web_open_markup("transborder"),
+        action="transborder_info",
     )
 
 

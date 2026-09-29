@@ -912,3 +912,22 @@ def test_human_style_gate_allows_specific_editorial_prose() -> None:
     )
 
     assert reason is None
+
+
+def test_every_cta_says_what_to_send() -> None:
+    # «Обсудите с ассистентом» без предмета разговора читатель пропускал:
+    # в каждом призыве — что прислать или описать.
+    from news.llm_writer import _CTA_LIBRARY
+
+    for level, templates in _CTA_LIBRARY.items():
+        for pillar, template in templates.items():
+            assert any(verb in template for verb in ("пришлите", "опишите", "перечислите")), (level, pillar)
+            assert "{assistant_link}" in template, (level, pillar)
+
+
+def test_writer_prompt_is_multiprofile() -> None:
+    from prompts.news import NEWS_FOOTER_DECISION_SYSTEM_PROMPT, NEWS_WRITER_SYSTEM_PROMPT
+
+    assert "многопрофильный" in NEWS_WRITER_SYSTEM_PROMPT
+    assert "права РФ" in NEWS_WRITER_SYSTEM_PROMPT
+    assert "что читатель может прислать" in NEWS_FOOTER_DECISION_SYSTEM_PROMPT

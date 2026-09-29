@@ -632,7 +632,7 @@ def assistant_turn(
     history = payload.get("history")
     base_questions = payload.get("base_questions")
     turn = next_turn(
-        intake={"description": item.description},
+        intake={"description": item.description, "known_names": client_names(db, item.lead_id)},
         history=history if isinstance(history, list) else [],
         base_questions=[str(q) for q in base_questions] if isinstance(base_questions, list) else [],
         area_label=str(payload.get("area_label") or "требует уточнения"),
@@ -656,3 +656,9 @@ def assistant_turn(
         "prompt_tokens": turn.prompt_tokens,
         "completion_tokens": turn.completion_tokens,
     }
+
+
+def client_names(db: Session, lead_id) -> list[str]:
+    """Имя и организация клиента — чтобы обезличить их в тексте перед моделью."""
+    lead = db.get(Lead, lead_id) if lead_id else None
+    return [value for value in (lead.name, lead.company) if value] if lead else []

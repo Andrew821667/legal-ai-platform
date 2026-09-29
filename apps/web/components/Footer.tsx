@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import CookieSettingsLink from "@/components/CookieSettingsLink";
 import { EXTERNAL_LINKS, ROUTES, contractAIEntryHref, contractAIEntryIsExternal, leadBotDeepLink } from "@/lib/links";
 import { PLATFORM_PARTS } from "@/lib/platformParts";
 import LegalDisclaimer from "@/components/LegalDisclaimer";
@@ -9,6 +11,9 @@ import {
   LEGAL_CONTACT_PHONE,
   LEGAL_CONTACT_PHONE_HREF,
   LEGAL_COPYRIGHT_YEAR,
+  LEGAL_OPERATOR_INN,
+  LEGAL_OPERATOR_NAME,
+  LEGAL_OPERATOR_STATUS,
   LEGAL_UPDATED_AT,
 } from "@/lib/legalProfile";
 
@@ -259,8 +264,8 @@ export default function Footer() {
         <div className="border-t border-slate-800 pt-8 pb-6">
           <div className="text-center text-sm text-slate-400 leading-relaxed max-w-5xl mx-auto space-y-3">
             <p>
-              <strong className="text-slate-400">{LEGAL_BRAND}</strong>: внедрение AI в юридическую функцию,
-              автоматизация договорных и типовых правовых процессов, проектирование legal ops контуров.
+              <strong className="text-slate-400">{LEGAL_BRAND}</strong>: юридическая помощь по праву РФ,
+              автоматизация юридической работы и разработка прикладных систем с ИИ.
             </p>
             <LegalDisclaimer className="mx-auto max-w-4xl !text-slate-400" />
             <div className="pt-2 flex items-center justify-center gap-4 text-xs">
@@ -276,7 +281,13 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-400 text-sm">© {LEGAL_COPYRIGHT_YEAR} {LEGAL_BRAND}. Все права защищены.</p>
+          <div className="text-center text-sm text-slate-400 md:text-left">
+            <p>© {LEGAL_COPYRIGHT_YEAR} {LEGAL_BRAND}. Все права защищены.</p>
+            {/* Реквизиты исполнителя — рядом с ценами и офертой их ищут первыми. */}
+            <p className="mt-1 text-xs">
+              {LEGAL_OPERATOR_NAME}, плательщик НПД ({LEGAL_OPERATOR_STATUS}), ИНН {LEGAL_OPERATOR_INN}
+            </p>
+          </div>
           <div className="flex max-w-full flex-wrap justify-center gap-x-6 gap-y-3 text-sm md:justify-end">
             <Link href="/privacy" className="text-slate-400 hover:text-amber-500 transition-colors">
               Политика конфиденциальности
@@ -284,12 +295,16 @@ export default function Footer() {
             <Link href="/terms" className="text-slate-400 hover:text-amber-500 transition-colors">
               Условия использования
             </Link>
+            <Link href="/consultation/offer" className="text-slate-400 hover:text-amber-500 transition-colors">
+              Оферта на консультацию
+            </Link>
             <Link href="/user-agreement" className="text-slate-400 hover:text-amber-500 transition-colors">
               Соглашение
             </Link>
             <Link href="/ai-policy" className="text-slate-400 hover:text-amber-500 transition-colors">
               AI policy
             </Link>
+            <CookieSettingsLink className="text-slate-400 hover:text-amber-500 transition-colors" />
           </div>
         </div>
       </div>

@@ -39,7 +39,7 @@ router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
 def clients(
     search: str = Query("", max_length=120),
     limit: int = Query(50, ge=1, le=200),
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """Клиенты с обращениями — новые первыми.
@@ -197,7 +197,7 @@ def clients(
 @router.get("/clients/{lead_id}/history")
 def client_history(
     lead_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
     limit: int = Query(default=100, ge=1, le=300),
 ) -> dict:

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import WebAssistant from "@/components/WebAssistant";
@@ -33,6 +34,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className={isLightOpsTheme && !isInternalRoute ? "visual-light-ops" : undefined}>{children}</div>
       <Footer />
       {!isInternalRoute && <WebAssistant />}
+      {!isInternalRoute && <CookieConsentBanner />}
     </>
   );
 }

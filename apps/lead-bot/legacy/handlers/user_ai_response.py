@@ -34,6 +34,15 @@ config = get_config()
 logger = logging.getLogger(__name__)
 
 
+def _known_names(user_data: dict) -> tuple[str, ...]:
+    """Имя собеседника из профиля — чтобы обезличить его в тексте перед моделью."""
+    return tuple(
+        str(value)
+        for value in (user_data.get("first_name"), user_data.get("last_name"), user_data.get("username"))
+        if value
+    )
+
+
 async def _stream_response_text(
     *,
     original_message: Message,
@@ -80,6 +89,7 @@ async def _stream_response_text(
         funnel_context=funnel_context,
         tools=assistant_tools.TOOLS_SCHEMA,
         tool_executor=assistant_tools.executor_for(user_data.get("telegram_id")),
+        known_names=_known_names(user_data),
     ):
         full_response += chunk
         chunk_buffer += chunk
@@ -175,12 +185,20 @@ async def _deliver_final_response(
     )
 
 
+# Вопрос о платформе или знакомство: контекст ответа просит не давить
+# предложением — кнопка платного шага под ним противоречила бы ему.
+_NO_CTA_INTENTS = {"platform_question", "browsing"}
+
+
 async def _maybe_send_consultation_cta(
     *,
     original_message: Message,
     response_stage: str,
     cta_shown: bool,
+    intent: str | None = None,
 ) -> bool:
+    if intent in _NO_CTA_INTENTS:
+        return False
     if not funnel.should_show_consultation_button(response_stage, cta_shown):
         return False
 
@@ -189,7 +207,7 @@ async def _maybe_send_consultation_cta(
             original_message,
             content.CONSULTATION_CTA_TEXT,
             action="consultation_cta",
-            reply_markup=_consultation_cta_markup(),
+            reply_markup=_consultation_cta_markup(intent),
         )
         return True
     except TelegramError as error:
@@ -220,7 +238,9 @@ def _schedule_topic_memory_update(*, user_data: dict, conversation_history: list
 
     async def _update_topic_memory() -> None:
         try:
-            summary = await ai_brain.ai_brain.summarize_topics_async(list(conversation_history))
+            summary = await ai_brain.ai_brain.summarize_topics_async(
+                list(conversation_history), known_names=_known_names(user_data)
+            )
             if summary:
                 database.db.update_topic_memory(user_db_id, summary)
         except (sqlite3.Error, KeyError, ValueError, AttributeError) as error:
@@ -239,12 +259,16 @@ def _schedule_post_response_lead_processing(
     cta_variant: str,
     cta_was_shown: bool,
     next_stage: str,
+    intent: str | None = None,
 ) -> None:
     user_db_id = user_data["id"]
+    telegram_contact = intent in lead_qualifier.TELEGRAM_CONTACT_INTENTS
 
     async def _post_response_lead_processing() -> None:
         try:
-            extracted = await ai_brain.ai_brain.extract_lead_data_async(list(conversation_history))
+            extracted = await ai_brain.ai_brain.extract_lead_data_async(
+                list(conversation_history), known_names=_known_names(user_data)
+            )
             if not extracted:
                 return
 
@@ -252,25 +276,20 @@ def _schedule_post_response_lead_processing(
             if telegram_profile_name:
                 extracted["name"] = telegram_profile_name
 
-            processed_lead_id = lead_qualifier.lead_qualifier.process_lead_data(user_db_id, extracted)
+            lead_before = database.db.get_lead_by_user_id(user_db_id)
+            processed_lead_id = lead_qualifier.lead_qualifier.process_lead_data(
+                user_db_id, extracted, telegram_contact=telegram_contact
+            )
             if processed_lead_id:
                 database.db.update_lead_last_message_time(user_db_id)
                 logger.info("Lead %s updated in background", processed_lead_id)
-                temperature = extracted.get("temperature") or extracted.get("lead_temperature", "cold")
-                should_notify = (
-                    temperature in ["hot", "warm"]
-                    or (
-                        extracted.get("name")
-                        and (extracted.get("email") or extracted.get("phone"))
-                        and extracted.get("pain_point")
-                    )
-                )
-                if should_notify:
+                if lead_qualifier.owner_should_hear(lead_before, extracted, telegram_contact=telegram_contact):
                     await notify_admin_new_lead(
                         context=context,
                         lead_id=processed_lead_id,
                         lead_data=extracted,
                         user_data=user_data,
+                        is_update=bool(lead_before and lead_before.get("notification_sent")),
                     )
 
             lead_after = database.db.get_lead_by_user_id(user_db_id)
@@ -345,9 +364,11 @@ async def process_ai_response(
         post_context=channel_post_context_block(getattr(context, "user_data", None)),
     )
 
-    if intent_result.context_override is None:
-        # Продажная воронка (или классификация не сработала/не уверена) —
-        # поведение как раньше: докручиваем диагностику/вопрос квалификации.
+    if intent_router.is_confident_sales(intent_result):
+        # Уверенный разговор о внедрении системы — докручиваем диагностику и
+        # вопрос квалификации. Неуверенная классификация сюда больше не
+        # попадает: вопрос «сколько юристов в отделе» человеку со своей
+        # правовой задачей только мешал.
         full_response = funnel.enforce_leadgen_response(
             response_text=full_response,
             stage=response_stage,
@@ -367,6 +388,7 @@ async def process_ai_response(
         original_message=original_message,
         response_stage=response_stage,
         cta_shown=cta_shown,
+        intent=intent_result.intent,
     )
 
     database.db.add_message(user_data["id"], "assistant", full_response)
@@ -442,5 +464,6 @@ async def process_ai_response(
         cta_variant=cta_variant,
         cta_was_shown=cta_shown,
         next_stage=next_stage,
+        intent=intent_result.intent,
     )
     _schedule_topic_memory_update(user_data=user_data, conversation_history=conversation_history)

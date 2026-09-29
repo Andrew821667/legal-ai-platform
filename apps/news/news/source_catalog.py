@@ -925,6 +925,16 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
             priority=0.85,
             bucket="broad_ai",
         ),
+        "consultant_ru_law": SourceSpec(
+            key="consultant_ru_law",
+            name="КонсультантПлюс: новое в законодательстве",
+            kind="rss",
+            note="Изменения права РФ с кратким изложением сути: основа темы «право РФ» многопрофильного канала",
+            url="https://www.consultant.ru/rss/fd.xml",
+            domain="consultant.ru",
+            priority=1.4,
+            bucket="ru_law",
+        ),
         "pravo_ru": SourceSpec(
             key="pravo_ru",
             name="Право.ru",
@@ -1064,65 +1074,73 @@ def source_catalog(settings: Any) -> dict[str, SourceSpec]:
     }
 
 
+def _with_ru_law_sources(keys: list[str], settings: Any) -> list[str]:
+    extra = [item.strip() for item in str(getattr(settings, "news_ru_law_source_keys", "") or "").split(",")]
+    return keys + [item for item in extra if item and item not in keys]
+
+
 def parse_active_source_keys(settings: Any) -> list[str]:
     raw_keys = getattr(settings, "news_source_keys", "")
     if raw_keys:
-        return [item.strip() for item in raw_keys.split(",") if item.strip()]
+        return _with_ru_law_sources([item.strip() for item in raw_keys.split(",") if item.strip()], settings)
 
     raw_urls = getattr(settings, "news_source_urls", "")
     if raw_urls:
-        return [item.strip() for item in raw_urls.split(",") if item.strip()]
+        return _with_ru_law_sources([item.strip() for item in raw_urls.split(",") if item.strip()], settings)
 
-    return [
-        "google_news_ru",
-        "google_news_en",
-        "google_news_ops_ru",
-        "google_news_ops_en",
-        "google_news_regulation_ru",
-        "google_news_regulation_en",
-        "google_news_market_en",
-        "google_news_privacy_ru",
-        "google_news_privacy_en",
-        "google_news_contracts_ru",
-        "google_news_contracts_en",
-        "google_news_legal_depts_en",
-        "google_news_ediscovery_en",
-        "google_news_agents_en",
-        "google_news_vendors_en",
-        "google_news_frontier_en",
-        "google_news_enterprise_ai_en",
-        "google_news_ai_products_en",
-        "google_news_ai_research_en",
-        "google_news_ai_policy_global_en",
-        "google_news_legal_ai_uk_en",
-        "google_news_regulation_europe_en",
-        "google_news_enterprise_ai_europe_en",
-        "google_news_legal_ops_europe_en",
-        "google_news_ai_vendors_europe_en",
-        "google_news_ai_privacy_europe_en",
-        "google_news_enterprise_ai_apac_en",
-        "google_news_legal_ai_apac_en",
-        "google_news_ai_china_en",
-        "google_news_enterprise_ai_china_en",
-        "google_news_legal_ai_china_en",
-        "google_news_ai_policy_china_en",
-        "google_news_ai_india_en",
-        "google_news_enterprise_ai_india_en",
-        "google_news_legal_ai_india_en",
-        "google_news_ai_policy_india_en",
-        "google_news_ai_japan_en",
-        "google_news_ai_korea_en",
-        "google_news_ai_singapore_en",
-        "google_news_ai_middle_east_en",
-        "google_news_ai_canada_en",
-        "ai_news_global",
-        "venturebeat_ai",
-        "the_decoder_ai",
-        "artificial_lawyer",
-        "marktechpost",
-        "habr_news",
-        "vc",
-    ]
+    return _with_ru_law_sources(_DEFAULT_SOURCE_KEYS, settings)
+
+
+_DEFAULT_SOURCE_KEYS = [
+    "google_news_ru",
+    "google_news_en",
+    "google_news_ops_ru",
+    "google_news_ops_en",
+    "google_news_regulation_ru",
+    "google_news_regulation_en",
+    "google_news_market_en",
+    "google_news_privacy_ru",
+    "google_news_privacy_en",
+    "google_news_contracts_ru",
+    "google_news_contracts_en",
+    "google_news_legal_depts_en",
+    "google_news_ediscovery_en",
+    "google_news_agents_en",
+    "google_news_vendors_en",
+    "google_news_frontier_en",
+    "google_news_enterprise_ai_en",
+    "google_news_ai_products_en",
+    "google_news_ai_research_en",
+    "google_news_ai_policy_global_en",
+    "google_news_legal_ai_uk_en",
+    "google_news_regulation_europe_en",
+    "google_news_enterprise_ai_europe_en",
+    "google_news_legal_ops_europe_en",
+    "google_news_ai_vendors_europe_en",
+    "google_news_ai_privacy_europe_en",
+    "google_news_enterprise_ai_apac_en",
+    "google_news_legal_ai_apac_en",
+    "google_news_ai_china_en",
+    "google_news_enterprise_ai_china_en",
+    "google_news_legal_ai_china_en",
+    "google_news_ai_policy_china_en",
+    "google_news_ai_india_en",
+    "google_news_enterprise_ai_india_en",
+    "google_news_legal_ai_india_en",
+    "google_news_ai_policy_india_en",
+    "google_news_ai_japan_en",
+    "google_news_ai_korea_en",
+    "google_news_ai_singapore_en",
+    "google_news_ai_middle_east_en",
+    "google_news_ai_canada_en",
+    "ai_news_global",
+    "venturebeat_ai",
+    "the_decoder_ai",
+    "artificial_lawyer",
+    "marktechpost",
+    "habr_news",
+    "vc",
+]
 
 
 def resolve_source_urls(settings: Any, enabled_overrides: dict[str, bool] | None = None) -> list[str]:

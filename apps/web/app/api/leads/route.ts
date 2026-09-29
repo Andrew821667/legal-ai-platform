@@ -20,14 +20,15 @@ import {
   verifyTurnstileToken,
 } from "@/lib/lead-security";
 import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/starter-offers";
+import { PD_CONSENT_VERSION } from "@/lib/pd-consent";
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
+// Публичный маршрут — только ключ бота: запасной ключ администратора открыл бы
+// при сбое конфигурации всё ядро (см. аудит периметра).
 const CORE_API_BOT_KEY =
   process.env.CORE_API_BOT_KEY ||
   process.env.API_KEY_BOT ||
-  process.env.CORE_API_ADMIN_KEY ||
-  process.env.API_KEY_ADMIN ||
   "";
 
 type LeadSegment = "inhouse" | "law_firm" | "entrepreneur" | "other";
@@ -237,7 +238,7 @@ export async function POST(request: NextRequest) {
     `offer=${offer}`,
     starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
     "consent=accepted",
-    "consent_version=website_pdn_transborder_v1",
+    `consent_version=${PD_CONSENT_VERSION}`,
     `consent_at=${consentAt}`,
     "transborder_consent=accepted",
     `ip_hash=${ipHash}`,
@@ -272,7 +273,7 @@ export async function POST(request: NextRequest) {
     description: messageWithOffer,
     source_context: cabinetSourceContext(session, (landingPage || "/").slice(0, 255)),
     consent_accepted: true,
-    consent_version: "website_pdn_transborder_v1",
+    consent_version: PD_CONSENT_VERSION,
     consent_at: consentAt,
     ...packageFields(starterOffer),
   };

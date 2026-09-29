@@ -112,6 +112,23 @@ class BusinessMenuResponder:
                 action=action,
             )
 
+    async def reply_html(
+        self,
+        text: str,
+        reply_markup,
+        *,
+        action: str,
+    ) -> None:
+        if self.is_business:
+            await self._send_business_menu_message(text, reply_markup)
+        else:
+            await utils.safe_reply_html(
+                self.query.message,
+                text,
+                action=action,
+                reply_markup=reply_markup,
+            )
+
     async def reply_text(
         self,
         text: str,

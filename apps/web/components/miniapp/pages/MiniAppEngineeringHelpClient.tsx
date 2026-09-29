@@ -6,6 +6,7 @@ import { AlertTriangle, Send } from "lucide-react";
 import { useMiniAppState } from "@/components/miniapp/MiniAppStateProvider";
 import { leadBotDeepLink } from "@/lib/links";
 import { LEGAL_CLIENT_TYPES, type LegalClientType } from "@/lib/legalHelp";
+import PdConsentText from "@/components/PdConsentText";
 
 /**
  * Обращение в инженерную практику — и в гибридную, автоматизацию юридической
@@ -230,7 +231,7 @@ export default function MiniAppEngineeringHelpClient() {
         </div>
         <label className="flex gap-3 text-xs text-slate-300">
           <input type="checkbox" checked={consentAccepted} onChange={(event) => setConsentAccepted(event.target.checked)} className="mt-0.5 h-4 w-4" />
-          <span>Согласен на обработку данных для рассмотрения задачи и связи со мной.</span>
+          <span><PdConsentText linkClassName="text-amber-300 underline" /></span>
         </label>
 
         {error && <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}

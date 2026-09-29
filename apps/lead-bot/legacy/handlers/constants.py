@@ -137,9 +137,9 @@ def append_inline_url_row(
     return InlineKeyboardMarkup(updated_rows)
 
 LEAD_MAGNET_MENU = [
-    [InlineKeyboardButton("📞 Консультация 30 мин", callback_data="magnet_consultation")],
+    [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
     [InlineKeyboardButton("📄 Чек-лист по договорам", callback_data="magnet_checklist")],
-    [InlineKeyboardButton("🎯 Демо-анализ договора", callback_data="magnet_demo")],
+    [InlineKeyboardButton("🧪 Автопроверка договора", callback_data="magnet_demo")],
     [InlineKeyboardButton("🧾 Образец AI-отчета", callback_data="magnet_sample_report")],
 ]
 
@@ -149,15 +149,28 @@ CONSENT_PDN_MENU = [
     [InlineKeyboardButton("📄 Политика ПД", callback_data="consent_doc_privacy")],
 ]
 
-CONSENT_TRANSBORDER_MENU = [
-    [InlineKeyboardButton("✅ Согласен на трансграничную передачу", callback_data="consent_transborder_yes")],
-    [InlineKeyboardButton("❌ Отказаться от ИИ-режима", callback_data="consent_transborder_no")],
-    [InlineKeyboardButton("📄 Условия трансграничной передачи", callback_data="consent_doc_transborder")],
-]
+# Следующий шаг под ответом ассистента. Юридическая задача — запись к юристу,
+# автоматизация и разработка — диагностика; обе платные, с ценой на кнопке.
+# Раньше была одна «Заказать консультацию», которая просила телефон и не
+# называла ни цены, ни формата.
+_LEGAL_CTA_INTENTS = {"new_legal_task", "continuing_own_matter"}
+_ENGINEERING_CTA_INTENTS = {"dev_task", "sales_conversation"}
 
-CONSULTATION_CTA_MENU = [
-    [InlineKeyboardButton("📞 Заказать консультацию", callback_data="magnet_consultation")],
-]
+
+def build_consultation_cta_menu(intent: str | None = None):
+    config = get_config()
+    booking_url = getattr(config, "CONSULTATION_BOOKING_URL", "")
+    diagnostic_url = getattr(config, "AUTOMATION_DIAGNOSTIC_URL", "")
+    rows = []
+    if booking_url and intent not in _ENGINEERING_CTA_INTENTS:
+        rows.append([InlineKeyboardButton("📅 Записаться к юристу — 4 900 ₽", url=booking_url)])
+    if diagnostic_url and intent not in _LEGAL_CTA_INTENTS:
+        rows.append([InlineKeyboardButton("🛠 Диагностика автоматизации — 7 900 ₽", url=diagnostic_url)])
+    rows.append([InlineKeyboardButton("💬 Обсудить с командой", callback_data="menu_leave_contact")])
+    return rows
+
+
+CONSULTATION_CTA_MENU = build_consultation_cta_menu()
 
 PERSONAL_MODE_RETURN_MENU = [
     [InlineKeyboardButton("↩️ Вернуться к боту", callback_data="menu_return_to_bot")],
@@ -166,7 +179,7 @@ PERSONAL_MODE_RETURN_MENU = [
 DOCUMENTS_MENU = [
     [
         InlineKeyboardButton("📄 Политика ПД", callback_data="doc_privacy"),
-        InlineKeyboardButton("🌍 Трансграничная передача", callback_data="doc_transborder"),
+        InlineKeyboardButton("🛡 Обезличивание для ИИ", callback_data="doc_transborder"),
     ],
     [
         InlineKeyboardButton("📜 Пользовательское соглашение", callback_data="doc_user_agreement"),

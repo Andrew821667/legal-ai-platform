@@ -152,7 +152,7 @@ def _sum_and_count(db: Session, *conditions) -> dict:
 
 @router.get("/finance")
 def finance(
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Деньги практики одним взглядом: сколько подписано, сколько в работе.
@@ -231,7 +231,7 @@ def finance(
 @router.get("/funnel")
 def funnel(
     days: int = Query(default=90, ge=7, le=730),
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Откуда приходят клиенты и на каком шаге останавливаются (см. practice_funnel)."""

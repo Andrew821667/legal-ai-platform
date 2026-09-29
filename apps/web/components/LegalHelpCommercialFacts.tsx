@@ -1,3 +1,11 @@
+import Link from "next/link";
+
+import { legalStarterOffers } from "@/lib/starter-offers";
+
+/**
+ * Цены первых шагов — из того же списка, что карточки на /legal-help и
+ * ассистент в Telegram; раньше здесь было только «стоимость — после оценки».
+ */
 export default function LegalHelpCommercialFacts() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
@@ -18,10 +26,19 @@ export default function LegalHelpCommercialFacts() {
           </p>
         </article>
         <article className="rounded-xl border border-slate-700 bg-slate-800/60 p-6">
-          <h3 className="text-xl font-semibold text-white">Условия до старта</h3>
+          <h3 className="text-xl font-semibold text-white">Стоимость первых шагов</h3>
+          <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-300">
+            {legalStarterOffers.map((offer) => (
+              <li key={offer.id}>
+                {offer.title} — <b className="text-white">{offer.price}</b>
+              </li>
+            ))}
+          </ul>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Срок и стоимость зависят от сложности, объёма материалов и срочности. Конкретные условия
-            сообщаются после первичной оценки и согласуются до выполнения поручения.
+            <Link href="/consultation" className="text-amber-300 underline underline-offset-2">
+              Записаться на консультацию
+            </Link>{" "}
+            с выбором времени. Остальные работы оцениваем после первичного описания и согласуем до начала.
           </p>
         </article>
       </div>

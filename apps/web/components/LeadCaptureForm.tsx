@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import PdConsentText from "@/components/PdConsentText";
 
 import LegalDisclaimer from "@/components/LegalDisclaimer";
 import TurnstileWidget from "@/components/TurnstileWidget";
@@ -295,13 +295,7 @@ export default function LeadCaptureForm() {
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
               />
               <span className="text-sm text-slate-600">
-                Я соглашаюсь на обработку персональных данных и, при использовании зарубежной
-                инфраструктуры аналитики и хостинга, на возможную трансграничную передачу данных в
-                объеме, необходимом для работы сайта. Подробнее:{" "}
-                <Link href="/privacy" className="text-amber-700 underline">
-                  политика конфиденциальности
-                </Link>
-                .
+                <PdConsentText linkClassName="text-amber-700 underline" />
               </span>
             </label>
 
