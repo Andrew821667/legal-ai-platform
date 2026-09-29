@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { minutesLeft, statusText, whenLabel, type Booking } from "@/lib/consultation";
+import { CONSULTATION_OFFER_PATH } from "@/lib/consultation-offer";
 import { formatRub } from "@/lib/money";
 
 /**
@@ -144,7 +145,9 @@ export default function BookingStatus({ token }: { token: string }) {
         <p>Сохраните адрес этой страницы — по нему видно состояние записи.</p>
         <p className="mt-2">
           Если юрист не сможет провести консультацию в выбранное время, он предложит другое или вернёт оплату полностью.
-          Перенос по вашей просьбе — не позднее чем за 24 часа до начала. Чек «Мой налог» юрист пришлёт после оплаты.
+          Перенос по вашей просьбе — по согласованию с юристом; до начала от консультации можно отказаться с возвратом
+          оплаты. Чек «Мой налог» юрист пришлёт после оплаты. Условия —{" "}
+          <Link href={CONSULTATION_OFFER_PATH} className="text-amber-300 underline underline-offset-2">в оферте</Link>.
         </p>
       </section>
     </div>

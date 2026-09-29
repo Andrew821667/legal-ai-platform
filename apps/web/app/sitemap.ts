@@ -52,7 +52,8 @@ const pages: SitemapPage[] = [
   { path: "/team", lastModified: visibilityUpdatedAt, changeFrequency: "monthly", priority: 0.75 },
   { path: "/regions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.55 },
   { path: "/privacy", lastModified: "2026-07-14", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/terms", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/terms", lastModified: "2026-09-27", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/consultation/offer", lastModified: "2026-09-27", changeFrequency: "yearly", priority: 0.3 },
   { path: "/user-agreement", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.25 },
   { path: "/ai-policy", lastModified: "2026-07-13", changeFrequency: "yearly", priority: 0.4 },
 ];
