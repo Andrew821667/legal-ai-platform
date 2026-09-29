@@ -726,13 +726,17 @@ def menu_response_by_button(
     return menu_response_by_key(key, lead=lead, selected_profile=selected_profile)
 
 
+_EMAIL_READY = bool(getattr(config, "SMTP_USER", "") and getattr(config, "SMTP_PASSWORD", ""))
+
+# Чек-лист и пример отчёта уходят письмом — без почты их не предлагаем
+# (см. handlers/constants.py, build_lead_magnet_menu).
 LEAD_MAGNET_OFFER_TEXT = (
     "<b>🎁 Полезные первые шаги</b>\n\n"
     f"📞 Консультация юриста — {CONSULTATION_PRICE_TEXT}\n"
-    "📄 Чек-лист «15 типовых ошибок в договорах»\n"
-    "🧪 Автопроверка договора в Contract AI\n"
-    "🧾 Пример отчета по договору\n\n"
-    "Выберите, что будет полезнее именно сейчас."
+    + ("📄 Чек-лист «15 типовых ошибок в договорах»\n" if _EMAIL_READY else "")
+    + "🧪 Автопроверка договора в Contract AI\n"
+    + ("🧾 Пример отчета по договору\n" if _EMAIL_READY else "")
+    + "\nВыберите, что будет полезнее именно сейчас."
 )
 
 CONSULTATION_CTA_TEXT = (
