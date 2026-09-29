@@ -328,3 +328,34 @@ def test_normalize_post_text_russifies_common_editorial_anglicisms_without_touch
     assert "юридическая проверка" in normalized
     assert "обязательная проверка человеком" in normalized
     assert 'href="https://example.com/legal-ais-output-workflow"' in normalized
+
+
+def test_same_headline_from_different_outlets_is_one_story() -> None:
+    from news.pipeline import dedupe_headlines, headline_key
+
+    first = ArticleCandidate(
+        source_url="https://news.google.com/rss", article_url="https://a.example/1",
+        title="Госдума приняла закон об ИИ в медицине - РБК", summary="",
+    )
+    copy = ArticleCandidate(
+        source_url="https://news.google.com/rss", article_url="https://b.example/2",
+        title="Госдума приняла закон об ИИ в медицине — Ведомости", summary="",
+    )
+    other = ArticleCandidate(
+        source_url="https://news.google.com/rss", article_url="https://c.example/3",
+        title="ФНС разъяснила порядок НДС для ИИ-сервисов - Коммерсантъ", summary="",
+    )
+    assert headline_key(first.title) == headline_key(copy.title)
+    kept, dropped = dedupe_headlines([first, copy, other])
+    assert kept == [first, other] and dropped == 1
+
+
+def test_titles_have_no_week_marker_and_no_fixed_practice_prefix() -> None:
+    from news.llm_writer import LLMNewsWriter
+
+    assert LLMNewsWriter._normalize_title_for_format(
+        "Обзор недели по Legal AI и автоматизации юрфункции (W38)", "weekly_review", "x"
+    ) == "Обзор недели по Legal AI и автоматизации юрфункции"
+    assert LLMNewsWriter._normalize_title_for_format(
+        "Практика недели: где договорный ИИ упирается в согласования", "practice", "x"
+    ) == "Где договорный ИИ упирается в согласования"

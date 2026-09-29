@@ -912,13 +912,19 @@ class LLMNewsWriter:
     @classmethod
     def _normalize_title_for_format(cls, title: str, format_type: str, fallback_title: str) -> str:
         normalized = re.sub(r"\s+", " ", (title or "").strip())
+        # Служебная метка недели («(W38)») из внутреннего кандидата обзора — не для читателя.
+        normalized = re.sub(r"\s*\(W\d{1,2}\)", "", normalized)
         if format_type == "longread":
             normalized = re.sub(r"^\s*(?:лонгрид|longread)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
         if format_type in {"practice", "humor"}:
-            normalized = re.sub(r"^\s*(?:юмор|humor|шутка)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE)
+            # «Практика недели: …» у каждого субботнего поста делало заголовки одинаковыми.
+            normalized = re.sub(
+                r"^\s*(?:юмор|humor|шутка|практика недели)\s*[:\-–—]\s*", "", normalized, flags=re.IGNORECASE
+            )
         normalized = normalized.strip(" -–—:;,.")
         if not normalized:
             normalized = re.sub(r"^\s*(?:лонгрид|longread|юмор|humor|шутка)\s*[:\-–—]?\s*", "", fallback_title, flags=re.IGNORECASE).strip()
+        normalized = normalized[:1].upper() + normalized[1:]
         return normalized or fallback_title
 
     @classmethod
