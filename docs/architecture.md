@@ -45,10 +45,9 @@
 - `GET /health` — быстрый liveness для Caddy/Docker/monitoring (вне version prefix).
 - `GET /health/detailed` — расширенный health для инфраструктуры/мониторинга (public, вне version prefix).
 - `GET /api/v1/workers/status` — статус воркеров (`any_active`, список `workers`) для scope `worker|admin`.
-- `/api/v1/special-consultations/*` удалён 2026-09-27: платная консультация — запись по времени
-  (`/api/v1/consultations/*`, страница `/consultation`). Таблицы `special_consultation_*` и модели
-  оставлены — на них опираются архив и обезличивание клиента; удалять отдельной миграцией, убедившись,
-  что в таблицах нет данных.
+- `/api/v1/special-consultations/*` удалён 2026-09-27 (#454), таблицы `special_consultation_*` — миграцией
+  0050 (2026-09-29): заказов и платежей не было. Платная консультация — запись по времени
+  (`/api/v1/consultations/*`, страница `/consultation`).
 - `GET /api/v1/contract-jobs/{job_id}` — получение статуса конкретной задачи (scope `bot|worker|admin`).
 - `GET /api/v1/contract-jobs/summary` — оперативная сводка очереди (`new/processing/done/failed`, stale/retry).
 - `GET /api/v1/contract-jobs/ops-overview` — единый операционный обзор (summary + sample задач + последние audit-события).
