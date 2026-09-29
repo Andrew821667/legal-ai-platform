@@ -23,6 +23,7 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-${PROJECT_DIR}/.env}"
 REQUIRED_NEWS_WORKERS="${REQUIRED_NEWS_WORKERS:-news-generate,news-telegram-ingest,news-publish,news-reader-digest}"
 DRAFT_MAX_IDLE_HOURS="${DRAFT_MAX_IDLE_HOURS:-24}"
 DUE_POSTS_ALERT_THRESHOLD="${DUE_POSTS_ALERT_THRESHOLD:-0}"
+DUE_POSTS_GRACE_MINUTES="${DUE_POSTS_GRACE_MINUTES:-10}"
 CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD="${CONTRACT_EXHAUSTED_NEW_ALERT_THRESHOLD:-0}"
 CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD="${CONTRACT_STALE_PROCESSING_ALERT_THRESHOLD:-0}"
 CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD="${CONTRACT_FAILED_RETRYABLE_ALERT_THRESHOLD:-0}"
@@ -331,10 +332,34 @@ else
     "⚠️ В очереди ready/review/scheduled нет ни одного поста. Проверьте генерацию."
 fi
 
-# 5) SLA: есть просроченные публикации (due queue)
-DUE_COUNT="$(api_get "${API_BASE}/api/v1/scheduled-posts?due=true&limit=100" | jq -r 'length')"
+# 5) SLA: есть публикация, которую издатель не забрал за два штатных цикла.
+# Без допуска cron в точное время слота считал пост просроченным раньше пятиминутного опроса издателя.
+DUE_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?due=true&limit=100")"
+DUE_COUNT="$(
+python3 - "$DUE_JSON" "$DUE_POSTS_GRACE_MINUTES" <<'PY'
+from datetime import datetime, timedelta, timezone
+import json, sys
+
+rows = json.loads(sys.argv[1] or "[]")
+cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(0, int(sys.argv[2])))
+count = 0
+for row in rows:
+    raw = str(row.get("publish_at") or "").strip()
+    if not raw:
+        count += 1
+        continue
+    try:
+        publish_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        count += 1
+        continue
+    if publish_at.astimezone(timezone.utc) <= cutoff:
+        count += 1
+print(count)
+PY
+)"
 if [ "${DUE_COUNT}" -gt "${DUE_POSTS_ALERT_THRESHOLD}" ]; then
   send_alert_once \
     "due_posts_threshold_exceeded" \
-    "⚠️ Просроченных публикаций в очереди: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD})."
+    "⚠️ Публикаций, просроченных более чем на ${DUE_POSTS_GRACE_MINUTES} мин: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD})."
 fi
