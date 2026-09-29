@@ -17,10 +17,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from core_api.models import (
+    ConsultationSlot,
     LegalIntake,
     Lead,
     LeadSource,
@@ -155,6 +156,71 @@ def build(db: Session, *, since: datetime, now: datetime) -> dict:
         "paid_minor": sum(paid_minor.values()),
         "currency": "RUB",
     }
+
+
+def revenue_by_source(db: Session, *, since: datetime, until: datetime) -> dict:
+    """Деньги за период по источнику клиента: оплаченные акты и консультации.
+
+    Воронка выше считает когорту пришедших; здесь — сколько денег пришло за
+    период и от кого, независимо от того, когда клиент появился.
+    """
+    by_source: dict[str, int] = {}
+    acts = db.execute(
+        select(WorkAct.amount_minor, Lead.source, Lead.cta_variant, Lead.notes)
+        .join(Lead, Lead.id == WorkAct.lead_id)
+        .where(WorkAct.status == WorkActStatus.paid)
+        .where(WorkAct.cancelled_at.is_(None))
+        .where(WorkAct.paid_at >= since, WorkAct.paid_at < until)
+        .where(Lead.archived_at.is_(None))
+        .where(real_client(Lead.telegram_user_id))
+    ).all()
+    for amount, *lead in acts:
+        key = source_key(*lead)
+        by_source[key] = by_source.get(key, 0) + int(amount or 0)
+    consultations = db.execute(
+        select(ConsultationSlot.price_minor, Lead.source, Lead.cta_variant, Lead.notes)
+        .outerjoin(Lead, Lead.id == ConsultationSlot.lead_id)
+        .where(ConsultationSlot.status == "confirmed")
+        .where(ConsultationSlot.confirmed_at >= since, ConsultationSlot.confirmed_at < until)
+        .where(or_(Lead.id.is_(None), Lead.archived_at.is_(None)))
+        .where(real_client(Lead.telegram_user_id))
+    ).all()
+    consultations_minor = 0
+    for price, source, cta_variant, notes in consultations:
+        # Запись на консультацию идёт с сайта; без лида — туда же.
+        key = source_key(source, cta_variant, notes) if source is not None else "site_form"
+        by_source[key] = by_source.get(key, 0) + int(price or 0)
+        consultations_minor += int(price or 0)
+    return {
+        "by_source": by_source,
+        "total_minor": sum(by_source.values()),
+        "consultations": {"count": len(consultations), "minor": consultations_minor},
+    }
+
+
+def cta_variants(db: Session, *, since: datetime, until: datetime) -> dict[str, dict[str, int]]:
+    """A/B-варианты призыва в боте: сколько пришло за период и сколько дошло до обращения.
+
+    Вариант бот ставит лиду при первом показе призыва (funnel.choose_cta_variant);
+    метки каналов и сайта (channel_post, legal_help…) — не A/B, их здесь нет.
+    """
+    rows = db.execute(
+        select(Lead.id, Lead.cta_variant)
+        .where(Lead.created_at >= since, Lead.created_at < until)
+        .where(Lead.cta_variant.in_(("A", "B")))
+        .where(Lead.archived_at.is_(None))
+        .where(real_client(Lead.telegram_user_id))
+    ).all()
+    ids = [row[0] for row in rows]
+    with_intake = (
+        set(db.scalars(select(LegalIntake.lead_id).where(LegalIntake.lead_id.in_(ids)).distinct())) if ids else set()
+    )
+    result: dict[str, dict[str, int]] = {}
+    for lead_id, variant in rows:
+        bucket = result.setdefault(variant, {"leads": 0, "intakes": 0})
+        bucket["leads"] += 1
+        bucket["intakes"] += int(lead_id in with_intake)
+    return result
 
 
 def _pct(part: int, whole: int) -> int | None:
