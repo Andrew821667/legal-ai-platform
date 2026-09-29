@@ -66,7 +66,7 @@ export default function CabinetTelegramLink(props: Props) {
   if (props.mode === "linked") {
     const since = props.linkedAt ? new Date(props.linkedAt).toLocaleDateString("ru-RU") : null;
     return (
-      <div id="telegram" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-slate-700">
+      <div id="telegram" className="scroll-mt-24 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">
           ✅ Telegram объединён{props.username ? ` (@${props.username})` : ""}
           {since ? ` с ${since}` : ""}
@@ -91,7 +91,7 @@ export default function CabinetTelegramLink(props: Props) {
 
   if (props.mode === "sessions") {
     return (
-      <div id="telegram" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
+      <div id="telegram" className="scroll-mt-24 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">Объединить вход через Telegram и через Яндекс ID?</p>
         <p className="mt-1">
           В этом браузере вы вошли и через Telegram, и через Яндекс ID{props.email ? ` (${props.email})` : ""}. После
@@ -123,7 +123,7 @@ export default function CabinetTelegramLink(props: Props) {
   }
 
   return (
-    <form id="telegram" onSubmit={submit} className="rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+    <form id="telegram" onSubmit={submit} className="scroll-mt-24 rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
       <p className="font-semibold text-slate-900">Общались с нами в Telegram? Объедините входы</p>
       <p className="mt-1">Тогда дела и документы из Telegram появятся здесь.</p>
       <ol className="mt-3 list-decimal space-y-2 pl-5">
