@@ -202,7 +202,17 @@ def test_contract_module_text_is_clear_for_new_user() -> None:
     assert "краткий отчёт с ключевыми рисками и рекомендациями" in response
 
 
-def test_consultation_text_explains_value_of_handoff() -> None:
+def test_consultation_text_names_price_format_and_booking() -> None:
     response = content.menu_response_by_key("menu_consultation")
-    assert "обсудить задачу с человеком" in response
-    assert "с чего лучше начать внедрение" in response
+    assert "4 900 ₽" in response
+    assert "До 60 минут" in response
+    assert "Записаться к юристу" in response
+    assert "бесплатн" not in response.lower()
+
+
+def test_prices_start_with_fixed_first_steps() -> None:
+    response = content.menu_response_by_key("menu_prices")
+    first_steps = response.index("Первые шаги")
+    assert first_steps < response.index("150 000 ₽")
+    for price in ("4 900 ₽", "от 7 900 ₽", "от 9 900 ₽", "от 39 000 ₽", "от 79 000 ₽"):
+        assert price in response, price

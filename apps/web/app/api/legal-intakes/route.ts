@@ -14,11 +14,11 @@ import { addStarterOfferToMessage, getStarterOffer, packageFields } from "@/lib/
 
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
+// Публичный маршрут — только ключ бота: запасной ключ администратора открыл бы
+// при сбое конфигурации всё ядро (см. аудит периметра).
 const CORE_API_BOT_KEY =
   process.env.CORE_API_BOT_KEY ||
   process.env.API_KEY_BOT ||
-  process.env.CORE_API_ADMIN_KEY ||
-  process.env.API_KEY_ADMIN ||
   "";
 
 const clientTypes = new Set(["company", "entrepreneur", "individual", "unknown"]);
@@ -130,6 +130,14 @@ export async function POST(request: NextRequest) {
   );
   recordLeadAttempt(protection, cfg, nowMs);
 
+  // Повтор той же записи на то же время (двойной клик): «принято» без ссылки на
+  // бронь оставило бы клиента без записи — просим открыть бронь или выбрать заново.
+  if (slotId && protection.action === "duplicate") {
+    return NextResponse.json(
+      { detail: "Эта запись уже отправлена. Откройте страницу брони или выберите время заново.", slot_taken: true },
+      { status: 409 },
+    );
+  }
   if (protection.action === "silent_drop" || protection.action === "duplicate") {
     return NextResponse.json({
       ok: true,

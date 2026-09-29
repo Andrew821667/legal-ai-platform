@@ -477,6 +477,8 @@ export const serviceDetails: Record<string, ServiceDetail> = {
       { question: "Возможно ли on-premise размещение?", answer: "Да, если это требуется по данным и инфраструктуре. Конкретный контур, модели и эксплуатационные обязанности определяются на архитектурном этапе." },
     ],
     related: [
+      { href: "/guides/telegram-bot-development-cost", label: "Сколько стоит Telegram-бот", description: "Границы прототипа от 39 000 ₽ и факторы бюджета рабочего сервиса." },
+      { href: "/guides/prepare-data-for-rag", label: "Подготовка данных для RAG", description: "Источники, версии, права доступа и вопросы для проверки качества." },
       { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации", description: "Карта процесса, интеграций, рисков и следующего этапа." },
       { href: "/engineering/telegram-bots", label: "Telegram-боты для бизнеса", description: "Приём заявок, маршрутизация, статусы и интеграции." },
       { href: "/engineering/ai-rag", label: "AI/RAG по данным компании", description: "Поиск, ответы с источниками и управляемая эскалация." },
@@ -540,6 +542,7 @@ export const serviceDetails: Record<string, ServiceDetail> = {
       { question: "Диагностика подходит для AI-проекта?", answer: "Да. Она помогает проверить источники данных, роли, критерии качества и понять, где AI даёт пользу, а где достаточно правил или обычной интеграции." },
     ],
     related: [
+      { href: "/guides/how-to-start-ai-adoption", label: "С чего начать внедрение ИИ", description: "Как выбрать первую задачу, проверить данные и решить, нужен ли готовый инструмент или разработка." },
       { href: "/guides/business-process-automation-audit", label: "Как подготовить процесс к автоматизации", description: "Участники, данные, интеграции, исключения и метрика первого этапа." },
       { href: "/engineering", label: "Инженерная практика", description: "Разработка программ, AI-сервисов и интеграций." },
       { href: "/engineering/telegram-bots", label: "Telegram-боты для бизнеса", description: "Прототип одного сквозного пользовательского сценария." },
@@ -611,6 +614,7 @@ export const serviceDetails: Record<string, ServiceDetail> = {
       { question: "Можно разместить систему внутри компании?", answer: "Да, возможны облачный, изолированный и on-premise контуры. Архитектура зависит от требований к данным, моделям, интеграциям и эксплуатации." },
     ],
     related: [
+      { href: "/guides/prepare-data-for-rag", label: "Как подготовить данные для RAG", description: "Проверить источники, версии, доступы и тестовые вопросы до разработки." },
       { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации", description: "Проверить процесс, данные и интеграции до разработки." },
       { href: "/engineering", label: "Инженерная практика", description: "Диагностика, разработка, интеграции и эксплуатация." },
       { href: "/engineering/telegram-bots", label: "Telegram-бот как интерфейс", description: "Вход для пользователей, статусы и передача диалога человеку." },
@@ -682,6 +686,7 @@ export const serviceDetails: Record<string, ServiceDetail> = {
       { question: "Можно подключить CRM или 1С?", answer: "Да, если у системы есть доступный API или другой надёжный способ обмена. Объём интеграции оценивается отдельно." },
     ],
     related: [
+      { href: "/guides/telegram-bot-development-cost", label: "Сколько стоит Telegram-бот", description: "Что входит в прототип от 39 000 ₽ и как оценить интеграции." },
       { href: "/engineering/automation-diagnostic", label: "Диагностика автоматизации", description: "Карта процесса, интеграций и первого этапа до разработки." },
       { href: "/engineering", label: "Инженерная практика", description: "Диагностика, интеграции, AI/RAG и разработка внутренних сервисов." },
       { href: "/engineering/ai-rag", label: "AI/RAG по данным компании", description: "Поиск и ответы с проверяемыми источниками." },

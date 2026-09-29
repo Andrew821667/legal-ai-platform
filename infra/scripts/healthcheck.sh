@@ -293,15 +293,18 @@ if [ "${#missing_workers[@]}" -gt 0 ]; then
     "⚠️ Неактивные news-воркеры: ${missing_workers[*]}."
 fi
 
-# 4) SLA: давно не было новых драфтов (review/scheduled)
+# 4) SLA: давно не было новых материалов генератора.
+# Автопубликация сохраняет новые посты сразу в ready, а ручная модерация — в review.
+READY_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=ready&limit=100&newest_first=true")"
 REVIEW_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=review&limit=100&newest_first=true")"
 SCHEDULED_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=scheduled&limit=100&newest_first=true")"
 LATEST_CREATED_TS="$(
-python3 - "$REVIEW_JSON" "$SCHEDULED_JSON" <<'PY'
+python3 - "$READY_JSON" "$REVIEW_JSON" "$SCHEDULED_JSON" <<'PY'
 import json, sys
-review = json.loads(sys.argv[1] or "[]")
-scheduled = json.loads(sys.argv[2] or "[]")
-all_rows = list(review) + list(scheduled)
+ready = json.loads(sys.argv[1] or "[]")
+review = json.loads(sys.argv[2] or "[]")
+scheduled = json.loads(sys.argv[3] or "[]")
+all_rows = list(ready) + list(review) + list(scheduled)
 created = sorted([str(x.get("created_at") or "").strip() for x in all_rows if str(x.get("created_at") or "").strip()], reverse=True)
 print(created[0] if created else "")
 PY
@@ -320,12 +323,12 @@ PY
   if [ "${age_hours}" -ge "${DRAFT_MAX_IDLE_HOURS}" ]; then
     send_alert_once \
       "draft_idle_too_long" \
-      "⚠️ Новые драфты не появлялись ${age_hours}ч (порог: ${DRAFT_MAX_IDLE_HOURS}ч)."
+      "⚠️ Новые материалы генератора не появлялись ${age_hours}ч (порог: ${DRAFT_MAX_IDLE_HOURS}ч)."
   fi
 else
   send_alert_once \
     "draft_stream_empty" \
-    "⚠️ В очереди review/scheduled нет ни одного поста. Проверьте генерацию."
+    "⚠️ В очереди ready/review/scheduled нет ни одного поста. Проверьте генерацию."
 fi
 
 # 5) SLA: есть просроченные публикации (due queue)

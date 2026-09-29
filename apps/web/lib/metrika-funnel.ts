@@ -3,9 +3,9 @@
  *
  * Воронка ядра начинается с тех, кто уже написал, — посетители, ушедшие
  * молча, в ней не видны. Метрика знает их число и откуда они пришли, и её
- * цели отправки формы (`lead_form_submit`, `starter_offer_submit`) — второй
- * счётчик заявок, с которым можно сверить ядро: расхождение значит, что
- * заявки теряются по дороге (антиспам, сбой ядра).
+ * цель отправки формы (`lead_form_submit`) — второй
+ * счётчик заявок, с которым можно сверить ядро: расхождение требует
+ * проверки антиспама, блокировщиков аналитики и повторных отправок.
  *
  * Модуль без Next — чтобы тестировать с подставным fetch. Токен Метрики
  * живёт только на сервере сайта, в браузер не уходит.
@@ -16,8 +16,8 @@ export const METRIKA_API = "https://api-metrika.yandex.net";
 // Номер счётчика не секрет: он в коде каждой страницы сайта.
 export const DEFAULT_COUNTER_ID = "110733908";
 
-/** Цели, которые сайт шлёт при отправке заявки (lib/lead-attribution.ts). */
-export const LEAD_GOAL_IDENTIFIERS = ["lead_form_submit", "starter_offer_submit"] as const;
+/** `starter_offer_submit` входит в `lead_form_submit`, поэтому не суммируем их. */
+export const LEAD_GOAL_IDENTIFIERS = ["lead_form_submit"] as const;
 
 const SOURCE_TITLES: Record<string, string> = {
   organic: "Поиск",

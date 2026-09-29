@@ -153,3 +153,31 @@ test("turnstile verification returns success from upstream response", async () =
 
   assert.equal(ok, true);
 });
+
+test("different request or different consultation time is not a duplicate", () => {
+  const nowMs = 1_800_000_300_000;
+  const base = {
+    contact: "client@example.com",
+    name: "Анна",
+    landing_page: "/legal-help",
+    description: "Нужна помощь со спором с арендодателем.",
+    _started_at_ms: nowMs - 10_000,
+  };
+  const evaluate = (payload, at) =>
+    evaluateLeadSubmission(
+      { payload, normalizedContact: normalizeLeadContact("client@example.com"), ip: "198.51.100.20", userAgent: "UA", nowMs: at },
+      { ...BASE_CONFIG, ipMaxAttempts: 10 },
+    );
+
+  const first = evaluate(base, nowMs);
+  rememberAcceptedLeadFingerprint(first.fingerprint, nowMs);
+  // Тот же день, тот же человек: запись на консультацию — другая заявка.
+  const booking = evaluate({ ...base, description: "Консультация по договору аренды офиса.", consultation_slot_id: "slot-1" }, nowMs + 60_000);
+  assert.equal(booking.action, "accept");
+  rememberAcceptedLeadFingerprint(booking.fingerprint, nowMs + 60_000);
+  // Та же запись на другое время — тоже не дубль; на то же время — дубль.
+  const otherTime = evaluate({ ...base, description: "Консультация по договору аренды офиса.", consultation_slot_id: "slot-2" }, nowMs + 120_000);
+  assert.equal(otherTime.action, "accept");
+  const again = evaluate({ ...base, description: "Консультация по договору аренды офиса.", consultation_slot_id: "slot-1" }, nowMs + 180_000);
+  assert.equal(again.action, "duplicate");
+});

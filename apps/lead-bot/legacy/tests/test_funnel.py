@@ -22,7 +22,9 @@ def test_enforce_leadgen_response_adds_structured_question_on_discover():
         lead_data={},
     )
 
-    assert "типичный сигнал разрозненного процесса" in result.lower()
+    # Шаблонной вставки про «разрозненный процесс» больше нет: она дописывалась
+    # к любому ответу, где клиент упомянул «хаос» или «теряем».
+    assert "разрозненного процесса" not in result.lower()
     assert "1)" in result and "2)" in result and "3)" in result
 
 
@@ -96,3 +98,40 @@ def test_should_recognize_ready_as_a_separate_word():
         "Готов продолжить",
         {"phone": "+7 900 000-00-00"},
     ) is True
+
+
+def test_consultation_question_is_not_a_handoff() -> None:
+    # «Нужна консультация по договору аренды» — вопрос к ассистенту, а не
+    # просьба передать диалог человеку.
+    for text in (
+        "Нужна консультация по договору аренды",
+        "Как начать работу с вами?",
+        "Хочу встречу обсудить автоматизацию",
+    ):
+        assert funnel.should_fast_track_handoff(text, {}) is False, text
+    assert funnel.should_fast_track_handoff("Свяжите меня с юристом", {}) is True
+
+
+def test_error_reply_gets_no_qualification_question() -> None:
+    error_text = (
+        "Извините, произошла ошибка при обработке вашего запроса. "
+        "Попробуйте еще раз или свяжитесь с нашей командой напрямую."
+    )
+    for stage in ("discover", "qualify"):
+        assert funnel.enforce_leadgen_response(
+            response_text=error_text,
+            stage=stage,
+            user_message="теряем заявки",
+            cta_shown=False,
+            cta_variant="A",
+            lead_data={},
+        ) == error_text
+
+
+def test_funnel_offers_paid_diagnostic_not_free_consultation() -> None:
+    context = funnel.build_stage_context("propose", "A", cta_shown=False)
+    assert "7 900" in context and "30 минут" not in context
+    question = funnel._first_qualification_question(
+        {"team_size": "4-10", "contracts_per_month": "10-30", "urgency": "high", "budget": "100-300K", "phone": "+7"}
+    )
+    assert "диагностика" in question and "7 900" in question

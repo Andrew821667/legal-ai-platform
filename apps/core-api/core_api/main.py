@@ -33,7 +33,6 @@ from core_api.routers import (
     reader,
     scheduled_posts,
     service_agreements,
-    special_consultations,
     telegram_ops,
     reviews,
     users,
@@ -81,7 +80,6 @@ app.include_router(scheduled_posts.router)
 app.include_router(reader.router)
 app.include_router(contract_jobs.router)
 app.include_router(contract_ai_bridge.router)
-app.include_router(special_consultations.router)
 app.include_router(service_agreements.router)
 app.include_router(lawyer_workspace.router)
 app.include_router(work_acts.router)

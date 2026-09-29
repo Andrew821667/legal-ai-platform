@@ -191,3 +191,20 @@ async def test_notify_admin_new_lead_still_requires_some_contact(monkeypatch: py
 
     assert sent_targets == []
     assert marked == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("intent", ["platform_question", "browsing"])
+async def test_no_paid_step_button_under_platform_questions(monkeypatch: pytest.MonkeyPatch, intent: str) -> None:
+    # Контекст ответа просит не давить предложением — кнопка платного шага
+    # под ним противоречила бы ему.
+    monkeypatch.setattr(user_ai_response.funnel, "should_show_consultation_button", lambda stage, shown: True)
+
+    async def _fail(*args, **kwargs):
+        raise AssertionError("кнопка не должна отправляться")
+
+    monkeypatch.setattr(user_ai_response.utils, "safe_reply_html", _fail)
+
+    assert await user_ai_response._maybe_send_consultation_cta(
+        original_message=SimpleNamespace(), response_stage="propose", cta_shown=False, intent=intent
+    ) is False

@@ -47,7 +47,7 @@ async def test_sales_intent_still_runs_leadgen_enforcement(monkeypatch):
     )
     _base_mocks(
         monkeypatch,
-        intent_result=intent_router.IntentResult(intent="sales_conversation", confidence=0.0, context_override=None),
+        intent_result=intent_router.IntentResult(intent="sales_conversation", confidence=0.9, context_override=None),
     )
 
     await user_ai_response.process_ai_response(
@@ -90,6 +90,42 @@ async def test_non_sales_intent_skips_leadgen_enforcement(monkeypatch):
         user_data={"id": 2, "telegram_id": 2, "first_name": "Гость"},
         lead=None,
         message_text="Сколько стоит ваша система?",
+        current_stage="discover",
+        cta_variant="A",
+        cta_shown=False,
+        allow_lead_processing=True,
+    )
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "intent_result",
+    [
+        # Неуверенная классификация — развилка, а не вопрос «сколько юристов».
+        intent_router.IntentResult(intent="unclear", confidence=0.2, context_override="# Запрос пока неясен"),
+        # Защита на случай, если sales придёт с низкой уверенностью.
+        intent_router.IntentResult(intent="sales_conversation", confidence=0.3, context_override=None),
+    ],
+)
+async def test_unsure_classification_skips_leadgen_enforcement(monkeypatch, intent_result):
+    calls = []
+    monkeypatch.setattr(
+        user_ai_response.funnel,
+        "enforce_leadgen_response",
+        lambda **kwargs: (calls.append(kwargs) or kwargs["response_text"]),
+    )
+    _base_mocks(monkeypatch, intent_result=intent_result)
+
+    await user_ai_response.process_ai_response(
+        update=SimpleNamespace(),
+        context=SimpleNamespace(),
+        original_message=SimpleNamespace(),
+        user=SimpleNamespace(first_name="Гость", id=3),
+        user_data={"id": 3, "telegram_id": 3, "first_name": "Гость"},
+        lead=None,
+        message_text="Здравствуйте, у меня вопрос",
         current_stage="discover",
         cta_variant="A",
         cta_shown=False,

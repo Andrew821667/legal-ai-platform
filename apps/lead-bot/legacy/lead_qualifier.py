@@ -8,6 +8,38 @@ import database
 
 logger = logging.getLogger(__name__)
 
+# Интенты, где описанная задача сама по себе повод завести лид: Telegram-
+# аккаунт — уже контакт. Раньше лид появлялся только с телефоном или почтой,
+# и человек, подробно описавший правовую задачу, юристу не доходил.
+TELEGRAM_CONTACT_INTENTS = frozenset({"new_legal_task", "dev_task"})
+
+_TEMPERATURE_RANK = {"cold": 0, "warm": 1, "hot": 2}
+
+
+def _task_described(extracted: Dict) -> bool:
+    return bool((extracted.get("pain_point") or "").strip() or (extracted.get("specific_need") or "").strip())
+
+
+def owner_should_hear(before: Optional[Dict], extracted: Dict, *, telegram_contact: bool = False) -> bool:
+    """Уведомлять ли юриста: впервые — или когда появилось то, ради чего стоит написать снова.
+
+    Раньше «НОВЫЙ ЛИД» уходил после каждого сообщения тёплого клиента: в
+    фоновой обработке не смотрели, что юрист уже уведомлён. Повод написать
+    снова — только рост температуры или впервые оставленный телефон/почта.
+    """
+    temperature = extracted.get("temperature") or extracted.get("lead_temperature") or "cold"
+    has_contact = bool(extracted.get("email") or extracted.get("phone"))
+    qualifies = temperature in ("hot", "warm") or (
+        bool((extracted.get("pain_point") or "").strip()) and (has_contact or telegram_contact)
+    )
+    if not qualifies:
+        return False
+    if not before or not before.get("notification_sent"):
+        return True
+    if _TEMPERATURE_RANK.get(temperature, 0) > _TEMPERATURE_RANK.get(before.get("temperature") or "cold", 0):
+        return True
+    return has_contact and not (before.get("email") or before.get("phone"))
+
 
 class LeadQualifier:
     """Класс для квалификации лидов"""
@@ -34,13 +66,21 @@ class LeadQualifier:
             "notes": f"{notes}\n{mark}" if notes else mark,
         }
 
-    def process_lead_data(self, user_id: int, extracted_data: Dict) -> Optional[int]:
+    def process_lead_data(
+        self,
+        user_id: int,
+        extracted_data: Dict,
+        *,
+        telegram_contact: bool = False,
+    ) -> Optional[int]:
         """
         Обработка и сохранение данных лида
 
         Args:
             user_id: ID пользователя в БД
             extracted_data: Извлеченные данные из диалога
+            telegram_contact: человек описал свою задачу в Telegram — лид
+                заводится и без телефона/почты, связь через Telegram
 
         Returns:
             ID лида или None
@@ -105,7 +145,8 @@ class LeadQualifier:
             has_contact = bool(lead_data.get('email') or lead_data.get('phone'))
             existing_has_contact = bool(existing_lead and (existing_lead.get('email') or existing_lead.get('phone')))
 
-            if not existing_lead and not has_contact:
+            via_telegram = telegram_contact and _task_described(extracted_data)
+            if not existing_lead and not has_contact and not via_telegram:
                 logger.info(
                     "Skipping lead creation for user %s: no contact info yet",
                     user_id,
@@ -115,8 +156,9 @@ class LeadQualifier:
             if not lead_data and existing_lead:
                 return existing_lead.get("id")
 
-            if not has_contact and not existing_has_contact and not existing_lead:
-                return None
+            if not existing_lead and not has_contact:
+                mark = "[CONTACT_MODE] Задача описана в Telegram, телефона/почты нет — связь через Telegram"
+                lead_data["notes"] = f"{lead_data['notes']}\n{mark}" if lead_data.get("notes") else mark
 
             # Пришёл по кнопке «Ассистент» под постом канала — новая заявка
             # помечается «из канала», чтобы воронка видела этот источник.

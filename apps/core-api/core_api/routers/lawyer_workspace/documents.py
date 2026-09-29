@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
 @router.get("/agreements/{agreement_id}/document")
 def agreement_document(
     agreement_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Точный текст, который видел и подписывал клиент, и его хеш.
@@ -53,7 +53,7 @@ def agreement_document(
 @router.get("/nda/{nda_id}/document")
 def nda_document(
     nda_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """То же для соглашения о конфиденциальности."""
@@ -72,7 +72,7 @@ def nda_document(
 @router.get("/nda-consents/{consent_id}/document")
 def nda_consent_document(
     consent_id: uuid.UUID,
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Точный отдельный текст согласия на обработку персональных данных."""
