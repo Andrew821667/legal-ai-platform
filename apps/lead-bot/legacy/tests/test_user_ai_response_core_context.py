@@ -30,7 +30,7 @@ async def test_core_context_is_prepended_to_funnel_context(monkeypatch):
 
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Привет"
 
@@ -68,7 +68,7 @@ async def test_no_core_context_leaves_funnel_context_unchanged(monkeypatch):
 
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Привет"
 
@@ -108,7 +108,7 @@ async def test_intent_override_replaces_stage_context(monkeypatch):
 
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Мы делаем..."
 
@@ -152,7 +152,7 @@ async def test_topic_memory_context_is_prepended_before_core_context(monkeypatch
 
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Привет"
 
@@ -191,7 +191,7 @@ async def test_no_topic_memory_leaves_funnel_context_unchanged(monkeypatch):
 
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Привет"
 
@@ -224,7 +224,7 @@ async def test_channel_post_context_reaches_the_model(monkeypatch):
     _stub_sales_intent(monkeypatch)
     captured = {}
 
-    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None):
+    async def _fake_stream(conversation_history, funnel_context=None, tools=None, tool_executor=None, **kwargs):
         captured["funnel_context"] = funnel_context
         yield "Ответ"
 

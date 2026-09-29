@@ -17,6 +17,7 @@ from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.config import get_settings
 from core_api.db import get_db
 from core_api.models import ActorType, AgreementTemplate, LegalIntake, Scope
+from core_api.routers.legal_intakes import client_names
 from core_api.terms_draft import MAX_TEMPLATES, draft_terms
 
 router = APIRouter(prefix="/api/v1/lawyer/intakes", tags=["lawyer-workspace"])
@@ -57,6 +58,7 @@ def terms_draft(
         model=settings.intake_analysis_model,
         proxy_url=settings.intake_analysis_proxy_url or None,
         timeout=settings.intake_analysis_timeout_seconds,
+        known_names=tuple(client_names(db, intake.lead_id)),
     )
 
     write_audit(

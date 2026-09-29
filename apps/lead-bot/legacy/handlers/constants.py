@@ -149,12 +149,6 @@ CONSENT_PDN_MENU = [
     [InlineKeyboardButton("📄 Политика ПД", callback_data="consent_doc_privacy")],
 ]
 
-CONSENT_TRANSBORDER_MENU = [
-    [InlineKeyboardButton("✅ Согласен на трансграничную передачу", callback_data="consent_transborder_yes")],
-    [InlineKeyboardButton("❌ Отказаться от ИИ-режима", callback_data="consent_transborder_no")],
-    [InlineKeyboardButton("📄 Условия трансграничной передачи", callback_data="consent_doc_transborder")],
-]
-
 # Следующий шаг под ответом ассистента. Юридическая задача — запись к юристу,
 # автоматизация и разработка — диагностика; обе платные, с ценой на кнопке.
 # Раньше была одна «Заказать консультацию», которая просила телефон и не
@@ -185,7 +179,7 @@ PERSONAL_MODE_RETURN_MENU = [
 DOCUMENTS_MENU = [
     [
         InlineKeyboardButton("📄 Политика ПД", callback_data="doc_privacy"),
-        InlineKeyboardButton("🌍 Трансграничная передача", callback_data="doc_transborder"),
+        InlineKeyboardButton("🛡 Обезличивание для ИИ", callback_data="doc_transborder"),
     ],
     [
         InlineKeyboardButton("📜 Пользовательское соглашение", callback_data="doc_user_agreement"),

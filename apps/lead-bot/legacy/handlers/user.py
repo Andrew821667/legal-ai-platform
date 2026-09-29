@@ -16,7 +16,6 @@ import security
 import content
 from .markup import (
     pdn_consent_markup as _pdn_consent_markup,
-    transborder_consent_markup as _transborder_consent_markup,
 )
 from .user_commands import (
     _is_pdn_consent_granted,
@@ -113,7 +112,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lead = database.db.get_local_lead_by_user_id(user_data["id"])
         consent_state = database.db.get_user_consent_state(user_data["id"])
         has_pdn_consent = _is_pdn_consent_granted(consent_state)
-        has_transborder_consent = bool(consent_state.get("transborder_consent"))
         is_admin = user.id == config.ADMIN_TELEGRAM_ID
         allow_lead_processing = (not is_admin) or config.ALLOW_ADMIN_TEST_LEADS
         chat = update.effective_chat
@@ -318,14 +316,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ):
             return
 
-        if not is_admin and not has_transborder_consent:
-            await utils.safe_reply_html(
-                original_message,
-                content.TRANSBORDER_REQUIRED_TEXT,
-                reply_markup=_transborder_consent_markup(),
-                action="transborder_required_message",
-            )
-            return
+        # Отдельного согласия на трансграничную передачу больше нет: модель
+        # получает обезличенный текст (pii.py), персональные данные за рубеж не уходят.
 
         # ПРОВЕРКА: если клиент повторяет одно и то же сообщение 3+ раза
         # И прошло более 30 минут с начала диалога - завершаем разговор

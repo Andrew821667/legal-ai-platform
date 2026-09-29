@@ -190,6 +190,7 @@ def next_turn(
         timeout=timeout,
         max_output_tokens=400,
         response_format={"type": "json_object"},
+        known_names=tuple(str(name) for name in intake.get("known_names") or ()),
     )
 
     if not result.ok:

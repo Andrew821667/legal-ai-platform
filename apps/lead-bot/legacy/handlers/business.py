@@ -1156,9 +1156,16 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
             funnel_context = f"{topic_memory_context}\n\n{funnel_context}"
         if core_context:
             funnel_context = f"{core_context}\n\n{funnel_context}"
+        sender = getattr(message, "from_user", None)
+        known_names = tuple(
+            value
+            for value in (getattr(sender, "first_name", None), getattr(sender, "last_name", None), getattr(sender, "username", None))
+            if value
+        )
         async for chunk in ai_brain.ai_brain.generate_response_stream(
             conversation_history,
-            funnel_context=funnel_context
+            funnel_context=funnel_context,
+            known_names=known_names,
         ):
             full_response += chunk
             chunk_buffer += chunk

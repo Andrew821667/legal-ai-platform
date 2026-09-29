@@ -215,6 +215,7 @@ def draft_terms(
     model: str = DEFAULT_MODEL,
     proxy_url: str | None = None,
     timeout: float = 90.0,
+    known_names: tuple[str, ...] = (),
 ) -> TermsDraft:
     """Черновик условий. Сбой модели — поле error, исключений наружу нет."""
     templates = templates[:MAX_TEMPLATES]
@@ -229,6 +230,7 @@ def draft_terms(
         # текст договора дорог в токенах: с меньшим лимитом ответ обрывается.
         max_output_tokens=3000,
         response_format={"type": "json_object"},
+        known_names=known_names,
     )
     if not result.ok:
         return TermsDraft(model=result.model, cost_usd=result.cost_usd, error=result.error or "empty_reply")

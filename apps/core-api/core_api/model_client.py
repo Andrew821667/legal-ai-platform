@@ -18,7 +18,16 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
+from shared.pii import Masker, mask_messages
+
 logger = logging.getLogger(__name__)
+
+
+def _masking_enabled() -> bool:
+    # Выключатель на крайний случай (LLM_PII_MASKING_ENABLED=false); по умолчанию включено.
+    from core_api.config import get_settings
+
+    return get_settings().llm_pii_masking_enabled
 
 # Цены за миллион токенов: ввод, вывод. Вынесены сюда, чтобы правка тарифов не
 # требовала изменения логики; актуальные значения — на странице тарифов вендора.
@@ -72,15 +81,27 @@ def chat(
     timeout: float = 90.0,
     max_output_tokens: int = 900,
     response_format: dict | None = None,
+    known_names: tuple[str, ...] = (),
 ) -> ChatResult:
     """Обращение к модели.
 
     Исключения не выпускают наружу: у обоих потребителей сбой модели не должен
     ломать основной сценарий. Ошибка возвращается полем error, а вызывающая
     сторона решает, чем её заменить.
+
+    Персональные данные к вендору не уходят: текст сообщений (кроме наших
+    системных промптов) обезличивается метками, ответ модели получает исходные
+    значения обратно (shared.pii). known_names — имя и организация клиента,
+    которые иначе можно не узнать в тексте.
     """
     if not api_key:
         return ChatResult(text="", model=model, error="api_key_missing")
+
+    masker = Masker(known_names=tuple(name for name in known_names if name)) if _masking_enabled() else None
+    if masker is not None:
+        messages = mask_messages(messages, masker)
+        if masker.mapping:
+            logger.info("model_pii_masked", extra={"items": len(masker.mapping)})
 
     request_body: dict[str, object] = {
         "model": model,
@@ -128,6 +149,9 @@ def chat(
     prompt_tokens = int(usage.get("prompt_tokens") or 0)
     completion_tokens = int(usage.get("completion_tokens") or 0)
     used_model = str(body.get("model") or model)
+
+    if masker is not None:
+        text = masker.restore(text)
 
     return ChatResult(
         text=text,
