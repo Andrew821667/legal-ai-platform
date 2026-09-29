@@ -157,6 +157,26 @@ class CoreApiBridge:
         )
         return result if isinstance(result, dict) else None
 
+    def decide_link(self, *, code_id: str, telegram_user_id: int, accept: bool) -> dict[str, Any] | None:
+        """Ответ владельца Telegram на «Объединить?». None — запрос устарел или ядро недоступно."""
+        if not self.enabled:
+            return None
+        result = self._post_read(
+            f"/api/v1/client-auth/telegram-link-codes/{code_id}/decision",
+            {"telegram_user_id": int(telegram_user_id), "accept": bool(accept)},
+        )
+        return result if isinstance(result, dict) else None
+
+    def owner_unlink(self, *, account_id: str, telegram_user_id: int) -> dict[str, Any] | None:
+        """«Это был не я» — отвязать Telegram от учётной записи сайта."""
+        if not self.enabled:
+            return None
+        result = self._post_read(
+            f"/api/v1/client-auth/accounts/{account_id}/telegram/owner-unlink",
+            {"telegram_user_id": int(telegram_user_id)},
+        )
+        return result if isinstance(result, dict) else None
+
     def _post(
         self,
         path: str,

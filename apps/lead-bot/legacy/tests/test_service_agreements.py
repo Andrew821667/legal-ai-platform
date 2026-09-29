@@ -461,7 +461,7 @@ async def test_client_details_create_and_open_signable_revision(monkeypatch, rep
         "Петров Пётр Петрович",
         "+7 900 000-00-00",
         "г. Москва, ул. Тестовая, д. 1",
-        "паспорт 00 00 000000, выдан 01.01.2020",
+        "паспорт 4501 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
     ):
         assert await flow.handle_message(input_update, ctx, value)
 
@@ -508,7 +508,7 @@ async def test_client_details_survive_document_delivery_failure(monkeypatch, rep
     assert await flow.handle_message(
         update,
         ctx,
-        "паспорт 00 00 000000, выдан 01.01.2020",
+        "паспорт 4501 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
     )
 
     assert flow.STATE_KEY not in ctx.user_data

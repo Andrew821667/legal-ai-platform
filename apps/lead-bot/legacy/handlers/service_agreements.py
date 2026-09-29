@@ -8,6 +8,7 @@ import logging
 import uuid
 
 import admin_interface
+import party_validation
 import utils
 from config import get_config
 from admin_access import is_admin_user
@@ -41,7 +42,8 @@ _CLIENT_FIELDS = {
         ("address", "Укажите адрес регистрации."),
         (
             "identity_document",
-            "Укажите вид документа, серию, номер, кем и когда он выдан.",
+            "Укажите паспорт: серию и номер, кем выдан, дату выдачи и код подразделения. "
+            f"{party_validation.PASSPORT_EXAMPLE} Для иностранного документа — его вид, номер и дату выдачи.",
         ),
     ),
     "organization": (
@@ -173,14 +175,30 @@ def _summary(item: dict) -> str:
     )
 
 
+_CLIENT_VALIDATORS = {
+    "full_name": party_validation.full_name,
+    "contact": party_validation.contact,
+    "address": party_validation.address,
+    "identity_document": party_validation.identity_document,
+    "org_name": party_validation.org_name,
+    "inn": party_validation.inn,
+    "ogrn": party_validation.ogrn,
+    "position": party_validation.position,
+    "authority_basis": party_validation.authority_basis,
+}
+
+
 def _client_value_error(field: str, value: str) -> str | None:
-    if field == "inn" and (not value.isdigit() or len(value) not in {10, 12}):
-        return "ИНН должен содержать 10 или 12 цифр. Введите его ещё раз."
-    if field == "ogrn" and (not value.isdigit() or len(value) not in {13, 15}):
-        return "ОГРН или ОГРНИП должен содержать 13 или 15 цифр. Введите его ещё раз."
-    minimum = 5 if field in {"full_name", "address", "identity_document"} else 3
-    if len(value) < minimum:
-        return "Значение слишком короткое. Введите данные полностью."
+    """Та же проверка по существу, что в ядре (party_validation): договор с
+    абракадаброй вместо паспорта или ИНН с неверной контрольной суммой
+    юридически ничего не стоит — говорим сразу и с примером."""
+    check = _CLIENT_VALIDATORS.get(field)
+    if check is None:
+        return None if len(value) >= 3 else "Значение слишком короткое. Введите данные полностью."
+    try:
+        check(value)
+    except party_validation.PartyDataError as exc:
+        return f"{exc} Введите ещё раз."
     return None
 
 

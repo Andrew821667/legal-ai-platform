@@ -92,7 +92,7 @@ from handlers.service_agreements import handle_admin_callback as handle_service_
 from handlers.service_agreements import handle_client_callback as handle_service_agreement_client_callback
 from handlers.work_acts import handle_admin_callback as handle_work_act_admin_callback
 from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
-from handlers.client_link import link_command
+from handlers.client_link import handle_link_callback, link_command
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from telegram_ui import inline_button as InlineKeyboardButton
@@ -854,6 +854,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_work_act_client_callback(update, context)
         elif data.startswith("nda:"):
             await handle_nda_callback(update, context)
+        elif data.startswith("clink:"):
+            await handle_link_callback(update, context)
         elif data == "contract_upload":
             await handle_contract_analysis_start(update, context)
         elif data == "contract_cancel":

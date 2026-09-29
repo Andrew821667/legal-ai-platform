@@ -89,7 +89,7 @@ def _consent_and_nda_preview(
     details = {
         "signer_full_name": "Иванов Иван Иванович",
         "signer_contact": "+7 900 123-45-67",
-        "signer_identity_document": "45 01 123456, выдан ОВД 01.02.2010",
+        "signer_identity_document": "45 01 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
         "signer_org": "",
         **overrides,
     }

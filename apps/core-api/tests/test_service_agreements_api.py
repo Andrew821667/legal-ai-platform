@@ -199,7 +199,7 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
                 "full_name": "Петров Пётр Петрович",
                 "contact": "+7 900 000-00-00",
                 "address": "г. Москва, ул. Тестовая, д. 1",
-                "identity_document": "паспорт 00 00 000000, выдан 01.01.2020",
+                "identity_document": "паспорт 45 01 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
             },
         )
         assert completed.status_code == 201
@@ -209,7 +209,7 @@ def test_two_sided_agreement_flow(monkeypatch) -> None:
         assert agreement["revision"] == 2
         assert agreement["status"] == "sent"
         assert agreement["client_details_complete"] is True
-        assert "паспорт 00 00 000000" in agreement["text"]
+        assert "паспорт 45 01 123456" in agreement["text"]
 
         visible = client.get(
             f"/api/v1/service-agreements/by-telegram/{telegram_id}",

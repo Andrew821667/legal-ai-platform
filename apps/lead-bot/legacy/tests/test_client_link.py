@@ -82,3 +82,58 @@ def test_bridge_asks_core_for_a_code(monkeypatch) -> None:
     assert result["code"] == "ABCD-EFGH"
     assert captured["url"] == "http://core-api:8000/api/v1/client-auth/telegram-link-codes"
     assert captured["body"] == {"telegram_user_id": 42, "telegram_username": None}
+
+
+def _query(data: str, edited: list[str]) -> SimpleNamespace:
+    async def _answer(*args, **kwargs):
+        return None
+
+    async def _edit(text, **kwargs):
+        edited.append(text)
+
+    return SimpleNamespace(
+        data=data, from_user=SimpleNamespace(id=42), message=None, answer=_answer, edit_message_text=_edit
+    )
+
+
+CODE_ID = "11111111-1111-1111-1111-111111111111"
+
+
+@pytest.mark.asyncio
+async def test_yes_links_and_no_declines_through_the_core(monkeypatch) -> None:
+    asked = []
+
+    def _decide(**kwargs):
+        asked.append(kwargs)
+        return {"status": "linked" if kwargs["accept"] else "declined", "email": "anna@yandex.ru"}
+
+    monkeypatch.setattr(client_link.core_api_bridge, "decide_link", _decide)
+    edited: list[str] = []
+    await client_link.handle_link_callback(SimpleNamespace(callback_query=_query(f"clink:ok:{CODE_ID}", edited)), None)
+    await client_link.handle_link_callback(SimpleNamespace(callback_query=_query(f"clink:no:{CODE_ID}", edited)), None)
+
+    assert asked == [
+        {"code_id": CODE_ID, "telegram_user_id": 42, "accept": True},
+        {"code_id": CODE_ID, "telegram_user_id": 42, "accept": False},
+    ]
+    assert "объединён с учётной записью сайта anna@yandex.ru" in edited[0]
+    assert "ничего не объединено" in edited[1]
+
+
+@pytest.mark.asyncio
+async def test_undo_unlinks_and_junk_is_ignored(monkeypatch) -> None:
+    unlinked = []
+    monkeypatch.setattr(
+        client_link.core_api_bridge,
+        "owner_unlink",
+        lambda **kwargs: unlinked.append(kwargs) or {"status": "unlinked", "email": "anna@yandex.ru"},
+    )
+    monkeypatch.setattr(client_link.core_api_bridge, "decide_link", lambda **kwargs: None)
+    edited: list[str] = []
+    await client_link.handle_link_callback(SimpleNamespace(callback_query=_query(f"clink:undo:{CODE_ID}", edited)), None)
+    await client_link.handle_link_callback(SimpleNamespace(callback_query=_query("clink:ok:../../x", edited)), None)
+    await client_link.handle_link_callback(SimpleNamespace(callback_query=_query(f"clink:ok:{CODE_ID}", edited)), None)
+
+    assert unlinked == [{"account_id": CODE_ID, "telegram_user_id": 42}]
+    assert "Отвязано" in edited[0]
+    assert "устарел" in edited[1] and "устарел" in edited[2]

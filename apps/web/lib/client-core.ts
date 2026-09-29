@@ -44,6 +44,8 @@ export type ClientAccountInfo = {
   telegram_user_id: number | null;
   telegram_username: string | null;
   telegram_linked_at: string | null;
+  /** Код введён на сайте, ждём «Да» владельца Telegram в боте. */
+  link_pending?: boolean;
 };
 
 /** Учётная запись из ядра — для серверных страниц кабинета; null, если ядро молчит. */
