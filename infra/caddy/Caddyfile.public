@@ -11,8 +11,17 @@
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    handle /api/v1/* {
+    # Ядро наружу — только то, что ходит снаружи: воркер договоров (MacBook)
+    # и мост Contract AI. Сайт, боты и новости обращаются к core-api:8000
+    # внутри сети; ключ бота видит данные клиентов, и публиковать весь
+    # /api/v1 в интернет незачем (аудит периметра, 27.09).
+    @core_public path /api/v1/workers /api/v1/workers/* /api/v1/contract-jobs /api/v1/contract-jobs/* /api/v1/contract-ai/*
+    handle @core_public {
         reverse_proxy core-api:8000
+    }
+
+    handle /api/v1/* {
+        respond 404
     }
 
     handle /health {
@@ -27,10 +36,8 @@
         reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
     }
 
-    handle /telegram-mcp* {
-        uri strip_prefix /telegram-mcp
-        reverse_proxy host.docker.internal:8791
-    }
+    # /telegram-mcp — только на служебном домене memory: на домене сайта он
+    # был бы общедоступным доступом к Telegram владельца.
 
     handle /lawtable {
         redir /lawtable/app 302
@@ -80,8 +87,17 @@ https://{$DOMAIN} {
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    handle /api/v1/* {
+    # Ядро наружу — только то, что ходит снаружи: воркер договоров (MacBook)
+    # и мост Contract AI. Сайт, боты и новости обращаются к core-api:8000
+    # внутри сети; ключ бота видит данные клиентов, и публиковать весь
+    # /api/v1 в интернет незачем (аудит периметра, 27.09).
+    @core_public path /api/v1/workers /api/v1/workers/* /api/v1/contract-jobs /api/v1/contract-jobs/* /api/v1/contract-ai/*
+    handle @core_public {
         reverse_proxy core-api:8000
+    }
+
+    handle /api/v1/* {
+        respond 404
     }
 
     handle /health {
@@ -95,10 +111,8 @@ https://{$DOMAIN} {
     # Guacamole намеренно не публикуется на основном домене:
     # единственная публичная точка входа — {$MEMORY_DOMAIN}, и она закрыта basic_auth.
 
-    handle /telegram-mcp* {
-        uri strip_prefix /telegram-mcp
-        reverse_proxy host.docker.internal:8791
-    }
+    # /telegram-mcp — только на служебном домене memory: на домене сайта он
+    # был бы общедоступным доступом к Telegram владельца.
 
     handle /lawtable {
         redir /lawtable/app 302

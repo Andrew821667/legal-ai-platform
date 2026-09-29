@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api/v1/lawyer", tags=["lawyer-workspace"])
 
 @router.get("/today")
 def today(
-    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin, Scope.bot)),
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
     db: Session = Depends(get_db),
 ) -> dict:
     """Что стоит без движения и ждёт юриста.

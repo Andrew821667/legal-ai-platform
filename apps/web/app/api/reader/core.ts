@@ -1,12 +1,12 @@
 const CORE_API_URL =
   process.env.CORE_API_URL || process.env.NEXT_PUBLIC_CORE_API_URL || "http://127.0.0.1:8000";
 
+// Публичный маршрут — только ключ бота: запасной ключ администратора открыл бы
+// при сбое конфигурации всё ядро (см. аудит периметра).
 const CORE_API_READER_KEY =
   process.env.CORE_API_BOT_KEY ||
   process.env.API_KEY_BOT ||
   process.env.API_KEY_NEWS ||
-  process.env.CORE_API_ADMIN_KEY ||
-  process.env.API_KEY_ADMIN ||
   "";
 
 const CORE_API_FETCH_TIMEOUT_MS = (() => {
