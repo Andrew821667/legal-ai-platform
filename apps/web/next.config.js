@@ -64,13 +64,13 @@ const nextConfig = {
             key: 'Content-Security-Policy-Report-Only',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://www.googletagmanager.com https://telegram.org",
+              "script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://telegram.org",
               "style-src 'self' 'unsafe-inline'",
               // https://t.me и https://*.telegram.org — аватар профиля из
               // Telegram Login на странице /cabinet/profile, обычный <img>.
-              "img-src 'self' data: blob: https://mc.yandex.ru https://www.google-analytics.com https://www.googletagmanager.com https://t.me https://*.telegram.org",
+              "img-src 'self' data: blob: https://mc.yandex.ru https://t.me https://*.telegram.org",
               "font-src 'self' data:",
-              "connect-src 'self' https://mc.yandex.ru https://www.google-analytics.com https://www.googletagmanager.com",
+              "connect-src 'self' https://mc.yandex.ru",
               // https://oauth.telegram.org — legacy-виджет входа рисует
               // кнопку и подтверждение внутри iframe с этого источника.
               // Обмен кода на токен идёт с сервера (route handler), CSP
