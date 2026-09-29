@@ -14,7 +14,6 @@ from .constants import (
     build_admin_reply_menu,
     build_client_reply_menu,
     CONSENT_PDN_MENU,
-    CONSENT_TRANSBORDER_MENU,
     CONSULTATION_CTA_MENU,
     DOCUMENTS_MENU,
     PERSONAL_MODE_RETURN_MENU,
@@ -38,10 +37,6 @@ def pdn_consent_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSENT_PDN_MENU)
 
 
-def transborder_consent_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(CONSENT_TRANSBORDER_MENU)
-
-
 def consultation_cta_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(CONSULTATION_CTA_MENU)
 
@@ -53,7 +48,7 @@ def documents_markup() -> InlineKeyboardMarkup:
 WEB_OPEN_LABELS = {
     "contract_ai": "Открыть Contract AI",
     "privacy": "Открыть политику ПД",
-    "transborder": "Открыть условия передачи",
+    "transborder": "Открыть страницу об обезличивании",
     "user_agreement": "Открыть соглашение",
     "ai_policy": "Открыть политику ИИ",
     "marketing_consent": "Открыть согласие на рассылки",

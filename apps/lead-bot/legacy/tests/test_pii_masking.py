@@ -139,3 +139,16 @@ async def test_masking_switch_off(monkeypatch: pytest.MonkeyPatch) -> None:
     await _collect(brain.generate_response_stream([{"role": "user", "message": "Меня зовут Иван Петров."}]))
 
     assert "Иван Петров" in _sent_text(completions.calls[0])
+
+
+def test_no_separate_transborder_consent_any_more() -> None:
+    # С обезличиванием данные за рубеж не уходят — отдельного согласия и шага
+    # «разрешите ИИ-режим» перед ответом ассистента больше нет.
+    import inspect
+
+    import content
+    from handlers import user
+
+    assert "transborder" not in inspect.getsource(user.handle_message).lower()
+    assert content.consent_user_status_text({"consent_given": True}) == "✅ Согласие на обработку ПД уже дано."
+    assert "обезличенный текст" in content.transborder_policy_text()

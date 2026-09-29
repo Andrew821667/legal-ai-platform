@@ -478,7 +478,7 @@ HELP_MESSAGE = (
     "<code>/documents</code> - список документов\n\n"
     "<b>Документы и управление данными:</b>\n"
     "<code>/privacy</code> - политика обработки ПД\n"
-    "<code>/transborder_consent</code> - условия трансграничной передачи\n"
+    "<code>/transborder_consent</code> - обезличивание данных перед сервисами ИИ\n"
     "<code>/user_agreement</code> - пользовательское соглашение\n"
     "<code>/ai_policy</code> - политика использования ИИ\n"
     "<code>/marketing_consent</code> - условия рассылок\n"
@@ -784,7 +784,7 @@ CONSENT_STEP_1_TEXT = (
     "<b>Важно:</b>\n"
     "• не присылайте без необходимости персональные данные третьих лиц и реквизиты документов\n"
     "• паспортные данные не передаются системам ИИ, веб-аналитике и рекламным системам\n"
-    "• для ИИ-анализа действует отдельное согласие на трансграничную передачу\n\n"
+    "• перед отправкой сервисам ИИ персональные данные обезличиваются — за рубеж они не передаются\n\n"
     "<b>Ваши права:</b>\n"
     "• запросить экспорт данных\n"
     "• запросить исправление\n"
@@ -794,22 +794,6 @@ CONSENT_STEP_1_TEXT = (
 )
 
 
-CONSENT_TRANSBORDER_TEXT = (
-    "<b>🌍 Согласие на трансграничную передачу данных для ИИ</b>\n\n"
-    "Для ИИ-ответов сообщения отправляются во внешние сервисы искусственного интеллекта "
-    "(например, OpenAI-совместимые провайдеры).\n"
-    "Перед отправкой мы не передаем ваши контактные данные как отдельные поля.\n\n"
-    "<b>Если не дать это согласие:</b>\n"
-    "• можно пользоваться меню и оставить заявку\n"
-    "• ИИ-режим анализа кейса будет отключен\n\n"
-    "Разрешаете использовать ИИ-режим с трансграничной передачей?"
-)
-
-
-TRANSBORDER_REQUIRED_TEXT = (
-    "⚠️ <b>Для ИИ-анализа вашего кейса нужно согласие на трансграничную передачу данных.</b>\n\n"
-    "Без него доступны: меню, консультация и ручная передача запроса команде."
-)
 
 
 CONSENT_DENIED_TEXT = (
@@ -827,17 +811,14 @@ CONSENT_REVOKED_TEXT = (
 
 def consent_status_text(consent: dict) -> str:
     consent_given = bool(consent.get("consent_given"))
-    transborder = bool(consent.get("transborder_consent"))
     revoked = bool(consent.get("consent_revoked"))
     consent_date = consent.get("consent_date") or "—"
-    transborder_date = consent.get("transborder_consent_date") or "—"
     revoked_date = consent.get("consent_revoked_at") or "—"
     return (
         "<b>📑 Статус согласий</b>\n\n"
         f"• Обработка ПД: {'✅' if consent_given else '❌'}\n"
         f"• Дата согласия: {_e(consent_date)}\n"
-        f"• Трансграничная передача: {'✅' if transborder else '❌'}\n"
-        f"• Дата трансграничного согласия: {_e(transborder_date)}\n"
+
         f"• Согласие отозвано: {'✅' if revoked else '❌'}\n"
         f"• Дата отзыва: {_e(revoked_date)}"
     )
@@ -845,15 +826,12 @@ def consent_status_text(consent: dict) -> str:
 
 def consent_user_status_text(consent: dict) -> str:
     consent_given = bool(consent.get("consent_given"))
-    transborder = bool(consent.get("transborder_consent"))
     revoked = bool(consent.get("consent_revoked"))
 
     if revoked:
         return "⚠️ Согласия отозваны. Для повторного запуска отправьте /start."
-    if consent_given and transborder:
-        return "✅ Согласия на обработку ПД и трансграничную передачу уже даны."
     if consent_given:
-        return "✅ Согласие на обработку ПД уже дано. ИИ-режим включится после отдельного согласия на трансграничную передачу."
+        return "✅ Согласие на обработку ПД уже дано."
     return "❌ Согласия еще не даны."
 
 
@@ -869,8 +847,10 @@ def privacy_policy_text() -> str:
 
 def transborder_policy_text() -> str:
     return (
-        "<b>📄 Согласие на трансграничную передачу данных</b>\n\n"
-        "Нужно для работы ИИ-функций на базе внешних сервисов искусственного интеллекта.\n"
+        "<b>🛡 Обезличивание перед сервисами ИИ</b>\n\n"
+        "Сервисы искусственного интеллекта получают только обезличенный текст: имена, телефоны, почта, "
+        "номера документов, счетов и карт, адреса и даты рождения заменяются метками. "
+        "Персональные данные за рубеж не передаются, отдельное согласие не нужно.\n"
         "<b>Подробная версия:</b> откройте веб-версию кнопкой под сообщением."
     )
 

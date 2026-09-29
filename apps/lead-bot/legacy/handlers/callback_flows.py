@@ -324,8 +324,8 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
         await utils.safe_edit_html(
             query.message,
             "<b>✅ Согласие на обработку ПД сохранено.</b>\n\n"
-            "Теперь можно оставить заявку, передать контакт и получать материалы.\n"
-            "Для ИИ-разбора кейса понадобится отдельное согласие на трансграничную передачу.",
+            "Теперь можно описать задачу, оставить заявку и получать материалы.\n"
+            "Сервисы ИИ получают только обезличенный текст — персональные данные за рубеж не передаются.",
             action="consent_pdn_yes",
         )
 
@@ -353,21 +353,14 @@ async def handle_consent_callback(update: Update, context: ContextTypes.DEFAULT_
     if action in ("consent_transborder_yes", "consent_transborder_no"):
         transborder_enabled = action == "consent_transborder_yes"
         database.db.set_user_transborder_consent(user_data["id"], transborder_enabled)
-        if transborder_enabled:
-            await utils.safe_edit_html(
-                query.message,
-                "<b>✅ Согласия сохранены.</b> ИИ-режим включен.\n\n"
-                "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг.",
-                action="consent_transborder_yes",
-            )
-        else:
-            await utils.safe_edit_html(
-                query.message,
-                "<b>✅ Согласие на обработку ПД сохранено.</b>\n"
-                "ИИ-режим отключен до вашего разрешения на трансграничную передачу.\n\n"
-                "Можно пользоваться меню и оставить заявку на консультацию.",
-                action="consent_transborder_no",
-            )
+        # Кнопки из старых сообщений: отдельное согласие больше не нужно.
+        await utils.safe_edit_html(
+            query.message,
+            "<b>Отдельное согласие больше не нужно.</b> Сервисы ИИ получают только обезличенный текст — "
+            "персональные данные за рубеж не передаются.\n\n"
+            "Можно описать задачу в свободной форме, и я помогу сформировать следующий шаг.",
+            action=action,
+        )
 
         await utils.safe_reply_html(
             query.message,
