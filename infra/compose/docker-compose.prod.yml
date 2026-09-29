@@ -13,7 +13,8 @@ x-telegram-api-and-host-extra-hosts: &telegram-api-and-host-extra-hosts
 # весь .env по-прежнему общий, но утечка из одного контейнера (веб, бот новостей)
 # не отдаёт ключ шифрования ПДн, ключи ИИ или токены чужих ботов. Кому что нужно —
 # по чтению переменных в коде; сверку держит apps/core-api/tests/test_compose_secrets.py.
-# Новый секрет сервису — убрать его из «off»-блока его группы.
+# Новый секрет сервису — убрать его из «off»-блока его группы; новый секрет в .env —
+# добавить в «off»-блоки всех групп, которым он не нужен.
 x-secrets-off-web: &secrets-off-web
   ALERT_BOT_TOKEN: ""
   API_KEY_WORKER: ""
@@ -26,6 +27,7 @@ x-secrets-off-web: &secrets-off-web
   OPENAI_API_KEY: ""
   PII_ENCRYPTION_KEY: ""
   POSTGRES_PASSWORD: ""
+  SMTP_PASSWORD: ""
   TELEGRAM_API_HASH: ""
 x-secrets-off-core: &secrets-off-core
   ADMIN_PANEL_ALLOW_LEGACY_PASSWORD: ""
@@ -45,10 +47,13 @@ x-secrets-off-core: &secrets-off-core
   OPENAI_API_KEY: ""
   POSTGRES_PASSWORD: ""
   READER_BOT_TOKEN: ""
+  SMTP_PASSWORD: ""
   TELEGRAM_API_HASH: ""
   TELEGRAM_BOT_TOKEN: ""
   TELEGRAM_OAUTH_CLIENT_SECRET: ""
   WEB_ASSISTANT_INTERNAL_KEY: ""
+  YANDEX_OAUTH_CLIENT_SECRET: ""
+  YM_ACCESS_TOKEN: ""
 x-secrets-off-lead-bot: &secrets-off-lead-bot
   ADMIN_PANEL_ALLOW_LEGACY_PASSWORD: ""
   ADMIN_PANEL_PASSWORD_HASH: ""
@@ -68,6 +73,8 @@ x-secrets-off-lead-bot: &secrets-off-lead-bot
   READER_BOT_TOKEN: ""
   TELEGRAM_API_HASH: ""
   TELEGRAM_OAUTH_CLIENT_SECRET: ""
+  YANDEX_OAUTH_CLIENT_SECRET: ""
+  YM_ACCESS_TOKEN: ""
 x-secrets-off-news: &secrets-off-news
   ADMIN_PANEL_ALLOW_LEGACY_PASSWORD: ""
   ADMIN_PANEL_PASSWORD_HASH: ""
@@ -87,8 +94,11 @@ x-secrets-off-news: &secrets-off-news
   PII_ENCRYPTION_KEY: ""
   POSTGRES_PASSWORD: ""
   READER_BOT_TOKEN: ""
+  SMTP_PASSWORD: ""
   TELEGRAM_OAUTH_CLIENT_SECRET: ""
   WEB_ASSISTANT_INTERNAL_KEY: ""
+  YANDEX_OAUTH_CLIENT_SECRET: ""
+  YM_ACCESS_TOKEN: ""
 x-secrets-off-reader: &secrets-off-reader
   ADMIN_PANEL_ALLOW_LEGACY_PASSWORD: ""
   ADMIN_PANEL_PASSWORD_HASH: ""
@@ -108,8 +118,11 @@ x-secrets-off-reader: &secrets-off-reader
   LEAD_NOTIFY_BOT_TOKEN: ""
   NEWS_ADMIN_BOT_TOKEN: ""
   PII_ENCRYPTION_KEY: ""
+  SMTP_PASSWORD: ""
   TELEGRAM_OAUTH_CLIENT_SECRET: ""
   WEB_ASSISTANT_INTERNAL_KEY: ""
+  YANDEX_OAUTH_CLIENT_SECRET: ""
+  YM_ACCESS_TOKEN: ""
 
 services:
   postgres:

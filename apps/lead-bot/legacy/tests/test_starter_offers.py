@@ -66,3 +66,17 @@ def test_lead_magnets_promise_nothing_free_from_the_lawyer() -> None:
 
 def test_is_cta_shown_recognizes_paid_diagnostic() -> None:
     assert funnel.is_cta_shown("Следующий шаг — диагностика за 7 900 ₽.", "A")
+
+
+def test_email_materials_are_offered_only_with_mail_configured(monkeypatch) -> None:
+    # Чек-лист и образец отчёта уходят письмом: без почты клиент получал
+    # «Произошла ошибка при отправке email».
+    cfg = constants.get_config()
+    monkeypatch.setattr(cfg, "SMTP_USER", "")
+    monkeypatch.setattr(cfg, "SMTP_PASSWORD", "")
+    without_mail = [b.callback_data for row in constants.build_lead_magnet_menu() for b in row]
+    assert without_mail == ["magnet_consultation", "magnet_demo"]
+    monkeypatch.setattr(cfg, "SMTP_USER", "noreply@ai-verdict.ru")
+    monkeypatch.setattr(cfg, "SMTP_PASSWORD", "app-password")
+    with_mail = [b.callback_data for row in constants.build_lead_magnet_menu() for b in row]
+    assert with_mail == ["magnet_consultation", "magnet_checklist", "magnet_demo", "magnet_sample_report"]
