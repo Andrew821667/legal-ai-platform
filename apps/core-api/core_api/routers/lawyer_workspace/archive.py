@@ -27,8 +27,6 @@ from core_api.models import (
     ServiceAgreement,
     ServiceAgreementMessage,
     ServiceAgreementStatus,
-    SpecialConsultationOrder,
-    SpecialConsultationPayment,
     WorkAct,
 )
 from core_api.routers.lawyer_workspace.common import (
@@ -196,9 +194,6 @@ def purge_client(
     act_ids = list(
         db.scalars(select(WorkAct.id).where(WorkAct.agreement_id.in_(agreement_ids or [uuid.UUID(int=0)])))
     )
-    order_ids = list(
-        db.scalars(select(SpecialConsultationOrder.id).where(SpecialConsultationOrder.lead_id == lead.id))
-    )
     none = [uuid.UUID(int=0)]
 
     db.execute(
@@ -208,10 +203,6 @@ def purge_client(
                 and_(AuditLog.target_type == "legal_intake", AuditLog.target_id.in_(intake_ids or none)),
                 and_(AuditLog.target_type == "service_agreement", AuditLog.target_id.in_(agreement_ids or none)),
                 and_(AuditLog.target_type == "work_act", AuditLog.target_id.in_(act_ids or none)),
-                and_(
-                    AuditLog.target_type == "special_consultation_order",
-                    AuditLog.target_id.in_(order_ids or none),
-                ),
             )
         )
     )
@@ -220,9 +211,6 @@ def purge_client(
         db.execute(delete(WorkAct).where(WorkAct.agreement_id.in_(agreement_ids)))
         db.execute(delete(ServiceAgreementMessage).where(ServiceAgreementMessage.agreement_id.in_(agreement_ids)))
         db.execute(delete(ServiceAgreement).where(ServiceAgreement.id.in_(agreement_ids)))
-    if order_ids:
-        db.execute(delete(SpecialConsultationPayment).where(SpecialConsultationPayment.order_id.in_(order_ids)))
-        db.execute(delete(SpecialConsultationOrder).where(SpecialConsultationOrder.id.in_(order_ids)))
     db.execute(delete(Event).where(Event.lead_id == lead.id))
     # Задания другого продукта (анализ договоров) не наши — только отвязываем.
     db.execute(update(ContractJob).where(ContractJob.lead_id == lead.id).values(lead_id=None))

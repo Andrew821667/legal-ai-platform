@@ -49,7 +49,6 @@ from core_api.models import (
     NdaPersonalDataConsent,
     NdaSignature,
     ServiceAgreement,
-    SpecialConsultationOrder,
     TelegramDelivery,
     WorkAct,
 )
@@ -151,12 +150,6 @@ def anonymize_lead(db: Session, lead: Lead, now: datetime) -> dict:
                 next_attempt_at=None)
     ).rowcount
     counts["events"] = db.execute(update(Event).where(Event.lead_id == lead.id).values(payload={})).rowcount
-    db.execute(
-        update(SpecialConsultationOrder)
-        .where(SpecialConsultationOrder.lead_id == lead.id)
-        .values(telegram_user_id=None, customer_name=None, customer_contact=None, customer_email=None,
-                customer_phone=None, customer_company=None, request_note=None, internal_note=None, context={})
-    )
 
     lead.name = ANON_NAME
     lead.contact = PLACEHOLDER
