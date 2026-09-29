@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildLeadAttribution,
   trackLeadConversion,
+  trackServiceRouteClick,
   trackStarterOfferSelection,
 } from "./lead-attribution.ts";
 import { starterOffers } from "./starter-offers.ts";
@@ -17,6 +18,53 @@ test("marks a Google visit as organic and keeps the first landing page", () => {
   assert.equal(data.utm_source, "google");
   assert.equal(data.utm_medium, "organic");
   assert.equal(data.landing_page, "/legal-ai/contract-review");
+});
+
+test("tracks each service route with its destination and first-touch source", () => {
+  const calls = [];
+  globalThis.window = {
+    location: { href: "https://ai-verdict.ru/legal-ai/prompts-for-lawyers" },
+    sessionStorage: {
+      getItem: () => JSON.stringify({
+        landing_page: "/legal-ai/prompts-for-lawyers",
+        utm_source: "google",
+        utm_medium: "organic",
+      }),
+    },
+    ym: (...args) => calls.push(args),
+  };
+
+  try {
+    trackServiceRouteClick("legal_contract_review", "/legal-help/contracts");
+    trackServiceRouteClick("contract_ai", "/contract-ai-system");
+    trackServiceRouteClick("engineering_rag_service", "/engineering/ai-rag");
+  } finally {
+    delete globalThis.window;
+  }
+
+  assert.equal(calls.length, 3);
+  for (const call of calls) {
+    assert.equal(call[1], "reachGoal");
+    assert.equal(call[2], "service_route_click");
+  }
+  assert.deepEqual(calls.map((call) => call[3].route), [
+    "legal_contract_review",
+    "contract_ai",
+    "engineering_rag_service",
+  ]);
+  assert.deepEqual(calls.map((call) => call[3].destination), [
+    "/legal-help/contracts",
+    "/contract-ai-system",
+    "/engineering/ai-rag",
+  ]);
+  assert.deepEqual(calls[0][3], {
+    route: "legal_contract_review",
+    from_page: "/legal-ai/prompts-for-lawyers",
+    destination: "/legal-help/contracts",
+    landing_page: "/legal-ai/prompts-for-lawyers",
+    traffic_source: "google",
+    traffic_medium: "organic",
+  });
 });
 
 test("marks a Yandex visit as organic", () => {

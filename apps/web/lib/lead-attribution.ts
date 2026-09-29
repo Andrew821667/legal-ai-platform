@@ -9,6 +9,8 @@ export type LeadAttribution = {
   landing_page?: string;
 };
 
+export type ServiceRoute = "legal_contract_review" | "contract_ai" | "engineering_rag_service";
+
 declare global {
   interface Window {
     ym?: (...args: unknown[]) => void;
@@ -137,5 +139,24 @@ export function trackStarterOfferSelection(offer: StarterOffer): void {
   const counterId = Number(rawId);
   if (Number.isFinite(counterId)) {
     window.ym?.(counterId, "reachGoal", "starter_offer_select", params);
+  }
+}
+
+export function trackServiceRouteClick(route: ServiceRoute, destination: string): void {
+  if (typeof window === "undefined") return;
+
+  const data = getLeadAttribution();
+  const params = {
+    route,
+    from_page: "/legal-ai/prompts-for-lawyers",
+    destination,
+    landing_page: data.landing_page,
+    traffic_source: data.utm_source,
+    traffic_medium: data.utm_medium,
+  };
+
+  const counterId = Number(process.env.NEXT_PUBLIC_YM_COUNTER_ID || "110733908");
+  if (Number.isFinite(counterId)) {
+    window.ym?.(counterId, "reachGoal", "service_route_click", params);
   }
 }
