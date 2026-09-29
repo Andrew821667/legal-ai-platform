@@ -149,6 +149,11 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
               ))}
             </div>
             <p className="mt-5 text-sm leading-6 text-slate-400">{page.example.note}</p>
+            {page.slug === "contracts" ? (
+              <Link href="/for-lawyers#internal-contract-analysis" className="mt-5 inline-flex text-sm font-semibold text-sky-800 hover:text-sky-900">
+                Как мы проверяли собственный анализатор договоров →
+              </Link>
+            ) : null}
           </div>
         </section>
       ) : null}
