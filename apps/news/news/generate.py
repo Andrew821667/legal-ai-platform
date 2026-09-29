@@ -22,6 +22,7 @@ from news.pipeline import (
     build_source_hash,
     canonicalize_url,
     choose_top_articles,
+    interleave_ru_law,
     default_pillar_targets,
     extract_domain,
     generation_theme_keys,
@@ -681,7 +682,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
     rag = PostedContentRAG(core_client)
     writer = LLMNewsWriter()
 
-    article_queue = list(selected_articles)
+    article_queue = interleave_ru_law(list(selected_articles), settings.news_ru_law_every)
     previews: list[dict[str, str]] = []
     duplicates = 0
     feedback_skipped = 0

@@ -21,9 +21,18 @@ class Settings(BaseSettings):
     news_admin_ids: str = ""
     news_source_keys: str = ""
     news_source_urls: str = ""
+    # Право РФ — одна из тем многопрофильного канала. Источники добавляются к
+    # NEWS_SOURCE_KEYS (на проде список задан явно), выключаются кнопкой
+    # источника в админ-боте или пустой строкой здесь.
+    news_ru_law_source_keys: str = "consultant_ru_law"
+    # Каждая N-я статья в очереди генерации — из права РФ, если такие есть; 0 — без чередования.
+    news_ru_law_every: int = 3
     news_rss_fetch_timeout_seconds: int = 12
     news_rss_fetch_workers: int = 6
     news_rss_proxy_url: str = ""
+    # Российские правовые ленты читаются напрямую: исходящий прокси ведёт в VPN
+    # и пропускает только свой список адресов (consultant.ru в нём нет — 403).
+    news_rss_direct_domains: str = "consultant.ru,garant.ru,pravo.ru"
     news_max_source_age_days: int = 3
     telegram_api_id: int = 0
     telegram_api_hash: str = ""

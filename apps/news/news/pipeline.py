@@ -387,6 +387,90 @@ _OFFTOPIC_MARKERS = (
     "астроном",
 )
 _LEGAL_DOMAINS = {"pravo.ru", "garant.ru", "consultant.ru"}
+# Право РФ — самостоятельная тема канала: такие статьи не обязаны упоминать
+# ИИ. Признак — русское изменение права, которое касается бизнеса или граждан.
+_CYRILLIC_RE = re.compile(r"[а-яё]")
+_RU_LAW_ACT_MARKERS = (
+    "закон",
+    "кодекс",
+    "постановлени",
+    "распоряжени",
+    "указ ",
+    "приказ",
+    "поправк",
+    "пленум",
+    "верховный суд",
+    "конституционный суд",
+    "госдум",
+    "совет федерации",
+    "нормативн",
+)
+_RU_LAW_AUDIENCE_MARKERS = (
+    "работодател",
+    "работник",
+    "трудов",
+    "налог",
+    "ндфл",
+    "ндс",
+    "взнос",
+    "предпринимател",
+    "самозанят",
+    "организаци",
+    "юридическ",
+    "граждан",
+    "потребител",
+    "договор",
+    "аренд",
+    "собственник",
+    "жиль",
+    "жкх",
+    "ипотек",
+    "кредит",
+    "банкрот",
+    "наслед",
+    "пенси",
+    "пособи",
+    "штраф",
+    "маркировк",
+    "персональн",
+    "лиценз",
+    "отчетност",
+    "отчётност",
+    "коммунальн",
+    "многоквартирн",
+    "перевод",
+    "вклад",
+    "страхов",
+    "бухгалтер",
+    "отпуск",
+    "зарплат",
+    "увольн",
+    "миграцион",
+)
+# Само изменение: «рассмотрит споры» или обзор предстоящих дел — ещё не
+# новое правило для читателя.
+_RU_LAW_CHANGE_MARKERS = (
+    "вступ",
+    "принял",
+    "принят",
+    "подписал",
+    "утвержд",
+    "утвердил",
+    "разъясн",
+    "указал",
+    "признал",
+    "изменени",
+    "поправк",
+    "установ",
+    "продл",
+    "отмен",
+    "ввод",
+    "обязан",
+    "запрет",
+)
+# Ленты правовых систем публикуют только правовые акты и разъяснения —
+# признак акта в тексте для них не нужен (письма министерств его не содержат).
+_RU_LAW_ACT_DOMAINS = {"consultant.ru", "garant.ru"}
 _AI_TECH_DOMAINS = {"habr.com", "vc.ru"}
 _SPECIALIZED_CANDIDATE_THRESHOLD = 2.8
 _SPECIFICITY_MARKERS = (
@@ -576,7 +660,47 @@ def specialized_relevance_score(article: ArticleCandidate) -> float:
     if ai_hits and legal_hits == 0 and ops_hits == 0 and market_hits == 0:
         score -= 1.2 if broad_ai_hits >= 2 else 2.8
 
+    # Право РФ проходит порог отбора; место в очереди задаёт interleave_ru_law,
+    # а не счёт — иначе бонус вытеснил бы ИИ-новости.
+    if is_ru_law_candidate(article):
+        score = max(score, _SPECIALIZED_CANDIDATE_THRESHOLD + 0.2)
+
     return score
+
+
+def is_ru_law_candidate(article: ArticleCandidate) -> bool:
+    """Изменение права РФ, которое касается бизнеса или граждан, — без ИИ-маркеров."""
+    text = _normalize_text(f"{article.title}\n{article.summary}")
+    if not _CYRILLIC_RE.search(text):
+        return False
+    has_audience = any(marker in text for marker in _RU_LAW_AUDIENCE_MARKERS)
+    if extract_domain(article.article_url or article.source_url) in _RU_LAW_ACT_DOMAINS:
+        return has_audience
+    has_act = any(marker in text for marker in _RU_LAW_ACT_MARKERS)
+    has_change = any(marker in text for marker in _RU_LAW_CHANGE_MARKERS)
+    return has_act and has_change and has_audience
+
+
+def interleave_ru_law(articles: list[ArticleCandidate], every: int) -> list[ArticleCandidate]:
+    """Каждая every-я статья очереди — из права РФ, пока такие есть.
+
+    Без чередования статьи права РФ стояли бы по общему счёту за ИИ-новостями
+    (у них меньше ключевых слов) и в канал почти не попадали бы — или, с
+    бонусом, вытеснили бы остальное.
+    """
+    if every <= 1:
+        return list(articles)
+    ru_law = [article for article in articles if is_ru_law_candidate(article)]
+    others = [article for article in articles if not is_ru_law_candidate(article)]
+    result: list[ArticleCandidate] = []
+    while others or ru_law:
+        if ru_law and (len(result) + 1) % every == 0:
+            result.append(ru_law.pop(0))
+        elif others:
+            result.append(others.pop(0))
+        else:
+            result.append(ru_law.pop(0))
+    return result
 
 
 def passes_editorial_scope(article: ArticleCandidate) -> bool:
@@ -587,6 +711,8 @@ def passes_editorial_scope(article: ArticleCandidate) -> bool:
     has_hard_market = any(_marker_present(text, marker) for marker in _HARD_MARKET_MARKERS)
     has_ops = any(_marker_present(text, marker) for marker in _OPS_MARKERS)
 
+    if is_ru_law_candidate(article):
+        return True
     if domain in _LEGAL_DOMAINS:
         return has_ai or has_ops
     return has_ai and (has_hard_legal or has_hard_market)
@@ -601,6 +727,8 @@ def passes_generation_scope(article: ArticleCandidate) -> bool:
     has_generation_ops = any(_marker_present(text, marker) for marker in _GENERATION_OPS_MARKERS)
     broad_ai_hits = sum(1 for marker in _BROAD_AI_MARKERS if _marker_present(text, marker))
 
+    if is_ru_law_candidate(article):
+        return True
     if domain in _LEGAL_DOMAINS:
         return has_ai and (has_hard_legal or has_generation_ops or has_hard_market)
     if domain in _AI_TECH_DOMAINS and has_ai and broad_ai_hits >= 2:
@@ -655,6 +783,10 @@ def generation_themes_for_text(text: str) -> set[str]:
 
 def article_matches_enabled_generation_themes(article: ArticleCandidate, enabled_theme_keys: set[str] | None) -> bool:
     if not enabled_theme_keys:
+        return True
+    # Темы в админ-боте — про ИИ; право РФ включается и выключается своими
+    # источниками (NEWS_RU_LAW_SOURCE_KEYS, кнопки источников).
+    if is_ru_law_candidate(article):
         return True
     article_themes = generation_themes_for_text(f"{article.title}\n{article.summary}")
     return bool(article_themes & enabled_theme_keys)

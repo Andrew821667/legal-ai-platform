@@ -11,7 +11,7 @@ from itertools import repeat
 import feedparser
 import requests
 
-from news.pipeline import ArticleCandidate, canonicalize_url
+from news.pipeline import ArticleCandidate, canonicalize_url, extract_domain
 from news.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -115,8 +115,6 @@ def _fetch_sources(source_urls: list[str], per_source_limit: int) -> list[RSSSou
     if not source_urls:
         return []
 
-    proxy_url = settings.news_rss_proxy_url.strip()
-    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
     worker_count = min(len(source_urls), max(1, settings.news_rss_fetch_workers))
     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="rss") as pool:
         return list(
@@ -124,9 +122,21 @@ def _fetch_sources(source_urls: list[str], per_source_limit: int) -> list[RSSSou
                 _fetch_source,
                 source_urls,
                 repeat(per_source_limit),
-                repeat(proxies),
+                [proxies_for(url) for url in source_urls],
             )
         )
+
+
+def proxies_for(source_url: str) -> dict[str, str] | None:
+    """Прокси для ленты: российские правовые источники — напрямую, остальные — через прокси."""
+    proxy_url = settings.news_rss_proxy_url.strip()
+    if not proxy_url:
+        return None
+    direct = {item.strip().lower() for item in settings.news_rss_direct_domains.split(",") if item.strip()}
+    if extract_domain(source_url) in direct:
+        # Явный None на схему: requests иначе возьмёт прокси из окружения.
+        return {"http": None, "https": None}  # type: ignore[dict-item]
+    return {"http": proxy_url, "https": proxy_url}
 
 
 def probe_rss_sources(source_urls: list[str]) -> list[RSSSourceResult]:

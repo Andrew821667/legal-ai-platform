@@ -25,7 +25,8 @@ def test_source_catalog_marks_telegram_unconfigured_by_default() -> None:
     catalog = source_catalog(settings)
     assert catalog['telegram_channels'].integrated is False
     active = active_source_specs(settings)
-    assert [item.key for item in active] == ['google_news_ru', 'telegram_channels', 'pravo_ru']
+    # Право РФ добавляется к явному списку источников (NEWS_RU_LAW_SOURCE_KEYS).
+    assert [item.key for item in active] == ['google_news_ru', 'telegram_channels', 'pravo_ru', 'consultant_ru_law']
     resolved = resolve_source_urls(settings)
     assert any('news.google.com/rss/search' in item for item in resolved)
     assert 'https://www.pravo.ru/rss/' in resolved
