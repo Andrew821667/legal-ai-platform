@@ -11,6 +11,13 @@
 почту указал сам заявитель. Иначе человек, вписавший в боте чужую почту,
 открыл бы её владельцу свои договоры с паспортными данными. Дела из Telegram
 видны по почте, только если учётная запись привязана к тому же Telegram.
+Привязка объединяет в обе стороны: вошедший через Telegram видит и заявки с
+сайта на почту привязанной учётной записи.
+
+Способ входа и круг дел — разные вещи: вошедший через Яндекс ID с
+привязанным Telegram видит дела из Telegram, но подписывает как вошедший
+через Яндекс ID (via_email) — в документ пишется тот способ, которым он
+действительно подтвердил личность.
 """
 
 from __future__ import annotations
@@ -49,8 +56,8 @@ class Principal:
 
     @property
     def via_email(self) -> bool:
-        """Вошёл по почте и Telegram к учётной записи не привязан."""
-        return self.account_id is not None and self.telegram_user_id is None
+        """Вошёл через Яндекс ID — даже если к учётной записи привязан Telegram."""
+        return self.account_id is not None
 
     def owns(self, *, lead_id: uuid.UUID | None, client_telegram_user_id: int | None) -> bool:
         """Документ клиента: адресован его Telegram или лежит в его деле без Telegram."""
@@ -92,6 +99,9 @@ def resolve(
         email = account.email
     elif telegram_user_id is None:
         raise HTTPException(status_code=400, detail="telegram_user_id or client_account_id is required")
+    else:
+        linked = db.scalar(select(ClientAccount).where(ClientAccount.telegram_user_id == telegram_user_id))
+        email = linked.email if linked is not None else None
     condition = lead_filter(telegram_user_id, email)
     lead_ids = frozenset(db.scalars(select(Lead.id).where(condition))) if condition is not None else frozenset()
     return Principal(

@@ -289,6 +289,10 @@ class Config:
         self.CONSULTATION_BOOKING_URL: str = os.getenv(
             'CONSULTATION_BOOKING_URL', 'https://ai-verdict.ru/consultation'
         ).strip()
+        # Профиль кабинета на сайте: там вводят код объединения с Telegram (/link).
+        self.CLIENT_CABINET_PROFILE_URL: str = os.getenv(
+            'CLIENT_CABINET_PROFILE_URL', 'https://ai-verdict.ru/cabinet/profile'
+        ).strip()
         # Платный первый шаг инженерной практики (сайт).
         self.AUTOMATION_DIAGNOSTIC_URL: str = os.getenv(
             'AUTOMATION_DIAGNOSTIC_URL', 'https://ai-verdict.ru/engineering/automation-diagnostic'
