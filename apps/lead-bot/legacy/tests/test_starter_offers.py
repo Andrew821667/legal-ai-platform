@@ -68,15 +68,27 @@ def test_is_cta_shown_recognizes_paid_diagnostic() -> None:
     assert funnel.is_cta_shown("Следующий шаг — диагностика за 7 900 ₽.", "A")
 
 
-def test_email_materials_are_offered_only_with_mail_configured(monkeypatch) -> None:
-    # Чек-лист и образец отчёта уходят письмом: без почты клиент получал
-    # «Произошла ошибка при отправке email».
-    cfg = constants.get_config()
-    monkeypatch.setattr(cfg, "SMTP_USER", "")
-    monkeypatch.setattr(cfg, "SMTP_PASSWORD", "")
-    without_mail = [b.callback_data for row in constants.build_lead_magnet_menu() for b in row]
-    assert without_mail == ["magnet_consultation", "magnet_demo"]
-    monkeypatch.setattr(cfg, "SMTP_USER", "noreply@ai-verdict.ru")
-    monkeypatch.setattr(cfg, "SMTP_PASSWORD", "app-password")
-    with_mail = [b.callback_data for row in constants.build_lead_magnet_menu() for b in row]
-    assert with_mail == ["magnet_consultation", "magnet_checklist", "magnet_demo", "magnet_sample_report"]
+def test_materials_are_offered_and_delivered_right_in_the_chat() -> None:
+    # Писем клиентам нет: чек-лист и образец отчёта бот отдаёт прямо в чате.
+    menu = [b.callback_data for row in constants.LEAD_MAGNET_MENU for b in row]
+    assert menu == ["magnet_consultation", "magnet_checklist", "magnet_demo", "magnet_sample_report"]
+    for magnet in content.IN_CHAT_MAGNETS:
+        text = content.LEAD_MAGNET_SELECTION_MESSAGES[magnet]
+        assert "email" not in text.lower() and "почт" not in text.lower()
+        assert len(text) < 4096  # одно сообщение Telegram
+    assert "15. " in content.CHECKLIST_MESSAGE
+    assert "Чек-лист" in content.LEAD_MAGNET_OFFER_TEXT and "Образец отчёта" in content.LEAD_MAGNET_OFFER_TEXT
+    followup = [b.callback_data for row in constants.MAGNET_FOLLOWUP_MENU for b in row]
+    assert followup == ["magnet_demo", "magnet_consultation"]
+
+
+def test_magnet_reply_gives_material_and_next_step() -> None:
+    from handlers.helpers import magnet_reply
+
+    text, markup = magnet_reply("checklist")
+    assert text == content.CHECKLIST_MESSAGE
+    assert [b.callback_data for row in markup.inline_keyboard for b in row] == ["magnet_demo", "magnet_consultation"]
+    text, markup = magnet_reply("sample_report")
+    assert text == content.SAMPLE_REPORT_MESSAGE and markup is not None
+    text, markup = magnet_reply("consultation")
+    assert "4 900" in text and markup is None

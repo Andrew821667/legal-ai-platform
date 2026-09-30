@@ -391,13 +391,6 @@ class Config:
             int(os.getenv('SECURITY_ALERT_BURST_THRESHOLD', '5')),
         )
 
-        # Настройки email/SMTP
-        self.SMTP_SERVER: str = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        self.SMTP_PORT: int = int(os.getenv('SMTP_PORT', '587'))
-        self.SMTP_USER: str = os.getenv('SMTP_USER', '')
-        self.SMTP_PASSWORD: str = os.getenv('SMTP_PASSWORD', '')
-        self.FROM_EMAIL: str = os.getenv('FROM_EMAIL', '')
-        self.FROM_NAME: str = os.getenv('FROM_NAME', 'AI Verdict Bot')
 
     def validate(self):
         """Валидация конфигурации"""

@@ -63,8 +63,6 @@ async def test_notify_admin_new_lead_skips_same_origin_chat(monkeypatch: pytest.
     monkeypatch.setattr(helpers.core_api_bridge, "enabled", False)
     monkeypatch.setattr(helpers.config, "LEADS_CHAT_ID", None)
     monkeypatch.setattr(helpers.config, "ADMIN_TELEGRAM_ID", 321681061)
-    monkeypatch.setattr(helpers.config, "SMTP_USER", "")
-    monkeypatch.setattr(helpers.config, "SMTP_PASSWORD", "")
 
     class _FakeBot:
         async def send_message(self, chat_id, text):
@@ -118,8 +116,6 @@ async def test_notify_admin_new_lead_treats_telegram_account_as_contact(monkeypa
     monkeypatch.setattr(helpers.core_api_bridge, "enabled", False)
     monkeypatch.setattr(helpers.config, "LEADS_CHAT_ID", 777777)
     monkeypatch.setattr(helpers.config, "ADMIN_TELEGRAM_ID", 888888)
-    monkeypatch.setattr(helpers.config, "SMTP_USER", "")
-    monkeypatch.setattr(helpers.config, "SMTP_PASSWORD", "")
 
     class _FakeBot:
         async def send_message(self, chat_id, text):
@@ -172,8 +168,6 @@ async def test_notify_admin_new_lead_still_requires_some_contact(monkeypatch: py
     monkeypatch.setattr(helpers.core_api_bridge, "enabled", False)
     monkeypatch.setattr(helpers.config, "LEADS_CHAT_ID", 777777)
     monkeypatch.setattr(helpers.config, "ADMIN_TELEGRAM_ID", 888888)
-    monkeypatch.setattr(helpers.config, "SMTP_USER", "")
-    monkeypatch.setattr(helpers.config, "SMTP_PASSWORD", "")
 
     class _FakeBot:
         async def send_message(self, chat_id, text):

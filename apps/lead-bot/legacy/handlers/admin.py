@@ -18,7 +18,6 @@ from config import get_config
 from admin_access import is_admin_user
 config = get_config()
 import utils
-import email_sender
 import security
 import prompts
 from .constants import ADMIN_PANEL_MENU, build_admin_panel_menu

@@ -28,7 +28,7 @@ _ATTR_TO_MODULE = {
     # helpers
     "extract_email": "handlers.helpers",
     "send_message_gradually": "handlers.helpers",
-    "send_lead_magnet_email": "handlers.helpers",
+    "accept_lead_magnet_email": "handlers.helpers",
     "notify_admin_new_lead": "handlers.helpers",
     # user
     "ai_policy_command": "handlers.user",

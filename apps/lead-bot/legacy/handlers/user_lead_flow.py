@@ -13,7 +13,7 @@ import content
 import database
 import funnel
 import utils
-from .helpers import extract_email, notify_admin_new_lead, send_lead_magnet_email
+from .helpers import extract_email, notify_admin_new_lead, accept_lead_magnet_email
 from .user_cta_actions import handle_handoff_request
 from .user_message_helpers import (
     build_new_phone_lead_payload as _build_new_phone_lead_payload,
@@ -75,7 +75,7 @@ async def maybe_handle_pending_lead_magnet(
 
     email = extract_email(message_text)
     if email:
-        await send_lead_magnet_email(update, user_data, lead, email)
+        await accept_lead_magnet_email(update, user_data, lead, email)
         return lead, True
 
     return lead, False
