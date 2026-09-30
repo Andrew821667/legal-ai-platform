@@ -1067,19 +1067,6 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
                 )
                 return
 
-            if magnet_type == "demo" and (getattr(message, "document", None) or getattr(message, "photo", None)):
-                file_marker = "photo"
-                if getattr(message, "document", None):
-                    file_marker = f"document:{message.document.file_name or message.document.file_id}"
-                existing_notes = (lead.get("notes") or "").strip()
-                notes = f"{existing_notes}\nДокумент для демо: {file_marker}".strip()
-                database.db.create_or_update_lead(user, {"notes": notes})
-                await context.bot.send_message(
-                    chat_id=message.chat.id,
-                    text="Документ получил. Теперь укажите email, и команда отправит дальнейшие шаги.",
-                    business_connection_id=message.business_connection_id,
-                )
-                return
 
         if not text:
             logger.warning(f"[Business] Skipping non-text message update: {update.update_id}")

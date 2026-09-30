@@ -110,7 +110,7 @@ async def send_message_gradually(update: Update, text: str):
 def magnet_reply(magnet_type: str | None) -> tuple[str, InlineKeyboardMarkup | None]:
     """Текст и кнопки материала: чек-лист и образец отчёта — целиком, в чате."""
     text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type or "", "Спасибо!")
-    markup = InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU) if magnet_type in content.IN_CHAT_MAGNETS else None
+    markup = InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU) if magnet_type in content.INSTANT_MAGNETS else None
     return text, markup
 
 

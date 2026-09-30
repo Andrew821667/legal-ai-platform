@@ -72,14 +72,17 @@ def test_materials_are_offered_and_delivered_right_in_the_chat() -> None:
     # Писем клиентам нет: чек-лист и образец отчёта бот отдаёт прямо в чате.
     menu = [b.callback_data for row in constants.LEAD_MAGNET_MENU for b in row]
     assert menu == ["magnet_consultation", "magnet_checklist", "magnet_demo", "magnet_sample_report"]
-    for magnet in content.IN_CHAT_MAGNETS:
+    for magnet in content.INSTANT_MAGNETS:
         text = content.LEAD_MAGNET_SELECTION_MESSAGES[magnet]
         assert "email" not in text.lower() and "почт" not in text.lower()
         assert len(text) < 4096  # одно сообщение Telegram
     assert "15. " in content.CHECKLIST_MESSAGE
     assert "Чек-лист" in content.LEAD_MAGNET_OFFER_TEXT and "Образец отчёта" in content.LEAD_MAGNET_OFFER_TEXT
-    followup = [b.callback_data for row in constants.MAGNET_FOLLOWUP_MENU for b in row]
-    assert followup == ["magnet_demo", "magnet_consultation"]
+    # Договор проверяют в Contract AI — кнопка ведёт туда, бот файлы не принимает.
+    contract_ai, consultation = (row[0] for row in constants.MAGNET_FOLLOWUP_MENU)
+    assert contract_ai.url.startswith("https://") and "contract" in contract_ai.url
+    assert consultation.callback_data == "magnet_consultation"
+    assert "пришлите" not in content.DEMO_MESSAGE.lower() and "сюда" not in content.DEMO_MESSAGE
 
 
 def test_magnet_reply_gives_material_and_next_step() -> None:
@@ -87,8 +90,35 @@ def test_magnet_reply_gives_material_and_next_step() -> None:
 
     text, markup = magnet_reply("checklist")
     assert text == content.CHECKLIST_MESSAGE
-    assert [b.callback_data for row in markup.inline_keyboard for b in row] == ["magnet_demo", "magnet_consultation"]
+    assert [b.callback_data for row in markup.inline_keyboard for b in row] == [None, "magnet_consultation"]
+    text, markup = magnet_reply("demo")
+    assert text == content.DEMO_MESSAGE and markup.inline_keyboard[0][0].url
     text, markup = magnet_reply("sample_report")
     assert text == content.SAMPLE_REPORT_MESSAGE and markup is not None
     text, markup = magnet_reply("consultation")
     assert "4 900" in text and markup is None
+
+
+@pytest.mark.asyncio
+async def test_contract_file_is_sent_to_contract_ai_not_taken_by_the_bot() -> None:
+    from types import SimpleNamespace
+
+    from handlers import user_non_text
+
+    replies = []
+
+    async def _reply(message, text, **kwargs):
+        replies.append((text, kwargs.get("reply_markup")))
+
+    original = user_non_text.utils.safe_reply_text
+    user_non_text.utils.safe_reply_text = _reply
+    try:
+        message = SimpleNamespace(document=SimpleNamespace(file_name="договор.pdf"), photo=None, contact=None, caption=None)
+        update = SimpleNamespace(effective_message=message, update_id=1, effective_user=None)
+        handled = await user_non_text.handle_non_text_input(update, None, {"id": 1}, None, True)
+    finally:
+        user_non_text.utils.safe_reply_text = original
+    assert handled is True
+    text, markup = replies[0]
+    assert "Contract AI" in text
+    assert markup.inline_keyboard[0][0].url

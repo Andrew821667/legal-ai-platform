@@ -144,9 +144,15 @@ LEAD_MAGNET_MENU = [
     [InlineKeyboardButton("🧾 Образец отчёта", callback_data="magnet_sample_report")],
 ]
 
-# Под чек-листом и образцом отчёта — следующий шаг.
+def contract_ai_url() -> str:
+    url = (getattr(get_config(), "CONTRACT_AI_SYSTEM_URL", "") or "https://contract.ai-verdict.ru").strip()
+    return url if url.startswith(("http://", "https://")) else f"https://{url.lstrip('/')}"
+
+
+# Под материалами — следующий шаг: проверить свой договор в Contract AI (бот
+# договоры не принимает — решение владельца) или консультация юриста.
 MAGNET_FOLLOWUP_MENU = [
-    [InlineKeyboardButton("🧪 Проверить свой договор", callback_data="magnet_demo")],
+    [InlineKeyboardButton("🧪 Проверить договор в Contract AI", url=contract_ai_url())],
     [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
 ]
 

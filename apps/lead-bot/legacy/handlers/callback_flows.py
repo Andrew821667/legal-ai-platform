@@ -244,7 +244,7 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
 
     selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо!")
     reply_markup = None
-    if magnet_type in content.IN_CHAT_MAGNETS:
+    if magnet_type in content.INSTANT_MAGNETS:
         # Материал отдан прямо здесь — почту не ждём (писем клиентам нет).
         lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead_id)
         reply_markup = InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU)

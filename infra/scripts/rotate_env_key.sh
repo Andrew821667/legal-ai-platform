@@ -31,8 +31,11 @@ read -rsp "Новое значение (ввод скрыт): " NEWVAL
 echo
 [ -n "$NEWVAL" ] || { echo "пусто — ничего не менял"; exit 1; }
 
+# Копия — только на время замены: в ней все секреты открытым текстом. После
+# удачной замены удаляется сама; при сбое остаётся, и путь к ней печатается.
 BACKUP="${ENV_FILE}.bak-$(date +%Y%m%d-%H%M%S)"
 cp -p "$ENV_FILE" "$BACKUP"
+trap 'echo "Сбой — .env можно вернуть из копии: $BACKUP" >&2' ERR
 
 VAR="$VAR" NEWVAL="$NEWVAL" python3 - "$ENV_FILE" <<'PY'
 import os, pathlib, sys
@@ -61,5 +64,10 @@ echo
 echo "Права и ACL:"
 ls -le "$ENV_FILE" | head -3
 echo
-echo "Копия: $BACKUP  (удалите, когда убедитесь, что всё работает)"
+if grep -q "^${VAR}=" "$ENV_FILE"; then
+  rm -f "$BACKUP"
+  echo "Временная копия .env удалена (в ней были все секреты)."
+else
+  echo "Строки ${VAR} после замены не видно — .env можно вернуть из копии: $BACKUP"
+fi
 echo "Дальше нужен перезапуск core-api — настройки читаются при старте."

@@ -52,7 +52,6 @@ from .user_lead_flow import (
     maybe_handle_pending_lead_magnet,
     maybe_handle_repeat_loop,
 )
-from .contract_analysis import handle_contract_document, CONTRACT_ANALYSIS_WAITING_KEY
 from .user_non_text import handle_non_text_input as _handle_non_text_input
 from .user_profile_edit import handle_profile_edit_input
 from .user_routing import (
@@ -168,7 +167,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clear_case_context(context)
             return
 
-        # В non-text ветке поддерживаем сценарий демо (документ + email).
         if not message_text:
             if _should_require_pdn_consent(is_admin, consent_state):
                 await utils.safe_reply_text(
@@ -178,16 +176,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     action="non_text_requires_pdn",
                 )
                 return
-            # Материалы по юридическому обращению принимаем раньше разбора
-            # договора: человек в уточняющем диалоге присылает документы по
-            # своему делу, а не файл на анализ.
+            # Материалы по юридическому обращению: человек в уточняющем диалоге
+            # присылает документы по своему делу. Договоры на проверку бот не
+            # принимает — для этого Contract AI (см. user_non_text).
             if await handle_intake_dialog_document(update, context):
                 return
-            # Перехватываем документ если пользователь в режиме анализа договора
-            if context.user_data.get(CONTRACT_ANALYSIS_WAITING_KEY):
-                handled = await handle_contract_document(update, context, user_data)
-                if handled:
-                    return
             await _handle_non_text_input(update, context, user_data, lead, allow_lead_processing)
             return
 
