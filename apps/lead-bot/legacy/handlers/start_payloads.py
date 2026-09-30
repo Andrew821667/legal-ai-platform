@@ -16,7 +16,7 @@ import content
 import database
 import utils
 from config import get_config
-from .helpers import notify_admin_new_lead
+from .helpers import magnet_reply, notify_admin_new_lead
 from .markup import consultation_contact_markup
 
 logger = logging.getLogger(__name__)
@@ -319,14 +319,14 @@ async def handle_contract_start_payload(
         )
         return True
 
-    selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо! Продолжаем.")
-    if entry == "demo":
-        selection_text = (
-            f"{selection_text}\n\n"
-            "Можно сразу отправить договор (файл/фото), затем укажите email."
-        )
-    reply_markup = consultation_contact_markup() if magnet_type == "consultation" else None
-    await utils.safe_reply_text(
+    if magnet_type in content.INSTANT_MAGNETS:
+        # Материал — сразу здесь; договор проверяют в Contract AI, не в боте.
+        database.db.create_or_update_lead(user_data["id"], {"lead_magnet_delivered": 1})
+        selection_text, reply_markup = magnet_reply(magnet_type)
+    else:
+        selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо! Продолжаем.")
+        reply_markup = consultation_contact_markup() if magnet_type == "consultation" else None
+    await utils.safe_reply_html(
         message,
         selection_text,
         reply_markup=reply_markup,

@@ -151,27 +151,21 @@ async def _notify_admin_fallback(
         logger.warning("Failed to notify admin about fallback legal intake %s: %s", lead_id, error)
 
 
-async def maybe_handle_legal_help_message(
+async def submit_legal_help(
     *,
-    update: Update,
     context: ContextTypes.DEFAULT_TYPE,
-    message_text: str,
     user: User,
     user_data: dict,
-) -> bool:
-    if context.user_data.get(LEGAL_HELP_MODE_KEY) != "awaiting_description":
-        return False
+    description: str,
+    client_type: str,
+    idempotency_key: str,
+    entry: str = "lead_bot",
+) -> None:
+    """Обращение к юристу: в ядро, лид — в бот, при сбое ядра — владельцу.
 
-    description = (message_text or "").strip()
-    if len(description) < 20:
-        await utils.safe_reply_text(
-            update.effective_message,
-            "Добавьте немного деталей: что произошло, какой результат нужен и есть ли срок.",
-            action="legal_help_description_too_short",
-        )
-        return True
-
-    client_type = context.user_data.get(LEGAL_HELP_CLIENT_TYPE_KEY, "unknown")
+    Общая точка для описания из «Юридической помощи» и для черновика,
+    собранного из разговора с ассистентом (handlers/intake_draft.py).
+    """
     created_at = datetime.now(timezone.utc).isoformat()
     local_payload = {
         "name": user.full_name or user.first_name,
@@ -194,7 +188,7 @@ async def maybe_handle_legal_help_message(
         "legal_area": "other",
         "description": description[:4000],
         "urgency": "no_deadline",
-        "source_context": "entry=lead_bot",
+        "source_context": f"entry={entry}",
         "consent_accepted": True,
         "consent_version": "legal-help-v1",
         "consent_at": created_at,
@@ -202,7 +196,7 @@ async def maybe_handle_legal_help_message(
     result = await asyncio.to_thread(
         core_api_bridge.create_legal_intake,
         payload,
-        idempotency_key=f"legal-help-tg-{user.id}-{update.effective_message.message_id}",
+        idempotency_key=idempotency_key,
     )
     # Лид заводит само обращение; боту остаётся дописать квалификацию и
     # взять номер. Без подтверждения обращения лид заводится отдельно, чтобы
@@ -227,8 +221,39 @@ async def maybe_handle_legal_help_message(
     database.db.track_event(
         user_data["id"],
         "legal_help_submitted",
-        payload={"client_type": client_type, "core_confirmed": result is not None},
+        payload={"client_type": client_type, "core_confirmed": result is not None, "entry": entry},
         lead_id=lead_id,
+    )
+
+
+async def maybe_handle_legal_help_message(
+    *,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    message_text: str,
+    user: User,
+    user_data: dict,
+) -> bool:
+    if context.user_data.get(LEGAL_HELP_MODE_KEY) != "awaiting_description":
+        return False
+
+    description = (message_text or "").strip()
+    if len(description) < 20:
+        await utils.safe_reply_text(
+            update.effective_message,
+            "Добавьте немного деталей: что произошло, какой результат нужен и есть ли срок.",
+            action="legal_help_description_too_short",
+        )
+        return True
+
+    client_type = context.user_data.get(LEGAL_HELP_CLIENT_TYPE_KEY, "unknown")
+    await submit_legal_help(
+        context=context,
+        user=user,
+        user_data=user_data,
+        description=description,
+        client_type=client_type,
+        idempotency_key=f"legal-help-tg-{user.id}-{update.effective_message.message_id}",
     )
     context.user_data.pop(LEGAL_HELP_MODE_KEY, None)
     context.user_data.pop(LEGAL_HELP_CLIENT_TYPE_KEY, None)

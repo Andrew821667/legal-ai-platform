@@ -79,11 +79,6 @@ from handlers.callbacks import (
     handle_open_web_callback,
     handle_profile_callback,
 )
-from handlers.contract_analysis import (
-    handle_contract_analysis_cancel,
-    handle_contract_analysis_start,
-    handle_contract_result_open,
-)
 from handlers.intake_dialog import start_dialog as start_intake_dialog
 from handlers.legal_help import handle_legal_help_callback
 from handlers.engineering_help import handle_callback as handle_engineering_help_callback
@@ -93,6 +88,7 @@ from handlers.service_agreements import handle_client_callback as handle_service
 from handlers.work_acts import handle_admin_callback as handle_work_act_admin_callback
 from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
 from handlers.client_link import handle_link_callback, link_command
+from handlers.intake_draft import handle_draft_callback as handle_intake_draft_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
 from telegram_ui import inline_button as InlineKeyboardButton
@@ -854,14 +850,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_work_act_client_callback(update, context)
         elif data.startswith("nda:"):
             await handle_nda_callback(update, context)
+        elif data.startswith("idraft:"):
+            await handle_intake_draft_callback(update, context)
         elif data.startswith("clink:"):
             await handle_link_callback(update, context)
-        elif data == "contract_upload":
-            await handle_contract_analysis_start(update, context)
-        elif data == "contract_cancel":
-            await handle_contract_analysis_cancel(update, context)
-        elif data.startswith("contract_result:"):
-            await handle_contract_result_open(update, context)
         else:
             await query.answer("Неизвестное действие")
         log_update_timing(update, started_at, ok=True)

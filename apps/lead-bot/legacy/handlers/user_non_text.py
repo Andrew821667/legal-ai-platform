@@ -8,8 +8,9 @@ from typing import Optional
 
 import database
 import utils
-from telegram import Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+from .constants import MAGNET_FOLLOWUP_MENU
 from .helpers import extract_email, accept_lead_magnet_email
 from .markup import consultation_contact_markup as _consultation_contact_markup
 from .user_cta_actions import handle_handoff_request
@@ -19,6 +20,24 @@ from .user_message_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+CONTRACT_FILES_TEXT = (
+    "Договоры на проверку принимает Contract AI — загрузите файл там по кнопке ниже: "
+    "система покажет риски и что стоит поправить.\n\n"
+    "Если это документ по вашему обращению к юристу, напишите, о каком деле речь, — "
+    "юрист подскажет, как его передать."
+)
+
+
+async def point_to_contract_ai(message) -> None:
+    """Файл договора — не в бот, а в Contract AI (решение владельца)."""
+    await utils.safe_reply_text(
+        message,
+        CONTRACT_FILES_TEXT,
+        reply_markup=InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU),
+        action="contract_file_to_contract_ai",
+    )
 
 
 async def handle_non_text_input(
@@ -59,6 +78,9 @@ async def handle_non_text_input(
             return True
 
     if not lead or not lead.get("lead_magnet_type") or lead.get("lead_magnet_delivered"):
+        if message.document or message.photo:
+            await point_to_contract_ai(message)
+            return True
         logger.warning("Skipping non-text message update type: %s", update.update_id)
         return True
 
@@ -82,21 +104,6 @@ async def handle_non_text_input(
         )
         return True
 
-    if magnet_type == "demo" and (message.document or message.photo):
-        file_marker = "photo"
-        if message.document:
-            file_marker = f"document:{message.document.file_name or message.document.file_id}"
-
-        existing_notes = (lead.get("notes") or "").strip()
-        notes = f"{existing_notes}\nДокумент для демо: {file_marker}".strip()
-        database.db.create_or_update_lead(user_data["id"], {"notes": notes})
-        await message.reply_text(
-            "Документ получил. Теперь укажите email, и мы отправим подтверждение и дальнейшие шаги."
-        )
-        return True
-
-    await message.reply_text(
-        "Чтобы продолжить, отправьте email в текстовом сообщении.\n"
-        "Для демонстрационного разбора можно приложить документ с подписью, где указан email."
-    )
+    if message.document or message.photo:
+        await point_to_contract_ai(message)
     return True
