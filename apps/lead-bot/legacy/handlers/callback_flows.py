@@ -15,7 +15,7 @@ import funnel
 import lead_qualifier
 import utils
 from config import get_config
-from .constants import CONSENT_PDN_MENU
+from .constants import CONSENT_PDN_MENU, MAGNET_FOLLOWUP_MENU
 from .helpers import notify_admin_new_lead
 from .markup import (
     clip_for_edit as _clip_for_edit,
@@ -243,9 +243,13 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         logger.warning("Failed to track CTA click analytics: %s", analytics_error)
 
     selection_text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type, "Спасибо!")
-    consultation_markup = None
-    if magnet_type == "consultation" and (not query.message or not getattr(query.message, "business_connection_id", None)):
-        consultation_markup = ReplyKeyboardMarkup(
+    reply_markup = None
+    if magnet_type in content.IN_CHAT_MAGNETS:
+        # Материал отдан прямо здесь — почту не ждём (писем клиентам нет).
+        lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead_id)
+        reply_markup = InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU)
+    elif magnet_type == "consultation" and (not query.message or not getattr(query.message, "business_connection_id", None)):
+        reply_markup = ReplyKeyboardMarkup(
             [
                 [KeyboardButton("📲 Отправить телефон", request_contact=True)],
                 [KeyboardButton("⬅️ Отмена")],
@@ -257,14 +261,15 @@ async def handle_lead_magnet_callback(update: Update, context: ContextTypes.DEFA
         await context.bot.send_message(
             chat_id=query.message.chat.id,
             text=selection_text,
+            parse_mode="HTML",
             business_connection_id=query.message.business_connection_id,
         )
     else:
-        await utils.safe_reply_text(
+        await utils.safe_reply_html(
             query.message,
             selection_text,
             action="lead_magnet_selection",
-            reply_markup=consultation_markup,
+            reply_markup=reply_markup,
         )
 
 

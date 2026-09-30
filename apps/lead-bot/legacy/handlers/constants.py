@@ -136,30 +136,19 @@ def append_inline_url_row(
     updated_rows = [link_row, *rows] if prepend else [*rows, link_row]
     return InlineKeyboardMarkup(updated_rows)
 
-# Чек-лист и образец отчёта уходят только письмом. Без настроенной почты
-# (SMTP_USER/SMTP_PASSWORD) клиент вводил адрес и получал «Произошла ошибка
-# при отправке email», поэтому до подключения почты эти пункты не показываем.
-EMAIL_MAGNETS = ("magnet_checklist", "magnet_sample_report")
+# Материалы бот отдаёт прямо в чате (писем клиентам нет — решение владельца).
+LEAD_MAGNET_MENU = [
+    [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
+    [InlineKeyboardButton("📄 Чек-лист по договорам", callback_data="magnet_checklist")],
+    [InlineKeyboardButton("🧪 Автопроверка договора", callback_data="magnet_demo")],
+    [InlineKeyboardButton("🧾 Образец отчёта", callback_data="magnet_sample_report")],
+]
 
-
-def email_delivery_ready() -> bool:
-    config = get_config()
-    return bool(getattr(config, "SMTP_USER", "") and getattr(config, "SMTP_PASSWORD", ""))
-
-
-def build_lead_magnet_menu() -> list:
-    rows = [
-        [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
-        [InlineKeyboardButton("📄 Чек-лист по договорам", callback_data="magnet_checklist")],
-        [InlineKeyboardButton("🧪 Автопроверка договора", callback_data="magnet_demo")],
-        [InlineKeyboardButton("🧾 Образец AI-отчета", callback_data="magnet_sample_report")],
-    ]
-    if email_delivery_ready():
-        return rows
-    return [row for row in rows if row[0].callback_data not in EMAIL_MAGNETS]
-
-
-LEAD_MAGNET_MENU = build_lead_magnet_menu()
+# Под чек-листом и образцом отчёта — следующий шаг.
+MAGNET_FOLLOWUP_MENU = [
+    [InlineKeyboardButton("🧪 Проверить свой договор", callback_data="magnet_demo")],
+    [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
+]
 
 CONSENT_PDN_MENU = [
     [InlineKeyboardButton("✅ Даю согласие на обработку ПД", callback_data="consent_pdn_yes")],

@@ -4,7 +4,6 @@ Handlers: helpers
 from __future__ import annotations
 
 import logging
-import smtplib
 import sqlite3
 import time
 import re
@@ -20,12 +19,12 @@ import admin_interface
 from config import get_config
 config = get_config()
 import utils
-import email_sender
 import security
 import prompts
 import name_hints
 import content
 from core_api_bridge import core_api_bridge
+from .constants import MAGNET_FOLLOWUP_MENU
 
 logger = logging.getLogger(__name__)
 
@@ -108,58 +107,36 @@ async def send_message_gradually(update: Update, text: str):
 
 
 
-async def send_lead_magnet_email(update: Update, user_data: dict, lead: dict, email: str):
-    """Отправляет email с lead magnet"""
+def magnet_reply(magnet_type: str | None) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Текст и кнопки материала: чек-лист и образец отчёта — целиком, в чате."""
+    text = content.LEAD_MAGNET_SELECTION_MESSAGES.get(magnet_type or "", "Спасибо!")
+    markup = InlineKeyboardMarkup(MAGNET_FOLLOWUP_MENU) if magnet_type in content.IN_CHAT_MAGNETS else None
+    return text, markup
+
+
+async def accept_lead_magnet_email(update: Update, user_data: dict, lead: dict, email: str):
+    """Клиент прислал почту, пока материал «ждал» её (раньше материалы шли письмом).
+
+    Писем клиентам больше нет (решение владельца): почту сохраняем как контакт,
+    а материал отдаём прямо здесь — без «ошибки отправки письма».
+    """
     try:
-        magnet_type = lead.get('lead_magnet_type')
+        magnet_type = lead.get("lead_magnet_type")
         if magnet_type == "demo_analysis":
             magnet_type = "demo"
             database.db.create_or_update_lead(user_data["id"], {"lead_magnet_type": "demo"})
-        user_name = lead.get('name') or user_data.get('first_name')
-
-        # Показываем индикатор печатания
-        await update.message.chat.send_action(action="typing")
-
-        # Отправляем email в зависимости от типа
-        success = False
-        if magnet_type == 'consultation':
-            success = email_sender.email_sender.send_consultation_confirmation(email, user_name)
-        elif magnet_type == 'checklist':
-            success = email_sender.email_sender.send_checklist(email, user_name)
-        elif magnet_type == 'demo':
-            success = email_sender.email_sender.send_demo_request_confirmation(email, user_name)
-        elif magnet_type == 'sample_report':
-            success = email_sender.email_sender.send_sample_report(email, user_name)
-
-        if success:
-            # Обновляем email в lead если его там нет
-            if not lead.get('email'):
-                database.db.create_or_update_lead(user_data['id'], {'email': email})
-
-            # Отмечаем lead magnet как доставленный
-            lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead['id'])
-
-            # Подтверждение пользователю
-            base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
-            await utils.safe_reply_html(
-                update.message,
-                f"{content.with_channel_nurture(base_message, after_contact=True)}\n\n"
-                f"<b>Контакт для отправки:</b> {email}",
-                action="lead_magnet_email_sent",
-            )
-            logger.info("Lead magnet %s sent to %s", magnet_type, utils.mask_email(email))
-        else:
-            # Ошибка отправки
-            await utils.safe_reply_html(
-                update.message,
-                "Произошла ошибка при отправке email.\n\n"
-                f"{content.DIRECT_CONTACTS_TEXT}",
-                action="lead_magnet_email_error",
-            )
-            logger.error("Failed to send lead magnet %s to %s", magnet_type, utils.mask_email(email))
-
-    except (smtplib.SMTPException, sqlite3.Error, TelegramError, KeyError, OSError) as e:
-        logger.error(f"Error in send_lead_magnet_email: {e}")
+        if not lead.get("email"):
+            database.db.create_or_update_lead(user_data["id"], {"email": email})
+        lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead["id"])
+        text, markup = magnet_reply(magnet_type)
+        await utils.safe_reply_html(
+            update.message,
+            f"Спасибо, почту записали.\n\n{text}",
+            reply_markup=markup,
+            action="lead_magnet_in_chat",
+        )
+    except (sqlite3.Error, TelegramError, KeyError) as e:
+        logger.error(f"Error in accept_lead_magnet_email: {e}")
         await utils.safe_reply_html(
             update.message,
             "Произошла ошибка.\n\n"
@@ -369,22 +346,6 @@ async def notify_admin_new_lead(context, lead_id: int, lead_data: dict, user_dat
             database.db.mark_lead_notification_sent(lead_id)
         else:
             logger.error(f"Lead notification was not delivered to any target for lead {lead_id}")
-
-        # Отправляем на email (если настроен SMTP)
-        if config.SMTP_USER and config.SMTP_PASSWORD:
-            try:
-                email_subject = f"[AI Verdict Bot] Новый лид: {lead.get('name') or user_data.get('first_name')}"
-                email_body = notification_message
-
-                email_sender.email_sender.send_email(
-                    to_email=config.SMTP_USER,  # Админу на почту
-                    subject=email_subject,
-                    body=email_body
-                )
-
-                logger.info(f"Email notification sent to admin about lead {lead_id}")
-            except (smtplib.SMTPException, OSError) as e:
-                logger.error(f"Error sending email notification: {e}")
 
     except (sqlite3.Error, TelegramError, KeyError, AttributeError) as e:
         logger.error(f"Error in notify_admin_new_lead: {e}")

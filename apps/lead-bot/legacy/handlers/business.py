@@ -20,7 +20,6 @@ import lead_qualifier
 from config import get_config
 config = get_config()
 import utils
-import email_sender
 import content
 import funnel
 from .constants import (
@@ -29,7 +28,7 @@ from .constants import (
     BUSINESS_PENDING_CONTACT_KEY,
     LEAD_MAGNET_MENU,
 )
-from .helpers import notify_admin_new_lead, extract_email
+from .helpers import extract_email, magnet_reply, notify_admin_new_lead
 from .markup import (
     business_phone_format_text as _business_phone_format_text,
     clear_business_contact_state as _clear_business_contact_state,
@@ -1054,34 +1053,18 @@ async def handle_business_message(update: Update, context: ContextTypes.DEFAULT_
 
             email = extract_email(text) if text else None
             if email:
-                user_name = message.from_user.first_name
-                success = False
-                if magnet_type == "consultation":
-                    success = email_sender.email_sender.send_consultation_confirmation(email, user_name)
-                elif magnet_type == "checklist":
-                    success = email_sender.email_sender.send_checklist(email, user_name)
-                elif magnet_type == "demo":
-                    success = email_sender.email_sender.send_demo_request_confirmation(email, user_name)
-                elif magnet_type == "sample_report":
-                    success = email_sender.email_sender.send_sample_report(email, user_name)
-
-                if success:
-                    if not lead.get("email"):
-                        database.db.create_or_update_lead(user, {"email": email})
-                    lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead["id"])
-                    base_message = content.LEAD_MAGNET_SENT_MESSAGES.get(magnet_type, "✅ Спасибо! Письмо отправлено.")
-                    await context.bot.send_message(
-                        chat_id=message.chat.id,
-                        text=f"{base_message}\n\nКонтакт для отправки: {email}",
-                        business_connection_id=message.business_connection_id,
-                    )
-                else:
-                    await context.bot.send_message(
-                        chat_id=message.chat.id,
-                        text=f"Произошла ошибка при отправке email.\n\n{content.DIRECT_CONTACTS_TEXT}",
-                        parse_mode="HTML",
-                        business_connection_id=message.business_connection_id,
-                    )
+                # Писем клиентам нет: почту сохраняем как контакт, материал — прямо здесь.
+                if not lead.get("email"):
+                    database.db.create_or_update_lead(user, {"email": email})
+                lead_qualifier.lead_qualifier.mark_lead_magnet_delivered(lead["id"])
+                reply_text, reply_markup = magnet_reply(magnet_type)
+                await context.bot.send_message(
+                    chat_id=message.chat.id,
+                    text=f"Спасибо, почту записали.\n\n{reply_text}",
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                    business_connection_id=message.business_connection_id,
+                )
                 return
 
             if magnet_type == "demo" and (getattr(message, "document", None) or getattr(message, "photo", None)):

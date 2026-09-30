@@ -10,7 +10,7 @@ import database
 import utils
 from telegram import Update
 from telegram.ext import ContextTypes
-from .helpers import extract_email, send_lead_magnet_email
+from .helpers import extract_email, accept_lead_magnet_email
 from .markup import consultation_contact_markup as _consultation_contact_markup
 from .user_cta_actions import handle_handoff_request
 from .user_message_helpers import (
@@ -70,7 +70,7 @@ async def handle_non_text_input(
     caption_text = message.caption or ""
     email = extract_email(caption_text)
     if email:
-        await send_lead_magnet_email(update, user_data, lead, email)
+        await accept_lead_magnet_email(update, user_data, lead, email)
         return True
 
     if magnet_type == "consultation":
