@@ -14,8 +14,9 @@
 #
 # Если настроен Яндекс Диск (infra/scripts/setup_yadisk_backup.sh →
 # ~/.config/legalai/yadisk.env), дамп и база бота уходят туда одним архивом,
-# зашифрованным на этой машине: на Диске только шифротекст. Хранится
-# YADISK_KEEP_DAYS дней. Расшифровать — infra/scripts/decrypt_backup.sh.
+# зашифрованным на этой машине, в папку приложения («Приложения» на Диске):
+# на Диске только шифротекст. Хранится YADISK_KEEP_DAYS дней. Расшифровать —
+# infra/scripts/decrypt_backup.sh.
 #
 # Итог пишется в service_health (key=backup): ядро скажет владельцу, если
 # свежего дампа нет больше суток или копия (бот, NAS, Диск) не удалась.
@@ -119,20 +120,28 @@ bot_db_copy() {
   chmod 600 "$target"
 }
 
-# Копия на Яндекс Диск (WebDAV). Дамп и база бота — в один tar с
-# контрольными суммами (SHA256SUMS), tar шифруется здесь (AES-256-CBC, ключ из
-# PBKDF2 по ключу-файлу), на Диск уходит только шифротекст. Пароль приложения
-# Яндекса — в netrc (права 600), не в командной строке. Причина ошибки — в stdout.
+# Копия на Яндекс Диск — REST API (WebDAV Яндекс оставил только платным
+# тарифам). Токен OAuth с доступом только к папке приложения: он не видит
+# остальных файлов Диска. Дамп и база бота — в один tar с контрольными
+# суммами (SHA256SUMS), tar шифруется здесь (AES-256-CBC, ключ из PBKDF2 по
+# ключу-файлу), на Диск уходит только шифротекст. Токен — в файле заголовка
+# (права 600), не в командной строке. Причина ошибки — в stdout.
+yadisk_api() {
+  # yadisk_api МЕТОД ПУТЬ [аргументы curl…] — запрос к API, тело ответа в stdout.
+  local method="$1" path="$2"
+  shift 2
+  curl -s --max-time 60 -H @"$YADISK_HEADER" -X "$method" -G "https://cloud-api.yandex.net/v1/disk/resources$path" "$@"
+}
+
 yadisk_copy() {
-  local dav="https://webdav.yandex.ru" dir key netrc keep work name archive code size remote cutoff old f
+  local keep key work name archive size link href code remote cutoff old f
   # shellcheck disable=SC1090
   . "$YADISK_ENV"
-  dir="${YADISK_DIR:-legalai-backups}"
   key="${YADISK_KEY_FILE:-$HOME/.config/legalai/backup.key}"
-  netrc="${YADISK_NETRC:-$HOME/.config/legalai/yadisk.netrc}"
+  YADISK_HEADER="${YADISK_HEADER:-$HOME/.config/legalai/yadisk.header}"
   keep="${YADISK_KEEP_DAYS:-60}"
-  if [ ! -r "$key" ] || [ ! -r "$netrc" ]; then
-    echo "нет ключа шифрования или доступа к Диску — запустите setup_yadisk_backup.sh"
+  if [ ! -r "$key" ] || [ ! -r "$YADISK_HEADER" ]; then
+    echo "нет ключа шифрования или токена Диска — запустите setup_yadisk_backup.sh"
     return 1
   fi
   work="$(mktemp -d)"
@@ -150,27 +159,38 @@ yadisk_copy() {
     return 1
   fi
   size="$(stat -f %z "$archive")"
-  curl -s -o /dev/null --netrc-file "$netrc" --max-time 30 -X MKCOL "$dav/$dir/" || true
-  code="$(curl -s -o /dev/null -w '%{http_code}' --netrc-file "$netrc" --max-time 900 -T "$archive" "$dav/$dir/$name.tar.enc")"
+  # Ссылка на загрузку, затем сам файл — по ссылке, без токена.
+  link="$(yadisk_api GET /upload --data-urlencode "path=app:/$name.tar.enc" --data-urlencode "overwrite=true")"
+  href="$(printf '%s' "$link" | sed -n 's/.*"href":"\([^"]*\)".*/\1/p')"
+  if [ -z "$href" ]; then
+    rm -rf "$work"
+    case "$link" in
+      *UnauthorizedError*) echo "Яндекс Диск не принял токен — выпустите новый (срок жизни — год)" ;;
+      *InsufficientStorage*) echo "на Яндекс Диске закончилось место" ;;
+      *) echo "Яндекс Диск не дал ссылку на загрузку: $(printf '%s' "$link" | head -c 200)" ;;
+    esac
+    return 1
+  fi
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 900 -T "$archive" "$href")"
   rm -rf "$work"
   case "$code" in
-    201 | 204) ;;
-    401) echo "Яндекс Диск не принял пароль приложения (401)"; return 1 ;;
+    201 | 202) ;;
     507) echo "на Яндекс Диске закончилось место (507)"; return 1 ;;
     *) echo "Яндекс Диск не принял копию (ответ ${code:-нет})"; return 1 ;;
   esac
-  remote="$(curl -s --netrc-file "$netrc" --max-time 30 -X PROPFIND -H 'Depth: 0' "$dav/$dir/$name.tar.enc" \
-    | grep -o 'getcontentlength>[0-9]*' | grep -o '[0-9]*$' | head -1)"
+  remote="$(yadisk_api GET "" --data-urlencode "path=app:/$name.tar.enc" --data-urlencode "fields=size" \
+    | grep -o '"size":[0-9]*' | grep -o '[0-9]*$' | head -1)"
   if [ "$remote" != "$size" ]; then
     echo "размер копии на Диске (${remote:-нет}) не совпал с архивом ($size)"
     return 1
   fi
   # Старые копии — по дате в имени: legal_ai_ГГГГММДД_ччммсс.tar.enc.
   cutoff="$(date -v-"${keep}"d +%Y%m%d)"
-  for old in $(curl -s --netrc-file "$netrc" --max-time 60 -X PROPFIND -H 'Depth: 1' "$dav/$dir/" \
+  for old in $(yadisk_api GET "" --data-urlencode "path=app:/" --data-urlencode "limit=1000" \
+    --data-urlencode "fields=_embedded.items.name" \
     | grep -o 'legal_ai_[0-9]\{8\}_[0-9]\{6\}\.tar\.enc' | sort -u); do
     if [ "${old:9:8}" \< "$cutoff" ]; then
-      curl -s -o /dev/null --netrc-file "$netrc" --max-time 60 -X DELETE "$dav/$dir/$old" || true
+      yadisk_api DELETE "" --data-urlencode "path=app:/$old" --data-urlencode "permanently=true" >/dev/null || true
     fi
   done
 }
