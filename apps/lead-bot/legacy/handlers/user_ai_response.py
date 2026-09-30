@@ -21,6 +21,7 @@ import prompts
 import security
 import utils
 from config import get_config
+from . import intake_draft
 from .helpers import notify_admin_new_lead
 from .start_payloads import channel_post_context_block
 from .markup import consultation_cta_markup as _consultation_cta_markup
@@ -390,6 +391,13 @@ async def process_ai_response(
         cta_shown=cta_shown,
         intent=intent_result.intent,
     )
+    # Описал новую юридическую задачу — предложить передать её юристу
+    # черновиком из его же слов (не чаще раза в сутки); спросил про NDA —
+    # сразу дать его открыть.
+    if intent_result.intent == "new_legal_task":
+        await intake_draft.offer_draft(original_message, context)
+    if intake_draft.mentions_nda(message_text):
+        await intake_draft.offer_nda(original_message)
 
     database.db.add_message(user_data["id"], "assistant", full_response)
 
