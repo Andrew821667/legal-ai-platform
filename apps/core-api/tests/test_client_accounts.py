@@ -155,7 +155,7 @@ def test_account_signs_nda_for_its_own_lead_only(world) -> None:
         "client_account_id": account_id,
         "signer_full_name": "Анна Петрова",
         "signer_contact": world["email"],
-        "signer_identity_document": "45 01 123456, выдан ОВД 01.02.2010",
+        "signer_identity_document": "45 01 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
         "signer_org": "",
     }
     # Чужой лид (из Telegram с той же почтой) — отказ.

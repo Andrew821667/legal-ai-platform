@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
+import party_validation
 import pytest
 
 from handlers import nda_signing as nda
@@ -113,7 +115,7 @@ async def _complete_form(update, context, *, org: str = "от себя") -> None
     await nda.handle_message(update, context, "Иванов Иван Иванович")
     await nda.handle_message(update, context, "+7 900 123-45-67")
     await nda.handle_message(
-        update, context, "45 01 123456, выдан ОВД города Москвы 01.02.2010"
+        update, context, "45 01 123456, выдан ОВД города Москвы 01.02.2010, код подразделения 770-001"
     )
     await nda.handle_message(update, context, org)
     await _press(update, context, "consent")
@@ -144,29 +146,28 @@ def _button_by_callback(notice: dict, callback_data: str):
 # --- проверки формулировок и разбора ввода -------------------------------
 
 
-def test_full_name_needs_at_least_two_parts() -> None:
-    assert nda.looks_like_full_name("Иванов Иван Иванович")
-    assert nda.looks_like_full_name("Ли Сюань")
-    assert not nda.looks_like_full_name("Иван")
-    assert not nda.looks_like_full_name("да")
-    assert not nda.looks_like_full_name("")
+def test_full_name_is_checked_like_in_the_core() -> None:
+    check = party_validation.full_name
+    assert nda.validation_error(check, "Иванов Иван Иванович") is None
+    assert nda.validation_error(check, "Ли Сюань") is None
+    for bad in ("Иван", "да", "", "абракадабра", "Иван 123"):
+        assert nda.validation_error(check, bad)
 
 
-def test_contact_accepts_phone_or_email() -> None:
-    assert nda.looks_like_contact("+7 900 123-45-67")
-    assert nda.looks_like_contact("89001234567")
-    assert nda.looks_like_contact("ivan@example.ru")
-    assert not nda.looks_like_contact("потом скажу")
-    assert not nda.looks_like_contact("12345")
+def test_contact_accepts_phone_email_or_username() -> None:
+    check = party_validation.contact
+    for good in ("+7 900 123-45-67", "89001234567", "ivan@example.ru", "@ivan_tg"):
+        assert nda.validation_error(check, good) is None
+    for bad in ("потом скажу", "12345"):
+        assert nda.validation_error(check, bad)
 
 
-def test_identity_document_needs_meaningful_details() -> None:
-    assert nda.looks_like_identity_document(
-        "45 01 123456, выдан ОВД города Москвы 01.02.2010"
-    )
-    assert nda.looks_like_identity_document("Passport AB1234567 issued 2020-01-01")
-    assert not nda.looks_like_identity_document("12345")
-    assert not nda.looks_like_identity_document("потом")
+def test_identity_document_needs_real_details() -> None:
+    check = party_validation.identity_document
+    assert nda.validation_error(check, "45 01 123456, выдан ОВД города Москвы 01.02.2010, код подразделения 770-001") is None
+    assert nda.validation_error(check, "Passport AB1234567 issued 2020-01-01") is None
+    for bad in ("12345", "потом", "абракадабра", "4501 123456 выдан фывапр 01.02.2010 770-001"):
+        assert nda.validation_error(check, bad)
 
 
 def test_signing_for_self_is_recognised() -> None:
@@ -400,7 +401,7 @@ async def test_bad_name_is_asked_again_without_advancing(
     await nda.handle_message(update, context, "Иван")
 
     assert context.user_data[nda.STAGE_KEY] == nda.STAGE_NAME
-    assert "фамилия" in replies[-1].lower()
+    assert "фамилию" in replies[-1].lower()
 
 
 @pytest.mark.anyio
@@ -428,7 +429,7 @@ async def test_bad_identity_document_is_asked_again(
     await nda.handle_message(update, context, "12345")
 
     assert context.user_data[nda.STAGE_KEY] == nda.STAGE_IDENTITY
-    assert "полные реквизиты" in replies[-1].lower()
+    assert "серия и номер" in replies[-1].lower()
 
 
 @pytest.mark.anyio
@@ -480,3 +481,12 @@ async def test_failed_signing_does_not_leave_the_client_guessing(
 async def test_messages_outside_the_flow_are_not_intercepted(update, replies) -> None:
     context = SimpleNamespace(user_data={})
     assert await nda.handle_message(update, context, "просто сообщение") is False
+
+
+_SHARED_VALIDATION = Path(__file__).resolve().parents[4] / "packages" / "shared" / "shared" / "party_validation.py"
+
+
+@pytest.mark.skipif(not _SHARED_VALIDATION.exists(), reason="нет packages/shared рядом (образ бота)")
+def test_bot_copy_of_party_validation_matches_the_core() -> None:
+    # Бот проверяет данные той же функцией, что ядро: копия должна совпадать.
+    assert (Path(__file__).resolve().parents[1] / "party_validation.py").read_text() == _SHARED_VALIDATION.read_text()

@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, model_validator
+from shared import party_validation
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -154,10 +155,6 @@ class AgreementClientDetails(ClientRef):
             required = (self.org_name, self.inn, self.ogrn, self.position, self.authority_basis)
             if not all(required):
                 raise ValueError("organization details are incomplete")
-            if not self.inn.isdigit() or len(self.inn) not in {10, 12}:
-                raise ValueError("inn must contain 10 or 12 digits")
-            if not self.ogrn.isdigit() or len(self.ogrn) not in {13, 15}:
-                raise ValueError("ogrn must contain 13 or 15 digits")
         return self
 
 
@@ -857,6 +854,26 @@ def mark_viewed(
     return _payload(item)
 
 
+def _validate_party(payload: AgreementClientDetails) -> None:
+    """Реквизиты стороны по существу, а не только «не пусто»: договор с
+    абракадаброй вместо паспорта или ИНН с неверной контрольной суммой
+    юридически ничего не стоит (shared/party_validation.py)."""
+    try:
+        payload.full_name = party_validation.full_name(payload.full_name)
+        payload.contact = party_validation.contact(payload.contact)
+        payload.address = party_validation.address(payload.address)
+        if payload.client_type == "person":
+            payload.identity_document = party_validation.identity_document(payload.identity_document)
+        else:
+            payload.org_name = party_validation.org_name(payload.org_name)
+            payload.inn = party_validation.inn(payload.inn)
+            payload.ogrn = party_validation.ogrn(payload.ogrn, inn_value=payload.inn)
+            payload.position = party_validation.position(payload.position)
+            payload.authority_basis = party_validation.authority_basis(payload.authority_basis)
+    except party_validation.PartyDataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/{agreement_id}/client-details", status_code=status.HTTP_201_CREATED)
 def complete_client_details(
     agreement_id: uuid.UUID,
@@ -888,6 +905,7 @@ def complete_client_details(
     if latest_id != item.id:
         raise HTTPException(status_code=409, detail="A newer agreement revision already exists")
 
+    _validate_party(payload)
     previous_client = item.client_snapshot or {}
     client = {
         "client_type": payload.client_type,

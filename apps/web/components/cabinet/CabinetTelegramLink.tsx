@@ -1,22 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 type Props =
-  | { mode: "code"; email: string | null; botLinkUrl: string }
+  | { mode: "code"; email: string | null; botLinkUrl: string; pending?: boolean }
   | { mode: "linked"; username: string | null; linkedAt: string | null }
   | { mode: "sessions"; email: string | null };
 
-async function send(method: "POST" | "DELETE", body?: object): Promise<{ ok: boolean; detail?: string }> {
+async function send(
+  method: "POST" | "DELETE",
+  body?: object,
+): Promise<{ ok: boolean; detail?: string; pending?: boolean }> {
   try {
     const response = await fetch("/api/client/link", {
       method,
       headers: body ? { "content-type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (response.ok) return { ok: true };
-    const data = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+    const data = (await response.json().catch(() => null)) as { detail?: unknown; pending?: unknown } | null;
+    if (response.ok) return { ok: true, pending: data?.pending === true };
     return { ok: false, detail: typeof data?.detail === "string" ? data.detail : "Не получилось. Попробуйте ещё раз." };
   } catch {
     return { ok: false, detail: "Нет связи с сайтом. Попробуйте ещё раз." };
@@ -45,13 +48,35 @@ export default function CabinetTelegramLink(props: Props) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(props.mode === "code" && Boolean(props.pending));
+
+  // Код введён — ждём «Да» в боте: спрашиваем сайт, пока не объединится или не отменят.
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(async () => {
+      const response = await fetch("/api/client/link", { cache: "no-store" }).catch(() => null);
+      const state = (await response?.json().catch(() => null)) as { linked?: boolean; pending?: boolean } | null;
+      if (state?.linked) {
+        window.clearInterval(timer);
+        router.refresh();
+      } else if (state && !state.pending) {
+        window.clearInterval(timer);
+        setWaiting(false);
+        setCode("");
+        setError("Объединение отменено в Telegram или запрос устарел. Чтобы попробовать снова, запросите в боте новый код.");
+      }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [waiting, router]);
 
   async function run(method: "POST" | "DELETE", body?: object) {
     setBusy(true);
     setError(null);
     const result = await send(method, body);
     setBusy(false);
-    if (result.ok) {
+    if (result.ok && result.pending) {
+      setWaiting(true);
+    } else if (result.ok) {
       router.refresh();
     } else {
       setError(result.detail || null);
@@ -117,6 +142,23 @@ export default function CabinetTelegramLink(props: Props) {
               Войти через Яндекс ID
             </a>
           </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (waiting) {
+    return (
+      <div id="telegram" className="scroll-mt-24 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+        <p className="font-semibold text-slate-900">📨 Подтвердите объединение в Telegram</p>
+        <p className="mt-1">
+          Бот прислал вам вопрос с почтой этой учётной записи{props.mode === "code" && props.email ? ` (${props.email})` : ""}.
+          Откройте его и нажмите «Да, объединить» — эта страница обновится сама.
+        </p>
+        {props.mode === "code" ? (
+          <a href={props.botLinkUrl.replace(/\?start=.*$/, "")} target="_blank" rel="noreferrer" className="mt-3 inline-block font-semibold text-amber-700 underline">
+            Открыть бота
+          </a>
         ) : null}
       </div>
     );

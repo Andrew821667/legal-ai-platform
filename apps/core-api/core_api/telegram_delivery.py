@@ -58,6 +58,8 @@ KIND_LABELS = {
     "consultation": "Подтверждение консультации",
     "agreement_reminder": "Напоминание о договоре",
     "document_request": "Запрос документов",
+    "link_confirm": "Подтверждение объединения с сайтом",
+    "link_notice": "Уведомление об объединении с сайтом",
 }
 
 _TOKEN = re.compile(r"bot\d+:[A-Za-z0-9_-]+")

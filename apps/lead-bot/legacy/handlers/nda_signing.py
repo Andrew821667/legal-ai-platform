@@ -21,6 +21,7 @@ from telegram_ui import inline_button as InlineKeyboardButton
 
 import admin_interface
 import database
+import party_validation
 import utils
 from config import get_config
 from core_api_bridge import core_api_bridge
@@ -48,7 +49,6 @@ RETURN_DIALOG = "dialog"
 
 _SELF_MARKERS = ("от себя", "себя", "физлицо", "физическое", "нет", "-", "—", "частное")
 
-_MIN_NAME_PARTS = 2
 
 
 def intro_markup() -> InlineKeyboardMarkup:
@@ -187,30 +187,17 @@ def build_summary(data: dict) -> str:
     return "\n".join(lines)
 
 
-def looks_like_full_name(text: str) -> bool:
-    """Хотя бы имя и фамилия.
+def validation_error(check, text: str) -> str | None:
+    """Текст ошибки проверки (party_validation) или None — данные годятся.
 
-    Проверка намеренно мягкая: отсеивает «да» и «Иван», но не спорит с людьми,
-    у которых непривычное для нас имя.
+    Та же проверка, что в ядре: абракадабра вместо паспорта делает NDA и
+    согласие юридически пустыми, поэтому говорим сразу и с примером.
     """
-    parts = [p for p in (text or "").replace(".", " ").split() if len(p) > 1]
-    return len(parts) >= _MIN_NAME_PARTS
-
-
-def looks_like_contact(text: str) -> bool:
-    """Телефон или почта."""
-    value = (text or "").strip()
-    if "@" in value and "." in value.split("@")[-1]:
-        return True
-    digits = [c for c in value if c.isdigit()]
-    return len(digits) >= 10
-
-
-def looks_like_identity_document(text: str) -> bool:
-    """Мягкая проверка реквизитов российского или иностранного документа."""
-    value = (text or "").strip()
-    significant = [char for char in value if char.isalnum()]
-    return len(value) >= 12 and len(significant) >= 8
+    try:
+        check(text)
+    except party_validation.PartyDataError as exc:
+        return str(exc)
+    return None
 
 
 def is_signing_for_self(text: str) -> bool:
@@ -425,13 +412,8 @@ async def handle_message(
     data = dict(context.user_data.get(DATA_KEY) or {})
 
     if stage == STAGE_NAME:
-        if not looks_like_full_name(text):
-            await utils.safe_reply_text(
-                message,
-                "Нужны фамилия и имя целиком — так соглашение будет иметь силу. "
-                "Например: Иванов Иван Иванович.",
-                action="nda_name_invalid",
-            )
+        if error := validation_error(party_validation.full_name, text):
+            await utils.safe_reply_text(message, error, action="nda_name_invalid")
             return True
         data["signer_full_name"] = text[:255]
         context.user_data[DATA_KEY] = data
@@ -444,32 +426,24 @@ async def handle_message(
         return True
 
     if stage == STAGE_CONTACT:
-        if not looks_like_contact(text):
-            await utils.safe_reply_text(
-                message,
-                "Это не похоже на телефон или почту. Напишите номер целиком "
-                "или адрес вида имя@почта.ру.",
-                action="nda_contact_invalid",
-            )
+        if error := validation_error(party_validation.contact, text):
+            await utils.safe_reply_text(message, error, action="nda_contact_invalid")
             return True
         data["signer_contact"] = text[:255]
         context.user_data[DATA_KEY] = data
         context.user_data[STAGE_KEY] = STAGE_IDENTITY
         await utils.safe_reply_text(
             message,
-            "Укажите реквизиты документа, удостоверяющего личность: серию и "
-            "номер, кем и когда выдан. Эти сведения не передаются ИИ и аналитике.",
+            "Укажите паспорт: серию и номер, кем выдан, дату выдачи и код подразделения. "
+            f"{party_validation.PASSPORT_EXAMPLE} Для иностранного документа — его вид, номер "
+            "и дату выдачи. Эти сведения не передаются ИИ и аналитике.",
             action="nda_ask_identity_document",
         )
         return True
 
     if stage == STAGE_IDENTITY:
-        if not looks_like_identity_document(text):
-            await utils.safe_reply_text(
-                message,
-                "Нужны полные реквизиты документа: серия и номер, кем и когда выдан.",
-                action="nda_identity_document_invalid",
-            )
+        if error := validation_error(party_validation.identity_document, text):
+            await utils.safe_reply_text(message, error, action="nda_identity_document_invalid")
             return True
         data["signer_identity_document"] = text[:500]
         context.user_data[DATA_KEY] = data

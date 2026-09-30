@@ -32,6 +32,8 @@ const EXACT: Record<string, string> = {
   telegram_linked_elsewhere:
     "Этот Telegram уже объединён с другой учётной записью сайта. Отвяжите его там или напишите нам в бот.",
   account_has_other_telegram: "К вашей учётной записи уже привязан другой Telegram — сначала отвяжите его.",
+  telegram_unavailable: "Не получилось отправить подтверждение в Telegram. Попробуйте ещё раз через минуту.",
+  link_request_expired: "Запрос на объединение устарел. Запросите в боте новый код командой /link.",
   "Client account not found": "Учётная запись не найдена. Войдите ещё раз.",
 
   // Консультации

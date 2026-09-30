@@ -5,7 +5,8 @@ import { UserRound } from "lucide-react";
 
 import CabinetProfileClient from "@/components/cabinet/CabinetProfileClient";
 import CabinetTelegramLink from "@/components/cabinet/CabinetTelegramLink";
-import { fetchClientAccount } from "@/lib/client-core";
+import { isStaffTelegramId } from "@/lib/cabinet-admin";
+import { fetchClientAccount, type ClientAccountInfo } from "@/lib/client-core";
 import { readClientSession, type ClientSession } from "@/lib/client-session-server";
 import { EXTERNAL_LINKS, leadBotDeepLink, ROUTES } from "@/lib/links";
 
@@ -28,9 +29,8 @@ function yandexLoginEnabled(): boolean {
 }
 
 /** Блок «Telegram»: объединить вход через Яндекс ID с Telegram или отвязать. */
-async function TelegramBlock({ session }: { session: ClientSession }) {
-  const accountId = session.accountId ?? session.otherAccount?.accountId ?? null;
-  if (!accountId) {
+function TelegramBlock({ session, account }: { session: ClientSession; account: ClientAccountInfo | null }) {
+  if (!session.accountId && !session.otherAccount) {
     if (!yandexLoginEnabled()) return null;
     return (
       <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
@@ -42,7 +42,6 @@ async function TelegramBlock({ session }: { session: ClientSession }) {
       </p>
     );
   }
-  const account = await fetchClientAccount(accountId);
   if (!account) return null;
   if (account.telegram_user_id) {
     // Вошёл через Telegram, а учётная запись привязана к другому — не наше дело показывать.
@@ -52,7 +51,14 @@ async function TelegramBlock({ session }: { session: ClientSession }) {
   if (session.telegramUserId) {
     return <CabinetTelegramLink mode="sessions" email={account.email} />;
   }
-  return <CabinetTelegramLink mode="code" email={account.email} botLinkUrl={leadBotDeepLink("link")} />;
+  return (
+    <CabinetTelegramLink
+      mode="code"
+      email={account.email}
+      botLinkUrl={leadBotDeepLink("link")}
+      pending={Boolean(account.link_pending)}
+    />
+  );
 }
 
 export default async function CabinetProfilePage() {
@@ -62,6 +68,9 @@ export default async function CabinetProfilePage() {
   }
 
   const profile = session.profile;
+  const accountId = session.accountId ?? session.otherAccount?.accountId ?? null;
+  const account = accountId ? await fetchClientAccount(accountId) : null;
+  const staff = isStaffTelegramId(session.telegramUserId) || isStaffTelegramId(account?.telegram_user_id);
   const displayName = [profile?.fn, profile?.ln].filter(Boolean).join(" ") || "Клиент AI Verdict";
   const initials = (profile?.fn?.[0] || "?").toUpperCase();
 
@@ -79,6 +88,7 @@ export default async function CabinetProfilePage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">{displayName}</h1>
           {profile?.un ? <p className="text-sm text-slate-500">@{profile.un}</p> : null}
+          {staff ? <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Администратор</p> : null}
           {profile?.email ? <p className="text-sm text-slate-500">{profile.email}</p> : null}
         </div>
       </div>
@@ -91,7 +101,7 @@ export default async function CabinetProfilePage() {
       </div>
 
       <div className="mt-6">
-        <TelegramBlock session={session} />
+        <TelegramBlock session={session} account={account} />
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">

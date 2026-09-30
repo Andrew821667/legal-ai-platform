@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from shared import party_validation
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -96,6 +97,15 @@ def _signer_data(payload: dict) -> dict[str, str]:
             status_code=422,
             detail="signer_full_name, signer_contact and signer_identity_document are required",
         )
+    # Абракадабра вместо паспорта делает NDA и согласие юридически пустыми.
+    try:
+        data["signer_full_name"] = party_validation.full_name(data["signer_full_name"])
+        data["signer_contact"] = party_validation.contact(data["signer_contact"])
+        data["signer_identity_document"] = party_validation.identity_document(data["signer_identity_document"])
+        if data["signer_org"]:
+            data["signer_org"] = party_validation.org_name(data["signer_org"])
+    except party_validation.PartyDataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return data
 
 

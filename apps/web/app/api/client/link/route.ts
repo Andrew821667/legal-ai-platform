@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { isTrustedAssistantOrigin, trustedHostsFor } from "@/lib/assistant-security";
 import { checkClientAccountCookie } from "@/lib/client-access";
-import { clientCoreDelete, clientCorePost } from "@/lib/client-core";
+import { clientCoreDelete, clientCorePost, fetchClientAccount } from "@/lib/client-core";
 import { cleanLinkCode, readBothSessions } from "@/lib/client-link";
 import {
   CLIENT_ACCOUNT_COOKIE,
@@ -40,6 +40,20 @@ function accountFrom(request: NextRequest): { accountId: string; secret: string 
     return NextResponse.json({ detail }, { status: result.status });
   }
   return { accountId: result.accountId, secret };
+}
+
+/** Состояние объединения — профиль опрашивает его, пока ждёт «Да» в боте. */
+export async function GET(request: NextRequest) {
+  const secret = clientSessionSecret();
+  const result = checkClientAccountCookie({ cookie: request.cookies.get(CLIENT_ACCOUNT_COOKIE)?.value || "", secret });
+  if (!result.ok) {
+    return NextResponse.json({ detail: result.detail }, { status: result.status });
+  }
+  const account = await fetchClientAccount(result.accountId);
+  if (!account) {
+    return NextResponse.json({ detail: "Кабинет временно недоступен." }, { status: 503 });
+  }
+  return NextResponse.json({ linked: Boolean(account.telegram_user_id), pending: Boolean(account.link_pending) });
 }
 
 export async function POST(request: NextRequest) {
