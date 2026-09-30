@@ -5,12 +5,20 @@
 # и вручную перед рискованными изменениями. Проверить, что дамп
 # восстанавливается, — infra/scripts/restore_drill.sh.
 #
+# Рядом с дампом — копия базы бота-ассистента (bot.db в контейнере
+# legal-ai-lead-bot: пользователи бота, состояние диалогов, отметки о согласиях).
+#
 # Если настроен NAS (infra/scripts/setup_nas_backup.sh → ~/.config/legalai/nas.env),
 # дамп копируется и туда: локальные дампы лежат на том же диске, что и база,
 # и от потери машины не спасают. На NAS хранится NAS_KEEP_DAYS дней.
 #
+# Если настроен Яндекс Диск (infra/scripts/setup_yadisk_backup.sh →
+# ~/.config/legalai/yadisk.env), дамп и база бота уходят туда одним архивом,
+# зашифрованным на этой машине: на Диске только шифротекст. Хранится
+# YADISK_KEEP_DAYS дней. Расшифровать — infra/scripts/decrypt_backup.sh.
+#
 # Итог пишется в service_health (key=backup): ядро скажет владельцу, если
-# свежего дампа нет больше суток или копия на NAS не удалась.
+# свежего дампа нет больше суток или копия (бот, NAS, Диск) не удалась.
 #
 # Паспортные данные в дампе — шифротекст; ключ (PII_ENCRYPTION_KEY) хранится
 # отдельно от бэкапов: ключ рядом с дампом = дамп открытым текстом.
@@ -20,6 +28,9 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=${BACKUP_DIR:-$HOME/backups/legal-ai}
 BACKUP_KEEP_DAYS=${BACKUP_KEEP_DAYS:-14}
 NAS_ENV=${NAS_ENV:-$HOME/.config/legalai/nas.env}
+YADISK_ENV=${YADISK_ENV:-$HOME/.config/legalai/yadisk.env}
+BOT_CONTAINER=${BOT_CONTAINER:-legal-ai-lead-bot}
+BOT_DB_PATH=${BOT_DB_PATH:-/app/data/bot.db}
 mkdir -p "$BACKUP_DIR"
 CONTAINER=${POSTGRES_CONTAINER:-legal-ai-postgres}
 PGUSER=${PGUSER:-legalai_app}
@@ -89,6 +100,81 @@ nas_copy() {
   return "$rc"
 }
 
+# База бота — SQLite внутри контейнера: снимаем согласованную копию его же
+# Python (backup API, база открыта только на чтение) и забираем наружу.
+bot_db_copy() {
+  local target="$1" tmp="/tmp/legal_ai_bot_backup.db"
+  if ! docker exec "$BOT_CONTAINER" python -c "import sqlite3; s = sqlite3.connect('file:$BOT_DB_PATH?mode=ro', uri=True); d = sqlite3.connect('$tmp'); s.backup(d); d.close(); s.close()" >/dev/null 2>&1; then
+    echo "не удалось снять копию $BOT_DB_PATH в $BOT_CONTAINER"
+    return 1
+  fi
+  if ! docker cp "$BOT_CONTAINER:$tmp" "$target.part" >/dev/null 2>&1 || [ ! -s "$target.part" ]; then
+    rm -f "$target.part"
+    docker exec "$BOT_CONTAINER" rm -f "$tmp" >/dev/null 2>&1 || true
+    echo "не удалось забрать копию базы бота из контейнера"
+    return 1
+  fi
+  docker exec "$BOT_CONTAINER" rm -f "$tmp" >/dev/null 2>&1 || true
+  mv "$target.part" "$target"
+  chmod 600 "$target"
+}
+
+# Копия на Яндекс Диск (WebDAV). Дамп и база бота — в один tar с
+# контрольными суммами (SHA256SUMS), tar шифруется здесь (AES-256-CBC, ключ из
+# PBKDF2 по ключу-файлу), на Диск уходит только шифротекст. Пароль приложения
+# Яндекса — в netrc (права 600), не в командной строке. Причина ошибки — в stdout.
+yadisk_copy() {
+  local dav="https://webdav.yandex.ru" dir key netrc keep work name archive code size remote cutoff old f
+  # shellcheck disable=SC1090
+  . "$YADISK_ENV"
+  dir="${YADISK_DIR:-legalai-backups}"
+  key="${YADISK_KEY_FILE:-$HOME/.config/legalai/backup.key}"
+  netrc="${YADISK_NETRC:-$HOME/.config/legalai/yadisk.netrc}"
+  keep="${YADISK_KEEP_DAYS:-60}"
+  if [ ! -r "$key" ] || [ ! -r "$netrc" ]; then
+    echo "нет ключа шифрования или доступа к Диску — запустите setup_yadisk_backup.sh"
+    return 1
+  fi
+  work="$(mktemp -d)"
+  name="legal_ai_$TIMESTAMP"
+  archive="$work/$name.tar.enc"
+  mkdir "$work/$name"
+  for f in "$@"; do
+    [ -n "$f" ] && cp "$f" "$work/$name/"
+  done
+  (cd "$work/$name" && shasum -a 256 -- * > SHA256SUMS)
+  if ! tar -C "$work" -cf - "$name" \
+    | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -md sha256 -salt -pass "file:$key" -out "$archive"; then
+    rm -rf "$work"
+    echo "не удалось зашифровать архив"
+    return 1
+  fi
+  size="$(stat -f %z "$archive")"
+  curl -s -o /dev/null --netrc-file "$netrc" --max-time 30 -X MKCOL "$dav/$dir/" || true
+  code="$(curl -s -o /dev/null -w '%{http_code}' --netrc-file "$netrc" --max-time 900 -T "$archive" "$dav/$dir/$name.tar.enc")"
+  rm -rf "$work"
+  case "$code" in
+    201 | 204) ;;
+    401) echo "Яндекс Диск не принял пароль приложения (401)"; return 1 ;;
+    507) echo "на Яндекс Диске закончилось место (507)"; return 1 ;;
+    *) echo "Яндекс Диск не принял копию (ответ ${code:-нет})"; return 1 ;;
+  esac
+  remote="$(curl -s --netrc-file "$netrc" --max-time 30 -X PROPFIND -H 'Depth: 0' "$dav/$dir/$name.tar.enc" \
+    | grep -o 'getcontentlength>[0-9]*' | grep -o '[0-9]*$' | head -1)"
+  if [ "$remote" != "$size" ]; then
+    echo "размер копии на Диске (${remote:-нет}) не совпал с архивом ($size)"
+    return 1
+  fi
+  # Старые копии — по дате в имени: legal_ai_ГГГГММДД_ччммсс.tar.enc.
+  cutoff="$(date -v-"${keep}"d +%Y%m%d)"
+  for old in $(curl -s --netrc-file "$netrc" --max-time 60 -X PROPFIND -H 'Depth: 1' "$dav/$dir/" \
+    | grep -o 'legal_ai_[0-9]\{8\}_[0-9]\{6\}\.tar\.enc' | sort -u); do
+    if [ "${old:9:8}" \< "$cutoff" ]; then
+      curl -s -o /dev/null --netrc-file "$netrc" --max-time 60 -X DELETE "$dav/$dir/$old" || true
+    fi
+  done
+}
+
 # Во временный файл: оборванный дамп не должен выглядеть как свежий бэкап.
 if ! docker exec "$CONTAINER" pg_dump -U "$PGUSER" -Fc "$PGDB" > "$TARGET.part" || [ ! -s "$TARGET.part" ]; then
   rm -f "$TARGET.part"
@@ -101,15 +187,40 @@ chmod 600 "$TARGET"
 find "$BACKUP_DIR" -name 'legal_ai_*.dump' -mtime +"$BACKUP_KEEP_DAYS" -delete
 echo "Backup completed: $(basename "$TARGET") ($(du -h "$TARGET" | cut -f1))"
 
+problems=""
+add_problem() { problems="${problems:+$problems; }$1"; }
+
+BOT_TARGET="$BACKUP_DIR/legal_ai_bot_$TIMESTAMP.db"
+if bot_error="$(bot_db_copy "$BOT_TARGET")"; then
+  echo "Bot DB copied: $(basename "$BOT_TARGET") ($(du -h "$BOT_TARGET" | cut -f1))"
+else
+  echo "Bot DB copy FAILED: $bot_error" >&2
+  add_problem "копия базы бота не удалась: $bot_error"
+  BOT_TARGET=""
+fi
+find "$BACKUP_DIR" -name 'legal_ai_bot_*.db' -mtime +"$BACKUP_KEEP_DAYS" -delete
+
 if [ -r "$NAS_ENV" ]; then
   if nas_error="$(nas_copy "$TARGET")"; then
     echo "NAS copy completed"
-    record_health true "" 1
   else
     echo "NAS copy FAILED: $nas_error" >&2
-    record_health false "копия на NAS не удалась: $nas_error" 1
-    exit 1
+    add_problem "копия на NAS не удалась: $nas_error"
   fi
-else
+fi
+
+if [ -r "$YADISK_ENV" ]; then
+  if yadisk_error="$(yadisk_copy "$TARGET" "$BOT_TARGET")"; then
+    echo "Yandex Disk copy completed"
+  else
+    echo "Yandex Disk copy FAILED: $yadisk_error" >&2
+    add_problem "копия на Яндекс Диск не удалась: $yadisk_error"
+  fi
+fi
+
+if [ -z "$problems" ]; then
   record_health true "" 1
+else
+  record_health false "$problems" 1
+  exit 1
 fi
