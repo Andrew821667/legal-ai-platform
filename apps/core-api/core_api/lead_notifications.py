@@ -127,10 +127,9 @@ def _format_lead_message(lead: Lead) -> str:
 
     lines: list[str] = [header, ""]
 
-    if lead.name:
-        lines.append(f"👤 Имя: {lead.name}")
-    if lead.contact:
-        lines.append(f"📞 Контакт: {lead.contact}")
+    # Уведомление идёт через Telegram (серверы за рубежом): имени и контакта в
+    # нём нет — они в рабочем месте, база в России.
+    lines.append("👤 Имя и контакт — в рабочем месте")
 
     segment_label: str | None = None
     if lead.segment is not None:
@@ -150,8 +149,6 @@ def _format_lead_message(lead: Lead) -> str:
         goal = parsed_notes.get("goal")
         if goal:
             lines.append(f"🧭 Цель: {goal}")
-        if lead.telegram_user_id:
-            lines.append(f"💬 Telegram ID: {lead.telegram_user_id}")
 
     if message:
         lines.append("")
@@ -234,6 +231,18 @@ def _post_telegram_message(
         raise last_exc
 
 
+def telegram_safe(text: str, known_names: tuple[str | None, ...] = ()) -> str:
+    """Текст уведомления юристу без персональных данных.
+
+    Уведомления уходят через Telegram, серверы которого за рубежом, а
+    трансграничной передачи у оператора нет (уведомление в РКН от 01.10.2026).
+    Имена, телефоны, почта, номера документов и адреса заменяются метками
+    (shared.pii); полный текст обращения — в рабочем месте."""
+    from shared.pii import Masker
+
+    return Masker(known_names=tuple(name for name in known_names if name)).mask(text)
+
+
 def notify_new_lead(lead_id: uuid.UUID) -> None:
     """Send a Telegram message about a newly created lead.
 
@@ -260,7 +269,7 @@ def notify_new_lead(lead_id: uuid.UUID) -> None:
         if is_staff(lead.telegram_user_id):
             # Владелец проверяет систему со своего аккаунта — не новый лид.
             return
-        text = _format_lead_message(lead)
+        text = telegram_safe(_format_lead_message(lead), (lead.name, lead.company))
     finally:
         db.close()
 
@@ -353,12 +362,8 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
             f"Клиент: {_LEGAL_CLIENT_LABELS[item.client_type.value]}",
             f"Направление: {_LEGAL_AREA_LABELS[item.legal_area.value]}",
             f"Срочность: {_LEGAL_URGENCY_LABELS[item.urgency.value]}",
-            f"Контакт: {lead.contact or 'не указан'}",
+            "Имя, организация и контакт — в рабочем месте",
         ]
-        if lead.name:
-            lines.append(f"Имя: {lead.name}")
-        if lead.company:
-            lines.append(f"Организация: {lead.company}")
         if item.region:
             lines.append(f"Регион: {item.region}")
         if item.deadline:
@@ -381,6 +386,7 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
         }
         lines.append(f"\nID: {item.id}")
         text = "\n".join(lines)
+        known_names = (lead.name, lead.company)
     finally:
         db.close()
 
@@ -389,6 +395,9 @@ def notify_new_legal_intake(intake_id: uuid.UUID) -> None:
     analysis_block = _legal_intake_analysis_block(intake_payload)
     if analysis_block:
         text = f"{text}\n{analysis_block}"
+    # Описание и разбор — словами клиента: имена, телефоны, документы в них
+    # заменяются метками перед отправкой в Telegram.
+    text = telegram_safe(text, known_names)
 
     try:
         telegram_delivery.send(

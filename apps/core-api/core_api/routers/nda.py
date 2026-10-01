@@ -459,7 +459,8 @@ def sign_nda(
         queue_notice(
             db,
             f"nda:{row.id}:signed",
-            f"Клиент {row.signer_full_name} подписал NDA в кабинете.",
+            # Без имени: уведомление идёт через Telegram — кто подписал, видно в рабочем месте.
+            "Клиент подписал NDA в кабинете — подробности в рабочем месте.",
         )
     db.commit()
     db.refresh(row)

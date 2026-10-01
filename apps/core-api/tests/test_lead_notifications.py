@@ -109,7 +109,11 @@ def test_new_website_lead_triggers_notification(
         assert call["data"]["chat_id"] == "999"
         text = call["data"]["text"]
         assert "Новая заявка с сайта" in text  # website_form header
-        assert "Sample Name" in text
+        # Уведомление идёт через Telegram (серверы за рубежом): без имени и
+        # контакта — они в рабочем месте.
+        assert "Sample Name" not in text
+        assert "+7900" not in text
+        assert "Имя и контакт — в рабочем месте" in text
         assert "Консультация юриста" in text  # localized offer
         # Should not leak technical/admin internals to the manager.
         assert "ip_hash" not in text
@@ -145,7 +149,8 @@ def test_new_miniapp_lead_triggers_notification(
         assert len(fake_telegram) == 1
         text = fake_telegram[0]["data"]["text"]
         assert "Mini App" in text  # source label for miniapp_form
-        assert "MiniApp User" in text
+        assert "MiniApp User" not in text  # имя — только в рабочем месте
+        assert "Telegram ID" not in text
         assert "telegram_verified" not in text  # internal flag hidden
     finally:
         _cleanup_lead(lead_id)
@@ -292,3 +297,48 @@ def test_without_proxy_telegram_is_called_directly(monkeypatch: pytest.MonkeyPat
     finally:
         get_settings.cache_clear()
     assert seen == [None]
+
+
+def test_legal_intake_notice_carries_no_personal_data(
+    api_key: str,
+    notify_config: None,
+    fake_telegram: list[dict[str, Any]],
+) -> None:
+    """Уведомление юристу о юридическом обращении идёт через Telegram (серверы за
+    рубежом): ни имени, ни контакта, ни телефона и почты из описания в нём нет."""
+    from test_practice import _cleanup
+
+    client = TestClient(app)
+    contact = f"intake-{uuid.uuid4().hex[:8]}@example.com"
+    response = client.post(
+        "/api/v1/legal-intakes",
+        headers={"X-API-Key": api_key},
+        json={
+            "source": "website_form",
+            "name": "Аркадий Соколов",
+            "contact": contact,
+            "description": "Аркадий Соколов, звоните +7 916 123-45-67 или пишите arkady@example.ru: спор по аренде.",
+            "consent_accepted": True,
+            "consent_version": "test",
+            "consent_at": "2026-10-01T00:00:00Z",
+        },
+    )
+    assert response.status_code == 201, response.text
+    lead_id = response.json()["lead_id"]
+    try:
+        texts = [call["data"]["text"] for call in fake_telegram]
+        assert texts, "уведомление не отправлено"
+        text = texts[-1]
+        assert "Имя, организация и контакт — в рабочем месте" in text
+        for leaked in ("Аркадий", "Соколов", contact, "+7 916", "arkady@example.ru"):
+            assert leaked not in text, leaked
+        assert "спор по аренде" in text  # суть обращения юрист видит
+    finally:
+        _cleanup([], lead_id)
+
+
+def test_telegram_safe_masks_known_names_and_contacts() -> None:
+    text = lead_notifications.telegram_safe(
+        "Ольга Петрова, ООО Ромашка: +7 999 123-45-67, olga@example.ru", ("Ольга Петрова", "ООО Ромашка")
+    )
+    assert "Петрова" not in text and "+7 999" not in text and "olga@example.ru" not in text

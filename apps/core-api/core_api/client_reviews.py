@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from core_api import telegram_delivery
 from core_api.audit import write_audit
 from core_api.client_notices import queue_notice
+from core_api.lead_notifications import telegram_safe
 from core_api.config import get_settings
 from core_api.db import SessionLocal
 from core_api.models import ActorType, ClientReview, Lead, ServiceAgreement, WorkAct, WorkActStatus
@@ -136,14 +137,12 @@ def record(
         review = ClientReview(act_id=act.id, lead_id=act.lead_id, telegram_user_id=telegram_user_id)
         db.add(review)
         db.flush()
-    lead = db.get(Lead, act.lead_id) if act.lead_id else None
-    who = (lead.name if lead and lead.name else "Клиент").split()[0]
     if score is not None and score != review.score:
         review.score = score
         queue_notice(
             db,
             f"review_score:{review.id}:{score}",
-            f"Оценка работы по акту № {act.act_number} от {who}: {'⭐' * score} ({score} из 5).",
+            f"Оценка работы по акту № {act.act_number}: {'⭐' * score} ({score} из 5).",
         )
     if text is not None:
         cleaned = " ".join(text.split())
@@ -153,7 +152,7 @@ def record(
             review.status = "pending"
             review.moderated_at = None
             digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:12]
-            queue_notice(db, f"review_text:{review.id}:{digest}", f"Отзыв по акту № {act.act_number} от {who}:\n«{cleaned[:1500]}»")
+            queue_notice(db, f"review_text:{review.id}:{digest}", f"Отзыв по акту № {act.act_number}:\n«{telegram_safe(cleaned[:1500])}»")
     if publish_consent is not None:
         review.publish_consent = publish_consent
     write_audit(

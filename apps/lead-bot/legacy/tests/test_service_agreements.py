@@ -61,6 +61,8 @@ def _agreement(
         "client_telegram_user_id": 77,
         "hash": "a" * 64,
         "text": "Точный текст договора",
+        # Копия для Telegram: ядро скрывает паспорт, адрес и контакт.
+        "text_telegram": "Точный текст договора",
     }
 
 
@@ -578,7 +580,7 @@ async def test_supplement_opens_straight_to_the_document_under_its_own_name(monk
 
     await flow.handle_client_callback(SimpleNamespace(callback_query=query), ctx)
 
-    assert bot.documents[0]["caption"] == "Точная редакция допсоглашения № AV-20260907-ABC123-DS1"
+    assert bot.documents[0]["caption"].startswith("Точная редакция допсоглашения № AV-20260907-ABC123-DS1")
     assert bot.documents[0]["document"].name == "dopsoglashenie-AV-20260907-ABC123-DS1.txt"
 
 
@@ -661,3 +663,55 @@ async def test_client_question_notice_opens_the_card_directly(replies, monkeypat
     rows = notice["reply_markup"].inline_keyboard
     assert rows[0][0].web_app.url == "https://example.ru/lawyer?client=33333333-3333-3333-3333-333333333333"
     assert rows[1][0].callback_data == f"sa_a:reply:{agreement['id']}"
+
+
+class _Msg(SimpleNamespace):
+    async def delete(self) -> None:
+        self.deleted = True
+
+
+@pytest.mark.anyio
+async def test_client_pd_messages_are_removed_from_chat(monkeypatch, replies) -> None:
+    """Паспорт, адрес и контакт, введённые в чат, бот удаляет из истории
+    Telegram — значение уже сохранено, а переписка лежит на серверах мессенджера."""
+    ctx = SimpleNamespace(
+        user_data={
+            flow.STATE_KEY: "client_details",
+            flow.DATA_KEY: {
+                "agreement_id": "11111111-1111-1111-1111-111111111111",
+                "client_type": "person",
+                "field_index": 0,
+            },
+        },
+        bot=Bot(),
+    )
+    user = SimpleNamespace(id=77, username="client")
+    monkeypatch.setattr(flow.core_api_bridge, "complete_service_agreement_client_details", lambda *a: _agreement("sent"))
+    monkeypatch.setattr(flow.core_api_bridge, "mark_service_agreement_viewed", lambda *a, **k: _agreement("viewed"))
+    monkeypatch.setattr(flow.core_api_bridge, "get_service_agreement_pdf", lambda *a: None)
+    sent: dict[str, _Msg] = {}
+    for value in (
+        "Петров Пётр Петрович",
+        "+7 900 000-00-00",
+        "г. Москва, ул. Тестовая, д. 1",
+        "паспорт 4501 123456, выдан ОВД района Арбат г. Москвы 01.02.2010, код подразделения 770-001",
+    ):
+        message = _Msg(chat_id=77, deleted=False)
+        sent[value] = message
+        assert await flow.handle_message(SimpleNamespace(effective_message=message, effective_user=user), ctx, value)
+
+    assert sent["Петров Пётр Петрович"].deleted is False  # имя нужно в договоре и не прячется
+    assert all(message.deleted for value, message in sent.items() if value != "Петров Пётр Петрович")
+
+
+@pytest.mark.anyio
+async def test_document_sent_to_telegram_is_the_masked_copy() -> None:
+    bot = Bot()
+    item = {**_agreement("viewed"), "text": "паспорт 4501 123456", "text_telegram": "[паспортные данные скрыты]"}
+    item.pop("id")  # без PDF — запасной .txt
+
+    await flow._send_document(bot, 77, item, "Договор")
+
+    document = bot.documents[0]
+    assert b"4501" not in document["document"].getvalue()
+    assert "скрыты" in document["caption"]
