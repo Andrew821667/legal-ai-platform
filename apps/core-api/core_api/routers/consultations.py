@@ -116,12 +116,11 @@ def claim(
         slot.claimed_at = consultations.now_utc()
         slot.held_until = None
         _audit(db, identity, slot, "consultation.claim")
-        lead = db.get(Lead, slot.lead_id) if slot.lead_id else None
         when = (consultations.when_text(slot) if slot.starts_at else "время не назначено — согласуйте с клиентом")
         queue_notice(
             db,
             f"consultation-claim:{slot.id}:{slot.code}",
-            f"Консультация ({when}): клиент {lead.name if lead and lead.name else ''} "
+            f"Консультация ({when}): клиент "
             f"сообщил об оплате {_rub(slot.price_minor)}, код {slot.code}. Сверьте поступление и подтвердите "
             "в рабочем месте («Задачи»).",
         )

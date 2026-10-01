@@ -497,9 +497,11 @@ class CoreApiBridge:
         return result if isinstance(result, dict) else None
 
     def get_service_agreement_pdf(self, agreement_id: str, telegram_user_id: int) -> bytes | None:
-        """PDF договора: точный текст и лист сведений о подписании."""
+        """PDF договора для отправки в Telegram: точный текст и лист сведений о
+        подписании, но паспорт, адрес и контакт скрыты (masked) — серверы
+        Telegram за рубежом, полная редакция остаётся в кабинете."""
         data = self._get_bytes(
-            f"/api/v1/service-agreements/{agreement_id}/pdf?telegram_user_id={telegram_user_id}"
+            f"/api/v1/service-agreements/{agreement_id}/pdf?telegram_user_id={telegram_user_id}&masked=true"
         )
         return data if data and data.startswith(b"%PDF") else None
 

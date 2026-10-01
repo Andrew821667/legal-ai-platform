@@ -51,3 +51,23 @@ def test_company_is_named_as_client() -> None:
     assert "Заказчик: ООО «Пример», в лице Петров Пётр Петрович" in _render(
         client_org="ООО «Пример»"
     )
+
+
+def test_telegram_copy_hides_passport_address_and_contact() -> None:
+    """Копия договора для Telegram — без паспорта, адреса и контакта: серверы
+    мессенджера за рубежом, полная редакция — в кабинете."""
+    from core_api.routers.service_agreements import telegram_safe_text
+
+    client = {
+        "identity_document": "паспорт 4512 345678, выдан ОВД Центрального района г. Тамбова 01.02.2010, 680-001",
+        "address": "г. Тамбов, ул. Советская, д. 1, кв. 2",
+        "contact": "+7 916 123-45-67",
+    }
+    text = (
+        "Заказчик — Иванов Иван; документ, удостоверяющий личность: " + client["identity_document"]
+        + "; адрес: " + client["address"] + "; контакт: " + client["contact"]
+    )
+    safe = telegram_safe_text(text, client)
+    assert "4512 345678" not in safe and "Советская" not in safe and "+7 916" not in safe
+    assert "паспортные данные скрыты" in safe and "Иванов Иван" in safe
+    assert telegram_safe_text(text, None) == text

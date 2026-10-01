@@ -248,6 +248,29 @@ def _client_details_text(client: dict) -> str:
     )
 
 
+# Копия документа, которую бот отправляет в Telegram: серверы мессенджера за
+# рубежом, а трансграничной передачи персональных данных у оператора нет
+# (уведомление в РКН от 01.10.2026). Паспорт, адрес и контакт в ней скрыты;
+# полная редакция — в личном кабинете на сайте и в базе в России.
+TELEGRAM_COPY_NOTE = (
+    "Паспортные данные, адрес и контакт в копии для Telegram скрыты; полная редакция — в личном кабинете."
+)
+
+
+def telegram_safe_text(text: str, client: dict | None) -> str:
+    client = client or {}
+    hidden = {
+        "identity_document": "[паспортные данные скрыты — см. личный кабинет]",
+        "address": "[адрес скрыт — см. личный кабинет]",
+        "contact": "[контакт скрыт]",
+    }
+    for key, label in hidden.items():
+        value = str(client.get(key) or "").strip()
+        if len(value) >= 3:
+            text = text.replace(value, label)
+    return text
+
+
 def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
     client = item.client_snapshot or {}
     data = {
@@ -298,6 +321,7 @@ def _payload(item: ServiceAgreement, *, include_text: bool = False) -> dict:
     data["summary_text"] = build_summary(data)
     if include_text:
         data["text"] = item.document_text
+        data["text_telegram"] = telegram_safe_text(item.document_text or "", item.client_snapshot)
     return data
 
 
@@ -766,12 +790,14 @@ def agreement_pdf(
     agreement_id: uuid.UUID,
     telegram_user_id: int | None = Query(default=None),
     client_account_id: uuid.UUID | None = Query(default=None),
+    masked: bool = Query(default=False),
     identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admin)),
     db: Session = Depends(get_db),
 ) -> Response:
     """Точный текст договора или допсоглашения в PDF и лист сведений о подписании.
 
     Доступ — как у просмотра документа: клиенту только свой и не черновик.
+    masked — копия для отправки в Telegram: паспорт, адрес и контакт скрыты.
     """
     from core_api.pdf_document import FontMissing, render
 
@@ -785,7 +811,8 @@ def agreement_pdf(
     title = _document_title(item)
     try:
         content = render(
-            text=item.document_text,
+            text=(telegram_safe_text(item.document_text, item.client_snapshot) + "\n\n" + TELEGRAM_COPY_NOTE)
+            if masked else item.document_text,
             footer_label=f"{title} № {item.agreement_number}",
             certificate_title="Сведения о документе и его подписании",
             certificate_rows=_certificate_rows(db, item),

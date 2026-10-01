@@ -175,6 +175,8 @@ def _summary(item: dict) -> str:
     )
 
 
+_CHAT_SCRUBBED_FIELDS = frozenset({"identity_document", "address", "contact"})
+
 _CLIENT_VALIDATORS = {
     "full_name": party_validation.full_name,
     "contact": party_validation.contact,
@@ -211,6 +213,9 @@ async def _ask_client_type(message, agreement_id: str) -> None:
     )
 
 
+TELEGRAM_COPY_NOTE = "Паспортные данные, адрес и контакт в копии скрыты; полная редакция — в личном кабинете."
+
+
 async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | None:
     """Документ клиенту — PDF с листом сведений о подписании.
 
@@ -218,7 +223,9 @@ async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | N
     его не отдало (черновик для админа, нет шрифта, сбой) — прежний .txt:
     клиент не должен остаться без документа из-за оформления.
     """
-    text = str(item.get("text") or "")
+    # В Telegram — копия со скрытыми паспортом, адресом и контактом (ядро
+    # готовит её само); полная редакция — в личном кабинете.
+    text = str(item.get("text_telegram") or "")
     if not text:
         return None
     number = str(item.get("agreement_number") or "agreement").replace("/", "-")
@@ -234,6 +241,8 @@ async def _send_document(bot, chat_id: int, item: dict, caption: str) -> int | N
     else:
         data = io.BytesIO(text.encode("utf-8"))
         data.name = f"{prefix}-{number}.txt"
+
+    caption = f"{caption}\n{TELEGRAM_COPY_NOTE}"[:1024]
 
     async def send():
         data.seek(0)
@@ -543,6 +552,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         idx += 1
         data["field_index"] = idx
         context.user_data[DATA_KEY] = data
+        if field in _CHAT_SCRUBBED_FIELDS:
+            # Паспорт, адрес и контакт не оставляем в истории чата Telegram:
+            # значение уже у нас, а переписка хранится на серверах мессенджера.
+            try:
+                await message.delete()
+            except (TelegramError, AttributeError):
+                pass
         if idx < len(fields):
             await utils.safe_reply_text(
                 message,
