@@ -293,6 +293,15 @@ services:
       - ../../.env
     environment:
       <<: *secrets-off-lead-bot
+      # Ассистент сайта разбирает текст посетителей — ключ admin, секрет входа
+      # юриста и токен бота ему не нужны (код web_assistant_api их не читает,
+      # сверка — test_compose_secrets.py). Config бота требует непустой токен,
+      # поэтому здесь заглушка: в Telegram ассистент не ходит.
+      API_KEY_ADMIN: ""
+      API_KEY_NEWS: ""
+      LAWYER_SESSION_SECRET: ""
+      TELEGRAM_BOT_TOKEN: ""
+      LEAD_BOT_TOKEN: "0:assistant-api-without-telegram"
       DB_PATH: /tmp/web-assistant.db
       LOG_FILE: /tmp/web-assistant.log
       CORE_API_SYNC_ENABLED: "0"
@@ -336,6 +345,7 @@ services:
       - ../../.env
     environment:
       <<: *secrets-off-news
+      API_KEY_ADMIN: ""  # ключ admin нужен только news-admin-bot
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
@@ -367,6 +377,7 @@ services:
       - ../../.env
     environment:
       <<: *secrets-off-news
+      API_KEY_ADMIN: ""  # ключ admin нужен только news-admin-bot
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TELEGRAM_SESSION_NAME: ${TELEGRAM_SESSION_NAME_DOCKER:-/app/data/telegram_bot}
       NEWS_TELEGRAM_CACHE_PATH: ${NEWS_TELEGRAM_CACHE_PATH:-/app/data/news_telegram_cache.json}
@@ -398,6 +409,7 @@ services:
       - ../../.env
     environment:
       <<: *secrets-off-news
+      API_KEY_ADMIN: ""  # ключ admin нужен только news-admin-bot
       CORE_API_URL: ${CORE_API_DOCKER_URL:-http://core-api:8000}
       TZ: ${TZ:-Europe/Moscow}
     command: >
