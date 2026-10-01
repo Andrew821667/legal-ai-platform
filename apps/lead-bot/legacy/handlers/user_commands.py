@@ -380,12 +380,7 @@ async def revoke_consent_command(update: Update, context: ContextTypes.DEFAULT_T
 
     await utils.safe_reply_html(
         update.message,
-        (
-            f"{content.CONSENT_REVOKED_TEXT}\n\n"
-            f"<b>Изменено профилей:</b> {result.get('users_updated', 0)}\n"
-            f"<b>Анонимизировано анкет:</b> {result.get('leads_anonymized', 0)}\n"
-            f"<b>Удалено сообщений диалога:</b> {result.get('messages_deleted', 0)}"
-        ),
+        content.consent_revoked_details_text(result),
         action="revoke_consent_command",
     )
 

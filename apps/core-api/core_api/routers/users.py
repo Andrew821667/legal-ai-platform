@@ -8,11 +8,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
+from core_api import anonymization
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.db import get_db
 from core_api.idempotency import cached_response, store_response
-from core_api.models import ActorType, Event, Lead, Scope, User
+from core_api.models import ActorType, ClientAccount, Event, Lead, Scope, User
 from core_api.schemas import UserCreate, UserDataOperationOut, UserOut, UserPatch, UsersCountOut
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
@@ -181,18 +182,32 @@ def gdpr_clear_user_data(
     user.last_interaction = now
     db.add(user)
 
+    # Отзыв согласия (ч. 5 ст. 21 152-ФЗ): обращения без договора обезличиваются
+    # целиком — тем же anonymize_lead, что и по сроку хранения: описания,
+    # уточнения, ссылки на файлы, тексты сообщений, события, учётная запись.
+    # Раньше обнулялись только имя и контакты, а бот при этом писал «удалено».
+    # Обращения с договором, актом или проверкой договора остаются: основание —
+    # договор и закон (п. 2, 5 ч. 1 ст. 6), бот говорит об этом прямо.
     leads = list(db.execute(select(Lead).where(Lead.telegram_user_id == telegram_user_id)).scalars().all())
     leads_anonymized = 0
+    leads_kept = 0
     for lead in leads:
-        lead.name = "Анонимизировано"
-        lead.contact = None
-        lead.company = None
-        lead.email = None
-        lead.phone = None
-        lead.notes = ((lead.notes or "").rstrip() + "\n[PDN] Анонимизировано по запросу пользователя")[-4000:]
-        lead.updated_at = now
-        db.add(lead)
+        if lead.anonymized_at is not None:
+            continue
+        if anonymization.has_work(db, lead.id):
+            leads_kept += 1
+            continue
+        anonymization.anonymize_lead(db, lead, now)
         leads_anonymized += 1
+    if leads_kept == 0:
+        # Вход на сайт через Telegram у этого человека больше не нужен.
+        for account in db.execute(
+            select(ClientAccount).where(ClientAccount.telegram_user_id == telegram_user_id)
+        ).scalars():
+            account.telegram_user_id = None
+            account.telegram_username = None
+            account.telegram_linked_at = None
+            db.add(account)
 
     write_audit(
         db,
@@ -201,13 +216,14 @@ def gdpr_clear_user_data(
         action="user.gdpr_clear",
         target_type="user",
         target_id=user.id,
-        details={"telegram_user_id": telegram_user_id, "leads_anonymized": leads_anonymized},
+        details={"leads_anonymized": leads_anonymized, "leads_kept": leads_kept},
     )
     db.commit()
     return UserDataOperationOut(
         telegram_user_id=telegram_user_id,
         users_updated=1,
         leads_anonymized=leads_anonymized,
+        leads_kept=leads_kept,
         messages_deleted=0,
     )
 

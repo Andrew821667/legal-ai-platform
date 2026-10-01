@@ -86,6 +86,9 @@ class UserDataOperationOut(BaseModel):
     users_reset: int = 0
     users_deleted: int = 0
     leads_anonymized: int = 0
+    # Отзыв согласия: обращения по договору (договор, акт, проверка договора)
+    # не обезличиваются — основание обработки — договор и закон (п. 5 ч. 1 ст. 6).
+    leads_kept: int = 0
     leads_deleted: int = 0
     messages_deleted: int = 0
     events_deleted: int = 0

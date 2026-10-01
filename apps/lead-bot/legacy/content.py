@@ -878,10 +878,31 @@ CONSENT_DENIED_TEXT = (
 
 
 CONSENT_REVOKED_TEXT = (
-    "<b>✅ Согласие отозвано.</b>\n\n"
-    "Персональные данные в анкете анонимизированы, история диалога удалена.\n"
-    "Для повторного запуска отправьте /start."
+    "<b>✅ Согласие отозвано.</b> Обработка ваших данных прекращена."
 )
+
+
+def consent_revoked_details_text(result: dict) -> str:
+    """Что именно сделано при отзыве согласия — без обещаний сверх сделанного."""
+    anonymized = int(result.get("leads_anonymized") or 0)
+    kept = int(result.get("leads_kept") or 0)
+    messages = int(result.get("messages_deleted") or 0)
+    lines = [CONSENT_REVOKED_TEXT, ""]
+    if anonymized:
+        lines.append(f"• Обращения обезличены: {anonymized} — имя, контакты, описания и переписка по ним.")
+    lines.append(f"• Удалено сообщений нашей переписки в боте: {messages}.")
+    if kept:
+        lines.append(
+            f"• По договору сохранено обращений: {kept}. Эти данные храним, пока этого требуют "
+            "договор и закон (документы, акты, чеки), и не используем для других целей."
+        )
+    lines.append(
+        "• Подписанные соглашение о конфиденциальности и согласие храним как доказательство "
+        "до 3 лет с подписания."
+    )
+    lines.append("")
+    lines.append("Чтобы снова пользоваться ботом, отправьте /start.")
+    return "\n".join(lines)
 
 
 def consent_status_text(consent: dict) -> str:
