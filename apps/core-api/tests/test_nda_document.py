@@ -61,7 +61,7 @@ def test_document_is_not_a_service_agreement() -> None:
 
     # Переносы строк в документе не должны влиять на проверку смысла.
     flat = " ".join(text.split())
-    assert "не является договором об оказании юридических услуг" in flat
+    assert "не является договором об оказании услуг или выполнении работ" in flat
 
 
 def test_operator_name_is_substituted() -> None:

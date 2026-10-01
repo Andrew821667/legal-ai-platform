@@ -7,7 +7,7 @@ const FALLBACKS = {
   contactEmail: "a.popov.gv@gmail.com",
   contactPhone: "+7 909 233-09-09",
   contactTelegram: "@legal_ai_helper_new_bot",
-  updatedAt: "27 сентября 2026 года",
+  updatedAt: "1 октября 2026 года",
 } as const;
 
 function normalizeText(value: string | undefined): string | undefined {
@@ -94,6 +94,7 @@ export const LEGAL_DOC_LINKS = {
   terms: "/terms",
   userAgreement: "/user-agreement",
   transborderConsent: "/transborder-consent",
+  pdConsent: "/pd-consent",
   marketingConsent: "/marketing-consent",
   aiPolicy: "/ai-policy",
 } as const;

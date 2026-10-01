@@ -240,7 +240,6 @@ export async function POST(request: NextRequest) {
     "consent=accepted",
     `consent_version=${PD_CONSENT_VERSION}`,
     `consent_at=${consentAt}`,
-    "transborder_consent=accepted",
     `ip_hash=${ipHash}`,
     `ua_hash=${userAgentHash}`,
     landingPage ? `landing=${landingPage}` : undefined,
