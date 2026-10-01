@@ -4,7 +4,9 @@ const FALLBACKS = {
   operatorStatus: "самозанятый",
   operatorInn: "683302758241",
   siteUrl: "https://ai-verdict.ru",
-  contactEmail: "a.popov.gv@gmail.com",
+  // Ящик в России (Яндекс): запросы по персональным данным не уходят в Gmail
+  // за рубеж (ч. 5 ст. 18 152-ФЗ). Решение владельца 01.10.2026.
+  contactEmail: "a9156729972@yandex.ru",
   contactPhone: "+7 909 233-09-09",
   contactTelegram: "@legal_ai_helper_new_bot",
   updatedAt: "1 октября 2026 года",

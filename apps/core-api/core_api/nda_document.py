@@ -192,7 +192,7 @@ def render_pdn_consent_text(
     operator_name: str,
     operator_inn: str = "",
     *,
-    privacy_contact_email: str = "privacy@ai-verdict.ru",
+    privacy_contact_email: str = "a9156729972@yandex.ru",
     signer_full_name: str = "",
     signer_contact: str = "",
     signer_identity_document: str = "",
@@ -207,7 +207,7 @@ def render_pdn_consent_text(
             signer_identity_document,
             signer_org,
         ),
-        privacy_contact_email=privacy_contact_email.strip() or "privacy@ai-verdict.ru",
+        privacy_contact_email=privacy_contact_email.strip() or "a9156729972@yandex.ru",
         version=PDN_CONSENT_VERSION,
     )
 

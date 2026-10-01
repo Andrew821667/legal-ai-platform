@@ -121,7 +121,8 @@ class Settings(BaseSettings):
     operator_status: str = "самозанятый"
     operator_inn: str = "683302758241"
     operator_details: str = ""
-    privacy_contact_email: str = "privacy@ai-verdict.ru"
+    # У ai-verdict.ru нет почты (MX): адрес по умолчанию — рабочий ящик в России.
+    privacy_contact_email: str = "a9156729972@yandex.ru"
 
     # Разбор юридических обращений моделью.
     # Отдельные переменные, а не OPENAI_*: те исторически указывают на другого
