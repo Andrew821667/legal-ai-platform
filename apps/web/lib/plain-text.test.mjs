@@ -15,3 +15,8 @@ test("пустое и непонятное остаётся безопасным
   assert.equal(plainText(""), "");
   assert.equal(plainText("&unknown; текст"), "&unknown; текст");
 });
+
+test("вложенные и экранированные теги не оставляют разметки", () => {
+  const result = plainText("<<b>script>alert(1)<</b>/script> &lt;i&gt;x&lt;/i&gt;");
+  assert.ok(!result.includes("<") && !result.includes(">"), result);
+});

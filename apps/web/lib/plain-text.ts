@@ -26,8 +26,15 @@ function decodeEntities(text: string): string {
 }
 
 export function plainText(html: string): string {
-  const withoutTags = String(html || "")
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]*>/g, "");
-  return decodeEntities(withoutTags).replace(/\s+/g, " ").trim();
+  let text = String(html || "").replace(/<br\s*\/?>/gi, " ");
+  // Снимаем теги, пока что-то снимается: вложенные «<<b>b>» за один проход
+  // оставили бы новый тег.
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, "");
+  } while (text !== previous);
+  // Это обычный текст: угловых скобок в нём не остаётся, в том числе
+  // появившихся из &lt;…&gt;.
+  return decodeEntities(text).replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 }
