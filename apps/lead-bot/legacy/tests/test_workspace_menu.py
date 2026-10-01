@@ -108,7 +108,7 @@ def test_menu_help_includes_channel_nurture_when_channel_available() -> None:
 def test_services_menu_explicitly_allows_freeform_ai_chat() -> None:
     response = content.menu_response_by_key("menu_services", selected_profile="business")
     assert "быстрых пилотов" in response
-    assert "рабочего контура автоматизации" in response
+    assert "рабочей системы на 1–2 процессах" in response
     assert "Необязательно ждать подходящую кнопку" in response
     assert "юристы тонут во входящих запросах" in response
 
@@ -139,7 +139,7 @@ def test_start_entry_text_is_clear_for_new_user() -> None:
     start_entry = content.build_start_entry_text("Андрей", selected_profile="law_firm")
     assert "Здравствуйте, Андрей." in start_entry
     assert "Основное направление AI Verdict — <b>автоматизация юридических бизнес-процессов</b>" in start_entry
-    assert "Вам доступен весь контур платформы" in start_entry
+    assert "Вам доступны все разделы платформы" in start_entry
     assert "Contract AI" in start_entry
     assert "reader-бот" in start_entry
     assert "Mini App" in start_entry
@@ -197,9 +197,11 @@ def test_workspace_text_links_platform_elements() -> None:
 def test_contract_module_text_is_clear_for_new_user() -> None:
     response = content.menu_response_by_key("menu_contract_ai")
     assert "Проверка договора" in response
-    assert "сервис AI-анализа договоров" in response
-    assert "полный анализ рисков договора за минуты" in response
-    assert "краткий отчёт с ключевыми рисками и рекомендациями" in response
+    assert "Contract AI" in response and "Contract_AI_System" not in response
+    assert "демо-доступ по заявке" in response
+    # Бот договоры не принимает (решение владельца) — и не зовёт присылать их сюда.
+    assert "прямо сюда" not in response and "согласован" not in response
+    assert "7 900 ₽" in response
 
 
 def test_consultation_text_names_price_format_and_booking() -> None:

@@ -80,7 +80,7 @@ def test_materials_are_offered_and_delivered_right_in_the_chat() -> None:
     assert "Чек-лист" in content.LEAD_MAGNET_OFFER_TEXT and "Образец отчёта" in content.LEAD_MAGNET_OFFER_TEXT
     # Договор проверяют в Contract AI — кнопка ведёт туда, бот файлы не принимает.
     contract_ai, consultation = (row[0] for row in constants.MAGNET_FOLLOWUP_MENU)
-    assert contract_ai.url.startswith("https://") and "contract" in contract_ai.url
+    assert contract_ai.url.startswith("https://") and contract_ai.url.endswith("/demo")
     assert consultation.callback_data == "magnet_consultation"
     assert "пришлите" not in content.DEMO_MESSAGE.lower() and "сюда" not in content.DEMO_MESSAGE
 

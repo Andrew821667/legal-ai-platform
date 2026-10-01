@@ -29,7 +29,7 @@ _SEGMENT_LABELS: dict[LeadSegment, str] = {
 }
 
 _OFFER_LABELS: dict[str, str] = {
-    "consultation": "Бесплатная консультация",
+    "consultation": "Консультация юриста",
     "checklist": "Гайд по внедрению ИИ",
     "demo": "Демонстрационный разбор договора",
     "sample_report": "Пример отчёта по договору",

@@ -62,6 +62,58 @@ async def test_start_command_sends_one_entry_message(monkeypatch: pytest.MonkeyP
     )
 
 
+def _returning_user_env(monkeypatch: pytest.MonkeyPatch, handled: bool) -> list[str]:
+    messages: list[str] = []
+
+    async def _fake_reply_html(message, text, **kwargs) -> None:
+        messages.append(text)
+
+    async def _fake_process_pending_start_payload(**kwargs) -> bool:
+        return handled
+
+    monkeypatch.setattr(user_commands.utils, "safe_reply_html", _fake_reply_html)
+    monkeypatch.setattr(user_commands, "process_pending_start_payload", _fake_process_pending_start_payload)
+    monkeypatch.setattr(user_commands.database.db, "create_or_update_user", lambda **kwargs: 1)
+    monkeypatch.setattr(user_commands.database.db, "set_chat_mode", lambda chat_id, mode: None)
+    monkeypatch.setattr(user_commands.database.db, "get_lead_by_user_id", lambda user_id: None)
+    monkeypatch.setattr(user_commands.database.db, "get_user_offer_profile", lambda user_id: None)
+    monkeypatch.setattr(user_commands.database.db, "get_user_consent_state", lambda user_id: {"consent_given": True})
+    monkeypatch.setattr(user_commands.database.db, "get_user_by_id", lambda user_id: {"id": user_id, "telegram_id": 44})
+    return messages
+
+
+def _start_update_with(label: str):
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=44, username="back", first_name="Ольга", last_name=None),
+        effective_chat=SimpleNamespace(id=44),
+        message=SimpleNamespace(),
+    )
+    return update, SimpleNamespace(user_data={}, args=[label])
+
+
+@pytest.mark.anyio
+async def test_returning_user_with_unknown_label_gets_greeting(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ссылки из подвала сайта и мини-аппа (web_footer_social…) своего сценария
+    # не имеют — человек должен получить приветствие, а не тишину.
+    messages = _returning_user_env(monkeypatch, handled=False)
+    update, context = _start_update_with("web_footer_social")
+
+    await user_commands.start_command(update, context)
+
+    assert len(messages) == 1
+    assert "С чего удобно начать" in messages[0]
+
+
+@pytest.mark.anyio
+async def test_returning_user_with_known_label_gets_only_its_scenario(monkeypatch: pytest.MonkeyPatch) -> None:
+    messages = _returning_user_env(monkeypatch, handled=True)
+    update, context = _start_update_with("legal_help")
+
+    await user_commands.start_command(update, context)
+
+    assert messages == []
+
+
 @pytest.mark.anyio
 async def test_start_command_sends_only_consent_to_new_user(monkeypatch: pytest.MonkeyPatch) -> None:
     messages: list[tuple[str, object | None]] = []

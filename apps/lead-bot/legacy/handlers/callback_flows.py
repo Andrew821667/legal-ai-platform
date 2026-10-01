@@ -21,6 +21,7 @@ from .markup import (
     clip_for_edit as _clip_for_edit,
     documents_panel_markup as _documents_panel_markup,
     documents_panel_text as _documents_panel_text,
+    marketing_consent_markup as _marketing_consent_markup,
     web_open_markup as _web_open_markup,
     web_url_markup as _web_url_markup,
     workspace_markup_for as _workspace_markup_for,
@@ -445,15 +446,17 @@ async def handle_documents_callback(update: Update, context: ContextTypes.DEFAUL
             action="doc_ai_policy",
         )
         return
-    if action == "doc_marketing_consent":
+    if action in ("doc_marketing_consent", "doc_marketing_yes", "doc_marketing_no"):
+        # Согласие на рассылки — только по явной кнопке; просмотр текста его не даёт.
+        if user_data and action != "doc_marketing_consent":
+            database.db.set_user_marketing_consent(user_data["id"], action == "doc_marketing_yes")
+        granted = bool(user_data and database.db.get_user_consent_state(user_data["id"]).get("marketing_consent"))
         await utils.safe_edit_html(
             query.message,
-            _clip_for_edit(_documents_panel_text("📣 Согласие на рассылки", content.marketing_consent_text())),
-            reply_markup=_web_open_markup("marketing_consent"),
-            action="doc_marketing_consent",
+            _clip_for_edit(_documents_panel_text("📣 Согласие на рассылки", content.marketing_consent_text(granted))),
+            reply_markup=_marketing_consent_markup(granted),
+            action=action,
         )
-        if user_data:
-            database.db.set_user_marketing_consent(user_data["id"], True)
         return
 
     if not user_data:

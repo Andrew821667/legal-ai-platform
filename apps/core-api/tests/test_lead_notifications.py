@@ -110,7 +110,7 @@ def test_new_website_lead_triggers_notification(
         text = call["data"]["text"]
         assert "Новая заявка с сайта" in text  # website_form header
         assert "Sample Name" in text
-        assert "Бесплатная консультация" in text  # localized offer
+        assert "Консультация юриста" in text  # localized offer
         # Should not leak technical/admin internals to the manager.
         assert "ip_hash" not in text
         assert "ua_hash" not in text
