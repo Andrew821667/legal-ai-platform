@@ -293,9 +293,14 @@ def test_admin_user_data_operations_by_telegram_id() -> None:
             user_row = db.execute(select(User).where(User.telegram_id == telegram_user_id).limit(1)).scalar_one()
             assert user_row.consent_given is False
             assert user_row.consent_revoked is True
-            rows = list(db.execute(select(Lead).where(Lead.telegram_user_id == telegram_user_id)).scalars().all())
+            # Обращения без договора обезличены целиком и отвязаны от Telegram.
+            rows = list(db.execute(select(Lead).where(Lead.id.in_(lead_ids))).scalars().all())
             assert len(rows) == 2
-            assert all(item.email is None and item.phone is None and item.contact is None for item in rows)
+            assert all(item.anonymized_at is not None and item.telegram_user_id is None for item in rows)
+            assert all(item.email is None and item.phone is None and item.notes is None for item in rows)
+            assert not any("Lead" in (item.name or "") for item in rows)
+            events = list(db.execute(select(Event).where(Event.lead_id == lead_ids[0])).scalars().all())
+            assert all(event.payload == {} for event in events)
         finally:
             db.close()
 
@@ -306,7 +311,8 @@ def test_admin_user_data_operations_by_telegram_id() -> None:
         assert reset.status_code == 200
         reset_body = reset.json()
         assert reset_body["users_reset"] == 1
-        assert reset_body["leads_deleted"] == 2
+        # Обезличенные обращения к Telegram больше не привязаны — сбрасывать нечего.
+        assert reset_body["leads_deleted"] == 0
         assert reset_body["events_deleted"] >= 1
 
         db = SessionLocal()
@@ -370,9 +376,64 @@ def test_admin_user_data_operations_by_telegram_id() -> None:
                     ),
                     {"tg_id": str(telegram_user_id)},
                 )
+                db.execute(delete(Lead).where(Lead.id.in_(lead_ids)))
                 db.execute(delete(Lead).where(Lead.telegram_user_id == telegram_user_id))
                 db.execute(delete(User).where(User.telegram_id == telegram_user_id))
                 db.commit()
+        finally:
+            db.close()
+        _delete_api_key_by_name(admin_key_name)
+
+
+def test_gdpr_clear_keeps_lead_with_contract_work() -> None:
+    """Отзыв согласия не обезличивает обращение с договорной работой:
+    основание обработки — договор и закон; бот сообщает об этом прямо."""
+    from core_api.models import ContractJob, ContractJobStatus, InputMode, UserRole
+
+    client = TestClient(app)
+    admin_key_name = f"pytest.users.admin.gdpr.{uuid4().hex[:6]}"
+    admin_key = _create_api_key(Scope.admin, admin_key_name)
+    telegram_user_id = 990_000_000 + int(uuid4().int % 1_000_000)
+    db = SessionLocal()
+    try:
+        db.add(User(telegram_id=telegram_user_id, username="gdpr_work", consent_given=True, role=UserRole.user))
+        free = Lead(source=LeadSource.telegram_bot, telegram_user_id=telegram_user_id, name="Без договора",
+                    contact="@free", status=LeadStatus.new)
+        worked = Lead(source=LeadSource.telegram_bot, telegram_user_id=telegram_user_id, name="С договором",
+                      contact="@worked", status=LeadStatus.qualified)
+        db.add_all([free, worked])
+        db.flush()
+        db.add(ContractJob(lead_id=worked.id, status=ContractJobStatus.new, input_mode=InputMode.text_only,
+                           document_text="договор"))
+        db.commit()
+        free_id, worked_id = free.id, worked.id
+    finally:
+        db.close()
+
+    try:
+        response = client.post(
+            f"/api/v1/users/by-telegram/{telegram_user_id}/gdpr-clear",
+            headers={"X-API-Key": admin_key},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["leads_anonymized"], body["leads_kept"]) == (1, 1)
+
+        db = SessionLocal()
+        try:
+            free_row = db.get(Lead, free_id)
+            worked_row = db.get(Lead, worked_id)
+            assert free_row.anonymized_at is not None and free_row.contact != "@free"
+            assert worked_row.anonymized_at is None and worked_row.contact == "@worked"
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(delete(ContractJob).where(ContractJob.lead_id.in_([free_id, worked_id])))
+            db.execute(delete(Lead).where(Lead.id.in_([free_id, worked_id])))
+            db.execute(delete(User).where(User.telegram_id == telegram_user_id))
+            db.commit()
         finally:
             db.close()
         _delete_api_key_by_name(admin_key_name)

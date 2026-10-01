@@ -397,18 +397,24 @@ class AdminInterface:
         return True
 
     def clear_user_data_by_telegram_id(self, telegram_id: int) -> dict | None:
+        """Отзыв согласия: ядро обезличивает обращения, бот удаляет свою копию
+        переписки. Раньше при работающем ядре переписка оставалась, а человеку
+        писали «история диалога удалена»."""
         core_result = self._core_request_json(
             "POST",
             f"/api/v1/users/by-telegram/{telegram_id}/gdpr-clear",
             admin_scope=True,
         )
-        if isinstance(core_result, dict):
-            return core_result
-
         target_user = self.db.get_user_by_telegram_id(telegram_id)
-        if not target_user:
-            return None
-        return self.db.revoke_user_consent_and_delete_data(target_user["id"])
+        local_result = (
+            self.db.revoke_user_consent_and_delete_data(target_user["id"]) if target_user else None
+        )
+        if isinstance(core_result, dict):
+            return {
+                **core_result,
+                "messages_deleted": int((local_result or {}).get("messages_deleted") or 0),
+            }
+        return local_result
 
     def reset_user_to_new_by_telegram_id(self, telegram_id: int) -> dict | None:
         core_result = self._core_request_json(
