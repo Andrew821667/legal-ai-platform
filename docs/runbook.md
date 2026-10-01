@@ -486,7 +486,11 @@ python -u -m app.reader_bot
 
 Для `caddy` в `docker-compose.prod.yml` предусмотрены env:
 - `CONTRACT_DOMAIN` (по умолчанию `contract.ai-verdict.ru`);
-- `CONTRACT_AI_UPSTREAM` (по умолчанию `host.docker.internal:3000`).
+- `CONTRACT_AI_UPSTREAM` — обязателен, значения по умолчанию нет (на проде фронтенд Contract AI на хосте, порт 3103);
+- `MEMORY_HUB_UPSTREAM` (по умолчанию `host.docker.internal:8787`) — memory-hub через порт на хосте, без общей сети с базой.
+
+Guacamole и `/telegram-mcp` удалены 01.10.2026 (решение владельца). У memory-hub наружу открыты только его
+маршруты с собственной авторизацией (коннекторы Claude/ChatGPT ходят в `/mcp`), описание API (`/docs`, `/openapi.json`) закрыто.
 
 Перед запуском убедитесь, что у DNS есть запись `A/AAAA` для `contract.ai-verdict.ru`, а upstream доступен из контейнера `caddy`.
 - доступные deep-link payload для `https://t.me/<reader_bot>?start=<payload>`:

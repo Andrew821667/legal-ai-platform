@@ -32,13 +32,6 @@
         reverse_proxy core-api:8000
     }
 
-    handle /guacamole* {
-        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
-    }
-
-    # /telegram-mcp — только на служебном домене memory: на домене сайта он
-    # был бы общедоступным доступом к Telegram владельца.
-
     handle /lawtable {
         redir /lawtable/app 302
     }
@@ -108,12 +101,6 @@ https://{$DOMAIN} {
         reverse_proxy core-api:8000
     }
 
-    # Guacamole намеренно не публикуется на основном домене:
-    # единственная публичная точка входа — {$MEMORY_DOMAIN}, и она закрыта basic_auth.
-
-    # /telegram-mcp — только на служебном домене memory: на домене сайта он
-    # был бы общедоступным доступом к Telegram владельца.
-
     handle /lawtable {
         redir /lawtable/app 302
     }
@@ -156,20 +143,13 @@ Disallow: /
         respond 404
     }
 
-    # Guacamole — шлюз удалённого доступа к хосту. Закрыт basic_auth, чтобы
-    # форма входа не отдавалась в интернет: без пароля отдаётся только 401,
-    # поэтому перебор учётных данных и эксплуатация уязвимостей самого
-    # Guacamole недоступны неаутентифицированному клиенту.
-    handle /guacamole* {
-        basic_auth {
-            {$GUAC_BASIC_AUTH_USER:av} {$GUAC_BASIC_AUTH_HASH}
-        }
-        reverse_proxy {$GUACAMOLE_UPSTREAM:host.docker.internal:8080}
-    }
-
-    handle /telegram-mcp* {
-        uri strip_prefix /telegram-mcp
-        reverse_proxy host.docker.internal:8791
+    # Guacamole (удалённый рабочий стол хоста) и /telegram-mcp удалены
+    # 01.10.2026 по решению владельца. Memory-hub остаётся: его коннекторы
+    # (Claude, ChatGPT) ходят в /mcp с OAuth, остальные маршруты hub закрыты
+    # его собственной авторизацией. Описание API наружу не отдаём.
+    @memory_api_docs path /docs /docs/* /redoc /redoc/* /openapi.json
+    handle @memory_api_docs {
+        respond 404
     }
 
     handle {
