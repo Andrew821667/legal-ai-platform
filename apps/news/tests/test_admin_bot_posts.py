@@ -407,22 +407,24 @@ def test_hidden_deleted_post_helper() -> None:
 
 
 def test_manual_post_kind_label_exists() -> None:
-    assert _manual_post_kind_label("promo_offer") == "Рекламный"
+    assert _manual_post_kind_label("promo_offer") == "О наших услугах"
 
 
 def test_manual_post_kind_structure_exists() -> None:
-    assert "боль клиента" in _manual_post_kind_structure("promo_offer")
+    assert "задача клиента" in _manual_post_kind_structure("promo_offer")
     assert "тезис" in _manual_post_kind_structure("opinion")
 
 
 def test_manual_post_kind_style_hints_exist() -> None:
-    assert "агрессивного продавливания" in _manual_post_kind_style_hint("promo_offer")
+    assert "информируем, а не продаём" in _manual_post_kind_style_hint("promo_offer")
     assert "авторский" in _manual_post_kind_style_hint("opinion")
     assert "действием или критерием" in _manual_post_kind_style_hint("checklist")
 
 
 def test_manual_post_kind_prompt_blocks_exist() -> None:
-    assert "узкого места клиента" in _manual_post_kind_prompt_block("promo_offer")
+    block = _manual_post_kind_prompt_block("promo_offer")
+    # «О наших услугах» — информирование: без призывов купить и сравнений (реклама в Telegram запрещена).
+    assert "не реклама" in block and "без призывов" in block and "Не сравнивай" in block
     assert "Первая фраза должна содержать четкий тезис" in _manual_post_kind_prompt_block("opinion")
     assert "исходную проблему" in _manual_post_kind_prompt_block("case_story")
     assert "самостоятельно" in _manual_post_kind_prompt_block("digest")
@@ -431,7 +433,7 @@ def test_manual_post_kind_prompt_blocks_exist() -> None:
 
 
 def test_manual_post_kind_screen_templates_exist() -> None:
-    assert "Где у клиента рвется процесс" in _manual_post_kind_screen_template("promo_offer")
+    assert "без призыва купить" in _manual_post_kind_screen_template("promo_offer")
     assert "Жесткий тезис" in _manual_post_kind_screen_template("opinion")
     assert "процесс до изменений" in _manual_post_kind_screen_template("case_story")
     assert "4-6 самостоятельных пунктов" in _manual_post_kind_screen_template("digest")
