@@ -14,6 +14,7 @@ import DocumentText from "./DocumentText";
 import HistoryList from "./HistoryList";
 import IntakeLinks from "./IntakeLinks";
 import NoteBox from "./NoteBox";
+import CaseFilesBlock from "./CaseFilesBlock";
 import CaseThreadBlock from "./CaseThreadBlock";
 import ReplyBox from "./ReplyBox";
 import RichText from "./RichText";
@@ -337,6 +338,17 @@ export default function ClientCardView({
       )}
 
       <CaseThreadBlock leadId={card.lead_id} initData={initData} onChanged={onChanged} />
+
+      <CaseFilesBlock
+        leadId={card.lead_id}
+        initData={initData}
+        insideTelegram={insideTelegram}
+        intakes={card.intakes.map((item) => ({
+          intake_id: item.intake_id,
+          label: `${intakeTitle(item)} · ${shortDate(item.created_at)}`,
+        }))}
+        onChanged={onChanged}
+      />
 
       <section>
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>

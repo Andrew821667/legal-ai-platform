@@ -244,7 +244,8 @@ function ActsBlock({
 /**
  * Выгрузка в CSV — для бухгалтерии и отчётности; ни одного экспорта в
  * системе не было, цифры переписывали с экрана. Внутри Telegram файл нельзя
- * скачать — бот присылает его в чат; снаружи, в Safari, — обычная ссылка.
+ * скачать — бот присылает его в чат, но без клиентов и предмета договора
+ * (Telegram за рубежом); снаружи, в Safari, — обычная ссылка, полный файл.
  */
 const PILL_BUTTON =
   "inline-flex items-center rounded-full bg-lw-primary-soft px-3 py-1.5 text-lw-sm font-semibold text-lw-primary transition-colors hover:bg-lw-blue-soft";
@@ -264,7 +265,7 @@ function ExportCsv({ initData, insideTelegram }: { initData: string; insideTeleg
   return (
     <span className="inline-flex items-center gap-2 text-lw-sm">
       {state === "sent" ? (
-        <span className="text-lw-success">CSV в чате с ботом</span>
+        <span className="text-lw-success">CSV в чате — без клиентов; полный — в браузере</span>
       ) : (
         <button
           type="button"

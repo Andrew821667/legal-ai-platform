@@ -99,6 +99,32 @@ export function coreDelete(path: string): Promise<NextResponse> {
 }
 
 /**
+ * Файл в ядро (multipart) — результат работы клиенту. Ядро ещё и уведомляет
+ * клиента в Telegram, поэтому ждём, как у отправки договора.
+ */
+export async function corePostForm(path: string, form: FormData): Promise<NextResponse> {
+  if (!CORE_API_ADMIN_KEY) {
+    return NextResponse.json({ detail: "Сервер не настроен: нет ключа доступа к ядру" }, { status: 500 });
+  }
+  try {
+    const response = await fetch(`${CORE_API_URL}${path}`, {
+      method: "POST",
+      headers: { "X-API-Key": CORE_API_ADMIN_KEY },
+      body: form,
+      cache: "no-store",
+      signal: AbortSignal.timeout(TELEGRAM_DELIVERY_TIMEOUT_MS),
+    });
+    const raw = await response.text();
+    return new NextResponse(response.ok ? raw : translateCoreErrorBody(raw), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json({ detail: "Ядро не ответило вовремя" }, { status: 504 });
+  }
+}
+
+/**
  * Файл из ядра (PDF договора) — как есть, с типом и именем от ядра.
  * Отказ — JSON с переведённым текстом, как у остальных вызовов.
  */

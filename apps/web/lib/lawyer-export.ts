@@ -9,13 +9,13 @@ import type { CsvAgreement } from "@/lib/lawyer-csv";
 
 export type CsvFile = { name: string; type: string; bytes: Uint8Array<ArrayBuffer> };
 
-export async function agreementsCsvFile(): Promise<CsvFile | Response> {
+export async function agreementsCsvFile(options: { withoutClients?: boolean } = {}): Promise<CsvFile | Response> {
   const upstream = await coreGet("/api/v1/lawyer/finance");
   if (!upstream.ok) return upstream;
   const finance = (await upstream.json()) as { agreements: CsvAgreement[] };
   return {
     name: agreementsCsvFileName(),
     type: "text/csv; charset=utf-8",
-    bytes: new TextEncoder().encode(agreementsCsv(finance.agreements || [])),
+    bytes: new TextEncoder().encode(agreementsCsv(finance.agreements || [], options)),
   };
 }

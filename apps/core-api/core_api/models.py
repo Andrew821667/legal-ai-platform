@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Sequence,
     String,
     Text,
@@ -1110,6 +1111,42 @@ class CaseMessage(Base):
         Index("ix_case_messages_lead", "lead_id", "created_at"),
         Index("ix_case_messages_intake", "intake_id"),
     )
+
+
+class ClientFile(Base):
+    """Файл по делу, который хранится у нас, а не в Telegram.
+
+    to_client — результат работы, который юрист передаёт клиенту в кабинет;
+    from_client — документ, загруженный клиентом в кабинете. Раньше загрузки
+    из кабинета пересылались юристу в Telegram и жили там (серверы за
+    рубежом), а передать клиенту без Telegram файл было нечем.
+
+    Содержимое зашифровано тем же ключом, что и паспортные данные
+    (PII_ENCRYPTION_KEY): в базе и её резервных копиях — только шифротекст.
+    """
+
+    __tablename__ = "client_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+    )
+    intake_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("legal_intakes.id", ondelete="CASCADE"), nullable=True
+    )
+    # to_client | from_client
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Когда клиент впервые скачал файл юриста (или юрист — файл клиента).
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_client_files_lead", "lead_id", "created_at"),)
 
 
 class IntakeDocument(Base):

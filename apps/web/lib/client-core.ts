@@ -38,6 +38,29 @@ export const clientCoreGet = (path: string) => call("GET", path);
 export const clientCorePost = (path: string, payload: unknown) => call("POST", path, payload);
 export const clientCoreDelete = (path: string) => call("DELETE", path);
 
+/** Файл в ядро (multipart): документ клиента по делу хранится у нас, не в Telegram. */
+export async function clientCorePostForm(path: string, form: FormData): Promise<NextResponse> {
+  if (!CORE_API_BOT_KEY) {
+    return NextResponse.json({ detail: "Кабинет временно не настроен." }, { status: 503 });
+  }
+  try {
+    const response = await fetch(`${CORE_API_URL}${path}`, {
+      method: "POST",
+      headers: { "X-API-Key": CORE_API_BOT_KEY },
+      body: form,
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
+    const raw = await response.text();
+    return new NextResponse(response.ok ? raw : translateCoreErrorBody(raw), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json({ detail: "Ядро не ответило вовремя." }, { status: 504 });
+  }
+}
+
 export type ClientAccountInfo = {
   client_account_id: string;
   email: string;

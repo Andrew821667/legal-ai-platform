@@ -8,13 +8,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, false, or_, select
 from sqlalchemy.orm import Session
 
-from core_api import document_requests
+from core_api import consultations, document_requests
 from core_api.audit import write_audit
 from core_api.auth import ApiKeyIdentity, require_scopes
 from core_api.client_principal import resolve
 from core_api.db import get_db
 from core_api.models import (
     ActorType,
+    ConsultationSlot,
     IntakeDocument,
     Lead,
     LegalIntake,
@@ -241,8 +242,16 @@ def summary(
     # Что юрист просит прислать; отменённые пункты клиенту не показываем.
     requested = document_requests.for_intakes(db, [row.id for row in intakes], with_cancelled=False)
     from core_api.routers.case_messages import unread_for_client
+    from core_api.routers.client_files import for_intakes as files_for_intakes, without_case as files_without_case
 
     unread = unread_for_client(db, intake_ids)
+    files = files_for_intakes(db, intake_ids)
+    # Записи на консультацию: статус оплаты, время и чек «Мой налог».
+    slots = db.scalars(
+        select(ConsultationSlot)
+        .where(ConsultationSlot.lead_id.in_(lead_ids), ConsultationSlot.status.in_(consultations.BOOKED))
+        .order_by(ConsultationSlot.created_at.desc())
+    ).all() if lead_ids else []
     return {
         "client": {
             "via": "account" if principal.account_id else "telegram",
@@ -271,7 +280,18 @@ def summary(
             "document_requests": requested.get(row.id, []),
             # Новые ответы юриста в переписке по делу — для отметки в кабинете.
             "messages_unread": unread.get(row.id, 0),
+            # Файлы по делу в нашей базе: результаты от юриста и загруженное клиентом.
+            "files": files.get(row.id, []),
         } for row in intakes],
+        "files": files_without_case(db, lead_ids),
+        "consultations": [{
+            "slot_id": str(slot.id), "starts_at": _iso(slot.starts_at),
+            "duration_min": slot.duration_min, "status": slot.status,
+            "price_minor": slot.price_minor, "code": slot.code,
+            "access_token": slot.access_token, "claimed_at": _iso(slot.claimed_at),
+            "confirmed_at": _iso(slot.confirmed_at),
+            "receipt_ref": slot.receipt_ref, "receipt_at": _iso(slot.receipt_at),
+        } for slot in slots],
         "agreements": [{
             "id": str(row.id), "intake_id": str(row.intake_id) if row.intake_id else None,
             "kind": "supplement" if row.parent_agreement_id else "agreement",
@@ -298,5 +318,7 @@ def summary(
             "objected_at": _iso(row.objected_at), "objection_text": row.objection_text,
             "claimed_paid_at": _iso(row.claimed_paid_at), "paid_at": _iso(row.paid_at),
             "cancelled_at": _iso(row.cancelled_at), "cancel_reason": row.cancel_reason,
+            # Чек «Мой налог» по оплате — ссылка, которую юрист внёс в рабочем месте.
+            "receipt_ref": row.receipt_ref, "receipt_at": _iso(row.receipt_at),
         } for row in acts],
     }

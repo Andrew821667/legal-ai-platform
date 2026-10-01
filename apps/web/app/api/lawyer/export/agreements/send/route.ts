@@ -10,8 +10,9 @@ import { TelegramFileError, uploadTelegramDocument } from "@/lib/telegram-file";
  *
  * Внутри Telegram файл нельзя скачать, зато можно получить сообщением: он
  * откроется в Excel или Numbers с телефона. Куда слать — из проверенной
- * сессии, а не из запроса: выгрузка со всеми клиентами чужому чату не
- * достанется.
+ * сессии, а не из запроса. В чат уходит копия без клиентов и предмета
+ * договора: серверы Telegram за рубежом, а трансграничной передачи
+ * персональных данных у нас нет. Полная выгрузка — в браузере.
  */
 
 export const dynamic = "force-dynamic";
@@ -25,11 +26,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ detail: "Сервер не настроен: нет токена бота" }, { status: 500 });
   }
 
-  const file = await agreementsCsvFile();
+  const file = await agreementsCsvFile({ withoutClients: true });
   if (file instanceof Response) return file;
 
   try {
-    await uploadTelegramDocument(token, auth.telegramUserId, file, "Договоры практики — выгрузка для отчётности");
+    await uploadTelegramDocument(token, auth.telegramUserId, file, "Договоры практики — выгрузка для отчётности (без клиентов; полная — в рабочем месте в браузере)");
     return Response.json({ ok: true });
   } catch (err) {
     const detail = err instanceof TelegramFileError ? err.message : "Не удалось отправить файл";

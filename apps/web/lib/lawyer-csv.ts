@@ -62,8 +62,15 @@ export function csvDate(value: string | null | undefined): string {
   });
 }
 
-export function agreementsCsv(rows: CsvAgreement[]): string {
-  const lines = [HEADER.map(cell).join(";")];
+/**
+ * withoutClients — копия для чата в Telegram: без столбцов «Клиент» и
+ * «Предмет» (в них имена и обстоятельства клиентов, а серверы Telegram за
+ * рубежом). Номера, суммы и даты для отчётности остаются; полная выгрузка —
+ * в рабочем месте в браузере.
+ */
+export function agreementsCsv(rows: CsvAgreement[], { withoutClients = false }: { withoutClients?: boolean } = {}): string {
+  const keep = (_: unknown, index: number) => !withoutClients || (index !== 1 && index !== 2);
+  const lines = [HEADER.filter(keep).map(cell).join(";")];
   for (const row of rows) {
     lines.push(
       [
@@ -77,6 +84,7 @@ export function agreementsCsv(rows: CsvAgreement[]): string {
         csvDate(row.sent_at),
         csvDate(row.signed_at),
       ]
+        .filter(keep)
         .map(cell)
         .join(";"),
     );

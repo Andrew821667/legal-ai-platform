@@ -41,6 +41,7 @@ from core_api.models import (
     ActorType,
     CaseMessage,
     ClientAccount,
+    ClientFile,
     ContractJob,
     Event,
     IntakeClarification,
@@ -128,7 +129,7 @@ def anonymize_lead(db: Session, lead: Lead, now: datetime) -> dict:
     """Обезличить одного клиента. Возвращает счётчики — без персональных данных."""
     emails = _emails(lead)
     counts = {"intakes": 0, "clarifications": 0, "documents": 0, "deliveries": 0, "events": 0, "accounts": 0,
-              "messages": 0}
+              "messages": 0, "files": 0}
     intake_ids = list(db.scalars(select(LegalIntake.id).where(LegalIntake.lead_id == lead.id)))
 
     if intake_ids:
@@ -154,6 +155,8 @@ def anonymize_lead(db: Session, lead: Lead, now: datetime) -> dict:
     counts["events"] = db.execute(update(Event).where(Event.lead_id == lead.id).values(payload={})).rowcount
     # Переписка по делу — словами клиента и юриста: удаляется целиком.
     counts["messages"] = db.execute(delete(CaseMessage).where(CaseMessage.lead_id == lead.id)).rowcount
+    # Файлы по делу (результаты юриста и загрузки из кабинета) — тоже целиком.
+    counts["files"] = db.execute(delete(ClientFile).where(ClientFile.lead_id == lead.id)).rowcount
 
     lead.name = ANON_NAME
     lead.contact = PLACEHOLDER

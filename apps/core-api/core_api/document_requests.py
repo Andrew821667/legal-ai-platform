@@ -84,8 +84,11 @@ def mark(row: DocumentRequest, status: str, document_id: uuid.UUID | None = None
     row.received_at = datetime.now(timezone.utc) if status == "received" else None
 
 
-def fulfill(db: Session, intake_id: uuid.UUID, request_id: uuid.UUID, document_id: uuid.UUID) -> bool:
-    """Загруженный файл закрывает пункт своего обращения; чужой пункт — нет."""
+def fulfill(db: Session, intake_id: uuid.UUID, request_id: uuid.UUID, document_id: uuid.UUID | None) -> bool:
+    """Загруженный файл закрывает пункт своего обращения; чужой пункт — нет.
+
+    document_id — файл в Telegram (intake_documents); для файла из кабинета,
+    который хранится у нас (client_files), — None."""
     row = db.get(DocumentRequest, request_id)
     if row is None or row.intake_id != intake_id or row.status == "cancelled":
         return False
