@@ -57,6 +57,11 @@ function appendHash(href: string, hash?: string): string {
 
 export function contractAIEntryHref(hash?: string): string {
   const base = EXTERNAL_LINKS.contractAI || ROUTES.contractAI;
+  // Доступ к Contract AI — персональный демо по заявке (решение владельца
+  // 01.10): у сервиса это страница /demo, якоря #demo на нём нет.
+  if (hash === "demo" && EXTERNAL_LINKS.contractAI) {
+    return `${base.replace(/\/+$/, "")}/demo`;
+  }
   return appendHash(base, hash);
 }
 

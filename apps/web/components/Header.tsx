@@ -164,14 +164,14 @@ export default function Header() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-3 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Проверить договор →
+                Contract AI · демо →
               </a>
             ) : (
               <Link
                 href={contractAIActionHref}
                 className="inline-flex items-center whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-3 py-3 rounded-lg transition-all transform hover:scale-105"
               >
-                Проверить договор →
+                Contract AI · демо →
               </Link>
             )}
           </div>
@@ -246,7 +246,7 @@ export default function Header() {
                   className="block mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Открыть сервис проверки договоров →
+                  Contract AI — демо по заявке →
                 </a>
               ) : (
                 <Link
@@ -254,7 +254,7 @@ export default function Header() {
                   className="block mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Открыть сервис проверки договоров →
+                  Contract AI — демо по заявке →
                 </Link>
               )}
               <Link

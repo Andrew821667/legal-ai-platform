@@ -67,7 +67,7 @@ export default function Footer() {
       { name: "Работа с регионами", href: "/regions" },
       { name: "Практические разборы", href: "/content-cases#practical" },
       {
-        name: "Проверить договор",
+        name: "Contract AI — демо по заявке",
         href: contractAIEntryHref("demo"),
         external: contractAIEntryIsExternal(),
       },
