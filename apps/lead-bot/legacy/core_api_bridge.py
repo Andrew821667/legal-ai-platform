@@ -305,6 +305,16 @@ class CoreApiBridge:
             ),
         ) is not None
 
+    def post_case_message(self, intake_id: str, *, telegram_user_id: int, text: str) -> bool:
+        """Сообщение клиента по делу — в общую переписку (видна юристу и в кабинете)."""
+        if not self.enabled:
+            return False
+        return self._post(
+            f"/api/v1/client-portal/cases/{intake_id}/messages",
+            {"telegram_user_id": int(telegram_user_id), "text": text, "channel": "telegram"},
+            idempotency_key=_stable_sync_key(f"case-message:{intake_id}:{telegram_user_id}", {"text": text}),
+        ) is not None
+
     def record_intake_document(
         self,
         intake_id: str,

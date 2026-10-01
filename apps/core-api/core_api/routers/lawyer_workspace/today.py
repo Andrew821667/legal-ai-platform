@@ -247,6 +247,15 @@ def today(
     consultation_claimed = [(s, lead) for s, lead in consultation_rows if s.status == "claimed"]
     consultation_receipt = [(s, lead) for s, lead in consultation_rows if s.status == "confirmed"]
 
+    # Новые сообщения клиентов в переписке по делу (кабинет и бот).
+    from core_api.routers.case_messages import unread_from_clients
+
+    unread_rows = unread_from_clients(db)
+    unread_leads = {
+        lead.id: lead
+        for lead in db.scalars(select(Lead).where(Lead.id.in_([lead_id for lead_id, _, _ in unread_rows])))
+    } if unread_rows else {}
+
     # 9. Не ушло в Telegram: не ушло совсем или повтор затянулся. Раньше такие
     #    сбои оседали в логе, и о них никто не знал.
     undelivered = db.execute(
@@ -433,6 +442,21 @@ def today(
                         "days_waiting": _days_since(a.claimed_paid_at),
                     }
                     for a, lead in acts_claimed
+                ],
+            },
+            {
+                "key": "client_messages",
+                "title": "Клиенты написали в переписке по делу",
+                "hint": "Откройте карточку клиента — раздел «Переписка»: ответ уйдёт в его кабинет и в Telegram, если он есть.",
+                "items": [
+                    {
+                        "lead_id": str(lead_id),
+                        "client": _lead_title(unread_leads.get(lead_id)),
+                        "is_test": is_staff(unread_leads[lead_id].telegram_user_id if lead_id in unread_leads else None),
+                        "messages": count,
+                        "days_waiting": _days_since(last_at),
+                    }
+                    for lead_id, count, last_at in unread_rows
                 ],
             },
             {

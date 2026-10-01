@@ -11,7 +11,10 @@ type Case = {
   documents: { id: string; file_name?: string | null; created_at?: string | null }[];
   /** Что юрист просит прислать по этому делу. */
   document_requests?: { request_id: string; title: string; note?: string | null; status: string }[];
+  /** Новые ответы юриста в переписке по делу. */
+  messages_unread?: number;
 };
+type CaseMessage = { id: string; author: "client" | "lawyer"; channel: string; text: string; created_at: string | null };
 type Agreement = {
   id: string; intake_id?: string | null; number: string; revision: number; status: string;
   /** supplement — допсоглашение к подписанному договору: реквизиты уже есть, сразу открыть и подписать. */
@@ -194,17 +197,100 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-amber-300">{practiceLabels[item.practice] || item.practice}</p><h3 className="mt-1 font-semibold text-white">{item.description.slice(0, 100)}</h3></div><span className="whitespace-nowrap text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div>
         {item.without_agreement ? <p className="mt-2 text-xs text-slate-400">Работа ведётся без отдельного соглашения.</p> : null}
         <CaseDocuments item={item} ndaSigned={data.nda.signed} onUploaded={() => void load()} />
-        <a href={`${EXTERNAL_LINKS.leadBot}?start=case_${item.id}`} className="mt-3 inline-block text-sm font-semibold text-amber-300">Написать по делу</a>
+        <CaseThread intakeId={item.id} unread={item.messages_unread || 0} telegramLinked={Boolean(data.client.telegram_linked)} />
       </article>)}
       {data.cases.length === 0 ? <p className="rounded-lg border border-slate-700 p-4 text-sm text-slate-300">Обращений пока нет.</p> : null}
     </div>
 
-    {data.agreements.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Договоры</h3></div><div className="mt-3 space-y-3">{data.agreements.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "supplement" ? `Допсоглашение № ${item.number}` : `№ ${item.number}, редакция ${item.revision}`}</p><span className="text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.subject}</p>{!item.client_details_complete && item.status === "sent" ? <AgreementDetails id={item.id} busy={busy} run={run} /> : <div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => openAgreement(item.id)}>Открыть</Button>{["sent", "viewed"].includes(item.status) ? <Question id={item.id} busy={busy} run={run} /> : null}</div>}</div>)}</div></article> : null}
+    {data.agreements.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Договоры</h3></div><div className="mt-3 space-y-3">{data.agreements.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "supplement" ? `Допсоглашение № ${item.number}` : `№ ${item.number}, редакция ${item.revision}`}</p><span className="text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.subject}</p><AgreementMessages messages={item.messages} />{!item.client_details_complete && item.status === "sent" ? <AgreementDetails id={item.id} busy={busy} run={run} /> : <div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => openAgreement(item.id)}>Открыть</Button>{["sent", "viewed"].includes(item.status) ? <Question id={item.id} busy={busy} run={run} /> : null}</div>}</div>)}</div></article> : null}
 
     {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "advance" ? "Счёт на предоплату" : "Акт"} № {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>{item.kind === "advance" ? "Открыть счёт" : "Открыть акт"}</Button></div></div>)}</div></article> : null}
 
     {doc ? <DocumentPanel kind={docKind!} doc={doc} note={note} setNote={setNote} busy={busy} close={() => setDoc(null)} run={run} variant={variant} error={error} /> : null}
   </section>;
+}
+
+function shortDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+}
+
+/**
+ * Переписка по делу прямо в кабинете — и для тех, у кого нет Telegram (вход
+ * через Яндекс ID). Ответ юриста приходит сюда; клиенту с Telegram — ещё и туда.
+ */
+function CaseThread({ intakeId, unread, telegramLinked }: { intakeId: string; unread: number; telegramLinked: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<CaseMessage[] | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [fresh, setFresh] = useState(unread);
+
+  const load = useCallback(async () => {
+    try {
+      const body = await request<{ messages: CaseMessage[] }>(`/api/client/cases/${intakeId}/messages`);
+      setMessages(body.messages);
+      setFresh(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось загрузить переписку");
+    }
+  }, [intakeId]);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/api/client/cases/${intakeId}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      setText("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось отправить");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return <div className="mt-3"><Button tone="quiet" onClick={() => { setOpen(true); void load(); }}>
+      <MessageSquareText className="mr-1 inline h-4 w-4" />Переписка с юристом{fresh ? ` · новых ответов: ${fresh}` : ""}
+    </Button></div>;
+  }
+  return <div className="mt-3 space-y-2 rounded-lg border border-slate-600 p-3">
+    <p className="text-sm font-semibold text-white">Переписка с юристом</p>
+    {messages === null ? <p className="text-sm text-slate-400">Загружаю…</p> : null}
+    {messages && messages.length === 0 ? <p className="text-sm text-slate-400">Сообщений пока нет. Напишите вопрос — юрист ответит здесь.</p> : null}
+    <ul className="space-y-2">
+      {(messages || []).map((message) => <li key={message.id} className={`rounded-lg p-2 text-sm ${message.author === "lawyer" ? "bg-amber-500/10 text-slate-100" : "bg-slate-900 text-slate-200"}`}>
+        <p className="text-xs text-slate-400">{message.author === "lawyer" ? "Юрист" : "Вы"}{message.created_at ? ` · ${shortDate(message.created_at)}` : ""}</p>
+        <p className="mt-1 whitespace-pre-wrap">{message.text}</p>
+      </li>)}
+    </ul>
+    <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} placeholder="Ваше сообщение юристу" className="w-full rounded bg-slate-900 p-2 text-sm" />
+    {error ? <p className="text-sm text-red-300">{error}</p> : null}
+    <div className="flex flex-wrap items-center gap-2">
+      <Button disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? "Отправляю…" : "Отправить"}</Button>
+      <Button tone="quiet" onClick={() => void load()}><RefreshCw className="mr-1 inline h-4 w-4" />Обновить</Button>
+    </div>
+    <p className="text-xs text-slate-400">
+      Не присылайте здесь паспортные данные и реквизиты карт.{telegramLinked ? " Ответ юриста придёт и в Telegram-бот." : ""}
+    </p>
+  </div>;
+}
+
+/** Вопросы по договору и ответы юриста — клиент без Telegram видит их только здесь. */
+function AgreementMessages({ messages }: { messages: Agreement["messages"] }) {
+  if (!messages?.length) return null;
+  return <ul className="mt-2 space-y-1">
+    {messages.map((message) => <li key={message.id} className="text-xs text-slate-300">
+      <span className="text-slate-400">{message.role === "lawyer" ? "Юрист" : "Вы"}:</span> {message.text}
+    </li>)}
+  </ul>;
 }
 
 function AgreementDetails({ id, busy, run }: { id: string; busy: boolean; run: (fn: () => Promise<unknown>) => Promise<void> }) {

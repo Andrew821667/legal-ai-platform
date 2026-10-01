@@ -39,6 +39,7 @@ from core_api.config import get_settings
 from core_api.db import SessionLocal
 from core_api.models import (
     ActorType,
+    CaseMessage,
     ClientAccount,
     ContractJob,
     Event,
@@ -126,7 +127,8 @@ def _emails(lead: Lead) -> set[str]:
 def anonymize_lead(db: Session, lead: Lead, now: datetime) -> dict:
     """Обезличить одного клиента. Возвращает счётчики — без персональных данных."""
     emails = _emails(lead)
-    counts = {"intakes": 0, "clarifications": 0, "documents": 0, "deliveries": 0, "events": 0, "accounts": 0}
+    counts = {"intakes": 0, "clarifications": 0, "documents": 0, "deliveries": 0, "events": 0, "accounts": 0,
+              "messages": 0}
     intake_ids = list(db.scalars(select(LegalIntake.id).where(LegalIntake.lead_id == lead.id)))
 
     if intake_ids:
@@ -150,6 +152,8 @@ def anonymize_lead(db: Session, lead: Lead, now: datetime) -> dict:
                 next_attempt_at=None)
     ).rowcount
     counts["events"] = db.execute(update(Event).where(Event.lead_id == lead.id).values(payload={})).rowcount
+    # Переписка по делу — словами клиента и юриста: удаляется целиком.
+    counts["messages"] = db.execute(delete(CaseMessage).where(CaseMessage.lead_id == lead.id)).rowcount
 
     lead.name = ANON_NAME
     lead.contact = PLACEHOLDER

@@ -47,6 +47,8 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return `${"⭐".repeat(item.score || 0)} «${item.review_text || ""}» — акт № ${item.act_number}`;
     case "act_claimed_paid":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
+    case "client_messages":
+      return `${item.messages || 1} ${(item.messages || 1) === 1 ? "новое сообщение" : "новых сообщения"} в переписке`;
     case "consultation_claimed":
     case "consultation_receipt":
       return `${item.starts_at ? whenLabel(item.starts_at) : "время согласовать"} — ${formatRub(item.amount_minor ?? null)}, код ${item.code || "—"}`;

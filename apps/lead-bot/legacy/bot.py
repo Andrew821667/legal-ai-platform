@@ -88,6 +88,7 @@ from handlers.service_agreements import handle_client_callback as handle_service
 from handlers.work_acts import handle_admin_callback as handle_work_act_admin_callback
 from handlers.work_acts import handle_client_callback as handle_work_act_client_callback
 from handlers.client_link import handle_link_callback, link_command
+from handlers.case_messages import handle_case_callback
 from handlers.intake_draft import handle_draft_callback as handle_intake_draft_callback
 from handlers.common import error_handler
 from handlers.helpers import notify_admin_new_lead
@@ -854,6 +855,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await handle_intake_draft_callback(update, context)
         elif data.startswith("clink:"):
             await handle_link_callback(update, context)
+        elif data.startswith("case:"):
+            await handle_case_callback(update, context)
         else:
             await query.answer("Неизвестное действие")
         log_update_timing(update, started_at, ok=True)

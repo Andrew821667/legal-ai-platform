@@ -1077,6 +1077,41 @@ class IntakeClarification(Base):
     )
 
 
+class CaseMessage(Base):
+    """Сообщение по делу: клиент ↔ юрист.
+
+    Раньше переписка шла только через Telegram, а клиент без него (вход через
+    Яндекс ID) из кабинета мог лишь открыть ссылку на бота — которая без VPN не
+    открывается. Здесь общий тред по делу: клиент пишет из кабинета или бота,
+    юрист отвечает из рабочего места; клиенту с Telegram ответ приходит и туда.
+
+    read_at — когда сообщение прочитала другая сторона: ответ юриста — клиент,
+    сообщение клиента — юрист.
+    """
+
+    __tablename__ = "case_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+    )
+    intake_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("legal_intakes.id", ondelete="CASCADE"), nullable=True
+    )
+    # client | lawyer
+    author: Mapped[str] = mapped_column(String(16), nullable=False)
+    # cabinet | telegram | workspace — откуда пришло сообщение
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_case_messages_lead", "lead_id", "created_at"),
+        Index("ix_case_messages_intake", "intake_id"),
+    )
+
+
 class IntakeDocument(Base):
     """Документ, присланный клиентом по обращению.
 

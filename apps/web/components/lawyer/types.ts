@@ -29,6 +29,8 @@ export type TodayItem = {
   days_left?: number | null;
   /** Ваш собственный аккаунт — проверка системы, а не клиент. */
   is_test?: boolean;
+  /** «Клиенты написали в переписке по делу»: сколько новых сообщений. */
+  messages?: number;
   // «Не доставлено в Telegram»
   delivery_id?: string;
   kind_label?: string;

@@ -15,6 +15,7 @@ from core_api.routers import (
     admin,
     agreement_drafts,
     agreement_templates,
+    case_messages,
     client_auth,
     automation_controls,
     client_notices,
@@ -85,6 +86,8 @@ app.include_router(lawyer_workspace.router)
 app.include_router(work_acts.router)
 app.include_router(client_notices.router)
 app.include_router(client_portal.router)
+app.include_router(case_messages.client)
+app.include_router(case_messages.lawyer)
 app.include_router(workers.router)
 app.include_router(telegram_ops.router)
 app.include_router(client_auth.router)

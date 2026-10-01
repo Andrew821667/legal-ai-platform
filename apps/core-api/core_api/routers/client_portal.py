@@ -240,6 +240,9 @@ def summary(
     )
     # Что юрист просит прислать; отменённые пункты клиенту не показываем.
     requested = document_requests.for_intakes(db, [row.id for row in intakes], with_cancelled=False)
+    from core_api.routers.case_messages import unread_for_client
+
+    unread = unread_for_client(db, intake_ids)
     return {
         "client": {
             "via": "account" if principal.account_id else "telegram",
@@ -266,6 +269,8 @@ def summary(
             "status": row.status.value, "without_agreement": row.without_agreement,
             "created_at": _iso(row.created_at), "documents": documents.get(row.id, []),
             "document_requests": requested.get(row.id, []),
+            # Новые ответы юриста в переписке по делу — для отметки в кабинете.
+            "messages_unread": unread.get(row.id, 0),
         } for row in intakes],
         "agreements": [{
             "id": str(row.id), "intake_id": str(row.intake_id) if row.intake_id else None,
