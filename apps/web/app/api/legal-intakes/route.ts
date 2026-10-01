@@ -53,6 +53,8 @@ type IntakeBody = {
   starter_offer_id?: string;
   /** Запись на консультацию: время бронируется вместе с обращением. */
   consultation_slot_id?: string;
+  /** «Оплатить сейчас, время согласуем»: бронь без времени. */
+  consultation_unscheduled?: boolean;
   consentAccepted?: boolean;
   offerAccepted?: boolean;
   utm_source?: string;
@@ -105,8 +107,9 @@ export async function POST(request: NextRequest) {
   if (slotId && !UUID.test(slotId)) {
     return NextResponse.json({ detail: "Выберите время консультации заново." }, { status: 400 });
   }
+  const unscheduled = !slotId && payload.consultation_unscheduled === true;
   // Запись на время — всегда пакет «Консультация юриста»: цена и формат те же.
-  const starterOffer = getStarterOffer(slotId ? "legal_consultation" : payload.starter_offer_id, "legal");
+  const starterOffer = getStarterOffer(slotId || unscheduled ? "legal_consultation" : payload.starter_offer_id, "legal");
   const description = addStarterOfferToMessage(
     rawDescription || "",
     starterOffer?.id,
@@ -122,7 +125,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Нужно согласие на обработку персональных данных." }, { status: 400 });
   }
   // Запись с оплатой — договор по оферте: без ознакомления с ней не записываем.
-  if (slotId && payload.offerAccepted !== true) {
+  if ((slotId || unscheduled) && payload.offerAccepted !== true) {
     return NextResponse.json({ detail: "Подтвердите, что ознакомились с офертой на консультацию." }, { status: 400 });
   }
 
@@ -139,9 +142,9 @@ export async function POST(request: NextRequest) {
 
   // Повтор той же записи на то же время (двойной клик): «принято» без ссылки на
   // бронь оставило бы клиента без записи — просим открыть бронь или выбрать заново.
-  if (slotId && protection.action === "duplicate") {
+  if ((slotId || unscheduled) && protection.action === "duplicate") {
     return NextResponse.json(
-      { detail: "Эта запись уже отправлена. Откройте страницу брони или выберите время заново.", slot_taken: true },
+      { detail: "Эта запись уже отправлена. Откройте страницу брони или выберите время заново.", slot_taken: Boolean(slotId) },
       { status: 409 },
     );
   }
@@ -176,7 +179,7 @@ export async function POST(request: NextRequest) {
     `ip_hash=${ipHash}`,
     `ua_hash=${uaHash}`,
     starterOffer ? `starter_offer=${starterOffer.id}` : undefined,
-    slotId ? `offer_version=${CONSULTATION_OFFER_VERSION}` : undefined,
+    slotId || unscheduled ? `offer_version=${CONSULTATION_OFFER_VERSION}` : undefined,
   ].filter(Boolean).join("\n");
 
   const coreResponse = await fetch(`${CORE_API_URL}/api/v1/legal-intakes`, {
@@ -209,6 +212,7 @@ export async function POST(request: NextRequest) {
       utm_term: clean(payload.utm_term, 255),
       ...packageFields(starterOffer),
       ...(slotId ? { consultation_slot_id: slotId } : {}),
+      ...(unscheduled ? { consultation_unscheduled: true } : {}),
     }),
     cache: "no-store",
   });

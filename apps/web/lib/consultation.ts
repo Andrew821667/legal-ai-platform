@@ -12,7 +12,8 @@ export type BookingStatus = "held" | "claimed" | "confirmed";
 
 export type Booking = {
   slot_id: string;
-  starts_at: string;
+  /** null — «оплатить сейчас, время согласуем»: юрист назначит после разговора. */
+  starts_at: string | null;
   duration_min: number;
   status: BookingStatus;
   price_minor: number | null;
@@ -41,6 +42,11 @@ export function timeLabel(iso: string): string {
 
 export function whenLabel(iso: string): string {
   return `${dayLabel(iso)}, ${timeLabel(iso)} (МСК)`;
+}
+
+/** Время брони: назначенное — дата и время, нет — «согласуем». */
+export function bookingWhen(iso: string | null): string {
+  return iso ? whenLabel(iso) : "Время согласуем с вами";
 }
 
 /** Свободное время по дням, дни и время по порядку. */
@@ -82,13 +88,16 @@ export function statusText(booking: Booking, now: Date = new Date()): string {
   switch (booking.status) {
     case "held": {
       const left = minutesLeft(booking.held_until, now);
-      return left
+      if (!left) return "Время бронирования истекло.";
+      return booking.starts_at
         ? `Время закреплено за вами ещё ${left} мин. Оплатите и нажмите «Я оплатил».`
-        : "Время бронирования истекло.";
+        : `Бронь действует ещё ${left} мин. Оплатите и нажмите «Я оплатил».`;
     }
     case "claimed":
       return "Вы сообщили об оплате. Юрист сверит поступление и подтвердит запись — обычно в течение рабочего дня.";
     case "confirmed":
-      return "Оплата получена, консультация подтверждена. Юрист свяжется с вами по контакту из заявки перед началом.";
+      return booking.starts_at
+        ? "Оплата получена, консультация подтверждена. Юрист свяжется с вами по контакту из заявки перед началом."
+        : "Оплата получена, консультация подтверждена. Юрист свяжется с вами по контакту из заявки и согласует время.";
   }
 }

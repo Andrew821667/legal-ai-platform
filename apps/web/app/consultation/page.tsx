@@ -10,7 +10,7 @@ import { isLightOpsTheme } from "@/lib/visualTheme";
 export const metadata: Metadata = createPageMetadata({
   title: "Запись на консультацию юриста",
   description:
-    "Выберите удобное время онлайн-консультации юриста AI Verdict и оплатите по QR: до 60 минут и письменный план дальнейших действий.",
+    "Онлайн-консультация юриста AI Verdict: оплата по QR, время — открытое в расписании или согласуем с вами; до 60 минут и письменный план дальнейших действий.",
   path: "/legal-help/online-consultation",
   index: false,
   follow: true,
@@ -23,13 +23,13 @@ export default function ConsultationPage() {
     <main className={`${isLightOpsTheme ? "visual-light-ops" : ""} min-h-screen bg-slate-900 text-slate-100`}>
       <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-28">
         <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">Консультация юриста</p>
-        <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4xl">Запись на удобное время</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4xl">Запись на консультацию</h1>
         <p className="mt-4 leading-7 text-slate-300">
           {offer.description} Стоимость — <b className="text-white">{offer.price}</b>, оплата по QR в приложении
           банка.
         </p>
         <ol className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-3">
-          <li className="rounded-lg border border-slate-700 bg-slate-900 p-3"><b className="text-white">1.</b> Выберите время и опишите вопрос</li>
+          <li className="rounded-lg border border-slate-700 bg-slate-900 p-3"><b className="text-white">1.</b> Выберите время или «время согласуем» и опишите вопрос</li>
           <li className="rounded-lg border border-slate-700 bg-slate-900 p-3"><b className="text-white">2.</b> Оплатите по QR и нажмите «Я оплатил»</li>
           <li className="rounded-lg border border-slate-700 bg-slate-900 p-3"><b className="text-white">3.</b> Юрист подтвердит запись и свяжется с вами</li>
         </ol>

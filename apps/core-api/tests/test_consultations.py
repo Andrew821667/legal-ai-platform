@@ -181,3 +181,86 @@ def test_closed_time_can_be_reopened_and_duplicates_are_skipped(world) -> None:
     assert len(reopened.json()["created"]) == 1 and reopened.json()["skipped"] == 1
     world["slots"].extend(row["slot_id"] for row in reopened.json()["created"])
     assert consultations.MOSCOW is not None
+
+
+def _book_agreed(world, contact=None):
+    return world["client"].post("/api/v1/legal-intakes", headers=world["bot"], json={
+        "source": "website_form",
+        "name": "Ольга",
+        "contact": contact or f"consult-{uuid4().hex[:8]}@example.com",
+        "description": "Нужна консультация по наследству, время согласуем.",
+        "consent_accepted": True, "consent_version": "test", "consent_at": "2026-10-01T00:00:00Z",
+        "package_id": "legal_consultation", "package_title": "Консультация юриста", "package_price_text": "4 900 ₽",
+        "consultation_unscheduled": True,
+    })
+
+
+def test_pay_now_time_agreed_then_lawyer_schedules(world) -> None:
+    """«Оплатить сейчас, время согласуем» (решение владельца 01.10.2026)."""
+    client, admin, bot = world["client"], world["admin"], world["bot"]
+    booked = _book_agreed(world)
+    assert booked.status_code == 201, booked.text
+    consultation = booked.json()["consultation"]
+    world["slots"].append(consultation["slot_id"])
+    assert consultation["status"] == "held" and consultation["starts_at"] is None
+    assert consultation["code"].startswith("K-")
+    token = consultation["access_token"]
+
+    # Бронь без времени не становится «свободным временем» для других.
+    assert consultation["slot_id"] not in {s["slot_id"] for s in client.get("/api/v1/consultations/slots", headers=bot).json()["slots"]}
+
+    assert client.post(f"/api/v1/consultations/bookings/{token}/claim", headers=bot).json()["status"] == "claimed"
+    db = SessionLocal()
+    try:
+        notice = db.scalar(select(ClientNotice.text).where(ClientNotice.event_key.like(f"consultation-claim:{consultation['slot_id']}%")))
+        assert "время не назначено" in notice
+    finally:
+        db.close()
+
+    listed = client.get("/api/v1/lawyer/consultations", headers=admin).json()["slots"]
+    assert listed[0]["slot_id"] == consultation["slot_id"] and listed[0]["starts_at"] is None
+
+    assert client.post(f"/api/v1/lawyer/consultations/{consultation['slot_id']}/confirm", headers=admin).json()["status"] == "confirmed"
+
+    # Занятое другой записью время назначить нельзя, свободное — можно.
+    busy = client.post(f"/api/v1/lawyer/consultations/{consultation['slot_id']}/schedule", headers=admin,
+                       json={"starts_at": world["base"].isoformat()})
+    assert busy.status_code == 409
+    agreed_at = world["base"] + timedelta(hours=5)
+    scheduled = client.post(f"/api/v1/lawyer/consultations/{consultation['slot_id']}/schedule", headers=admin,
+                            json={"starts_at": agreed_at.isoformat()})
+    assert scheduled.status_code == 200, scheduled.text
+    assert datetime.fromisoformat(scheduled.json()["starts_at"]) == agreed_at
+    page = client.get(f"/api/v1/consultations/bookings/{token}", headers=bot).json()
+    assert page["status"] == "confirmed" and page["starts_at"] is not None
+
+
+def test_unpaid_time_agreed_booking_closes_instead_of_freeing(world) -> None:
+    client, bot = world["client"], world["bot"]
+    consultation = _book_agreed(world).json()["consultation"]
+    world["slots"].append(consultation["slot_id"])
+    db = SessionLocal()
+    try:
+        slot = db.get(ConsultationSlot, consultation["slot_id"])
+        slot.held_until = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+    assert client.get(f"/api/v1/consultations/bookings/{consultation['access_token']}", headers=bot).status_code == 404
+    # Сгоревшие брони закрываются при любом чтении расписания (оно сохраняет очистку).
+    free = client.get("/api/v1/consultations/slots", headers=bot).json()["slots"]
+    assert consultation["slot_id"] not in {s["slot_id"] for s in free}
+    db = SessionLocal()
+    try:
+        assert db.get(ConsultationSlot, consultation["slot_id"]).status == "cancelled"
+    finally:
+        db.close()
+    # Клиент может отменить новую бронь до оплаты — она тоже закрывается.
+    again = _book_agreed(world).json()["consultation"]
+    world["slots"].append(again["slot_id"])
+    assert client.post(f"/api/v1/consultations/bookings/{again['access_token']}/cancel", headers=bot).status_code == 200
+    db = SessionLocal()
+    try:
+        assert db.get(ConsultationSlot, again["slot_id"]).status == "cancelled"
+    finally:
+        db.close()

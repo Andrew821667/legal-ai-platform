@@ -21,14 +21,20 @@ const CHALLENGE_MODE = (process.env.NEXT_PUBLIC_LEAD_FORM_CHALLENGE_MODE || "off
  * Запись на консультацию: свободное время юриста → короткая заявка → бронь
  * на время оплаты → страница брони с QR. Заявка создаётся тем же путём, что
  * форма юрпомощи (/api/legal-intakes), с тем же антиспамом.
+ *
+ * «Оплатить сейчас, время согласуем» (решение владельца 01.10.2026): если
+ * подходящего времени в расписании нет, клиент оплачивает консультацию сразу,
+ * а юрист согласует с ним время. Раньше без свободного времени оплатить было
+ * нельзя — человека уводили в общую форму, и выбранный пакет терялся.
  */
+const AGREED = "agreed" as const;
 export default function ConsultationBooking() {
   const router = useRouter();
   const [slots, setSlots] = useState<FreeSlot[] | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [holdMinutes, setHoldMinutes] = useState(30);
   const [loadError, setLoadError] = useState("");
-  const [selected, setSelected] = useState<FreeSlot | null>(null);
+  const [selected, setSelected] = useState<FreeSlot | typeof AGREED | null>(null);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
   const [description, setDescription] = useState("");
@@ -89,7 +95,7 @@ export default function ConsultationBooking() {
           description,
           client_type: "unknown",
           legal_area: "other",
-          consultation_slot_id: selected.slot_id,
+          ...(selected === AGREED ? { consultation_unscheduled: true } : { consultation_slot_id: selected.slot_id }),
           source_context: "consultation_booking",
           consentAccepted: consent,
           offerAccepted,
@@ -133,17 +139,14 @@ export default function ConsultationBooking() {
       <section className="rounded-xl border border-slate-700 bg-slate-900 p-5 md:p-7">
         <div className="flex items-center gap-2 text-amber-300">
           <CalendarClock className="h-5 w-5" />
-          <h2 className="text-xl font-semibold text-white">Выберите время</h2>
+          <h2 className="text-xl font-semibold text-white">Время консультации</h2>
         </div>
         {loadError ? <p className="mt-4 text-sm text-red-300">{loadError}</p> : null}
         {slots === null && !loadError ? <p className="mt-4 text-sm text-slate-400">Загружаю расписание…</p> : null}
         {slots !== null && days.length === 0 ? (
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Свободного времени сейчас нет. Оставьте заявку в{" "}
-            <Link href="/legal-help#legal-help-form" className="text-amber-300 underline underline-offset-2">
-              форме юридической помощи
-            </Link>{" "}
-            — юрист предложит время сам.
+            Открытого времени в расписании сейчас нет — оплатите консультацию, и юрист согласует с вами удобное время
+            по телефону или в переписке.
           </p>
         ) : null}
         <div className="mt-5 space-y-4">
@@ -157,7 +160,7 @@ export default function ConsultationBooking() {
                     type="button"
                     onClick={() => setSelected(slot)}
                     className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                      selected?.slot_id === slot.slot_id
+                      selected !== AGREED && selected?.slot_id === slot.slot_id
                         ? "border-amber-400 bg-amber-500 text-slate-950"
                         : "border-slate-600 text-slate-100 hover:border-amber-400"
                     }`}
@@ -170,12 +173,25 @@ export default function ConsultationBooking() {
           ))}
         </div>
         {days.length ? <p className="mt-4 text-xs text-slate-400">Время московское.</p> : null}
+        {slots !== null ? (
+          <button
+            type="button"
+            onClick={() => setSelected(AGREED)}
+            className={`mt-5 rounded-lg border px-4 py-3 text-left text-sm font-semibold ${
+              selected === AGREED
+                ? "border-amber-400 bg-amber-500 text-slate-950"
+                : "border-slate-600 text-slate-100 hover:border-amber-400"
+            }`}
+          >
+            {days.length ? "Подходящего времени нет — " : ""}Оплатить сейчас, время согласуем
+          </button>
+        ) : null}
       </section>
 
       {selected ? (
         <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-5 md:p-7">
           <p className="text-lg font-semibold text-white">
-            {whenLabel(selected.starts_at)} · {selected.duration_min} минут
+            {selected === AGREED ? "Время согласуем с вами · до 60 минут" : `${whenLabel(selected.starts_at)} · ${selected.duration_min} минут`}
             {price !== null ? ` · ${formatRub(price)}` : ""}
           </p>
           <label className="block">
@@ -198,7 +214,7 @@ export default function ConsultationBooking() {
             <label className="block">
               <span className="text-sm text-slate-300">Контакт для связи</span>
               <input value={contact} onChange={(event) => setContact(event.target.value)} maxLength={255} required
-                placeholder="Телефон, email или @telegram"
+                placeholder="Телефон или @telegram"
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" />
             </label>
           </div>
@@ -240,11 +256,13 @@ export default function ConsultationBooking() {
           {notice ? <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-slate-100">{notice}</p> : null}
           <button type="submit" disabled={submitting}
             className="inline-flex rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-60">
-            {submitting ? "Записываю…" : "Записаться и перейти к оплате"}
+            {submitting ? "Записываю…" : selected === AGREED ? "Перейти к оплате" : "Записаться и перейти к оплате"}
           </button>
           <p className="text-xs leading-5 text-slate-400">
-            Время закрепляется за вами на {holdMinutes} минут для оплаты. Не указывайте в описании паспортные данные и
-            реквизиты карт.
+            {selected === AGREED
+              ? `Бронь на оплату действует ${holdMinutes} минут; время консультации юрист согласует с вами после оплаты.`
+              : `Время закрепляется за вами на ${holdMinutes} минут для оплаты.`}{" "}
+            Не указывайте в описании паспортные данные и реквизиты карт.
           </p>
         </form>
       ) : null}

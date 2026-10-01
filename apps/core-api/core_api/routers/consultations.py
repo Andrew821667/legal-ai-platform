@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -117,10 +117,11 @@ def claim(
         slot.held_until = None
         _audit(db, identity, slot, "consultation.claim")
         lead = db.get(Lead, slot.lead_id) if slot.lead_id else None
+        when = (consultations.when_text(slot) if slot.starts_at else "время не назначено — согласуйте с клиентом")
         queue_notice(
             db,
             f"consultation-claim:{slot.id}:{slot.code}",
-            f"Консультация {consultations.when_text(slot)}: клиент {lead.name if lead and lead.name else ''} "
+            f"Консультация ({when}): клиент {lead.name if lead and lead.name else ''} "
             f"сообщил об оплате {_rub(slot.price_minor)}, код {slot.code}. Сверьте поступление и подтвердите "
             "в рабочем месте («Задачи»).",
         )
@@ -156,6 +157,10 @@ class ReceiptIn(BaseModel):
     ref: str | None = Field(default=None, max_length=500)
 
 
+class ScheduleIn(BaseModel):
+    starts_at: datetime
+
+
 def _lawyer_slot(db: Session, slot_id: uuid.UUID) -> ConsultationSlot:
     slot = db.execute(select(ConsultationSlot).where(ConsultationSlot.id == slot_id).with_for_update()).scalar_one_or_none()
     if slot is None:
@@ -188,8 +193,9 @@ def lawyer_list(
         select(ConsultationSlot, Lead)
         .outerjoin(Lead, Lead.id == ConsultationSlot.lead_id)
         .where(ConsultationSlot.status != "cancelled")
-        .where(ConsultationSlot.starts_at >= now - timedelta(days=7))
-        .order_by(ConsultationSlot.starts_at)
+        # Брони без времени — всегда в списке и первыми: юристу назначить время.
+        .where(or_(ConsultationSlot.starts_at >= now - timedelta(days=7), ConsultationSlot.starts_at.is_(None)))
+        .order_by(ConsultationSlot.starts_at.asc().nulls_first())
         .limit(200)
     ).all()
     return {
@@ -276,14 +282,57 @@ def confirm(
                     kind="consultation",
                     token=token,
                     chat_id=lead.telegram_user_id,
-                    text=(f"Оплата получена — консультация подтверждена: {consultations.when_text(slot)}, "
-                          f"до {slot.duration_min} минут. Юрист свяжется с вами перед началом."),
+                    text=(
+                        f"Оплата получена — консультация подтверждена: {consultations.when_text(slot)}, "
+                        f"до {slot.duration_min} минут. Юрист свяжется с вами перед началом."
+                        if slot.starts_at else
+                        f"Оплата получена — консультация подтверждена, до {slot.duration_min} минут. "
+                        "Юрист свяжется с вами, чтобы согласовать удобное время."
+                    ),
                     retryable=True,
                     lead_id=lead.id,
                 )
                 delivered = "telegram"
             except Exception as exc:  # noqa: BLE001 — исход в журнале отправок, повторит фон
                 logger.warning("consultation notice failed: %s", telegram_delivery.safe_error(exc))
+                delivered = "queued"
+    return {**_row(slot, lead), "client_notified": delivered}
+
+
+@lawyer.post("/{slot_id}/schedule")
+def schedule(
+    slot_id: uuid.UUID,
+    body: ScheduleIn,
+    identity: ApiKeyIdentity = Depends(require_scopes(Scope.admin)),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Время, согласованное с клиентом (бронь «время согласуем») или перенос."""
+    slot = _lawyer_slot(db, slot_id)
+    if slot.status not in consultations.BOOKED:
+        raise HTTPException(status_code=409, detail="Consultation slot is not booked")
+    try:
+        consultations.schedule(db, slot, body.starts_at, consultations.now_utc())
+    except consultations.SlotUnavailable as exc:
+        raise HTTPException(status_code=409, detail="Consultation time is unavailable") from exc
+    _audit(db, identity, slot, "consultation.schedule")
+    db.commit()
+    lead = db.get(Lead, slot.lead_id) if slot.lead_id else None
+    delivered = "none"
+    if lead is not None and lead.telegram_user_id and slot.status == "confirmed":
+        token = telegram_delivery._client_token()
+        if token:
+            try:
+                telegram_delivery.send(
+                    kind="consultation",
+                    token=token,
+                    chat_id=lead.telegram_user_id,
+                    text=f"Время консультации: {consultations.when_text(slot)}, до {slot.duration_min} минут.",
+                    retryable=True,
+                    lead_id=lead.id,
+                )
+                delivered = "telegram"
+            except Exception as exc:  # noqa: BLE001 — исход в журнале отправок, повторит фон
+                logger.warning("consultation schedule notice failed: %s", telegram_delivery.safe_error(exc))
                 delivered = "queued"
     return {**_row(slot, lead), "client_notified": delivered}
 

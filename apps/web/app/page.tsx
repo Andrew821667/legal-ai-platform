@@ -125,7 +125,7 @@ export default function Home() {
               <span className="mt-1 block font-semibold text-white">
                 Консультация онлайн — {starterOffers.legal_consultation.price}
               </span>
-              <span className="mt-1 block text-sm text-slate-300">До 60 минут и письменный план. Время выбираете сами.</span>
+              <span className="mt-1 block text-sm text-slate-300">До 60 минут и письменный план. Время согласуем с вами.</span>
             </Link>
             <Link
               href={ROUTES.automationDiagnostic}

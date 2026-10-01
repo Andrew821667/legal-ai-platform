@@ -14,6 +14,11 @@
 Статусы: free → held (клиент выбрал, оплачивает) → claimed (сообщил об
 оплате) → confirmed (юрист увидел деньги). Неоплаченная бронь по истечении
 времени сама возвращается в free. cancelled — время закрыл юрист.
+
+«Оплатить сейчас, время согласуем» (решение владельца 01.10.2026): бронь без
+времени — starts_at пусто, юрист назначает время после разговора (schedule).
+Такая бронь при истечении или отмене не становится «свободным временем», а
+закрывается (cancelled): времени, которое можно отдать другому, у неё нет.
 """
 
 from __future__ import annotations
@@ -43,13 +48,21 @@ def now_utc() -> datetime:
 
 
 def release_expired(db: Session, now: datetime) -> int:
-    """Неоплаченные брони с истёкшим сроком — снова свободное время."""
-    return db.execute(
+    """Неоплаченные брони с истёкшим сроком — снова свободное время
+    (брони без времени просто закрываются)."""
+    expired = (ConsultationSlot.status == "held", ConsultationSlot.held_until < now)
+    released = db.execute(
         update(ConsultationSlot)
-        .where(ConsultationSlot.status == "held", ConsultationSlot.held_until < now)
+        .where(*expired, ConsultationSlot.starts_at.is_not(None))
         .values(status="free", lead_id=None, intake_id=None, price_minor=None, code=None, access_token=None,
                 held_until=None)
     ).rowcount
+    closed = db.execute(
+        update(ConsultationSlot)
+        .where(*expired, ConsultationSlot.starts_at.is_(None))
+        .values(status="cancelled", cancelled_at=now, access_token=None, held_until=None)
+    ).rowcount
+    return released + closed
 
 
 def _earliest(now: datetime) -> datetime:
@@ -92,24 +105,64 @@ def hold(db: Session, slot_id: uuid.UUID, lead: Lead, intake: LegalIntake, now: 
     return slot
 
 
+def hold_unscheduled(db: Session, lead: Lead, intake: LegalIntake, now: datetime) -> ConsultationSlot:
+    """Бронь без времени: клиент оплачивает сейчас, время юрист согласует с ним."""
+    settings = get_settings()
+    slot = ConsultationSlot(
+        starts_at=None,
+        duration_min=60,
+        status="held",
+        lead_id=lead.id,
+        intake_id=intake.id,
+        price_minor=settings.consultation_price_minor,
+        code=f"K-{secrets.token_hex(3).upper()}",
+        access_token=secrets.token_urlsafe(24),
+        held_until=now + timedelta(minutes=settings.consultation_hold_minutes),
+    )
+    db.add(slot)
+    db.flush()
+    return slot
+
+
+def schedule(db: Session, slot: ConsultationSlot, starts_at: datetime, now: datetime) -> None:
+    """Юрист назначил согласованное время. Занятое другой записью — нельзя."""
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=MOSCOW)
+    if starts_at <= now or starts_at > now + timedelta(days=MAX_DAYS_AHEAD):
+        raise SlotUnavailable
+    taken = db.scalar(
+        select(func.count()).select_from(ConsultationSlot)
+        .where(ConsultationSlot.starts_at == starts_at, ConsultationSlot.status != "cancelled",
+               ConsultationSlot.id != slot.id)
+    )
+    if taken:
+        raise SlotUnavailable
+    slot.starts_at = starts_at
+
+
 def local(value: datetime) -> datetime:
     return value.astimezone(MOSCOW)
 
 
 def when_text(slot: ConsultationSlot) -> str:
+    if slot.starts_at is None:
+        return "время согласуем с вами"
     start = local(slot.starts_at)
     return f"{start:%d.%m.%Y} в {start:%H:%M} (МСК)"
 
 
 def purpose(slot: ConsultationSlot) -> str:
     """Назначение платежа: по коду юрист находит перевод в выписке."""
+    if slot.starts_at is None:
+        return f"Консультация юриста, код {slot.code}. НДС не облагается"
     return f"Консультация {local(slot.starts_at):%d.%m.%Y %H:%M}, код {slot.code}. НДС не облагается"
 
 
 def booking(slot: ConsultationSlot) -> dict:
     return {
         "slot_id": str(slot.id),
-        "starts_at": slot.starts_at.isoformat(),
+        # None — время согласуем с клиентом (бронь без времени).
+        "starts_at": slot.starts_at.isoformat() if slot.starts_at else None,
         "duration_min": slot.duration_min,
         "status": slot.status,
         "price_minor": slot.price_minor,
@@ -130,7 +183,14 @@ def by_token(db: Session, token: str, *, lock: bool = False) -> ConsultationSlot
 
 
 def release(slot: ConsultationSlot) -> None:
-    """Бронь снята — время снова свободно (если оно ещё впереди)."""
+    """Бронь снята — время снова свободно (если оно ещё впереди).
+    Бронь без времени просто закрывается: отдавать некого время."""
+    if slot.starts_at is None:
+        slot.status = "cancelled"
+        slot.cancelled_at = now_utc()
+        slot.access_token = None
+        slot.held_until = None
+        return
     slot.status = "free"
     slot.lead_id = slot.intake_id = None
     slot.price_minor = None

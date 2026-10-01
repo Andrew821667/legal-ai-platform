@@ -266,6 +266,8 @@ class LegalIntakeCreate(BaseModel):
     # Запись на платную консультацию: слот бронируется в той же транзакции,
     # что и обращение, — занятое время не оставит «висящего» клиента.
     consultation_slot_id: uuid.UUID | None = None
+    # Оплатить консультацию сейчас, время согласовать (бронь без времени).
+    consultation_unscheduled: bool = False
 
 
     @model_validator(mode="after")

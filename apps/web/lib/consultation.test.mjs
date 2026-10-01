@@ -43,3 +43,13 @@ test("статус брони и остаток времени", () => {
   assert.match(statusText({ ...held, status: "confirmed" }, now), /подтверждена/);
   assert.ok(BOOKING_TOKEN.test("a".repeat(32)) && !BOOKING_TOKEN.test("../x"));
 });
+
+test("бронь без времени: «согласуем» вместо даты и свои тексты статуса", async () => {
+  const { bookingWhen, statusText } = await import("./consultation.ts");
+  assert.equal(bookingWhen(null), "Время согласуем с вами");
+  assert.match(bookingWhen("2026-10-05T12:00:00+03:00"), /12:00 \(МСК\)/);
+  const now = new Date("2026-10-01T10:00:00Z");
+  const base = { slot_id: "s", starts_at: null, duration_min: 60, price_minor: 490000, code: "K-1", held_until: "2026-10-01T10:20:00Z" };
+  assert.match(statusText({ ...base, status: "held" }, now), /Бронь действует ещё 20 мин/);
+  assert.match(statusText({ ...base, status: "confirmed" }, now), /согласует время/);
+});

@@ -58,7 +58,7 @@ async def prompt_legal_help_client_type(message, context: ContextTypes.DEFAULT_T
     await utils.safe_reply_text(
         message,
         "Юридическая помощь\n\nКому нужна помощь?\n\n"
-        "Нужна только консультация? Выберите удобное время и оплатите сразу — кнопка внизу.",
+        "Нужна только консультация? Оплатите её сразу на сайте — время согласуем с вами. Кнопка внизу.",
         reply_markup=legal_help_client_type_markup(),
         action="legal_help_choose_client_type",
     )
