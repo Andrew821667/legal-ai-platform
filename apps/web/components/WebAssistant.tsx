@@ -193,7 +193,7 @@ export default function WebAssistant() {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">AI Verdict</p>
           <p className="truncate text-xs text-slate-300">
-            {signedInName ? `Вы вошли как ${signedInName} — вижу ваши дела` : "Профильный ассистент"}
+            {signedInName ? `Вы вошли как ${signedInName} — вижу ваши дела` : "ИИ-ассистент, не юрист"}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -290,7 +290,11 @@ export default function WebAssistant() {
           </button>
         </div>
         <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="text-[11px] leading-4 text-slate-600">Не отправляйте документы и чувствительные данные.</p>
+          <p className="text-[11px] leading-4 text-slate-600">
+            Отвечает ИИ: ответы информационные и не являются юридической консультацией.
+            Не отправляйте документы и чувствительные данные.{" "}
+            <a href="/ai-policy" className="underline hover:text-slate-900">Подробнее</a>
+          </p>
           <a
             href="/#lead-form"
             className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-800 hover:text-amber-950 focus-visible:outline-2 focus-visible:outline-amber-700"

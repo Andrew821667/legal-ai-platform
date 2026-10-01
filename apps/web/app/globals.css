@@ -414,6 +414,16 @@ body {
   color: #b45309 !important;
 }
 
+/* Кнопка «Юрист · 4 900 ₽» и её мобильный вариант: светло-жёлтый текст на
+   белой шапке давал контраст около 1,5:1 — на телефоне кнопку не было видно. */
+.site-header-light-ops [class*="text-amber-300"] {
+  color: #92400e !important;
+}
+
+.site-header-light-ops [class*="border-amber-500"] {
+  border-color: #b45309 !important;
+}
+
 .site-header-light-ops [class*="bg-slate-800"] {
   background-color: #ffffff !important;
   border-color: #7c8da3 !important;

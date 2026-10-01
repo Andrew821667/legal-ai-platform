@@ -399,7 +399,7 @@ export default function LegalAiPage() {
           <p className="mt-7 max-w-4xl text-sm leading-6 text-slate-400">
             Для проектов в России отдельно оцениваются требования к обработке персональных данных и защите
             информации. Базовые тексты для проверки требований: {" "}
-            <a href="https://ips.pravo.gov.ru/api/ips/legislation/document?baseid=None&hash=98490812b3409e2a8d78a11ca9010f434ea3d9250a11dbbdb78690cd5551bdd6" className="text-sky-300 underline hover:text-sky-200">
+            <a href="https://www.consultant.ru/document/cons_doc_LAW_61801/" className="text-sky-300 underline hover:text-sky-200">
               Федеральный закон № 152-ФЗ
             </a>{" "}
             и {" "}

@@ -90,7 +90,7 @@ export const metadata: Metadata = {
       "mTUEyeu5VGZOmD8i8uGmxG-XhDHU6MacydZDAWry8U0",
       "_SgjUQ3vTWakJb8xf1ej6p1M_mC8JIsmuuQs3e-aFOQ",
     ],
-    yandex: "2559d6caccd0ac2b9",
+    yandex: "2559d6cacd0ac2b9",
     other: {
       "msvalidate.01": "CD03C5F5623FD1B0202D61D79DA9745E",
     },

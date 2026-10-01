@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Личный кабинет | AI Verdict",
+  title: "Личный кабинет",
   description: "Ваши обращения, договоры, акты и NDA.",
   // Раздел не для поисковиков: он показывает персональные данные клиента.
   robots: { index: false, follow: false, nocache: true },

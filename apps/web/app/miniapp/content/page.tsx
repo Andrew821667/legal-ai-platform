@@ -6,7 +6,7 @@ import { listPublishedAiLawComments } from "@/lib/aiLawEditorialStore";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Контент Mini App | AI Verdict",
+  title: "Контент Mini App",
   description: "Подборка материалов AI Verdict для юристов, бизнеса и legal ops внутри Mini App.",
   alternates: {
     canonical: "/miniapp/content",
