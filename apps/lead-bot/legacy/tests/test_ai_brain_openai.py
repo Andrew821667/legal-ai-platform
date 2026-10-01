@@ -411,7 +411,7 @@ async def test_generate_response_stream_includes_rag_context(monkeypatch: pytest
     brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
 
     monkeypatch.setattr(
-        ai_brain_module, "_rag_context_for", lambda history: "# Похожие удачные диалоги\nПример 1..."
+        ai_brain_module, "_rag_context_for", lambda history, *_: "# Похожие удачные диалоги\nПример 1..."
     )
 
     result = "".join(
@@ -436,7 +436,7 @@ async def test_generate_response_stream_without_rag_hits_does_not_add_system_mes
     brain = _make_brain(monkeypatch)
     calls: list[dict[str, Any]] = []
     brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
-    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history: "")
+    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history, *_: "")
 
     async for _ in brain.generate_response_stream([{"role": "user", "message": "Привет"}]):
         pass
@@ -454,11 +454,11 @@ async def test_company_knowledge_context_is_appended_after_rag(monkeypatch: pyte
     calls: list[dict[str, Any]] = []
     brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
 
-    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history: "# Похожие удачные диалоги\nПример")
+    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history, *_: "# Похожие удачные диалоги\nПример")
     monkeypatch.setattr(
         ai_brain_module,
         "_company_knowledge_context_for",
-        lambda history: "# База знаний компании\n- Проверка договоров: ...",
+        lambda history, *_: "# База знаний компании\n- Проверка договоров: ...",
     )
 
     async for _ in brain.generate_response_stream([{"role": "user", "message": "Сколько стоит проверка договоров?"}]):
@@ -476,8 +476,8 @@ async def test_no_company_knowledge_hit_adds_nothing(monkeypatch: pytest.MonkeyP
     brain = _make_brain(monkeypatch)
     calls: list[dict[str, Any]] = []
     brain.async_client = _FakeClient(_FakeAsyncStreamingCompletions("Ответ", calls))
-    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history: "")
-    monkeypatch.setattr(ai_brain_module, "_company_knowledge_context_for", lambda history: "")
+    monkeypatch.setattr(ai_brain_module, "_rag_context_for", lambda history, *_: "")
+    monkeypatch.setattr(ai_brain_module, "_company_knowledge_context_for", lambda history, *_: "")
 
     async for _ in brain.generate_response_stream([{"role": "user", "message": "Привет"}]):
         pass
@@ -496,6 +496,43 @@ def test_company_knowledge_context_helper_delegates_to_module(monkeypatch: pytes
     )
 
     assert result == "# База знаний компании\nпо запросу: Сколько стоит проверка договоров?"
+
+
+def test_company_knowledge_query_is_masked_before_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Эмбеддинги считает OpenAI — запрос уходит туда уже без телефона, почты и имени.
+    seen: dict[str, str] = {}
+
+    def _build(query):
+        seen["query"] = query
+        return ""
+
+    monkeypatch.setattr(ai_brain_module.company_knowledge, "build_context", _build)
+
+    ai_brain_module._company_knowledge_context_for(
+        [{"role": "user", "message": "Я Аркадий, звоните +7 916 123-45-67 или arkady@example.ru, нужен договор"}],
+        ("Аркадий",),
+    )
+
+    assert "+7 916" not in seen["query"]
+    assert "arkady@example.ru" not in seen["query"]
+    assert "Аркадий" not in seen["query"]
+    assert "нужен договор" in seen["query"]
+
+
+def test_rag_query_is_masked_before_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ai_brain_module.config, "RAG_SIMILAR_DIALOGS_ENABLED", True, raising=False)
+    monkeypatch.setattr(ai_brain_module.database.db, "get_successful_conversations", lambda limit=30: [{"id": 1}])
+    seen: dict[str, str] = {}
+
+    def _find(*, query, **kwargs):
+        seen["query"] = query
+        return []
+
+    monkeypatch.setattr(ai_brain_module.knowledge_engine.knowledge_engine, "find_similar_conversations", _find)
+
+    ai_brain_module._rag_context_for([{"role": "user", "message": "Пишите на ivan@example.ru по договору поставки"}])
+
+    assert "ivan@example.ru" not in seen["query"]
 
 
 def test_company_knowledge_context_helper_swallows_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -149,10 +149,15 @@ def contract_ai_url() -> str:
     return url if url.startswith(("http://", "https://")) else f"https://{url.lstrip('/')}"
 
 
+def contract_ai_demo_url() -> str:
+    """Contract AI — персональный демо-доступ по заявке (решение владельца 01.10)."""
+    return f"{contract_ai_url().rstrip('/')}/demo"
+
+
 # Под материалами — следующий шаг: проверить свой договор в Contract AI (бот
 # договоры не принимает — решение владельца) или консультация юриста.
 MAGNET_FOLLOWUP_MENU = [
-    [InlineKeyboardButton("🧪 Проверить договор в Contract AI", url=contract_ai_url())],
+    [InlineKeyboardButton("🧪 Contract AI — заявка на демо", url=contract_ai_demo_url())],
     [InlineKeyboardButton("📞 Консультация юриста — 4 900 ₽", callback_data="magnet_consultation")],
 ]
 

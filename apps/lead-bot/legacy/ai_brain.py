@@ -162,7 +162,21 @@ def _last_user_message(limited_history: List[Dict[str, str]]) -> Optional[str]:
     )
 
 
-def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
+def _masked_query(limited_history: List[Dict[str, str]], known_names: tuple[str, ...] = ()) -> Optional[str]:
+    """Последнее сообщение человека для поиска по эмбеддингам — уже обезличенное.
+
+    Эмбеддинги считает OpenAI (серверы за рубежом), поэтому текст уходит туда
+    в том же виде, что и в чат-модель: с метками вместо телефонов, почты,
+    имён и номеров документов. Смысл для поиска похожих материалов метки не
+    меняют."""
+    query = _last_user_message(limited_history)
+    if not query:
+        return query
+    masker = _new_masker(known_names)
+    return masker.mask(query) if masker is not None else query
+
+
+def _rag_context_for(limited_history: List[Dict[str, str]], known_names: tuple[str, ...] = ()) -> str:
     """Похожие удачные диалоги для промпта — общий для generate_response и
     generate_response_stream. Синхронный (клиент эмбеддингов в
     knowledge_engine.py — блокирующий OpenAI SDK); из async-кода зовите через
@@ -179,7 +193,7 @@ def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
     if not getattr(config, "RAG_SIMILAR_DIALOGS_ENABLED", False):
         return ""
     try:
-        last_user_message = _last_user_message(limited_history)
+        last_user_message = _masked_query(limited_history, known_names)
         if not last_user_message or len(last_user_message) <= 10:
             return ""
 
@@ -203,12 +217,13 @@ def _rag_context_for(limited_history: List[Dict[str, str]]) -> str:
         return ""
 
 
-def _company_knowledge_context_for(limited_history: List[Dict[str, str]]) -> str:
+def _company_knowledge_context_for(limited_history: List[Dict[str, str]], known_names: tuple[str, ...] = ()) -> str:
     """Материалы компании (услуги, FAQ, сценарии, методология) для промпта —
     company_knowledge.py. Тот же синхронный/asyncio.to_thread контракт, что
-    у _rag_context_for; пусто — не ошибка, отвечаем без этого блока."""
+    у _rag_context_for; пусто — не ошибка, отвечаем без этого блока.
+    Запрос к эмбеддингам — обезличенный (_masked_query)."""
     try:
-        return company_knowledge.build_context(_last_user_message(limited_history))
+        return company_knowledge.build_context(_masked_query(limited_history, known_names))
     except Exception as e:
         logger.warning(f"Company knowledge search failed (non-critical): {e}")
         return ""
@@ -360,13 +375,13 @@ class AIBrain:
             # RAG: похожие удачные диалоги — тот же поиск, что и в generate_response,
             # но в отдельном потоке: клиент эмбеддингов синхронный, а это — async-путь,
             # блокировать event loop сетевым вызовом на каждое сообщение нельзя.
-            rag_context = await asyncio.to_thread(_rag_context_for, limited_history)
+            rag_context = await asyncio.to_thread(_rag_context_for, limited_history, known_names)
             if rag_context:
                 messages.append({"role": "system", "content": rag_context})
 
             # База знаний компании (услуги, FAQ, сценарии, методология) —
             # тот же asyncio.to_thread-контракт, отдельный блок промпта.
-            knowledge_context = await asyncio.to_thread(_company_knowledge_context_for, limited_history)
+            knowledge_context = await asyncio.to_thread(_company_knowledge_context_for, limited_history, known_names)
             if knowledge_context:
                 messages.append({"role": "system", "content": knowledge_context})
 

@@ -499,7 +499,7 @@ def format_lead_notification(lead_data: dict, user_data: dict) -> str:
 
     if lead_data.get('lead_magnet_type'):
         magnet_types = {
-            'consultation': 'Консультация 30 мин',
+            'consultation': 'Консультация юриста — 4 900 ₽',
             'checklist': 'Чек-лист по договорам',
             'demo_analysis': 'Демо-анализ договора',
             'demo': 'Демо-анализ договора',

@@ -19,6 +19,7 @@ from telegram.ext import ContextTypes
 from .markup import (
     documents_markup as _documents_markup,
     main_menu_markup as _main_menu_markup,
+    marketing_consent_markup as _marketing_consent_markup,
     pdn_consent_markup as _pdn_consent_markup,
     profile_panel_markup as _profile_panel_markup,
     quick_nav_markup_for as _quick_nav_markup_for,
@@ -131,7 +132,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             client_too=is_extra_admin(config, user.id),
         )
 
-        if not start_payload and not needs_pdn_consent:
+        async def send_start_entry() -> None:
             await utils.safe_reply_html(
                 update.message,
                 content.build_start_entry_text(
@@ -145,14 +146,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info("Start entry sent on /start for user %s", user.id)
 
+        if not start_payload and not needs_pdn_consent:
+            await send_start_entry()
+
         user_data = database.db.get_local_user_by_id(user_id)
         if user_data and not needs_pdn_consent:
-            await process_pending_start_payload(
+            handled = await process_pending_start_payload(
                 message=update.message,
                 context=context,
                 user_data=user_data,
                 user=user,
             )
+            if start_payload and not handled:
+                # Метка без своего сценария (ссылки из подвала сайта, с главной,
+                # из мини-аппа: web_footer_social, miniapp_home_task…) — обычное
+                # приветствие. Раньше вернувшийся человек не получал ничего.
+                logger.info("Start label without scenario %r for user %s", start_payload[:64], user.id)
+                await send_start_entry()
         elif needs_pdn_consent:
             consent_text = _pdn_consent_prompt_text()
             if _CHANNEL_START_PAYLOAD_RE.match(start_payload):
@@ -168,7 +178,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif _CONTRACT_START_PAYLOAD_RE.match(start_payload):
                 consent_text = (
                     f"{consent_text}\n\n"
-                    "После подтверждения согласия сразу переведу вас в сервис проверки договоров Contract_AI_System."
+                    "После подтверждения согласия сразу открою сервис проверки договоров Contract AI."
                 )
             elif start_payload == "link":
                 consent_text = (
@@ -296,14 +306,14 @@ async def marketing_consent_command(update: Update, context: ContextTypes.DEFAUL
     _ = context
     user = update.effective_user
     user_data = database.db.get_local_user_by_telegram_id(user.id)
+    granted = bool(user_data and database.db.get_user_consent_state(user_data["id"]).get("marketing_consent"))
+    # Показ текста — не согласие: оно даётся только отдельной кнопкой.
     await utils.safe_reply_html(
         update.message,
-        content.marketing_consent_text(),
-        reply_markup=_web_open_markup("marketing_consent"),
+        content.marketing_consent_text(granted),
+        reply_markup=_marketing_consent_markup(granted),
         action="marketing_consent_command",
     )
-    if user_data:
-        database.db.set_user_marketing_consent(user_data["id"], True)
 
 
 async def transborder_consent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -310,9 +310,9 @@ async def handle_contract_start_payload(
         await utils.safe_reply_text(
             message,
             (
-                "🖥 Запрос на доступ к модулю Contract_AI_System принят.\n\n"
-                "Это отдельный сервис для проверки договоров. "
-                "Оставьте контакт, и мы согласуем следующий шаг и формат доступа."
+                "🖥 Запрос на доступ к Contract AI принят.\n\n"
+                "Это отдельный сервис проверки договоров; доступ — персональный демо по заявке. "
+                "Оставьте контакт, и мы согласуем доступ."
             ),
             reply_markup=consultation_contact_markup(),
             action="contract_start_cabinet",

@@ -70,6 +70,28 @@ def web_open_markup(target: str) -> InlineKeyboardMarkup:
     )
 
 
+def marketing_consent_markup(granted: bool) -> InlineKeyboardMarkup:
+    """Согласие на рассылки — только отдельной кнопкой (ч. 1 ст. 18 38-ФЗ).
+    Раньше оно ставилось уже при просмотре текста согласия."""
+    choice = (
+        InlineKeyboardButton("✖ Отказаться от рассылок", callback_data="doc_marketing_no")
+        if granted
+        else InlineKeyboardButton("✅ Согласен получать рассылки", callback_data="doc_marketing_yes")
+    )
+    return InlineKeyboardMarkup(
+        [
+            [choice],
+            [
+                InlineKeyboardButton(
+                    WEB_OPEN_LABELS.get("marketing_consent", "Открыть веб-страницу"),
+                    callback_data="open_web:marketing_consent",
+                )
+            ],
+            [InlineKeyboardButton("⬅️ К списку документов", callback_data="doc_menu")],
+        ]
+    )
+
+
 def web_url_markup(target: str, url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
