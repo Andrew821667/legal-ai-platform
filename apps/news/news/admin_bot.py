@@ -5508,6 +5508,7 @@ class NewsAdminBot:
             activities["news-generate"],
             actions={"generate_slot_done", "generate_slot_failed"},
         )
+        fact_guard = ((generation_event or {}).get("details") or {}).get("fact_guard")
         if generation_event is None:
             generation_state = "нет завершенного цикла за 24 часа"
         else:
@@ -5538,6 +5539,7 @@ class NewsAdminBot:
             next_publish = "не запланирована"
 
         return DailyReportSnapshot(
+            fact_guard=fact_guard if isinstance(fact_guard, dict) else None,
             now_local=now_utc.astimezone(ZoneInfo(settings.tz_name)),
             source_health=source_health,
             telegram_channels=len(channels),

@@ -36,6 +36,8 @@ class DailyReportSnapshot:
     publishing_count: int
     next_publish: str
     generation_state: str
+    # Сверка фактов постов с источником за 7 дней (news.source_facts.journal_summary).
+    fact_guard: Mapping[str, Any] | None = None
 
 
 def daily_report_due(
@@ -130,6 +132,24 @@ def event_datetime(row: Mapping[str, Any] | None) -> datetime | None:
     return _event_datetime(row or {})
 
 
+def fact_guard_lines(summary: Mapping[str, Any] | None) -> str:
+    """Ревизия материалов: сколько постов прошли сверку фактов с источником."""
+    if not summary:
+        return "• Сверка фактов с источником: данных пока нет\n"
+    days = summary.get("days") or 7
+    checked = int(summary.get("checked") or 0)
+    repaired = int(summary.get("repaired") or 0)
+    rejected = int(summary.get("rejected") or 0)
+    line = (
+        f"• Сверка фактов за {days} дн.: подтверждено {checked}, исправлено {repaired}, "
+        f"не допущено {rejected}\n"
+    )
+    titles = [str(title) for title in (summary.get("rejected_titles") or []) if title]
+    if titles:
+        line += "".join(f"  — не допущен: {title}\n" for title in titles[:3])
+    return line
+
+
 def build_daily_report_text(snapshot: DailyReportSnapshot) -> str:
     source = snapshot.source_health
     reserve = snapshot.ready_count + snapshot.scheduled_count
@@ -190,7 +210,8 @@ def build_daily_report_text(snapshot: DailyReportSnapshot) -> str:
         "Контент за 24 часа\n"
         f"• Опубликовано: {snapshot.published_24h}\n"
         f"• Ошибок публикации: {snapshot.failed_24h}\n"
-        f"• Последняя генерация: {snapshot.generation_state}\n\n"
+        f"• Последняя генерация: {snapshot.generation_state}\n"
+        f"{fact_guard_lines(snapshot.fact_guard)}\n"
         "Очередь\n"
         f"• Запас: {reserve} (готовых {snapshot.ready_count}, запланированных {snapshot.scheduled_count})\n"
         f"• На проверке: {snapshot.review_count}\n"

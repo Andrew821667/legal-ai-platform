@@ -589,6 +589,86 @@ def test_generate_post_applies_fact_check_correction_for_subject_mixup() -> None
     assert "арендуют жилье" not in result["text"]
 
 
+_GUARD_DRAFT = """{"is_relevant": true, "reject_reason": "", "title": "Ипотечные квартиры и аренда", "rubric": "market", "lead": "Лид о рынке ипотеки и аренды.", "what_happened": "Доля сдаваемых ипотечных квартир достигла 40-45%.", "business_effect": "Это влияет на рынок аренды и на поведение инвесторов в жилую недвижимость.", "legal_risks": "Нужно проверить раскрытие условий аренды.", "next_steps": "Проверить продукт; сверить риски", "conclusion": "Вывод о рынке.", "hashtags": ["#AIVerdict"]}"""
+_GUARD_BODY = (
+    "<b>Ипотечные квартиры и аренда</b>\\n\\nЛид о рынке ипотеки и аренды, где поведение заемщиков уже влияет на структуру предложения и на логику инвестиционных решений.\\n\\n"
+    "<b>Что произошло</b>\\nДоля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье, чтобы покрывать кредитные платежи, а не сами снимают его. Это меняет картину предложения и поведение собственников на рынке.{extra}\\n\\n"
+    "<b>Почему это важно</b>\\nДля рынка это сигнал, что ипотечное жилье все чаще рассматривается как денежный поток, а не только как объект проживания. Это влияет на стратегию инвесторов, модель спроса и устойчивость арендных ставок.\\n\\n"
+    "<b>Что это значит для рынка</b>\\nЮристам и продуктовым командам важно смотреть на договорную модель аренды, режим раскрытия условий, риски по просрочке и то, как кредитные ограничения влияют на фактическое использование объекта. Ошибка в трактовке роли собственника здесь меняет весь смысл новости.\\n\\n"
+    "<b>Источник</b>: ссылка\\n#AIVerdict #AI #LegalTech"
+)
+
+
+def _guard_writer(extra_responses: list[str]) -> LLMNewsWriter:
+    invented = _GUARD_BODY.format(extra=" С 1 апреля 2027 года действует закон 245-ФЗ.")
+    writer = LLMNewsWriter.__new__(LLMNewsWriter)
+    writer.client = _SequenceFakeClient(
+        [_GUARD_DRAFT, '{"approved": true, "reason": "", "title": "Ипотечные квартиры и аренда", "text": "' + invented + '"}', *extra_responses]
+    )
+    writer.model = "fake"
+    writer._use_max_tokens_param = True
+    return writer
+
+
+def _guard_article() -> ArticleCandidate:
+    return ArticleCandidate(
+        source_url="https://example.com/feed",
+        article_url="https://example.com/article",
+        title="Ипотечные квартиры и аренда",
+        summary="Доля сдаваемых ипотечных квартир достигла 40-45%. Многие заемщики сдают жилье для покрытия кредитных платежей.",
+        published_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+    )
+
+
+def test_source_fact_guard_strips_invented_law_and_date() -> None:
+    from news import source_facts
+
+    source_facts._journal.clear()
+    clean = _GUARD_BODY.format(extra="")
+    writer = _guard_writer(['{"title": "Ипотечные квартиры и аренда", "text": "' + clean + '"}'])
+
+    result = writer.generate_post(
+        _guard_article(), [], format_type="daily", cta_type="soft", pillar="market",
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=UTC),
+    )
+
+    assert result is not None
+    assert "245-ФЗ" not in result["text"] and "2027" not in result["text"]
+    assert source_facts.journal_summary()["repaired"] == 1
+
+
+def test_source_fact_guard_rejects_post_when_invention_stays() -> None:
+    from news import source_facts
+
+    source_facts._journal.clear()
+    still = _GUARD_BODY.format(extra=" С 1 апреля 2027 года действует закон 245-ФЗ.")
+    writer = _guard_writer(['{"title": "Ипотечные квартиры и аренда", "text": "' + still + '"}'])
+
+    result = writer.generate_post(
+        _guard_article(), [], format_type="daily", cta_type="soft", pillar="market",
+        target_publish_at=datetime(2026, 3, 24, 18, 0, tzinfo=UTC),
+    )
+
+    assert result is None
+    assert source_facts.journal_summary()["rejected"] == 1
+
+
+def test_ru_law_news_gets_hint_without_ai_angles() -> None:
+    article = ArticleCandidate(
+        source_url="https://publication.pravo.gov.ru",
+        article_url="https://publication.pravo.gov.ru/document/1",
+        title="Подписан федеральный закон об изменении порядка аренды жилья",
+        summary="Федеральный закон вносит изменения в Гражданский кодекс: арендодатели и граждане обязаны регистрировать договор.",
+        published_at=datetime(2026, 9, 24, 8, 0, tzinfo=UTC),
+    )
+    from news.pipeline import is_ru_law_candidate
+
+    assert is_ru_law_candidate(article)
+    hint = LLMNewsWriter._infer_legal_focus_hint(article, "market")
+    # Новость про аренду: без навязанных SLA, поставщиков и AI Act.
+    assert "права РФ" in hint and "Не упоминай ИИ, AI Act, SLA" in hint
+
+
 def test_quality_gate_rejects_weak_daily_third_block() -> None:
     text = (
         "<b>360 Business Law расширяет AI-сервис проверки договоров</b>\n\n"

@@ -18,7 +18,8 @@ from news.competitor_policy import (
     competitor_mentions,
     competitor_policy_failure_reason,
 )
-from news.pipeline import ArticleCandidate, RAGExample, normalize_post_text
+from news import source_facts
+from news.pipeline import ArticleCandidate, RAGExample, is_ru_law_candidate, normalize_post_text
 from news.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -449,15 +450,17 @@ _CALENDAR_WINDOW_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
     (re.compile(r"до\s+конца\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)", re.IGNORECASE), 25),
 )
 _FACT_CHECK_SYSTEM_PROMPT = (
-    "Ты выпускающий редактор Telegram-канала по Legal AI. "
-    "Проверяешь уже написанный HTML-пост перед тем, как он попадет в review.\n"
+    "Ты выпускающий редактор Telegram-канала AI Verdict (право РФ, автоматизация, ИИ). "
+    "Проверяешь уже написанный HTML-пост перед публикацией: канал публикует его без ручной проверки.\n"
     "1) Не добавляй новых фактов.\n"
     "2) Исправляй перепутанные роли и субъекты действия: кто сдает, кто арендует, кто покупает, кто продает, кто подал иск, кто ответчик, кто кредитор, кто заемщик.\n"
     "3) Дата итогового поста важнее исходной временной формулировки. Если в тексте остались устаревшие прогнозы, near-term ожидания или дедлайны, перепиши их в нейтральный актуальный вид или убери.\n"
     "4) Для weekly_review нельзя оставлять устаревшие прогнозы как будто они еще впереди.\n"
     "5) Опрос, исследование или маркетинговый материал поставщика не доказывает, что читателю нужно покупать именно этот класс решений. Убирай категоричные закупочные рекомендации; оставляй сравнение вариантов, пилот и проверку ограничений выборки.\n"
     "6) Сохраняй HTML-разметку Telegram и заголовки блоков.\n"
-    "7) Верни строго JSON: "
+    "7) Сверь с источником каждое число, сумму, процент, дату, номер закона, акта или статьи и дату вступления в силу. "
+    "Чего нет в источнике — удали или перепиши без конкретики; если без этого пост теряет смысл, верни approved=false и причину.\n"
+    "8) Верни строго JSON: "
     '{"approved": true, "reason": "", "title": "исправленный заголовок", "text": "исправленный HTML-пост"}'
 )
 _FALLBACK_SUMMARY_META_PREFIXES = (
@@ -472,6 +475,14 @@ _WEEKLY_META_PREFIXES = (
     "сигналы недели",
     "ключевые сигналы недели",
     "обзор недели по legal ai",
+)
+# Новость права РФ: комментарий — о самом изменении, без натянутого ИИ.
+# Раньше подсказки по словам «договор» и «суд» добавляли к новостям об аренде
+# или наследстве абзац про SLA, поставщиков и AI Act.
+_RU_LAW_LEGAL_HINT = (
+    "Это новость права РФ. Юридический блок: кого касается изменение, с какой даты, что сделать читателю. "
+    "Номера актов, статей, даты и суммы — только из источника. Не упоминай ИИ, AI Act, SLA, поставщиков "
+    "и Legal AI, если их нет в источнике."
 )
 _RUBRIC_LEGAL_TEMPLATE_HINTS = {
     "privacy": (
@@ -1449,6 +1460,8 @@ class LLMNewsWriter:
 
     @classmethod
     def _infer_legal_focus_hint(cls, article: ArticleCandidate, pillar: str) -> str:
+        if is_ru_law_candidate(article):
+            return _RU_LAW_LEGAL_HINT
         haystack = " ".join(
             part for part in (article.title or "", article.summary or "", article.article_url or "") if part
         ).lower()
@@ -2150,6 +2163,109 @@ class LLMNewsWriter:
         target_publish_at: datetime | None = None,
         intelligent_footer_enabled: bool = True,
     ) -> dict[str, str] | None:
+        """Пост по статье — только если его «жёсткие» факты есть в источнике.
+
+        Канал публикует без ручной проверки (решение владельца 01.10.2026),
+        поэтому после всех правок модели номера законов и статей, даты и суммы
+        сверяются с источником кодом (news.source_facts). Неподтверждённое
+        модель один раз убирает; не вышло — пост не создаётся."""
+        draft = self._generate_post_draft(
+            article,
+            rag_examples,
+            format_type=format_type,
+            cta_type=cta_type,
+            pillar=pillar,
+            negative_feedback_context=negative_feedback_context,
+            target_publish_at=target_publish_at,
+            intelligent_footer_enabled=intelligent_footer_enabled,
+        )
+        if draft is None:
+            return None
+        return self._enforce_source_facts(article, draft, format_type=format_type)
+
+    def _enforce_source_facts(
+        self,
+        article: ArticleCandidate,
+        draft: dict[str, str],
+        *,
+        format_type: str,
+    ) -> dict[str, str] | None:
+        source_text = f"{article.title}\n{article.summary}"
+        check_dates = format_type not in {"weekly_review", "digest"}
+        title, text = draft.get("title") or "", draft.get("text") or ""
+        unsupported = source_facts.unsupported_facts(title, text, source_text, check_dates=check_dates)
+        if not unsupported:
+            source_facts.record("checked", title)
+            return draft
+        try:
+            title, text = self._strip_unsupported_facts(
+                title=title, text=text, unsupported=unsupported, format_type=format_type
+            )
+        except Exception as exc:
+            logger.warning("llm_post_source_fact_repair_failed", extra={"title": title[:80], "error": str(exc)[:200]})
+        still = source_facts.unsupported_facts(title, text, source_text, check_dates=check_dates)
+        if still or not self._passes_quality_gate(text, format_type):
+            source_facts.record("rejected", draft.get("title") or title)
+            logger.warning(
+                "llm_post_rejected_by_source_fact_guard",
+                extra={
+                    "title": (draft.get("title") or "")[:80],
+                    "article_url": article.article_url,
+                    "format_type": format_type,
+                    "unsupported": (still or unsupported)[:8],
+                },
+            )
+            return None
+        source_facts.record("repaired", title)
+        logger.info(
+            "llm_post_repaired_by_source_fact_guard",
+            extra={"title": title[:80], "article_url": article.article_url, "removed": unsupported[:8]},
+        )
+        return {**draft, "title": title[:160], "text": text}
+
+    def _strip_unsupported_facts(
+        self,
+        *,
+        title: str,
+        text: str,
+        unsupported: list[str],
+        format_type: str,
+    ) -> tuple[str, str]:
+        prompt = (
+            "В посте есть значения, которых нет в источнике: "
+            + "; ".join(unsupported[:12])
+            + ".\nУбери их или перепиши фразы без этой конкретики. Новых фактов, чисел, дат и номеров не добавляй. "
+            "Сохрани HTML-разметку Telegram, заголовки блоков, блок «Следующий шаг» и «Источник» как есть.\n"
+            'Верни строго JSON: {"title": "заголовок", "text": "HTML-пост"}\n\n'
+            f"Заголовок: {title}\n\n{text}"
+        )
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "Ты выпускающий редактор. Убираешь из поста неподтверждённые факты."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            **self._completion_kwargs(format_type),
+        )
+        payload = self._extract_json(response.choices[0].message.content or "")
+        return (
+            self._shorten_title(str(payload.get("title") or title), 110),
+            normalize_post_text(str(payload.get("text") or text)),
+        )
+
+    def _generate_post_draft(
+        self,
+        article: ArticleCandidate,
+        rag_examples: list[RAGExample],
+        format_type: str = "standard",
+        cta_type: str = "soft",
+        pillar: str = "implementation",
+        negative_feedback_context: str = "",
+        target_publish_at: datetime | None = None,
+        intelligent_footer_enabled: bool = True,
+    ) -> dict[str, str] | None:
         source_failure = competitor_policy_failure_reason(
             text="",
             source_url=article.source_url,
@@ -2201,7 +2317,8 @@ class LLMNewsWriter:
             f"Стилистика канала: {self._style_hint(format_type)}\n"
             f"Приоритетный юридический угол: {self._infer_legal_focus_hint(article, pillar)}\n"
             f"{relevance_bias_hint}\n"
-            f"Шаблон юридического комментария для этой рубрики: {self._rubric_template_hint(inferred_rubric)}\n"
+            f"Шаблон юридического комментария для этой рубрики: "
+            f"{_RU_LAW_LEGAL_HINT if is_ru_law_candidate(article) else self._rubric_template_hint(inferred_rubric)}\n"
             f"{format_hint}\n"
             f"{_FORMAT_SHAPE_HINTS.get(format_type, '')}\n"
             f"CTA-уровень: {cta_type}\n\n"

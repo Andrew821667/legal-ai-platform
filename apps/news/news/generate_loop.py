@@ -14,6 +14,7 @@ from news.control_plane import (
     review_retention_days,
 )
 from news.core_client import CoreClient
+from news import source_facts
 from news.generate import run_generation
 from news.logging_config import setup_logging
 from news.settings import settings
@@ -254,6 +255,9 @@ def main() -> int:
                             "result_code": result_code,
                             "date": today_key,
                             "busy": False,
+                            # Итоги сверки фактов с источником за 7 дней — для
+                            # ежедневного отчёта админ-бота.
+                            "fact_guard": source_facts.journal_summary(),
                         },
                     )
                     if result_code != 0:
