@@ -337,7 +337,7 @@ MIT License - см. файл [LICENSE](LICENSE)
 
 Андрей Попов
 - Telegram: @AndrewPopov821667
-- Email: a.popov.gv@gmail.com
+- Email: a9156729972@yandex.ru
 - GitHub: [@Andrew821667](https://github.com/Andrew821667)
 - 
 ---

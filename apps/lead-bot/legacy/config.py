@@ -308,7 +308,7 @@ class Config:
             'MARKETING_CONSENT_URL',
             'https://ai-verdict.ru/marketing-consent',
         )
-        self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'privacy@ai-verdict.ru')
+        self.PRIVACY_CONTACT_EMAIL: str = os.getenv('PRIVACY_CONTACT_EMAIL', 'a9156729972@yandex.ru')
         self.OPERATOR_NAME: str = os.getenv('OPERATOR_NAME', 'AI Verdict').strip()
         self.OPERATOR_INN: str = os.getenv('OPERATOR_INN', '').strip()
         self.OPERATOR_DETAILS: str = os.getenv('OPERATOR_DETAILS', '').strip()

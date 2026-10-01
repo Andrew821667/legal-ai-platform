@@ -30,7 +30,7 @@ CONTACTS = {
     "manager_name": "Андрей Попов",
     "telegram": "@AndrewPopov821667",
     "phone": "+7 (909) 233-09-09",
-    "email": "a.popov.gv@gmail.com",
+    "email": "a9156729972@yandex.ru",
     "github": "github.com/Andrew821667",
 }
 
