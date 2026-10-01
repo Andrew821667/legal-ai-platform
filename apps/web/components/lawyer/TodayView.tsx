@@ -49,7 +49,7 @@ function itemLine(section: TodaySection, item: TodayItem): string {
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}`;
     case "consultation_claimed":
     case "consultation_receipt":
-      return `${item.starts_at ? whenLabel(item.starts_at) : ""} — ${formatRub(item.amount_minor ?? null)}, код ${item.code || "—"}`;
+      return `${item.starts_at ? whenLabel(item.starts_at) : "время согласовать"} — ${formatRub(item.amount_minor ?? null)}, код ${item.code || "—"}`;
     case "act_overdue":
       return `Акт № ${item.act_number} — ${formatRub(item.amount_minor ?? null)}${
         item.last_reminded_at ? ` · напоминали ${shortDate(item.last_reminded_at)}` : ""

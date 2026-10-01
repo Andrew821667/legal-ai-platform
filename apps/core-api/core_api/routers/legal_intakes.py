@@ -180,6 +180,9 @@ def create_legal_intake(
         except consultations.SlotUnavailable as exc:
             db.rollback()
             raise HTTPException(status_code=409, detail="Consultation slot is taken") from exc
+    elif payload.consultation_unscheduled:
+        # Оплатить сейчас, время согласуем: бронь без времени.
+        slot = consultations.hold_unscheduled(db, lead, item, datetime.now(timezone.utc))
     write_audit(
         db,
         actor_type=ActorType.api_key,

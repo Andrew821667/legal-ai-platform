@@ -14,7 +14,8 @@ import { lawyerAction, lawyerFetch } from "./useTelegram";
 
 type SlotRow = {
   slot_id: string;
-  starts_at: string;
+  /** null — «оплатить сейчас, время согласуем»: время назначает юрист. */
+  starts_at: string | null;
   duration_min: number;
   status: "free" | "held" | "claimed" | "confirmed";
   code: string | null;
@@ -49,6 +50,7 @@ export default function ConsultationsBlock({
   const [duration, setDuration] = useState(60);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState<Record<string, string>>({});
 
   const load = async () => {
     try {
@@ -107,8 +109,26 @@ export default function ConsultationsBlock({
     }
   };
 
-  const upcoming = (rows || []).filter((row) => new Date(row.starts_at).getTime() > Date.now() - 2 * 3_600_000);
-  const byDay = new Map<string, SlotRow[]>();
+  const schedule = async (row: SlotRow) => {
+    const raw = (scheduleAt[row.slot_id] || "").trim();
+    const [day, time] = raw.split("T");
+    const starts = moscowStarts(day || "", time ? [time.slice(0, 5)] : []);
+    if (!starts.length) return setNote("Укажите дату и время консультации.");
+    try {
+      await lawyerAction(`/api/lawyer/consultations/${row.slot_id}/schedule`, initData, { starts_at: starts[0] });
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Не удалось назначить время");
+    }
+  };
+
+  const unscheduled = (rows || []).filter((row) => !row.starts_at);
+  const upcoming = (rows || []).filter(
+    (row): row is SlotRow & { starts_at: string } =>
+      Boolean(row.starts_at) && new Date(row.starts_at as string).getTime() > Date.now() - 2 * 3_600_000,
+  );
+  const byDay = new Map<string, (SlotRow & { starts_at: string })[]>();
   for (const row of upcoming) {
     const key = dayLabel(row.starts_at);
     byDay.set(key, [...(byDay.get(key) || []), row]);
@@ -118,8 +138,8 @@ export default function ConsultationsBlock({
     <div className="rounded-xl bg-lw-cell p-3 text-lw-sm text-lw-muted">
       <p className="text-lw-ink">Консультации{price ? ` · ${formatRub(price)}` : ""}</p>
       <p className="mt-1">
-        Клиенты записываются на открытое время на странице ai-verdict.ru/consultation и платят по QR. Бронь без оплаты
-        снимается сама.
+        Клиенты записываются на открытое время на странице ai-verdict.ru/consultation и платят по QR — или оплачивают
+        сразу, а время вы согласуете с ними и назначите здесь. Бронь без оплаты снимается сама.
       </p>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -142,6 +162,42 @@ export default function ConsultationsBlock({
         </button>
       </div>
 
+      {unscheduled.length ? (
+        <div className="mt-3">
+          <p className="text-lw-ink">Время согласовать с клиентом</p>
+          <ul className="mt-1 space-y-2">
+            {unscheduled.map((row) => (
+              <li key={row.slot_id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <span className={row.status === "confirmed" ? "text-lw-success" : "text-lw-warning"}>{STATUS[row.status]}</span>
+                  {row.client ? ` · ${row.client}` : ""}
+                  {row.code ? ` · код ${row.code}` : ""}
+                  {row.status === "confirmed" && !row.receipt_at ? " · чек не отмечен" : ""}
+                </span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt[row.slot_id] || ""}
+                    onChange={(event) => setScheduleAt({ ...scheduleAt, [row.slot_id]: event.target.value })}
+                    className="lw-input !w-auto !py-1"
+                  />
+                  <button type="button" onClick={() => void schedule(row)} className="text-lw-primary underline underline-offset-2">
+                    назначить время
+                  </button>
+                  {row.status === "held" || row.status === "claimed" ? (
+                    <button type="button" onClick={() => void act(row, "confirm")} className="text-lw-primary underline underline-offset-2">
+                      оплата пришла
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={() => void act(row, "release")} className="underline underline-offset-2">
+                    снять бронь
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {rows && upcoming.length === 0 ? <p className="mt-2">Открытого времени нет.</p> : null}
       {[...byDay.entries()].map(([day, items]) => (
         <div key={day} className="mt-3">

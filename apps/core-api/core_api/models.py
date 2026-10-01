@@ -1154,7 +1154,8 @@ class ConsultationSlot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Пусто — «оплатить сейчас, время согласуем»: юрист назначит после разговора.
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_min: Mapped[int] = mapped_column(Integer, nullable=False, default=60, server_default="60")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="free", server_default="free")
     lead_id: Mapped[uuid.UUID | None] = mapped_column(

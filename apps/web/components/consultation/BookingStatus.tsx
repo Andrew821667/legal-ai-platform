@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { minutesLeft, statusText, whenLabel, type Booking } from "@/lib/consultation";
+import { bookingWhen, minutesLeft, statusText, type Booking } from "@/lib/consultation";
 import { CONSULTATION_OFFER_PATH } from "@/lib/consultation-offer";
 import { formatRub } from "@/lib/money";
 
@@ -81,7 +81,7 @@ export default function BookingStatus({ token }: { token: string }) {
     <div className="space-y-5">
       <section className="rounded-xl border border-slate-700 bg-slate-900 p-5 md:p-7">
         <p className="text-sm text-slate-400">Консультация юриста</p>
-        <h2 className="mt-1 text-2xl font-semibold text-white">{whenLabel(booking.starts_at)}</h2>
+        <h2 className="mt-1 text-2xl font-semibold text-white">{bookingWhen(booking.starts_at)}</h2>
         <p className="mt-1 text-slate-300">
           До {booking.duration_min} минут онлайн · {formatRub(booking.price_minor)}
         </p>
@@ -144,7 +144,7 @@ export default function BookingStatus({ token }: { token: string }) {
       <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-sm leading-6 text-slate-400">
         <p>Сохраните адрес этой страницы — по нему видно состояние записи.</p>
         <p className="mt-2">
-          Если юрист не сможет провести консультацию в выбранное время, он предложит другое или вернёт оплату полностью.
+          Если юрист не сможет провести консультацию в согласованное время, он предложит другое или вернёт оплату полностью.
           Перенос по вашей просьбе — по согласованию с юристом; до начала от консультации можно отказаться с возвратом
           оплаты. Чек «Мой налог» юрист пришлёт после оплаты. Условия —{" "}
           <Link href={CONSULTATION_OFFER_PATH} className="text-amber-300 underline underline-offset-2">в оферте</Link>.
