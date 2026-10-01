@@ -79,6 +79,8 @@ def _returning_user_env(monkeypatch: pytest.MonkeyPatch, handled: bool) -> list[
     monkeypatch.setattr(user_commands.database.db, "get_user_offer_profile", lambda user_id: None)
     monkeypatch.setattr(user_commands.database.db, "get_user_consent_state", lambda user_id: {"consent_given": True})
     monkeypatch.setattr(user_commands.database.db, "get_user_by_id", lambda user_id: {"id": user_id, "telegram_id": 44})
+    # Вернувшийся пользователь есть в локальной базе бота — не зависим от её содержимого.
+    monkeypatch.setattr(user_commands.database.db, "get_local_user_by_id", lambda user_id: {"id": user_id, "telegram_id": 44})
     return messages
 
 
