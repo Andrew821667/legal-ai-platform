@@ -273,10 +273,10 @@ export default function MiniAppHomePage() {
             ? `Последнее действие: ${state.lastAction}.`
             : "Пока нет действий — начните с контента или с проверки договора."}
         </p>
-        <p className="mt-2 text-xs text-slate-300">
-          Сохранено: {state.savedCount} • Событий за 24ч: {state.recentEvents24h} • Лид-интентов за 30д:{" "}
-          {state.leadIntents30d}
-        </p>
+        {/* Счётчики событий и «лид-интентов» — внутренняя аналитика, клиенту не показываем. */}
+        {state.savedCount > 0 ? (
+          <p className="mt-2 text-xs text-slate-300">Сохранено материалов: {state.savedCount}</p>
+        ) : null}
       </article>
 
       <article className="rounded-xl border border-slate-800 bg-slate-800/70 p-4">

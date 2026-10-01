@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { plainText } from "@/lib/plain-text";
 import { callReaderCoreCached, ensureReaderKey } from "../core";
 
 type HighlightAudience = "lawyer" | "business" | "mixed";
@@ -78,8 +79,8 @@ function scoreForAudience(row: any, audience: HighlightAudience): number {
 function mapHighlight(row: any): HighlightItem {
   return {
     id: String(row?.id || ""),
-    title: String(row?.title || "Без заголовка").trim(),
-    summary: trimSummary(String(row?.text || "")),
+    title: plainText(String(row?.title || "")) || "Без заголовка",
+    summary: trimSummary(plainText(String(row?.text || ""))),
     rubric: String(row?.rubric || ""),
     kind: String(row?.publication_kind || row?.format_type || "daily"),
     postedAt: String(row?.posted_at || row?.publish_at || ""),

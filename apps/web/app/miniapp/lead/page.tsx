@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import MiniAppLeadClient from "@/components/miniapp/pages/MiniAppLeadClient";
 
 export const metadata: Metadata = {
-  title: "Заявка Mini App | AI Verdict",
+  title: "Заявка Mini App",
   description: "Форма заявки Mini App AI Verdict для пилота, проверки договорного сценария, интеграции, бота, сайта, Mini App или внутреннего сервиса.",
   alternates: {
     canonical: "/miniapp/lead",

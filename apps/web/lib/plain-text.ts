@@ -1,0 +1,40 @@
+// Посты канала хранятся в Telegram-HTML (<b>, <i>, <a>, &quot;…). На сайте и в
+// Mini App их заголовки и анонсы показываются обычным текстом — без этого в
+// «Сигналах и материалах» клиент видел сырые теги <b>…</b>.
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  laquo: "«",
+  raquo: "»",
+  mdash: "—",
+  ndash: "–",
+};
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code: string) => {
+    if (code[0] === "#") {
+      const point = code[1].toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+      return Number.isFinite(point) && point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+    }
+    return ENTITIES[code.toLowerCase()] ?? match;
+  });
+}
+
+export function plainText(html: string): string {
+  let text = String(html || "").replace(/<br\s*\/?>/gi, " ");
+  // Снимаем теги, пока что-то снимается: вложенные «<<b>b>» за один проход
+  // оставили бы новый тег.
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, "");
+  } while (text !== previous);
+  // Это обычный текст: угловых скобок в нём не остаётся, в том числе
+  // появившихся из &lt;…&gt;.
+  return decodeEntities(text).replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+}

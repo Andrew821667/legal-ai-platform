@@ -249,10 +249,9 @@ export default function LeadCaptureForm() {
                   }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 >
-                  <option value="consultation">Консультация</option>
-                  <option value="checklist">Гайд</option>
-                  <option value="demo">Демонстрационный разбор договора</option>
-                  <option value="sample_report">Пример отчета по договору</option>
+                  {/* Гайд, демо-разбор и пример отчёта форма не доставляет (писем
+                      клиентам нет) — эти варианты убраны; материалы выдаёт бот. */}
+                  <option value="consultation">Юридическая задача или консультация</option>
                   <option value="unknown">Автоматизация / разработка и AI</option>
                 </select>
               </label>

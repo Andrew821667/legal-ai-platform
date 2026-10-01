@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import AdminPanel from "@/components/AdminPanel";
 
 export const metadata: Metadata = {
-  title: "System Monitor | AI Verdict",
+  title: "System Monitor",
   robots: {
     index: false,
     follow: false,

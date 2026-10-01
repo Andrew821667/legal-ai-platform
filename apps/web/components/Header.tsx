@@ -230,12 +230,20 @@ export default function Header() {
                   {item.name}
                 </Link>
               ))}
+              {/* Консультация — главный платный вход, на телефоне первая кнопка. */}
+              <Link
+                href="/consultation"
+                className="mt-4 block rounded-lg border border-amber-500/60 px-4 py-3 text-center font-semibold text-amber-300 transition-colors hover:border-amber-400"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Консультация юриста — {starterOffers.legal_consultation.price}
+              </Link>
               {contractAIActionExternal ? (
                 <a
                   href={contractAIActionHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
+                  className="block mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Открыть сервис проверки договоров →
@@ -243,19 +251,12 @@ export default function Header() {
               ) : (
                 <Link
                   href={contractAIActionHref}
-                  className="block mt-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
+                  className="block mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-3 rounded-lg text-center transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Открыть сервис проверки договоров →
                 </Link>
               )}
-              <Link
-                href="/consultation"
-                className="mt-2 block rounded-lg border border-amber-500/60 px-4 py-3 text-center font-semibold text-amber-300 transition-colors hover:border-amber-400"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Консультация юриста — {starterOffers.legal_consultation.price}
-              </Link>
               <Link
                 href={ROUTES.cabinet}
                 prefetch={false}
@@ -267,7 +268,8 @@ export default function Header() {
               </Link>
               <div className="mt-4 border-t border-slate-700 pt-3">
                 <p className="px-4 pb-2 text-xs uppercase tracking-wide text-slate-400">Еще</p>
-                {secondaryNavigation.map((item) => (
+                {/* «Личный кабинет» уже есть отдельной строкой выше — без повтора. */}
+                {secondaryNavigation.filter((item) => item.href !== ROUTES.cabinet).map((item) => (
                   <Link
                     key={item.name}
                     href={item.href}
