@@ -1014,3 +1014,5 @@ def test_writer_prompt_is_multiprofile() -> None:
     assert "что читатель может описать" in NEWS_FOOTER_DECISION_SYSTEM_PROMPT
     # Бот договоры не принимает — концовки постов не зовут их присылать.
     assert "Не предлагай присылать в бот договоры" in NEWS_FOOTER_DECISION_SYSTEM_PROMPT
+    # Футер — информирование: без цен и призывов купить (реклама в Telegram запрещена).
+    assert "не называй цены" in NEWS_FOOTER_DECISION_SYSTEM_PROMPT and "₽" not in NEWS_FOOTER_DECISION_SYSTEM_PROMPT
