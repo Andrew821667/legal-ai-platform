@@ -669,8 +669,11 @@ ssh legalai-prod 'chmod 700 ~/rotate-env-key.sh'
 кавычках писать не стоит.
 
 ### Шаг 2. Пересоздать контейнер
+`<MACMINI_HOST>` — адрес хоста из переменной репозитория `MACMINI_SSH_HOST` (или SSH-алиас из
+`~/.ssh/config`), `<admin>` — учётка с доступом к docker. В репозитории их не держим.
+
 ```bash
-ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
+ssh <admin>@<MACMINI_HOST> 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
   && cd /Users/legalai/projects/legal-ai-platform \
   && IMG=$(docker inspect -f "{{.Config.Image}}" legal-ai-core-api) \
   && CORE_API_IMAGE="$IMG" docker compose -p compose --env-file .env \
@@ -725,7 +728,7 @@ ssh legalai-prod 'cd ~/projects/legal-ai-platform && K=$(grep "^API_KEY_BOT=" .e
 3. Пересоздать оба сервиса — `restart` не перечитывает `.env` (см. ловушку 3
    в разделе выше):
    ```bash
-   ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH      && cd /Users/legalai/projects/legal-ai-platform      && IMG_CORE=$(docker inspect -f "{{.Config.Image}}" legal-ai-core-api)      && IMG_BOT=$(docker inspect -f "{{.Config.Image}}" legal-ai-lead-bot)      && CORE_API_IMAGE="$IMG_CORE" LEAD_BOT_IMAGE="$IMG_BOT"         docker compose -p compose --env-file .env -f infra/compose/docker-compose.prod.yml         up -d --force-recreate core-api lead-bot'
+   ssh <admin>@<MACMINI_HOST> 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH      && cd /Users/legalai/projects/legal-ai-platform      && IMG_CORE=$(docker inspect -f "{{.Config.Image}}" legal-ai-core-api)      && IMG_BOT=$(docker inspect -f "{{.Config.Image}}" legal-ai-lead-bot)      && CORE_API_IMAGE="$IMG_CORE" LEAD_BOT_IMAGE="$IMG_BOT"         docker compose -p compose --env-file .env -f infra/compose/docker-compose.prod.yml         up -d --force-recreate core-api lead-bot'
    ```
 4. Проверить: в логах контейнера должна появиться строка `sentry_initialized`
    (core-api) или `Sentry включён` (lead-bot). Без DSN там же — `sentry_disabled`
@@ -818,7 +821,7 @@ URL». Календарь перечитывает ленту примерно �
 ```bash
 ssh legalai-prod 'cd ~/projects/legal-ai-platform && grep -q "^YM_ACCESS_TOKEN=" .env || printf "YM_ACCESS_TOKEN=\n" >> .env'
 ssh -t legalai-prod 'ENV_FILE=/Users/legalai/projects/legal-ai-platform/.env ~/rotate-env-key.sh YM_ACCESS_TOKEN'
-ssh andrej@78.132.140.211 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
+ssh <admin>@<MACMINI_HOST> 'export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH \
   && cd /Users/legalai/projects/legal-ai-platform \
   && IMG=$(docker inspect -f "{{.Config.Image}}" legal-ai-web) \
   && WEB_IMAGE="$IMG" docker compose -p compose --env-file .env \

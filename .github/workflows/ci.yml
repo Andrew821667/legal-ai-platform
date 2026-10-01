@@ -10,7 +10,49 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # В PR гоняем только тесты затронутых частей: у приватного репозитория
+  # минуты CI платные сверх 2 000 в месяц, а в сентябре ушло около 7 000.
+  # На push в main (перед деплоем) — всё, как раньше.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.diff.outputs.python }}
+      core: ${{ steps.diff.outputs.core }}
+      news: ${{ steps.diff.outputs.news }}
+      bot: ${{ steps.diff.outputs.bot }}
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            for area in python core news bot web; do echo "$area=true" >> "$GITHUB_OUTPUT"; done
+            exit 0
+          fi
+          files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          printf '%s\n' "$files"
+          hit() { printf '%s\n' "$files" | grep -Eq "$1" && echo true || echo false; }
+          all='^(\.github/workflows/|pyproject\.toml$|uv\.lock$)'
+          if [ "$(hit "$all")" = true ]; then
+            for area in python core news bot web; do echo "$area=true" >> "$GITHUB_OUTPUT"; done
+            exit 0
+          fi
+          echo "python=$(hit '\.py$')" >> "$GITHUB_OUTPUT"
+          # test_compose_secrets ядра читает код всех сервисов — любая правка приложений.
+          echo "core=$(hit '^(apps/|packages/|infra/compose/)')" >> "$GITHUB_OUTPUT"
+          echo "news=$(hit '^(apps/news/|packages/)')" >> "$GITHUB_OUTPUT"
+          echo "bot=$(hit '^apps/lead-bot/')" >> "$GITHUB_OUTPUT"
+          echo "web=$(hit '^apps/web/')" >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -19,6 +61,8 @@ jobs:
       - run: uv run ruff check apps/ packages/ --select F,B904,B905,UP031
 
   test-core-api:
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -46,6 +90,8 @@ jobs:
       - run: uv run --package core-api --with httpx pytest apps/core-api/tests/ -q
 
   test-news:
+    needs: changes
+    if: needs.changes.outputs.news == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -54,6 +100,8 @@ jobs:
       - run: uv run --package news pytest apps/news/tests/ -q
 
   test-lead-bot-legacy:
+    needs: changes
+    if: needs.changes.outputs.bot == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -84,6 +132,8 @@ jobs:
           retention-days: 14
 
   web-build:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -97,6 +147,8 @@ jobs:
       - run: npm run build --prefix apps/web
 
   web-lint:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -178,16 +230,51 @@ jobs:
             dockerfile: infra/caddy/Dockerfile.public
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - id: image_owner
         run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7
+      # Образ, чьи файлы (COPY в Dockerfile) не менялись с прошлого коммита
+      # main, не пересобираем: тег нового SHA ставим на образ прошлого
+      # коммита. Сборка двух архитектур занимала ~25 мин на каждое слияние,
+      # даже если поменялся один текст бота. Образа прошлого коммита ещё нет
+      # (его сборка не закончилась) или изменился сам CI — собираем как раньше.
+      - id: reuse
+        env:
+          BEFORE: ${{ github.event.before }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          IMAGE: ghcr.io/${{ steps.image_owner.outputs.value }}/legal-ai-${{ matrix.image_name }}
+        run: |
+          set -euo pipefail
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          case "$BEFORE" in ''|0000000000000000000000000000000000000000) exit 0 ;; esac
+          git cat-file -e "$BEFORE^{commit}" 2>/dev/null || exit 0
+          sources="$(grep -E '^[[:space:]]*COPY[[:space:]]' "$DOCKERFILE" | grep -v -- '--from=' \
+            | sed -E 's/--[a-z-]+(=[^ ]*)?//g' | awk '{for (i = 2; i < NF; i++) print $i}')"
+          changed="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+          printf 'COPY:\n%s\nChanged:\n%s\n' "$sources" "$changed"
+          for path in "$DOCKERFILE" .dockerignore .github/workflows/ci.yml $sources; do
+            pattern="${path%\*}"
+            if printf '%s\n' "$changed" | grep -q -- "^${pattern%/}"; then
+              echo "Изменено: $path — собираем."
+              exit 0
+            fi
+          done
+          if docker buildx imagetools inspect "$IMAGE:$BEFORE" >/dev/null 2>&1; then
+            docker buildx imagetools create -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" "$IMAGE:$BEFORE"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Без изменений — образ $BEFORE помечен $GITHUB_SHA."
+          fi
+      - if: steps.reuse.outputs.build == 'true'
+        uses: docker/setup-qemu-action@v4
+      - if: steps.reuse.outputs.build == 'true'
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -248,7 +335,7 @@ jobs:
         run: |
           set -euo pipefail
           : "${MACMINI_SSH_KEY:?Set MACMINI_SSH_KEY}"
-          : "${MACMINI_HOST:?Set MACMINI_SSH_HOST, for example 78.132.140.211}"
+          : "${MACMINI_HOST:?Set MACMINI_SSH_HOST (repository variable)}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$MACMINI_SSH_KEY" > ~/.ssh/macmini_deploy_key
@@ -261,7 +348,7 @@ jobs:
           MACMINI_HOST: ${{ vars.MACMINI_SSH_HOST }}
         run: |
           set -euo pipefail
-          : "${MACMINI_HOST:?Set MACMINI_SSH_HOST, for example 78.132.140.211}"
+          : "${MACMINI_HOST:?Set MACMINI_SSH_HOST (repository variable)}"
           ssh_retry() {
             local attempt
             for attempt in 1 2 3; do
