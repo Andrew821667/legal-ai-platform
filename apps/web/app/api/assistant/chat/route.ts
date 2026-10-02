@@ -4,6 +4,7 @@ import {
   AssistantPayloadError,
   isTrustedAssistantOrigin,
   normalizeAssistantPayload,
+  recordAssistantDaily,
   recordAssistantRequest,
   trustedHostsFor,
 } from "@/lib/assistant-security";
@@ -44,6 +45,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { detail: "Слишком много сообщений. Подождите немного и продолжите диалог." },
       { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
+  }
+  const daily = recordAssistantDaily(ip);
+  if (!daily.allowed) {
+    return NextResponse.json(
+      {
+        detail:
+          daily.scope === "site"
+            ? "Ассистент на сегодня исчерпал лимит ответов. Оставьте заявку через форму на сайте — юрист ответит сам."
+            : "На сегодня вопросов с вашего адреса достаточно — продолжим завтра. Или оставьте заявку через форму на сайте.",
+      },
+      { status: 429 },
     );
   }
 

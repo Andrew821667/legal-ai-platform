@@ -233,13 +233,13 @@ def _format_runtime_settings_for_admin() -> str:
 
 
 async def _send_standalone_login_link(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Выдаёт разовую ссылку для входа в рабочее место вне Telegram.
+    """Выдаёт одноразовую ссылку для входа в рабочее место вне Telegram.
 
     Токен подписывается временем клика — минт делается здесь, а не при сборке
     меню, поэтому кнопка не может нести готовую ссылку и живёт как callback.
-    Ссылку можно перевыпустить в любой момент; отозвать одну-единственную,
-    не трогая остальные, нельзя — при потере телефона стоит сменить
-    LAWYER_SESSION_SECRET (см. docs/runbook.md).
+    Ссылка срабатывает один раз и 15 минут; сессия после входа — кука сайта
+    на 30 дней. Отозвать все сессии разом — сменить LAWYER_SESSION_SECRET
+    (см. docs/runbook.md).
     """
     config = get_config()
     url = lawyer_session_link.build_login_url(
@@ -256,11 +256,12 @@ async def _send_standalone_login_link(query, context: ContextTypes.DEFAULT_TYPE)
         return
     await utils.safe_reply_text(
         query.message,
-        "Ссылка на рабочее место без Telegram — откройте её в Safari и добавьте "
-        "страницу на экран «Домой».\n\n"
+        "Ссылка на рабочее место без Telegram — откройте её в Safari сразу и "
+        "добавьте страницу на экран «Домой».\n\n"
         f"{url}\n\n"
-        "Действует 30 дней. Если телефон потерян — смените LAWYER_SESSION_SECRET, "
-        "и эта и все прежние ссылки перестанут работать.",
+        "Ссылка одноразовая и действует 15 минут. После входа рабочее место "
+        "помнит вас 30 дней. Если телефон потерян — смените LAWYER_SESSION_SECRET, "
+        "и все входы перестанут действовать.",
         action="admin_lawyer_link_sent",
     )
 

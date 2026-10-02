@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { checkLawyerAccess, checkLawyerSessionCookie, parseAllowedIds } from "./lawyer-access";
+import { rejectForeignOrigin } from "./same-origin";
 import { TELEGRAM_INIT_DATA_HEADER } from "./telegram-webapp-auth";
 
 /**
@@ -66,5 +67,8 @@ export function requireLawyer(request: NextRequest): LawyerContext | NextRespons
   if (!cookieResult.ok) {
     return NextResponse.json({ detail: cookieResult.detail }, { status: cookieResult.status });
   }
+  // Кука уходит с запросом сама — изменяющий запрос принимаем только со своих страниц.
+  const foreign = rejectForeignOrigin(request);
+  if (foreign) return foreign;
   return { telegramUserId: cookieResult.telegramUserId };
 }
