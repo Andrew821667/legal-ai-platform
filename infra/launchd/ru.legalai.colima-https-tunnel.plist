@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Порт 443 сайта из Colima на внешние адреса Mac mini — от root, всегда
+  (зачем — в colima-https-tunnel.sh). Установка (нужен sudo):
+    sudo install -o root -g wheel -m 755 infra/launchd/colima-https-tunnel.sh /usr/local/sbin/colima-https-tunnel.sh
+    sudo install -o root -g wheel -m 644 infra/launchd/ru.legalai.colima-https-tunnel.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.colima-https-tunnel.plist
+  Проверка: sudo launchctl print system/ru.legalai.colima-https-tunnel | grep state
+  Перезапуск: sudo launchctl kickstart -k system/ru.legalai.colima-https-tunnel
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ru.legalai.colima-https-tunnel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/usr/local/sbin/colima-https-tunnel.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/andrej/Library/Logs/colima-https-tunnel.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/andrej/Library/Logs/colima-https-tunnel.log</string>
+</dict>
+</plist>

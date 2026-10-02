@@ -130,6 +130,11 @@ if [ "$SMOKE_NOTIFY" = "1" ]; then
   for item in "${failures[@]}"; do
     text+=$'\n'"— $item"
   done
+  # 000 при здоровых контейнерах — до сайта не доходит соединение: порт 443
+  # с Colima на хост (02.10.2026 — после пересоздания Caddy).
+  if printf '%s\n' "${failures[@]}" | grep -q "ответ 000"; then
+    text+=$'\n\n'"Ответ 000 — соединения нет. Проверить службу ru.legalai.colima-https-tunnel (sudo launchctl print system/ru.legalai.colima-https-tunnel) и порт 443 (docs/runbook.md, «Порт 443 на Mac mini»)."
+  fi
   # Через ядро: у него токен и прокси. Ядро лежит — пробуем бота-ассистента.
   for container in "$CORE" legal-ai-lead-bot; do
     if printf '%s' "$text" | docker exec -i -e ADMIN_ID="$(env_value ADMIN_TELEGRAM_ID)" "$container" sh -c '
