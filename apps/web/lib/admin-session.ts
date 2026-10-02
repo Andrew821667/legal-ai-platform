@@ -3,6 +3,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { resolveAdminClientContext } from "@/lib/admin-auth";
+import { rejectForeignOrigin } from "@/lib/same-origin";
 import {
   appendAdminAuditEvent,
   createAdminSessionRecord,
@@ -174,7 +175,8 @@ export function hasValidAdminSession(request: NextRequest): boolean {
 
 export function requireAdminSession(request: NextRequest): NextResponse | null {
   if (hasValidAdminSession(request)) {
-    return null;
+    // Изменяющий запрос по куке — только со своих страниц (lib/same-origin.ts).
+    return rejectForeignOrigin(request);
   }
   return NextResponse.json({ detail: "Admin session required" }, { status: 401 });
 }

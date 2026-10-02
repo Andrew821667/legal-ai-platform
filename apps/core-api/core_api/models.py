@@ -1113,6 +1113,23 @@ class CaseMessage(Base):
     )
 
 
+class LawyerLoginNonce(Base):
+    """Погашенная одноразовая ссылка входа в рабочее место.
+
+    Ссылку подписывает бот (apps/lead-bot/legacy/lawyer_session_link.py), сайт
+    проверяет подпись и гасит её здесь: вторая попытка с тем же nonce упирается
+    в первичный ключ. Хранится хэш nonce, не он сам; строки старше срока
+    ссылки удаляются при следующем входе.
+    """
+
+    __tablename__ = "lawyer_login_nonces"
+
+    nonce_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ClientFile(Base):
     """Файл по делу, который хранится у нас, а не в Telegram.
 

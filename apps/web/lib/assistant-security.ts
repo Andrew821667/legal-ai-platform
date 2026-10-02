@@ -97,6 +97,44 @@ export function recordAssistantRequest(
 }
 
 /**
+ * Суточный бюджет ИИ-чата на сайте: потолок сообщений с одного адреса и на
+ * весь сайт. Окно в 5 минут (выше) останавливает частые запросы, но за сутки
+ * один адрес мог отправить тысячи — каждое сообщение стоит денег у
+ * провайдера модели. Сутки — по Москве. Счётчики в памяти процесса и
+ * обнуляются при перезапуске сайта: это ограничитель расходов, а не учёт.
+ */
+let dailyKey = "";
+let dailyTotal = 0;
+const dailyByIp = new Map<string, number>();
+
+function moscowDay(now: number): string {
+  return new Date(now + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function recordAssistantDaily(
+  ip: string,
+  now = Date.now(),
+): { allowed: true } | { allowed: false; scope: "ip" | "site" } {
+  const day = moscowDay(now);
+  if (day !== dailyKey) {
+    dailyKey = day;
+    dailyTotal = 0;
+    dailyByIp.clear();
+  }
+  const siteLimit = positiveInt(process.env.WEB_ASSISTANT_DAILY_MAX, 500);
+  const ipLimit = positiveInt(process.env.WEB_ASSISTANT_IP_DAILY_MAX, 50);
+  if (dailyTotal >= siteLimit) return { allowed: false, scope: "site" };
+  const used = dailyByIp.get(ip) || 0;
+  if (used >= ipLimit) return { allowed: false, scope: "ip" };
+  dailyByIp.set(ip, used + 1);
+  dailyTotal += 1;
+  if (dailyTotal === siteLimit) {
+    console.warn(`[assistant] суточный лимит сайта исчерпан: ${siteLimit} сообщений за ${day}`);
+  }
+  return { allowed: true };
+}
+
+/**
  * Хосты, которым доверяем как Origin запроса с этого сайта — общий список
  * для чата ассистента, /cabinet/logout и /api/leads (cookie-путь). host из
  * URL и заголовка Host обычно совпадают; x-forwarded-host и
@@ -126,7 +164,18 @@ export function isTrustedAssistantOrigin(origin: string | null, hosts: string | 
   }
 }
 
+/**
+ * Изменяющий запрос — только со своих страниц; чтение (GET/HEAD) — с любых:
+ * ссылка на скачивание файла открывается и без Origin. См. lib/same-origin.ts.
+ */
+export function sameOriginAllowed(method: string, origin: string | null, hosts: string[]): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS" || isTrustedAssistantOrigin(origin, hosts);
+}
+
 export function __resetAssistantSecurityStateForTests(): void {
   ipBuckets.clear();
   sessionBuckets.clear();
+  dailyKey = "";
+  dailyTotal = 0;
+  dailyByIp.clear();
 }

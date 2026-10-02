@@ -19,6 +19,7 @@ import {
   revokeAllOtherAdminSessions,
   revokeCurrentAdminSession,
 } from "@/lib/admin-session";
+import { rejectForeignOrigin } from "@/lib/same-origin";
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw || "");
@@ -56,6 +57,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Вход и выход — только со своей страницы: чужой сайт не залогинит браузер
+  // в нашу админку под своим паролем и не разлогинит владельца.
+  const foreign = rejectForeignOrigin(request);
+  if (foreign) return foreign;
   const client = resolveAdminClientContext(request.headers);
   const nowMs = Date.now();
   const blockedForSeconds = getLoginBlockInfo(client.clientKey, nowMs, getThrottleOptions());
@@ -162,6 +167,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const foreign = rejectForeignOrigin(request);
+  if (foreign) return foreign;
   let scope = "current";
   try {
     const payload = (await request.json()) as { scope?: string };

@@ -294,9 +294,9 @@ def lawyer_workspace_keyboard_url(user_id: int | None = None) -> str:
     (документация WebAppInitData: «It is empty if the Mini App was launched
     from a keyboard button»). Из inline-кнопки — с подписью, и там вход
     работал; из нижней — рабочее место не знало, кто пришёл. Поэтому нижняя
-    кнопка ведёт на /lawyer/login с тем же подписанным токеном, что и
-    «Ссылка для Safari»: вход по куке, initData не нужен. Токен выпускается
-    заново при каждой отправке клавиатуры — на /start и /admin.
+    кнопка ведёт на /lawyer/login с одноразовым токеном, как «Ссылка для
+    Safari»: вход по куке, initData не нужен. Токен выпускается заново при
+    каждой отправке клавиатуры — на /start и /admin.
 
     Без секрета — голый адрес: рабочее место тогда объяснит, что делать.
     """
@@ -308,6 +308,9 @@ def lawyer_workspace_keyboard_url(user_id: int | None = None) -> str:
         user_id or getattr(config, "ADMIN_TELEGRAM_ID", 0) or 0,
         workspace_url=url,
         secret=getattr(config, "LAWYER_SESSION_SECRET", ""),
+        # Кнопка висит до следующего /start или /admin. Ссылка одноразовая:
+        # первый вход ставит куку, дальше сайт пускает по ней, не гася ссылку.
+        ttl_seconds=lawyer_session_link.KEYBOARD_LINK_TTL_SECONDS,
     )
     return login or url
 

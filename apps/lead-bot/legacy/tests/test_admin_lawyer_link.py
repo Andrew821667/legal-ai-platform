@@ -40,8 +40,8 @@ async def test_sends_a_working_link_when_secret_is_set(monkeypatch) -> None:
     await admin_callbacks._send_standalone_login_link(query, SimpleNamespace())
 
     assert len(sent) == 1
-    assert "https://ai-verdict.ru/lawyer/login?token=848510279." in sent[0]
-    assert "30 дней" in sent[0]
+    assert "https://ai-verdict.ru/lawyer/login?token=v2.848510279." in sent[0]
+    assert "одноразовая" in sent[0] and "15 минут" in sent[0]
 
 
 @pytest.mark.anyio

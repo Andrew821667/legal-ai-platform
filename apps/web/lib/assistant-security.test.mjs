@@ -69,3 +69,34 @@ test("assistant accepts only same-origin browser requests", () => {
     ["legal-ai-web:3000", "https://ai-verdict.ru"],
   ), true);
 });
+
+test("изменяющий запрос — только со своего Origin; чтение — с любого", async () => {
+  const { sameOriginAllowed } = await import("./assistant-security.ts");
+  const hosts = ["ai-verdict.ru"];
+  assert.equal(sameOriginAllowed("POST", "https://ai-verdict.ru", hosts), true);
+  // Поддомен для SameSite «свой», а для нас — нет.
+  assert.equal(sameOriginAllowed("POST", "https://contract.ai-verdict.ru", hosts), false);
+  assert.equal(sameOriginAllowed("DELETE", "https://evil.example", hosts), false);
+  assert.equal(sameOriginAllowed("PATCH", null, hosts), false);
+  assert.equal(sameOriginAllowed("GET", null, hosts), true);
+  assert.equal(sameOriginAllowed("HEAD", "https://evil.example", hosts), true);
+});
+
+test("суточный бюджет чата: потолок с адреса и на сайт, новые сутки — заново", async () => {
+  const { recordAssistantDaily } = await import("./assistant-security.ts");
+  process.env.WEB_ASSISTANT_IP_DAILY_MAX = "2";
+  process.env.WEB_ASSISTANT_DAILY_MAX = "3";
+  try {
+    const noon = Date.parse("2026-10-02T09:00:00Z"); // 12:00 по Москве
+    assert.deepEqual(recordAssistantDaily("1.1.1.1", noon), { allowed: true });
+    assert.deepEqual(recordAssistantDaily("1.1.1.1", noon), { allowed: true });
+    assert.deepEqual(recordAssistantDaily("1.1.1.1", noon), { allowed: false, scope: "ip" });
+    assert.deepEqual(recordAssistantDaily("2.2.2.2", noon), { allowed: true });
+    assert.deepEqual(recordAssistantDaily("3.3.3.3", noon), { allowed: false, scope: "site" });
+    // 21:30 UTC — уже следующие сутки по Москве.
+    assert.deepEqual(recordAssistantDaily("1.1.1.1", Date.parse("2026-10-02T21:30:00Z")), { allowed: true });
+  } finally {
+    delete process.env.WEB_ASSISTANT_IP_DAILY_MAX;
+    delete process.env.WEB_ASSISTANT_DAILY_MAX;
+  }
+});

@@ -261,7 +261,8 @@ async def test_client_button_without_an_address_opens_the_menu(monkeypatch) -> N
 
 def test_admin_bottom_button_carries_a_login_token(monkeypatch) -> None:
     """Нижняя кнопка не может войти по initData — Telegram его не передаёт.
-    Поэтому она ведёт на /lawyer/login с тем же токеном, что «Ссылка для Safari»."""
+    Поэтому она ведёт на /lawyer/login с одноразовым токеном, как «Ссылка для
+    Safari», но со сроком до следующего /admin (неделя)."""
     import handlers.constants as constants
 
     cfg = constants.get_config()
@@ -270,16 +271,18 @@ def test_admin_bottom_button_carries_a_login_token(monkeypatch) -> None:
     monkeypatch.setattr(cfg, "ADMIN_TELEGRAM_ID", 42, raising=False)
 
     url = constants.build_admin_reply_menu()[0][0].web_app.url
-    assert url.startswith("https://example.ru/lawyer/login?token=42.")
+    assert url.startswith("https://example.ru/lawyer/login?token=v2.42.")
 
     # Токен настоящий: подпись пересчитывается тем же способом, что и в вебе.
     import hashlib
     import hmac
 
     token = url.split("token=", 1)[1]
-    user_id, issued_at, signature = token.split(".")
-    assert user_id == "42"
-    expected = hmac.new(b"s3cret", f"{user_id}.{issued_at}".encode(), hashlib.sha256).hexdigest()
+    _, user_id, issued_at, ttl, nonce, signature = token.split(".")
+    assert user_id == "42" and ttl == str(7 * 24 * 60 * 60)
+    expected = hmac.new(
+        b"s3cret", f"lawyer-login.{user_id}.{issued_at}.{ttl}.{nonce}".encode(), hashlib.sha256
+    ).hexdigest()
     assert signature == expected
 
 

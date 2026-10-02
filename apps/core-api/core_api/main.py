@@ -28,6 +28,7 @@ from core_api.routers import (
     events,
     health,
     lawyer_calendar,
+    lawyer_login,
     lawyer_workspace,
     leads,
     legal_intakes,
@@ -91,6 +92,7 @@ app.include_router(case_messages.client)
 app.include_router(case_messages.lawyer)
 app.include_router(client_files.client)
 app.include_router(client_files.lawyer)
+app.include_router(lawyer_login.router)
 app.include_router(workers.router)
 app.include_router(telegram_ops.router)
 app.include_router(client_auth.router)
