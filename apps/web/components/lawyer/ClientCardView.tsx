@@ -14,6 +14,7 @@ import DocumentText from "./DocumentText";
 import HistoryList from "./HistoryList";
 import IntakeLinks from "./IntakeLinks";
 import NoteBox from "./NoteBox";
+import CaseThreadBlock from "./CaseThreadBlock";
 import ReplyBox from "./ReplyBox";
 import RichText from "./RichText";
 import SupplementForm from "./SupplementForm";
@@ -334,6 +335,8 @@ export default function ClientCardView({
         )}
       </section>
       )}
+
+      <CaseThreadBlock leadId={card.lead_id} initData={initData} onChanged={onChanged} />
 
       <section>
         <SectionTitle count={card.intakes.length}>Обращения</SectionTitle>

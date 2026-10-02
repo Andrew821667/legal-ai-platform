@@ -1292,7 +1292,20 @@ def reply_and_deliver(
     if not text:
         raise HTTPException(status_code=422, detail="text is required")
     if not item.client_telegram_user_id:
-        raise HTTPException(status_code=409, detail="Client has no Telegram")
+        # Клиент без Telegram (вход через Яндекс ID) видит переписку по договору
+        # в личном кабинете: ответ записывается туда. Раньше здесь был 409, и
+        # ответить такому клиенту было нельзя вовсе.
+        msg = ServiceAgreementMessage(
+            agreement_id=item.id,
+            role=ServiceAgreementMessageRole.lawyer,
+            telegram_user_id=payload.telegram_user_id,
+            text=text,
+        )
+        db.add(msg)
+        db.flush()
+        _audit(db, identity, item, "service_agreement.reply", {"channel": "cabinet"})
+        db.commit()
+        return {"id": str(msg.id), "delivered": True, "delivered_via": "cabinet"}
 
     token = _client_bot_token()
     if not token:

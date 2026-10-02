@@ -95,14 +95,16 @@ async def test_start_with_foreign_case_does_not_open_it(replies, summary) -> Non
 
 
 @pytest.mark.asyncio
-async def test_message_goes_to_case_card_and_to_lawyer(monkeypatch, replies, admin_messages) -> None:
+async def test_message_goes_to_the_case_thread(monkeypatch, replies, admin_messages) -> None:
+    """Сообщение по делу — в общую переписку (кабинет и карточка юриста).
+    Уведомление юристу ставит ядро без имени и текста; бот сам его не шлёт."""
     recorded: list[dict] = []
 
-    def _record(intake_id, **kwargs) -> bool:
+    def _post(intake_id, **kwargs) -> bool:
         recorded.append({"intake_id": intake_id, **kwargs})
         return True
 
-    monkeypatch.setattr(case_messages.core_api_bridge, "record_clarification", _record)
+    monkeypatch.setattr(case_messages.core_api_bridge, "post_case_message", _post)
     context = SimpleNamespace(
         user_data={
             case_messages.CASE_CONTEXT_KEY: {
@@ -125,17 +127,34 @@ async def test_message_goes_to_case_card_and_to_lawyer(monkeypatch, replies, adm
     )
 
     assert handled is True
-    assert recorded[0]["intake_id"] == INTAKE_ID
-    assert recorded[0]["question_text"] == "Сообщение клиента по делу"
-    assert recorded[0]["answer_text"] == "Работодатель прислал ответ на претензию"
-    assert recorded[0]["question_key"].startswith("client_message:")
-    assert admin_messages[0]["chat_id"] == 777
-    assert "«Трудовые отношения»" in admin_messages[0]["text"]
-    assert "Иван Петров (@client)" in admin_messages[0]["text"]
-    assert "Работодатель прислал ответ на претензию" in admin_messages[0]["text"]
-    assert replies == ["Передал юристу по делу «Трудовые отношения». Ответ придёт сюда же."]
+    assert recorded == [{"intake_id": INTAKE_ID, "telegram_user_id": _user().id,
+                         "text": "Работодатель прислал ответ на претензию"}]
+    assert admin_messages == []
+    assert replies == ["Передал юристу по делу «Трудовые отношения». Ответ придёт сюда же и в личный кабинет на сайте."]
     # Контекст остаётся: следующее сообщение того же разговора — тоже по делу.
     assert case_messages.CASE_CONTEXT_KEY in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_core_down_message_reaches_lawyer_without_name(monkeypatch, replies, admin_messages) -> None:
+    monkeypatch.setattr(case_messages.core_api_bridge, "post_case_message", lambda *a, **k: False)
+    context = SimpleNamespace(
+        user_data={case_messages.CASE_CONTEXT_KEY: {"intake_id": INTAKE_ID, "title": "Спор", "until": 10**12}},
+        bot=object(),
+    )
+
+    await case_messages.maybe_handle_case_message(
+        update=_update("Иван Петров, звоните +7 916 123-45-67"),
+        context=context,
+        original_message=object(),
+        message_text="Иван Петров, звоните +7 916 123-45-67",
+        user=_user(),
+        user_data={"first_name": "Иван", "last_name": "Петров"},
+    )
+
+    text = admin_messages[0]["text"]
+    assert "не записалось" in text
+    assert "Петров" not in text and "+7 916" not in text
 
 
 @pytest.mark.asyncio
@@ -161,7 +180,7 @@ async def test_expired_case_context_is_ignored(replies) -> None:
 
 @pytest.mark.asyncio
 async def test_core_and_lawyer_both_unreachable_is_reported_to_client(monkeypatch, replies, admin_messages) -> None:
-    monkeypatch.setattr(case_messages.core_api_bridge, "record_clarification", lambda *a, **k: False)
+    monkeypatch.setattr(case_messages.core_api_bridge, "post_case_message", lambda *a, **k: False)
 
     async def _fail(bot, action="send_message", **kwargs) -> None:
         raise RuntimeError("network")

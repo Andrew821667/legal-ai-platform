@@ -131,38 +131,39 @@ async def maybe_handle_case_message(*, update, context, original_message, messag
 
     intake_id = str(state["intake_id"])
     title = str(state.get("title") or "дело")
-    recorded = core_api_bridge.record_clarification(
-        intake_id,
-        question_key=f"client_message:{int(time.time())}",
-        question_text="Сообщение клиента по делу",
-        answer_text=text,
-    )
+    # В общую переписку по делу: юрист видит её в карточке клиента, клиент — в
+    # кабинете. Уведомление юристу ставит ядро — без имени и текста клиента.
+    recorded = core_api_bridge.post_case_message(intake_id, telegram_user_id=int(user.id), text=text)
 
-    who = " ".join(part for part in (user_data.get("first_name"), user_data.get("last_name")) if part) or (
-        f"@{user_data.get('username')}" if user_data.get("username") else f"id {user.id}"
-    )
-    username = f" (@{user.username})" if getattr(user, "username", None) else ""
-    notice = f"💬 Сообщение по делу «{title}» от {who}{username}:\n\n{text[:3000]}"
-    if not recorded:
-        notice += "\n\n⚠️ В карточку обращения не записалось — ядро не ответило, текст только здесь."
-    markup = lawyer_workspace_button(state.get("lead_id"), label="Открыть карточку")
     delivered = False
-    try:
-        await utils.safe_send_message(
-            context.bot,
-            action="case_message_notify",
-            chat_id=config.ADMIN_TELEGRAM_ID,
-            text=notice,
-            reply_markup=markup,
+    if not recorded:
+        # Ядро не ответило — текст не должен пропасть: юристу, но без имени,
+        # а телефоны, почта и документы в тексте — метками (Telegram за рубежом).
+        import pii
+
+        names = tuple(n for n in (user_data.get("first_name"), user_data.get("last_name")) if n)
+        masked = pii.Masker(known_names=names).mask(text[:3000])
+        notice = (
+            f"💬 Сообщение клиента по делу «{title}» не записалось в систему — ядро не ответило.\n\n"
+            f"{masked}"
         )
-        delivered = True
-    except Exception as error:  # noqa: BLE001 — клиент не должен видеть падение доставки
-        logger.warning("Case message notification failed: %s", type(error).__name__)
+        markup = lawyer_workspace_button(state.get("lead_id"), label="Открыть карточку")
+        try:
+            await utils.safe_send_message(
+                context.bot,
+                action="case_message_notify",
+                chat_id=config.ADMIN_TELEGRAM_ID,
+                text=notice,
+                reply_markup=markup,
+            )
+            delivered = True
+        except Exception as error:  # noqa: BLE001 — клиент не должен видеть падение доставки
+            logger.warning("Case message notification failed: %s", type(error).__name__)
 
     # Окно продлевается: следующее сообщение того же разговора — тоже по делу.
     state["until"] = time.time() + CASE_CONTEXT_TTL_SECONDS
     if recorded or delivered:
-        reply = f"Передал юристу по делу «{title}». Ответ придёт сюда же."
+        reply = f"Передал юристу по делу «{title}». Ответ придёт сюда же и в личный кабинет на сайте."
     else:
         reply = (
             "Не получилось передать сообщение прямо сейчас. Попробуйте ещё раз "
@@ -170,3 +171,15 @@ async def maybe_handle_case_message(*, update, context, original_message, messag
         )
     await utils.safe_reply_text(original_message, reply, action="case_message_forwarded")
     return True
+
+
+async def handle_case_callback(update, context) -> None:
+    """Кнопка «Ответить по делу» под ответом юриста: открыть дело в чате."""
+    query = update.callback_query
+    if query is None or query.from_user is None:
+        return
+    await utils.safe_answer_callback(query, action="case_reply_answer")
+    intake_id = (query.data or "").removeprefix("case:")
+    if not CASE_START_PAYLOAD_RE.match(f"case_{intake_id}"):
+        return
+    await handle_case_start_payload(message=query.message, context=context, user=query.from_user, intake_id=intake_id)
