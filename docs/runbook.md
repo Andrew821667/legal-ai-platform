@@ -312,6 +312,36 @@ cd apps/lead-bot/legacy
 - `PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS` — таймаут отправки одного уведомления;
 - `PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS` — допустимый лаг scheduler без warning/misfire.
 
+## Порт 443 на Mac mini: Colima и Tailscale Funnel
+Docker на Mac mini — Colima (Lima): порты контейнеров на хост пробрасывает
+`limactl hostagent` через ssh от имени `andrej`. macOS пускает не-root на
+порт 443 только на все адреса сразу (`0.0.0.0`), а на том же хосте Tailscale
+Funnel держит 443 на адресах Tailscale — для вебхука MAX-бота
+(`inwhite-ai-demo`, `mac-mini-andrej.tailaf1886.ts.net` → `127.0.0.1:8001`;
+MAX принимает вебхук только на 443). Пока оба на месте, штатный проброс 443
+не встаёт: 02.10.2026 после пересоздания Caddy сайт отвечал 000 при здоровых
+контейнерах.
+
+Решение — служба `ru.legalai.colima-https-tunnel` (`infra/launchd/`): ssh от
+root к sshd виртуальной машины Colima, 443 на `en0`, `en1` и `127.0.0.1`;
+адреса Tailscale остаются Funnel. Пересоздание Caddy туннель не рвёт; обрыв
+ssh — launchd поднимает заново за ~10 с; порт sshd Colima читается при каждом
+старте из `~/.colima/_lima/colima/ssh.config`. Порт 80 по-прежнему
+пробрасывает Lima.
+
+```bash
+sudo launchctl print system/ru.legalai.colima-https-tunnel | grep -E "state|pid|runs"
+sudo tail /Users/andrej/Library/Logs/colima-https-tunnel.log
+sudo launchctl kickstart -k system/ru.legalai.colima-https-tunnel   # перезапуск
+tailscale serve status                                              # что держит Funnel
+```
+Установка и обновление — команды в шапке plist; скрипт ставится root-владельцем
+в `/usr/local/sbin`, не запускается из каталога проекта. Если Funnel с 443
+уберут — служба продолжит работать как есть (Lima `0.0.0.0:443` не займёт,
+пока туннель держит конкретные адреса). Вернуться к штатному пробросу:
+`sudo launchctl bootout system/ru.legalai.colima-https-tunnel`, затем
+перезапустить контейнер Caddy.
+
 ## Ночные и периодические задачи (cron)
 News-пайплайн (`news-telegram-ingest`, `news-generate`, `news-publish`, `news-reader-digest`) запускается в compose в постоянных loop-процессах:
 - `news-telegram-ingest` и `news-generate` реально выполняют работу только в слотах из control-plane;
