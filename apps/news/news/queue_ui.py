@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
-
 
 ScreenGuide = Callable[[str, list[str]], str]
 
@@ -62,6 +61,7 @@ def build_auto_queue_text(
         "Текущая сетка:",
         f"• Пн-Пт: {schedule_daily_morning_label} и {schedule_daily_evening_label}",
         f"• Пятница: обзор недели в {schedule_weekly_review_label}",
+        f"• Четверг: «Практика AI Verdict» в {schedule_daily_evening_label}",
         f"• Суббота: практика недели в {schedule_humor_label}",
         f"• Воскресенье: лонгрид в {schedule_longread_label}",
         "",
@@ -112,7 +112,7 @@ def build_manual_queue_text(
     screen_guide: ScreenGuide | None = None,
 ) -> str:
     guide = screen_guide or (lambda _what, _actions: "")
-    current_utc = now_utc or datetime.now(timezone.utc)
+    current_utc = now_utc or datetime.now(UTC)
     filter_label = "к публикации сейчас" if queue_filter == "due" else "все на публикацию"
     theme_label = "Все темы" if theme_filter == "all" else pillar_display(theme_filter)
 

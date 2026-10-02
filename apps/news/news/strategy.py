@@ -7,12 +7,13 @@ from typing import Any
 from news.pipeline import parse_schedule_slots
 from news.settings import settings
 
-PUBLICATION_KIND_ORDER = ("daily", "weekly_review", "longread", "practice", "other")
+PUBLICATION_KIND_ORDER = ("daily", "weekly_review", "longread", "practice", "services", "other")
 PUBLICATION_KIND_LABELS = {
     "daily": "Ежедневный пост",
     "weekly_review": "Обзор недели",
     "longread": "Лонгрид",
     "practice": "Практика недели",
+    "services": "Практика AI Verdict",
     "other": "Прочее",
 }
 PUBLICATION_KIND_BADGES = {
@@ -20,6 +21,7 @@ PUBLICATION_KIND_BADGES = {
     "weekly_review": "🧭",
     "longread": "📚",
     "practice": "🧩",
+    "services": "🏛",
     "other": "📌",
 }
 
@@ -35,12 +37,14 @@ _FORMAT_TYPE_BY_KIND = {
     "weekly_review": "weekly_review",
     "longread": "longread",
     "practice": "practice",
+    "services": "manual_promo_offer",
 }
 _CTA_TYPE_BY_KIND = {
     "daily": "soft",
     "weekly_review": "soft",
     "longread": "mid",
     "practice": "soft",
+    "services": "soft",
 }
 _LONGREAD_TOPIC_FALLBACK = (
     "AI для intake и первичной квалификации обращений",
@@ -112,6 +116,8 @@ def publication_kind_from_format_type(format_type: str | None) -> str:
         return "longread"
     if normalized in {"practice", "humor"}:
         return "practice"
+    if normalized in {"service", "services", "promo_offer", "manual_promo_offer"}:
+        return "services"
     return "other"
 
 
@@ -327,9 +333,10 @@ def _apply_schedule_row(config: ScheduleConfig, row: dict[str, Any] | None, alia
 def _day_slots(current_day: date, config: ScheduleConfig) -> list[tuple[str, tuple[int, int], bool]]:
     weekday = current_day.weekday()
     if weekday <= 4:
+        evening_kind = "services" if weekday == 3 else "daily"
         slots = [
             ("daily", config.daily_morning_slot, config.daily_morning_enabled),
-            ("daily", config.daily_evening_slot, config.daily_evening_enabled),
+            (evening_kind, config.daily_evening_slot, config.daily_evening_enabled),
         ]
         if weekday == 4:
             slots.append(("weekly_review", config.weekly_review_slot, config.weekly_review_enabled))

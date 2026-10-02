@@ -23,10 +23,10 @@ from news.pipeline import (
     canonicalize_url,
     choose_top_articles,
     dedupe_headlines,
-    interleave_ru_law,
     default_pillar_targets,
     extract_domain,
     generation_theme_keys,
+    interleave_ru_law,
     lexical_similarity,
     normalize_rubric_to_pillar,
     passes_generation_scope,
@@ -34,6 +34,7 @@ from news.pipeline import (
 )
 from news.rag import PostedContentRAG
 from news.rss_fetcher import fetch_rss_articles
+from news.service_posts import service_post_for
 from news.settings import settings
 from news.source_catalog import (
     active_source_specs,
@@ -534,6 +535,32 @@ def _build_practice_candidate(now_utc: datetime, selected_articles: list[Article
     )
 
 
+def _build_service_preview(slot, publish_at_utc: datetime) -> dict[str, str]:
+    item = service_post_for(slot.publish_at_local.date())
+    source_url = f"internal://services/{item.slug}/{slot.publish_at_local.date().isoformat()}"
+    return {
+        "title": item.title,
+        "text": item.text,
+        "rubric": item.pillar,
+        "publication_kind": "services",
+        "format_type": "manual_promo_offer",
+        "cta_type": "soft",
+        "source_url": source_url,
+        "source_feed_url": "internal://services",
+        "source_title": item.title,
+        "source_summary": "Проверенный редакционный материал о практике AI Verdict.",
+        "source_domain": "",
+        "source_hash": build_source_hash(source_url, item.title, publish_at_utc),
+        "pillar": item.pillar,
+        "channel_id": settings.telegram_channel_id or "",
+        "channel_username": settings.telegram_channel_username or "",
+        "publish_at": publish_at_utc.isoformat(),
+        "status": generated_post_status(),
+        "article_published_at": publish_at_utc.isoformat(),
+        "longread_topic": "",
+    }
+
+
 def collect_generation_previews(limit: int) -> GenerationRunResult:
     if not settings.api_key_news:
         raise RuntimeError("API_KEY_NEWS is required")
@@ -704,7 +731,7 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         cta_type = slot.cta_type
         publish_at_utc = slot.publish_at_local.astimezone(UTC)
         freshness_window = timedelta(days=max(1, settings.news_max_source_age_days))
-        if publish_at_utc > now_utc + freshness_window:
+        if publication_kind != "services" and publish_at_utc > now_utc + freshness_window:
             skipped_slots += 1
             logger.info(
                 "publish_slot_outside_freshness_window_skipped",
@@ -713,6 +740,24 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
                     "max_age_days": settings.news_max_source_age_days,
                 },
             )
+            continue
+
+        if publication_kind == "services":
+            preview = _build_service_preview(slot, publish_at_utc)
+            max_similarity = max(
+                (lexical_similarity(preview["text"], prev_text) for prev_text in history_texts),
+                default=0.0,
+            )
+            if max_similarity >= settings.news_similarity_threshold + 0.15:
+                duplicates += 1
+                skipped_slots += 1
+                logger.info(
+                    "service_post_duplicate_skipped",
+                    extra={"source_url": preview["source_url"], "similarity": round(max_similarity, 4)},
+                )
+                continue
+            previews.append(preview)
+            history_texts.append(preview["text"])
             continue
 
         for _ in range(0, 80):

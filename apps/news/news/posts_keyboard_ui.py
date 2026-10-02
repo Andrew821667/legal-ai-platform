@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-
 InlineButtonFactory = Callable[..., Any]
 SubmenuRowsFactory = Callable[..., list[list[Any]]]
 
@@ -90,6 +89,7 @@ def build_review_posts_keyboard_rows(
         ("weekly_review", "Обзоры"),
         ("longread", "Лонгриды"),
         ("practice", "Практика недели"),
+        ("services", "Практика AI Verdict"),
         ("other", "Прочее"),
     ]
     for index in range(0, len(kind_rows), 2):
