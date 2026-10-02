@@ -13,6 +13,17 @@ type Case = {
   document_requests?: { request_id: string; title: string; note?: string | null; status: string }[];
   /** Новые ответы юриста в переписке по делу. */
   messages_unread?: number;
+  /** Файлы по делу, которые хранятся у нас: результаты от юриста и загруженное из кабинета. */
+  files?: CaseFile[];
+};
+type CaseFile = {
+  id: string; direction: "to_client" | "from_client"; file_name: string; size: number;
+  note?: string | null; created_at?: string | null; downloaded_at?: string | null;
+};
+type Consultation = {
+  slot_id: string; starts_at: string | null; duration_min: number; status: string;
+  price_minor: number | null; access_token?: string | null;
+  receipt_ref?: string | null; receipt_at?: string | null;
 };
 type CaseMessage = { id: string; author: "client" | "lawyer"; channel: string; text: string; created_at: string | null };
 type Agreement = {
@@ -30,6 +41,8 @@ type Act = {
   claimed_paid_at?: string | null; paid_at?: string | null; cancelled_at?: string | null;
   /** advance — счёт на предоплату, без приёмки работы. */
   kind?: "act" | "advance";
+  /** Чек «Мой налог» по оплате — ссылка, которую внёс юрист. */
+  receipt_ref?: string | null;
 };
 type Summary = {
   client: {
@@ -39,6 +52,10 @@ type Summary = {
   };
   nda: { signed: boolean; signed_at?: string | null; signer_full_name?: string | null; pdn_consent_at?: string | null };
   cases: Case[]; agreements: Agreement[]; acts: Act[];
+  /** Файлы от юриста вне дела (прислан до первого обращения). */
+  files?: CaseFile[];
+  /** Записи на консультацию: оплата, время, чек. */
+  consultations?: Consultation[];
 };
 type Doc = {
   id: string; text: string; hash?: string; document_hash?: string; status: string; kind?: string;
@@ -49,6 +66,9 @@ type Doc = {
 const practiceLabels: Record<string, string> = {
   legal: "Юридическая практика", engineering: "Инженерная практика",
   hybrid: "Автоматизация юридической функции",
+};
+const consultationLabels: Record<string, string> = {
+  held: "Ждём оплату", claimed: "Оплата проверяется", confirmed: "Оплачено",
 };
 const statusLabels: Record<string, string> = {
   received: "Получено", needs_clarification: "Уточняем задачу", conflict_check: "Проверка",
@@ -204,7 +224,26 @@ export default function ClientCases({ variant = "miniapp", emptyState }: ClientC
 
     {data.agreements.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Договоры</h3></div><div className="mt-3 space-y-3">{data.agreements.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "supplement" ? `Допсоглашение № ${item.number}` : `№ ${item.number}, редакция ${item.revision}`}</p><span className="text-xs text-slate-400">{statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.subject}</p><AgreementMessages messages={item.messages} />{!item.client_details_complete && item.status === "sent" ? <AgreementDetails id={item.id} busy={busy} run={run} /> : <div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => openAgreement(item.id)}>Открыть</Button>{["sent", "viewed"].includes(item.status) ? <Question id={item.id} busy={busy} run={run} /> : null}</div>}</div>)}</div></article> : null}
 
-    {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "advance" ? "Счёт на предоплату" : "Акт"} № {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>{item.kind === "advance" ? "Открыть счёт" : "Открыть акт"}</Button></div></div>)}</div></article> : null}
+    {data.acts.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-400"/><h3 className="font-semibold text-white">Акты</h3></div><div className="mt-3 space-y-3">{data.acts.map((item) => <div key={item.id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0"><div className="flex justify-between gap-3"><p className="text-sm text-white">{item.kind === "advance" ? "Счёт на предоплату" : "Акт"} № {item.number}</p><span className="text-xs text-slate-400">{item.cancelled_at ? "Отозван" : item.paid_at ? "Оплачен" : item.accepted_at ? "Работа принята" : item.objected_at ? "Есть замечания" : statusLabels[item.status] || item.status}</span></div><p className="mt-1 text-sm text-slate-300">{item.description}</p><p className="mt-1 text-sm font-semibold text-white">{money(item.amount_minor)}</p><Receipt value={item.receipt_ref} /><div className="mt-3"><Button onClick={() => openAct(item.id)} disabled={Boolean(item.cancelled_at)}>{item.kind === "advance" ? "Открыть счёт" : "Открыть акт"}</Button></div></div>)}</div></article> : null}
+
+    {data.consultations?.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
+      <div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Консультации</h3></div>
+      <div className="mt-3 space-y-3">{data.consultations.map((item) => <div key={item.slot_id} className="border-t border-slate-700 pt-3 first:border-0 first:pt-0">
+        <div className="flex justify-between gap-3">
+          <p className="text-sm text-white">{item.starts_at ? shortDate(item.starts_at) : "Время согласуем с вами"}{item.price_minor ? ` · ${money(item.price_minor)}` : ""}</p>
+          <span className="text-xs text-slate-400">{consultationLabels[item.status] || item.status}</span>
+        </div>
+        <div className="flex flex-wrap gap-x-4">
+          <Receipt value={item.receipt_ref} />
+          {item.access_token ? <a href={`/consultation/booking/${item.access_token}`} className="mt-2 inline-block text-sm font-semibold text-amber-300 underline">Страница записи</a> : null}
+        </div>
+      </div>)}</div>
+    </article> : null}
+
+    {data.files?.length ? <article className="rounded-lg border border-slate-700 bg-slate-800/80 p-4">
+      <div className="flex items-center gap-2"><FileText className="h-5 w-5 text-amber-300"/><h3 className="font-semibold text-white">Документы от юриста</h3></div>
+      <ul className="mt-3 space-y-2">{data.files.map((file) => <FileItem key={file.id} file={file} />)}</ul>
+    </article> : null}
 
     {doc ? <DocumentPanel kind={docKind!} doc={doc} note={note} setNote={setNote} busy={busy} close={() => setDoc(null)} run={run} variant={variant} error={error} /> : null}
   </section>;
@@ -426,15 +465,23 @@ function PaymentQr({ actId }: { actId: string }) {
 }
 
 /**
- * Документы по делу: что уже передано и загрузка нового. Раньше здесь было
- * «отправьте файл в чат бота по этому обращению» — лишний шаг и путаница,
- * к какому делу файл. Файл уходит юристу в Telegram и сразу виден в деле.
+ * Документы по делу: что прислал юрист, что уже передано и загрузка нового.
+ * Раньше здесь было «отправьте файл в чат бота по этому обращению» — лишний
+ * шаг и путаница, к какому делу файл. Файл хранится у нас и сразу виден
+ * юристу в рабочем месте; в Telegram он не уходит.
  */
 function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned: boolean; onUploaded: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const requested = item.document_requests || [];
   const waiting = requested.filter((r) => r.status === "open").length;
+  const fromLawyer = (item.files || []).filter((file) => file.direction === "to_client");
+  // Прежние загрузки (через Telegram) и новые (в нашей базе) — одним списком.
+  const mine = [
+    ...item.documents.map((doc) => ({ id: doc.id, file_name: doc.file_name, created_at: doc.created_at || "" })),
+    ...(item.files || []).filter((file) => file.direction === "from_client")
+      .map((file) => ({ id: file.id, file_name: file.file_name, created_at: file.created_at || "" })),
+  ].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const upload = async (file: File, requestId?: string, title?: string) => {
     setBusy(true); setNote(null);
     try {
@@ -470,8 +517,12 @@ function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned:
         </li>)}
       </ul>
     </div> : null}
-    <p className="text-xs text-slate-400">Документы: {item.documents.length}</p>
-    {item.documents.length ? <ul className="space-y-1 text-xs text-slate-300">{item.documents.slice(-5).map((doc) => <li key={doc.id} className="truncate">📎 {doc.file_name || "файл"}</li>)}</ul> : null}
+    {fromLawyer.length ? <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3">
+      <p className="text-sm font-semibold text-slate-100">Документы от юриста</p>
+      <ul className="mt-2 space-y-2">{fromLawyer.map((file) => <FileItem key={file.id} file={file} />)}</ul>
+    </div> : null}
+    <p className="text-xs text-slate-400">Ваши документы: {mine.length}</p>
+    {mine.length ? <ul className="space-y-1 text-xs text-slate-300">{mine.slice(-5).map((doc) => <li key={doc.id} className="truncate">📎 {doc.file_name || "файл"}</li>)}</ul> : null}
     {ndaSigned ? <label className={`inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-100 ${busy ? "opacity-50" : ""}`}>
       <input type="file" className="hidden" disabled={busy} accept={accept}
         onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(file); }} />
@@ -480,4 +531,46 @@ function CaseDocuments({ item, ndaSigned, onUploaded }: { item: Case; ndaSigned:
     {ndaSigned ? <p className="text-xs text-slate-500">PDF, Word, Excel, фото или ZIP до 20 МБ. Файл сразу увидит юрист.</p> : null}
     {note ? <p className={`text-xs ${note.ok ? "text-emerald-400" : "text-red-300"}`}>{note.text}</p> : null}
   </div>;
+}
+
+/** Чек «Мой налог»: ссылка — кнопкой, иначе номер как есть. */
+function Receipt({ value }: { value?: string | null }) {
+  if (!value) return null;
+  return /^https:\/\//i.test(value)
+    ? <a href={value} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-emerald-400 underline">Чек «Мой налог»</a>
+    : <p className="mt-2 text-sm text-slate-300">Чек «Мой налог»: {value}</p>;
+}
+
+/**
+ * Файл по делу. На сайте — обычная ссылка (сессия в куке). В мини-аппе
+ * Telegram у ссылки не было бы подтверждения личности, поэтому файл грузится
+ * запросом с initData, как QR оплаты, и сохраняется из памяти браузера.
+ */
+function FileItem({ file }: { file: CaseFile }) {
+  const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
+  const url = `/api/client/files/${file.id}`;
+  const download = async () => {
+    const initData = telegramInitData();
+    if (!initData) { window.location.href = url; return; }
+    setState("busy");
+    try {
+      const response = await fetch(url, { headers: { "x-telegram-init-data": initData }, cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      const blob = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = blob; link.download = file.file_name; document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(blob), 60_000);
+      setState("idle");
+    } catch {
+      setState("failed");
+    }
+  };
+  return <li className="text-sm">
+    <button type="button" onClick={() => void download()} disabled={state === "busy"} className="text-left font-semibold text-amber-300 underline disabled:opacity-50">
+      📎 {file.file_name}
+    </button>
+    <span className="ml-2 text-xs text-slate-400">{shortDate(file.created_at || null)}</span>
+    {file.note ? <span className="block text-xs text-slate-300">{file.note}</span> : null}
+    {state === "failed" ? <span className="block text-xs text-red-300">Не получилось скачать здесь — откройте личный кабинет на сайте ai-verdict.ru.</span> : null}
+  </li>;
 }

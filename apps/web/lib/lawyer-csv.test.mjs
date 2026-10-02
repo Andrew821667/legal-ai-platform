@@ -54,3 +54,11 @@ test("неизвестный статус остаётся кодом, а не �
 test("имя файла — с датой выгрузки", () => {
   assert.equal(agreementsCsvFileName(new Date("2026-09-11T12:00:00Z")), "договоры-2026-09-11.csv");
 });
+
+test("копия для Telegram — без клиента и предмета договора, суммы и даты на месте", () => {
+  const csv = agreementsCsv([row()], { withoutClients: true });
+  const lines = csv.slice(1).split("\r\n");
+  assert.equal(lines[0], "Номер;Статус;Сумма, ₽;Цена в документе;Составлен;Отправлен;Подписан");
+  assert.equal(lines[1], "AV-20260909-2EFAB3-R2;Подписан;12500,50;12 500,50 ₽;09.09.2026;09.09.2026;11.09.2026");
+  assert.ok(!csv.includes("Рябов") && !csv.includes("имущества"));
+});

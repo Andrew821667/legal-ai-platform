@@ -26,6 +26,8 @@ const EXACT: Record<string, string> = {
   "Template not found": "Заготовка не найдена.",
   "Booking not found": "Запись не найдена или время бронирования истекло.",
   "Consultation slot not found": "Время не найдено.",
+  "File not found": "Файл не найден.",
+  "Case not found": "Дело не найдено.",
 
   // Объединение с Telegram (кабинет, вход через Яндекс ID)
   invalid_code: "Код не подошёл или истёк. Запросите новый в боте командой /link и введите его в течение 10 минут.",
@@ -61,6 +63,12 @@ const EXACT: Record<string, string> = {
   "Bot token is not configured": "Сервер не настроен: нет токена бота.",
   "NDA must be signed first": "Сначала клиент должен подписать соглашение о конфиденциальности.",
   "NDA must be signed before uploading documents": "Документы принимаются после подписания NDA.",
+  // Файлы по делу
+  "File must have an extension": "У файла нет расширения — переименуйте его, например «договор.pdf».",
+  "File type is not allowed": "Такой тип файла не принимаем: PDF, Word, Excel, фото или ZIP.",
+  "File is empty": "Файл пустой.",
+  "File is larger than 20 MB": "Файл больше 20 МБ — сожмите его или разделите на части.",
+  "Encryption key is not configured": "Хранилище файлов не настроено — сообщите юристу.",
   "Conflict check must be clear": "Сначала отметьте, что конфликта интересов нет.",
   "Conflict check must be clear first": "Сначала отметьте, что конфликта интересов нет.",
   "Operator contract details are incomplete": "Не заполнены реквизиты исполнителя — договор составить нельзя.",
