@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "practice", "other")
+AUTO_QUEUE_FILTERS = ("all", "daily", "weekly_review", "longread", "practice", "services", "other")
 MANUAL_QUEUE_FILTERS = ("due", "all")
 REVIEW_SOURCE_FILTERS = ("all", "ai", "manual")
 QUEUE_THEME_FILTERS = ("all", "regulation", "case", "implementation", "tools", "market")
