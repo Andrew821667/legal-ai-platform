@@ -61,6 +61,9 @@ PRIORITY_MARKERS = ("белые списки", "whitelist", "white list")
 # уберёт его из подписки. Такой узел в конфиге опаснее, чем его отсутствие:
 # балансировщик тратит на него попытки, а при неудачном порядке залипает.
 PROBE_TIMEOUT = float(os.environ.get("XRAY_BALANCER_PROBE_TIMEOUT", "3"))
+CHANNEL_PROBE_URL = "https://api.telegram.org"
+CHANNEL_PROBE_TIMEOUT = int(os.environ.get("XRAY_BALANCER_CHANNEL_PROBE_TIMEOUT", "12"))
+FORCE_RELOAD = os.environ.get("XRAY_BALANCER_FORCE_RELOAD") == "1"
 
 
 def node_alive(addr, port):
@@ -85,6 +88,33 @@ def log(m):
             f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + m + "\n")
     except Exception:
         pass
+
+
+def current_channel_healthy():
+    """Keep a working pool until Telegram actually needs a replacement."""
+    try:
+        result = subprocess.run(
+            [
+                "/usr/bin/curl",
+                "-s",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                "--max-time",
+                str(CHANNEL_PROBE_TIMEOUT),
+                "-x",
+                f"http://{BIND}:{HTTP_PORT}",
+                CHANNEL_PROBE_URL,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=CHANNEL_PROBE_TIMEOUT + 2,
+        )
+    except Exception:
+        return False
+    code = result.stdout.strip()
+    return result.returncode == 0 and bool(code) and code != "000"
 
 def gw():
     r = subprocess.run(["ipconfig", "getoption", "en0", "router"], capture_output=True, text=True).stdout.strip()
@@ -367,7 +397,20 @@ def main():
 
     old = open(OUT_CFG).read() if os.path.exists(OUT_CFG) else ""
     if hashlib.md5(new.encode()).hexdigest() != hashlib.md5(old.encode()).hexdigest():
-        open(OUT_CFG, "w").write(new)
+        # Смена конфига сбрасывает observatory. Пока он заново проверяет узлы,
+        # leastPing отправляет весь трафик через первый узел, который может
+        # принимать TCP, но рвать Telegram. Обновление пула нужно при отказе,
+        # а не каждые полчаса поверх исправного канала.
+        if old and not FORCE_RELOAD and current_channel_healthy():
+            log(
+                f"pool changed -> {len(pool)} servers, but current Telegram channel is healthy; "
+                "reload deferred"
+            )
+            return
+        tmp = OUT_CFG + ".tmp"
+        with open(tmp, "w") as fh:
+            fh.write(new)
+        os.replace(tmp, OUT_CFG)
         log("pool CHANGED -> %d servers, %d routes; reloading balancer" % (len(pool), len(route_ips)))
         subprocess.run(["/bin/launchctl", "kickstart", "-k", SERVICE], capture_output=True)
     else:
