@@ -105,8 +105,64 @@ if [ "$FORCE_RECREATE" = "1" ]; then
   recreate_args=(--force-recreate)
 fi
 
+# Копия базы перед миграциями. Ночная копия бывает почти суточной давности:
+# неудачная миграция откатила бы базу на день назад. Если в новом образе ядра
+# есть миграции, которых нет в базе, — сначала дамп, проверенный pg_restore
+# --list. Не удался — деплой останавливается до того, как ядро запустит
+# миграции: лучше не выкатить, чем выкатить без пути назад. Хранятся
+# последние PRE_MIGRATION_KEEP копий.
+PRE_MIGRATION_DIR="${PRE_MIGRATION_DIR:-$HOME/backups/legal-ai/pre-migration}"
+PRE_MIGRATION_KEEP="${PRE_MIGRATION_KEEP:-5}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-legal-ai-postgres}"
+PGUSER_NAME="${PGUSER_NAME:-legalai_app}"
+PGDB_NAME="${PGDB_NAME:-legalai_platform}"
+
+pre_migration_backup() {
+  local image="${CORE_API_IMAGE:-}" current target file
+  if [ -z "$image" ]; then
+    echo "Pre-migration backup: образ ядра не задан (локальная сборка) — пропуск"
+    return 0
+  fi
+  current="$(docker exec "$POSTGRES_CONTAINER" psql -U "$PGUSER_NAME" -d "$PGDB_NAME" -tAc \
+    'select version_num from alembic_version' 2>/dev/null | tr -d '[:space:]' || true)"
+  if [ -z "$current" ]; then
+    echo "Pre-migration backup: версия схемы не прочитана (новая база?) — пропуск"
+    return 0
+  fi
+  # Ревизии называются ГГГГММДД_NNNN — последняя по алфавиту и есть голова.
+  target="$(docker run --rm --entrypoint sh "$image" -c \
+    'grep -ho "^revision = \"[^\"]*\"" /app/apps/core-api/alembic/versions/*.py' 2>/dev/null \
+    | sed -E 's/.*"(.*)"/\1/' | sort | tail -1 || true)"
+  if [ -n "$target" ] && [ "$target" = "$current" ]; then
+    echo "Pre-migration backup: новых миграций нет ($current)"
+    return 0
+  fi
+  mkdir -p "$PRE_MIGRATION_DIR"
+  chmod 700 "$PRE_MIGRATION_DIR"
+  file="$PRE_MIGRATION_DIR/before_${target:-unknown}_from_${current}_$(date +%Y%m%d_%H%M%S).dump"
+  echo "Pre-migration backup: $current -> ${target:-?}, дамп в $file"
+  if ! docker exec "$POSTGRES_CONTAINER" pg_dump -U "$PGUSER_NAME" -Fc "$PGDB_NAME" > "$file.part" \
+    || [ ! -s "$file.part" ] \
+    || ! docker exec -i "$POSTGRES_CONTAINER" pg_restore --list < "$file.part" >/dev/null; then
+    rm -f "$file.part"
+    echo "Pre-migration backup FAILED — деплой остановлен до миграций" >&2
+    return 1
+  fi
+  mv "$file.part" "$file"
+  chmod 600 "$file"
+  { ls -1t "$PRE_MIGRATION_DIR"/before_*.dump 2>/dev/null || true; } | tail -n +"$((PRE_MIGRATION_KEEP + 1))" | while read -r old; do
+    rm -f "$old"
+  done
+  echo "Pre-migration backup: готово ($(du -h "$file" | cut -f1))"
+}
+
 echo "Starting production stack..."
 "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" postgres
+for _ in $(seq 1 30); do
+  docker exec "$POSTGRES_CONTAINER" pg_isready -U "$PGUSER_NAME" -d "$PGDB_NAME" -q >/dev/null 2>&1 && break
+  sleep 2
+done
+pre_migration_backup
 if [ "${#recreate_args[@]}" -gt 0 ]; then
   "${compose[@]}" up -d "$COMPOSE_BUILD_MODE" "${recreate_args[@]}" \
     core-api \

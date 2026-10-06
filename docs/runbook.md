@@ -312,6 +312,29 @@ cd apps/lead-bot/legacy
 - `PENDING_LEADS_NOTIFY_TIMEOUT_SECONDS` — таймаут отправки одного уведомления;
 - `PENDING_LEADS_JOB_MISFIRE_GRACE_SECONDS` — допустимый лаг scheduler без warning/misfire.
 
+## Журналы на Mac mini
+Журналы контейнеров ограничены в compose (`json-file`, 10 МБ × 5, включая
+Postgres). Журналы служб самого хоста (launchd и cron: xray, туннели, сторожа,
+бэкап) подрезает раз в сутки в 04:10 служба `ru.legalai.trim-host-logs` (root;
+`infra/launchd/trim-host-logs.sh`): файл больше 20 МБ сжимается в
+`<имя>.1.gz` (прежняя копия заменяется) и очищается на месте — службы пишут с
+O_APPEND и продолжают без перезапуска. Каталоги: `~andrej/Library/Logs`,
+`~legalai/Library/Logs`, `~andrej/backups/legal-ai`. Итоги —
+`/var/log/legalai-trim-host-logs.log`. Установка — команды в шапке plist.
+
+## Сторож: оповещения владельцу
+`news_monitor_cron.sh` (cron пользователя `legalai`, каждые 10 минут) запускает
+`healthcheck.sh`: здоровье ядра, Telegram из контейнеров, очередь Contract AI,
+воркеры новостей, свежесть генерации, просроченные публикации, а также — с
+06.10.2026 — тишина в канале (нет вышедших постов 26 ч), неудачные публикации
+за двое суток (по сообщению на пост), остановленные контейнеры (postgres, web,
+caddy, бот-ассистент, assistant-api, админ-бот и читатель новостей) и ответ
+сайта через порт 443. Сообщения уходят через `infra/scripts/lib/notify_owner.sh`
+— изнутри контейнера ядра (запасной — бота) через прокси: прямой запрос с хоста
+в api.telegram.org висел до таймаута, и до 06.10.2026 ни одно оповещение
+сторожа владельцу не доходило. Один ключ — не чаще раза в 30 минут
+(`ALERT_COOLDOWN_SECONDS`); недоставленное не считается отправленным.
+
 ## Порт 443 на Mac mini: Colima и Tailscale Funnel
 Docker на Mac mini — Colima (Lima): порты контейнеров на хост пробрасывает
 `limactl hostagent` через ssh от имени `andrej`. macOS пускает не-root на
@@ -595,11 +618,32 @@ tail /Users/andrej/backups/legal-ai/backup.log
 ```bash
 BACKUP_DIR=/Users/andrej/backups/legal-ai ./infra/scripts/backup_postgres.sh
 ```
-**Проверочное восстановление** — раз в месяц и после изменений схемы. Свежий
+**Копия перед миграциями.** Деплой (`deploy_macmini.sh`) сравнивает версию
+схемы в базе с последней миграцией в новом образе ядра; если миграции есть —
+сначала дамп в `/Users/andrej/backups/legal-ai/pre-migration/`
+(`before_<новая>_from_<старая>_<время>.dump`, проверен `pg_restore --list`,
+хранятся последние 5). Не удался дамп — деплой останавливается до миграций.
+Откат неудачной миграции — `restore_postgres.sh` с этим дампом.
+
+**Проверочное восстановление** — после изменений схемы вручную. Свежий
 дамп восстанавливается во временный контейнер без портов, число строк сверяется
 с живой базой, контейнер удаляется; живая база только читается:
 ```bash
 FRESH_DUMP=1 BACKUP_DIR=/Users/andrej/backups/legal-ai ./infra/scripts/restore_drill.sh
+```
+**Ежемесячные учения с копией на Яндекс Диске** (`offsite_restore_drill.sh`,
+LaunchDaemon `ru.legalai.restore-drill`, 2-го числа в 04:40, от `andrej`): весь
+путь аварии — скачать последний архив с Диска, расшифровать ключом с этой
+машины, сверить контрольные суммы, восстановить дамп во временный контейнер
+(`restore_drill.sh`), проверить базу бота (`sqlite3 … integrity_check`).
+Итог — владельцу в Telegram и в `service_health` (key=`restore_drill`); ядро
+напомнит, если учений не было больше 40 дней или последние не прошли.
+Расшифрованное лежит во временной папке и удаляется в любом случае.
+```bash
+sudo cp infra/launchd/ru.legalai.restore-drill.plist /Library/LaunchDaemons/
+sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.restore-drill.plist
+sudo launchctl kickstart -k system/ru.legalai.restore-drill      # прогнать сейчас
+tail /Users/andrej/backups/legal-ai/restore-drill.log
 ```
 Восстановление в живую базу (только при аварии — затирает данные):
 ```bash

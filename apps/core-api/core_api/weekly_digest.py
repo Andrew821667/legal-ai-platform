@@ -176,6 +176,9 @@ def build(db: Session, now: datetime) -> str:
     backup = backup_health.digest_line(db, now)
     if backup:
         lines += ["", backup]
+    drill = backup_health.drill_digest_line(db, now)
+    if drill:
+        lines.append(drill)
     retention = anonymization.digest_line(db, now)
     if retention:
         lines += ["", retention]

@@ -21,6 +21,10 @@ from core_api.models import ServiceHealth
 KEY = "backup"
 # Бэкап ночью раз в сутки: 26 часов — с запасом на задержку запуска.
 STALE_AFTER = timedelta(hours=26)
+# Учения по восстановлению копии с Яндекс Диска — раз в месяц
+# (infra/scripts/offsite_restore_drill.sh); 40 дней — с запасом.
+DRILL_KEY = "restore_drill"
+DRILL_STALE_AFTER = timedelta(days=40)
 _MSK = timezone(timedelta(hours=3))
 
 
@@ -70,3 +74,53 @@ def digest_line(db, now: datetime) -> str | None:
     if found:
         return f"⚠️ {found[1]}"
     return f"Бэкап базы: последний {_msk(row.checked_at)} МСК, всё в порядке."
+
+
+def drill_problem(row: ServiceHealth, now: datetime) -> tuple[str, str] | None:
+    """(вид, текст) проблемы с учениями по восстановлению или None."""
+    if row.checked_at is None or now - row.checked_at > DRILL_STALE_AFTER:
+        return "stale", (
+            "Учения по восстановлению копии с Яндекс Диска не проходили больше 40 дней: "
+            f"последние — {_msk(row.checked_at)} МСК."
+        )
+    if not row.ok:
+        return "error", f"Учения {_msk(row.checked_at)} МСК: копию восстановить не удалось — {row.last_error or 'сбой'}."
+    return None
+
+
+def check_drill(now: datetime | None = None) -> dict:
+    """Не пропали ли ежемесячные учения. Итог каждых учений скрипт присылает
+    сам; здесь — на случай, если задача перестала запускаться или её
+    сообщение не дошло. Строки нет — учения не настроены, молчим."""
+    now = now or datetime.now(timezone.utc)
+    db = SessionLocal()
+    try:
+        row = db.get(ServiceHealth, DRILL_KEY, with_for_update=True)
+        if row is None:
+            return {"skipped": "not_configured"}
+        found = drill_problem(row, now)
+        if found and row.alerted_at is None:
+            kind, text = found
+            marker = (row.checked_at or now).isoformat()
+            queue_notice(
+                db,
+                f"restore-drill:{kind}:{marker}",
+                f"{text}\nПроверьте на Mac mini: sudo launchctl print system/ru.legalai.restore-drill "
+                "и ~/backups/legal-ai/restore-drill.log (пользователь andrej).",
+            )
+            row.alerted_at = now
+        db.commit()
+        return {"ok": found is None, "last": row.checked_at.isoformat() if row.checked_at else None}
+    finally:
+        db.close()
+
+
+def drill_digest_line(db, now: datetime) -> str | None:
+    """Строка об учениях для сводки за неделю."""
+    row = db.get(ServiceHealth, DRILL_KEY)
+    if row is None:
+        return None
+    found = drill_problem(row, now)
+    if found:
+        return f"⚠️ {found[1]}"
+    return f"Учения по восстановлению: последние {_msk(row.checked_at)} МСК, копия восстановилась."

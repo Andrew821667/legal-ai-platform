@@ -23,8 +23,9 @@ def clean():
     def wipe():
         db = SessionLocal()
         try:
-            db.execute(delete(ServiceHealth).where(ServiceHealth.key == backup_health.KEY))
+            db.execute(delete(ServiceHealth).where(ServiceHealth.key.in_([backup_health.KEY, backup_health.DRILL_KEY])))
             db.execute(delete(ClientNotice).where(ClientNotice.event_key.like("backup:%")))
+            db.execute(delete(ClientNotice).where(ClientNotice.event_key.like("restore-drill:%")))
             db.commit()
         finally:
             db.close()
@@ -95,5 +96,49 @@ def test_digest_line() -> None:
     db = SessionLocal()
     try:
         assert backup_health.digest_line(db, NOW).startswith("Бэкап базы: последний")
+    finally:
+        db.close()
+
+
+def _drill(**values) -> None:
+    db = SessionLocal()
+    try:
+        row = db.get(ServiceHealth, backup_health.DRILL_KEY) or ServiceHealth(key=backup_health.DRILL_KEY)
+        for key, value in values.items():
+            setattr(row, key, value)
+        db.add(row)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _drill_notices() -> list[str]:
+    db = SessionLocal()
+    try:
+        return list(db.scalars(select(ClientNotice.text).where(ClientNotice.event_key.like("restore-drill:%"))))
+    finally:
+        db.close()
+
+
+def test_restore_drill_silent_until_configured_and_while_fresh() -> None:
+    assert backup_health.check_drill(NOW) == {"skipped": "not_configured"}
+    _drill(ok=True, checked_at=NOW - timedelta(days=20))
+    assert backup_health.check_drill(NOW)["ok"] is True
+    assert _drill_notices() == []
+
+
+def test_restore_drill_stale_or_failed_alerts_once() -> None:
+    _drill(ok=True, checked_at=NOW - timedelta(days=41))
+    assert backup_health.check_drill(NOW)["ok"] is False
+    backup_health.check_drill(NOW + timedelta(minutes=2))
+    [text] = _drill_notices()
+    assert "больше 40 дней" in text
+
+    _drill(ok=False, checked_at=NOW, alerted_at=None, last_error="pg_restore не смог восстановить дамп")
+    backup_health.check_drill(NOW)
+    assert any("pg_restore" in text for text in _drill_notices())
+    db = SessionLocal()
+    try:
+        assert "pg_restore" in backup_health.drill_digest_line(db, NOW)
     finally:
         db.close()

@@ -150,6 +150,12 @@ services:
     mem_limit: 1g
     memswap_limit: 1g
     restart: unless-stopped
+    # Как у остальных: без предела журнал контейнера растёт, пока не съест диск.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   web:
     image: ${WEB_IMAGE:-legal-ai-web:local}

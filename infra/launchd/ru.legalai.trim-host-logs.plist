@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Подрезка журналов служб на хосте — раз в сутки в 04:10, от root (часть
+  журналов принадлежит root). Зачем — в trim-host-logs.sh. Установка (sudo):
+    sudo install -o root -g wheel -m 755 infra/launchd/trim-host-logs.sh /usr/local/sbin/trim-host-logs.sh
+    sudo install -o root -g wheel -m 644 infra/launchd/ru.legalai.trim-host-logs.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.trim-host-logs.plist
+  Проверка: sudo launchctl kickstart -k system/ru.legalai.trim-host-logs
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ru.legalai.trim-host-logs</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/usr/local/sbin/trim-host-logs.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>4</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/var/log/legalai-trim-host-logs.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/legalai-trim-host-logs.log</string>
+</dict>
+</plist>

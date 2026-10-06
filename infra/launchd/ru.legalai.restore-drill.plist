@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Учения по восстановлению копии с Яндекс Диска — 2-го числа каждого месяца
+  в 04:40 (после ночного бэкапа в 03:30), от имени andrej (у него docker,
+  ключ шифрования и токен Диска). Итог — владельцу в Telegram и в
+  service_health (key=restore_drill). Установка (нужен sudo):
+    sudo cp infra/launchd/ru.legalai.restore-drill.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/ru.legalai.restore-drill.plist
+  Прогнать сейчас: sudo launchctl kickstart -k system/ru.legalai.restore-drill
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ru.legalai.restore-drill</string>
+  <key>UserName</key>
+  <string>andrej</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/legalai/projects/legal-ai-platform/infra/scripts/offsite_restore_drill.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/andrej</string>
+    <key>ENV_FILE</key>
+    <string>/Users/legalai/projects/legal-ai-platform/.env</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key>
+    <integer>2</integer>
+    <key>Hour</key>
+    <integer>4</integer>
+    <key>Minute</key>
+    <integer>40</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/andrej/backups/legal-ai/restore-drill.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/andrej/backups/legal-ai/restore-drill.log</string>
+</dict>
+</plist>
