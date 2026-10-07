@@ -131,12 +131,25 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
             {topic.intro}
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Link href="/#lead-form" className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
-              Разобрать процесс
-            </Link>
-            <Link href="/legal-ai" className="rounded-lg border border-slate-500 px-5 py-3 font-semibold text-slate-800 hover:border-amber-600 hover:text-amber-800">
-              Весь обзор Legal AI
-            </Link>
+            {topic.slug === "prompts-for-lawyers" ? (
+              <>
+                <TrackedServiceLink href="/engineering/automation-diagnostic" route="engineering_diagnostic" className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
+                  Диагностика внедрения ИИ — 7 900 ₽
+                </TrackedServiceLink>
+                <Link href="#prompt-templates" className="rounded-lg border border-slate-500 px-5 py-3 font-semibold text-slate-800 hover:border-amber-600 hover:text-amber-800">
+                  Перейти к 8 шаблонам
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/#lead-form" className="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400">
+                  Разобрать процесс
+                </Link>
+                <Link href="/legal-ai" className="rounded-lg border border-slate-500 px-5 py-3 font-semibold text-slate-800 hover:border-amber-600 hover:text-amber-800">
+                  Весь обзор Legal AI
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -154,7 +167,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         </div>
       </section>
 
-      <section className="border-y border-slate-800 bg-slate-900/70">
+      <section id={topic.slug === "prompts-for-lawyers" ? "prompt-templates" : undefined} className="border-y border-slate-800 bg-slate-900/70">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-semibold text-white">Практические сценарии</h2>
           <div className="mt-8 grid gap-5 md:grid-cols-2">
@@ -181,7 +194,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Юрист разберёт условия, риски и возможные правки. Экспресс-проверка — от 7 900 ₽.
               </p>
-              <TrackedServiceLink href="/legal-help/contracts" route="legal_contract_review" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/legal-help/contracts" route="legal_contract_review" className="mt-5 inline-flex font-semibold text-sky-300 hover:text-sky-200">
                 Состав юридической проверки →
               </TrackedServiceLink>
             </li>
@@ -190,7 +203,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Посмотрите Contract AI: интерфейс для первичного анализа, замечаний и контроля результата юристом.
               </p>
-              <TrackedServiceLink href="/contract-ai-system" route="contract_ai" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/contract-ai-system" route="contract_ai" className="mt-5 inline-flex font-semibold text-sky-300 hover:text-sky-200">
                 Возможности Contract AI →
               </TrackedServiceLink>
             </li>
@@ -199,7 +212,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
               <p className="mt-3 text-sm leading-6 text-slate-300">
                 Спроектируем AI/RAG-контур с источниками, ролями и проверяемыми ответами — от 79 000 ₽.
               </p>
-              <TrackedServiceLink href="/engineering/ai-rag" route="engineering_rag_service" className="mt-5 inline-flex font-semibold text-sky-800 hover:text-sky-900">
+              <TrackedServiceLink href="/engineering/ai-rag" route="engineering_rag_service" className="mt-5 inline-flex font-semibold text-sky-300 hover:text-sky-200">
                 Формат AI/RAG-проекта →
               </TrackedServiceLink>
             </li>
@@ -301,9 +314,15 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
               Опишите задачу, документы и ограничения. Определим, где нужен ИИ, где достаточно правил и какая проверка требуется до рабочего запуска.
             </p>
           </div>
-          <Link href="/#lead-form" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
-            Обсудить задачу
-          </Link>
+          {topic.slug === "prompts-for-lawyers" ? (
+            <TrackedServiceLink href="/engineering/automation-diagnostic" route="engineering_diagnostic" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
+              Диагностика процесса — 7 900 ₽
+            </TrackedServiceLink>
+          ) : (
+            <Link href="/#lead-form" className="rounded-lg bg-amber-500 px-6 py-3 text-center font-semibold text-slate-950 hover:bg-amber-400">
+              Обсудить задачу
+            </Link>
+          )}
         </div>
         <p className="mt-8 text-sm leading-6 text-slate-500">
           Автор и ответственный за материал — <Link href="/team" className="underline hover:text-slate-300">{LEGAL_OPERATOR_NAME}</Link>.

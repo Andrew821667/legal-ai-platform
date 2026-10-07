@@ -37,12 +37,13 @@ test("tracks each service route with its destination and first-touch source", ()
   try {
     trackServiceRouteClick("legal_contract_review", "/legal-help/contracts");
     trackServiceRouteClick("contract_ai", "/contract-ai-system");
+    trackServiceRouteClick("engineering_diagnostic", "/engineering/automation-diagnostic");
     trackServiceRouteClick("engineering_rag_service", "/engineering/ai-rag");
   } finally {
     delete globalThis.window;
   }
 
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   for (const call of calls) {
     assert.equal(call[1], "reachGoal");
     assert.equal(call[2], "service_route_click");
@@ -50,11 +51,13 @@ test("tracks each service route with its destination and first-touch source", ()
   assert.deepEqual(calls.map((call) => call[3].route), [
     "legal_contract_review",
     "contract_ai",
+    "engineering_diagnostic",
     "engineering_rag_service",
   ]);
   assert.deepEqual(calls.map((call) => call[3].destination), [
     "/legal-help/contracts",
     "/contract-ai-system",
+    "/engineering/automation-diagnostic",
     "/engineering/ai-rag",
   ]);
   assert.deepEqual(calls[0][3], {
