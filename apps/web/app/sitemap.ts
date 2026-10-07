@@ -24,10 +24,10 @@ const visibilityUpdatedAt = "2026-08-13";
 const pages: SitemapPage[] = [
   { path: "", lastModified: visibilityUpdatedAt, changeFrequency: "weekly", priority: 1 },
   { path: "/legal-ai", lastModified: legalAiUpdatedAt, changeFrequency: "monthly", priority: 0.95 },
-  { path: "/for-lawyers", lastModified: LEGAL_AI_REVIEWED_AT, changeFrequency: "monthly", priority: 0.9 },
+  { path: "/for-lawyers", lastModified: "2026-09-30", changeFrequency: "monthly", priority: 0.9 },
   { path: "/for-business", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.9 },
   { path: "/solutions", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
-  { path: "/services", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/services", lastModified: "2026-10-07", changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help", lastModified: practiceUpdatedAt, changeFrequency: "weekly", priority: 0.9 },
   { path: "/legal-help/business", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
   { path: "/legal-help/individuals", lastModified: LEGAL_HELP_REVIEWED_AT, changeFrequency: "monthly", priority: 0.85 },
@@ -40,7 +40,9 @@ const pages: SitemapPage[] = [
   { path: "/services/tax-compliance-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/land-law-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
   { path: "/services/legal-analytics-ai", lastModified: marketingUpdatedAt, changeFrequency: "monthly", priority: 0.7 },
-  { path: "/engineering", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
+  { path: "/engineering", lastModified: "2026-10-07", changeFrequency: "monthly", priority: 0.85 },
+  { path: "/engineering/ai-implementation", lastModified: "2026-10-07", changeFrequency: "monthly", priority: 0.85 },
+  { path: "/engineering/integrations", lastModified: "2026-10-07", changeFrequency: "monthly", priority: 0.85 },
   { path: "/engineering/automation-diagnostic", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/engineering/telegram-bots", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
   { path: "/engineering/ai-rag", lastModified: practiceUpdatedAt, changeFrequency: "monthly", priority: 0.85 },
@@ -81,19 +83,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }));
   const legalPages: SitemapPage[] = legalHelpPageList.map((page) => ({
     path: `/legal-help/${page.slug}`,
-    lastModified: LEGAL_HELP_REVIEWED_AT,
+    lastModified: page.updatedAt ?? LEGAL_HELP_REVIEWED_AT,
     changeFrequency: "monthly",
     priority: 0.75,
   }));
   const legalRegionPages: SitemapPage[] = legalHelpRegionList.map((region) => ({
     path: `/legal-help/regions/${region.slug}`,
-    lastModified: LEGAL_HELP_REVIEWED_AT,
+    lastModified: region.updatedAt ?? LEGAL_HELP_REVIEWED_AT,
     changeFrequency: "monthly",
     priority: 0.7,
   }));
   const legalAiPages: SitemapPage[] = legalAiTopics.map((topic) => ({
     path: `/legal-ai/${topic.slug}`,
-    lastModified: topic.reviewedAt ?? LEGAL_AI_REVIEWED_AT,
+    lastModified: topic.updatedAt ?? topic.reviewedAt ?? LEGAL_AI_REVIEWED_AT,
     changeFrequency: "monthly",
     priority: 0.8,
   }));

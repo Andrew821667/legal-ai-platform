@@ -12,6 +12,8 @@ export const ROUTES = {
   automationDiagnostic: "/engineering/automation-diagnostic",
   telegramBots: "/engineering/telegram-bots",
   aiRag: "/engineering/ai-rag",
+  aiImplementation: "/engineering/ai-implementation",
+  integrations: "/engineering/integrations",
   legalHelpBusiness: "/legal-help/business",
   legalHelpIndividuals: "/legal-help/individuals",
   about: "/about",

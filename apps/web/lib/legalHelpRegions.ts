@@ -6,6 +6,8 @@ export type LegalHelpRegion = {
   name: string;
   prepositionalName: string;
   hubTitle?: string;
+  heroTitle?: string;
+  updatedAt?: string;
   categories?: Array<"federal-center" | "agriculture">;
   seoTitle: string;
   description: string;

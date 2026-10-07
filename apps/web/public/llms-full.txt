@@ -118,6 +118,8 @@ Commercial engineering entry points:
 - process automation and integration diagnostic: https://ai-verdict.ru/engineering/automation-diagnostic
 - Telegram bot prototype and development: https://ai-verdict.ru/engineering/telegram-bots
 - RAG systems and AI knowledge bases built on company data: https://ai-verdict.ru/engineering/ai-rag
+- AI adoption and implementation with a measured pilot: https://ai-verdict.ru/engineering/ai-implementation
+- CRM, 1C, website and API integrations: https://ai-verdict.ru/engineering/integrations
 
 ## Products and channels
 

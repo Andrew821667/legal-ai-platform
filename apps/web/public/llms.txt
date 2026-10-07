@@ -45,6 +45,8 @@
 - Automation and integration diagnostic: https://ai-verdict.ru/engineering/automation-diagnostic
 - Telegram bot development: https://ai-verdict.ru/engineering/telegram-bots
 - RAG systems and AI knowledge bases: https://ai-verdict.ru/engineering/ai-rag
+- AI adoption and implementation for business: https://ai-verdict.ru/engineering/ai-implementation
+- CRM, 1C, website and API integrations: https://ai-verdict.ru/engineering/integrations
 - Contract automation: https://ai-verdict.ru/services/contracts-ai
 - Contract AI product: https://ai-verdict.ru/contract-ai-system
 - Russian AI legislation comments: https://ai-verdict.ru/ai-law

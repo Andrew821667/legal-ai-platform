@@ -24,6 +24,8 @@ test("AI discovery files include current commercial and expert pages", () => {
     "/engineering/automation-diagnostic",
     "/engineering/telegram-bots",
     "/engineering/ai-rag",
+    "/engineering/ai-implementation",
+    "/engineering/integrations",
     "/guides/online-lawyer-consultation-price",
     "/guides/business-process-automation-audit",
     "/guides/contract-review-lawyer-price",
@@ -34,4 +36,16 @@ test("AI discovery files include current commercial and expert pages", () => {
     assert.match(concise, new RegExp(path));
     assert.match(full, new RegExp(path));
   }
+});
+
+test("engineering landing pages are listed for crawlers and lead to the engineering form", () => {
+  const sitemap = read("app/sitemap.ts");
+  const services = read("app/services/page.tsx");
+  const detail = read("components/ServiceDetailPage.tsx");
+
+  for (const path of ["/engineering/ai-implementation", "/engineering/integrations"]) {
+    assert.match(sitemap, new RegExp(path));
+    assert.match(services, new RegExp(path));
+  }
+  assert.match(detail, /defaultPractice=\{isEngineeringPractice \? "engineering" : "hybrid"\}/);
 });

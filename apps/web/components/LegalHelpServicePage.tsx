@@ -58,7 +58,7 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
         name: page.title,
         description: page.description,
         inLanguage: "ru-RU",
-        dateModified: LEGAL_HELP_REVIEWED_AT,
+        dateModified: page.updatedAt ?? LEGAL_HELP_REVIEWED_AT,
         mainEntity: { "@id": `${canonicalUrl}#service` },
         reviewedBy: {
           "@type": "Person",
@@ -155,6 +155,21 @@ export default function LegalHelpServicePage({ page }: { page: LegalHelpPage }) 
               </Link>
             ) : null}
           </div>
+        </section>
+      ) : null}
+
+      {page.scenarios?.length ? (
+        <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-semibold text-white">{page.scenarioHeading ?? "С чем можно обратиться"}</h2>
+          <div className="mt-7 grid gap-5 md:grid-cols-2">
+            {page.scenarios.map((item) => (
+              <article key={item.title} className="rounded-2xl border border-slate-700 bg-slate-800/60 p-6">
+                <h3 className="text-xl font-semibold text-amber-300">{item.title}</h3>
+                <p className="mt-3 leading-7 text-slate-300">{item.description}</p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-5 text-sm text-slate-400">Состав работы и итоговую стоимость согласуем после первичного описания задачи.</p>
         </section>
       ) : null}
 

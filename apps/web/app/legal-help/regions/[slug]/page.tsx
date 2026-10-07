@@ -68,7 +68,7 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
         "@id": `${canonicalUrl}#service`,
         name: `Юридическая помощь в ${region.prepositionalName}`,
         description: region.description,
-        serviceType: region.agriculture
+        serviceType: region.agriculture && !region.heroTitle
           ? "Дистанционные юридические услуги для агробизнеса"
           : "Дистанционные юридические услуги",
         provider: { "@id": `${SEO_SITE_URL}/#organization` },
@@ -88,7 +88,7 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
         "@id": canonicalUrl,
         name: region.seoTitle,
         description: region.description,
-        dateModified: LEGAL_HELP_REVIEWED_AT,
+        dateModified: region.updatedAt ?? LEGAL_HELP_REVIEWED_AT,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
         publisher: { "@id": `${SEO_SITE_URL}/#organization` },
@@ -121,12 +121,12 @@ export default async function LegalHelpRegionPage({ params }: RegionPageProps) {
             <span>{region.name}</span>
           </nav>
           <p className="mt-8 text-sm font-semibold uppercase tracking-wide text-amber-300">
-            {region.agriculture ? "Юридическая помощь агробизнесу · Онлайн по России" : "Онлайн по законодательству Российской Федерации"}
+            {region.agriculture && !region.heroTitle ? "Юридическая помощь агробизнесу · Онлайн по России" : "Онлайн по законодательству Российской Федерации"}
           </p>
           <h1 className="mt-3 max-w-5xl text-4xl font-semibold leading-tight text-white md:text-5xl">
-            {region.agriculture && !region.categories?.includes("federal-center")
+            {region.heroTitle ?? (region.agriculture && !region.categories?.includes("federal-center")
               ? `Юридическая помощь агробизнесу в ${region.prepositionalName}`
-              : `Юридическая помощь в ${region.prepositionalName}`}
+              : `Юридическая помощь в ${region.prepositionalName}`)}
           </h1>
           <p className="mt-6 max-w-4xl text-lg leading-relaxed text-slate-200">{region.intro}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">

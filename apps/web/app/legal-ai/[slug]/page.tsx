@@ -49,7 +49,7 @@ export default async function LegalAiTopicPage({ params }: LegalAiTopicPageProps
         headline: topic.title,
         description: topic.description,
         datePublished: LEGAL_AI_REVIEWED_AT,
-        dateModified: reviewedAt,
+        dateModified: topic.updatedAt ?? reviewedAt,
         inLanguage: "ru-RU",
         mainEntityOfPage: { "@type": "WebPage", "@id": url },
         author: {
