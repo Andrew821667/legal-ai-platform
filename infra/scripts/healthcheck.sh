@@ -5,7 +5,13 @@ API_BASE="${CORE_API_URL:-http://localhost:8000}"
 API_KEY_ADMIN="${API_KEY_ADMIN:?API_KEY_ADMIN is required}"
 ALERT_BOT_TOKEN="${ALERT_BOT_TOKEN:-}"
 ALERT_CHAT_ID="${ALERT_CHAT_ID:-}"
-ALERT_STATE_FILE="${ALERT_STATE_FILE:-/tmp/legal-ai-alert-state.json}"
+# Состояние оповещений — не в /tmp: macOS вычищает его по расписанию, и
+# затихшие тревоги зазвучали бы заново, а «тревога снята» не пришло бы.
+ALERT_STATE_FILE="${ALERT_STATE_FILE:-$HOME/Library/Application Support/legal-ai/alert-state.json}"
+mkdir -p "$(dirname "${ALERT_STATE_FILE}")" 2>/dev/null || true
+if [ -f /tmp/legal-ai-alert-state.json ] && [ ! -f "${ALERT_STATE_FILE}" ]; then
+  mv /tmp/legal-ai-alert-state.json "${ALERT_STATE_FILE}" 2>/dev/null || true
+fi
 ALERT_COOLDOWN_SECONDS="${ALERT_COOLDOWN_SECONDS:-1800}"
 SLA_ALERTS_ENABLED="${SLA_ALERTS_ENABLED:-1}"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -69,6 +75,37 @@ print(int((data or {}).get(key, 0) or 0))
 PY
 }
 
+# api_get с повторами: деплой пересоздаёт контейнеры, и одиночный запрос,
+# попавший в эти секунды, слал тревогу на штатную операцию (#322). Три
+# попытки с паузой переживают перезапуск и не прячут настоящий отказ.
+api_get_retry() {
+  local url="$1" attempts="${2:-3}" pause="${3:-10}" i=1
+  while [ "$i" -le "$attempts" ]; do
+    api_get "$url" && return 0
+    [ "$i" -lt "$attempts" ] && sleep "$pause"
+    i=$((i + 1))
+  done
+  return 1
+}
+
+_state_clear() {
+  python3 - "$ALERT_STATE_FILE" "$1" <<'PY'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh) or {}
+except Exception:
+    raise SystemExit(0)
+if key in data:
+    del data[key]
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    os.replace(tmp, path)
+PY
+}
+
 _state_set_ts() {
   local key="$1"
   local now_ts="$2"
@@ -113,6 +150,18 @@ send_alert_once() {
   fi
   DOCKER_BIN="${DOCKER_BIN}" notify_owner "$text" || return 0
   _state_set_ts "$key" "$now_ts"
+}
+
+# resolve_alert КЛЮЧ ТЕКСТ — тревога по ключу была отправлена, а причина ушла:
+# сообщить «снята» и забыть. Иначе последним в переписке остаётся сигнал
+# тревоги, и каждое оповещение приходится перепроверять вручную (#322).
+# Не доставлено — состояние не трогаем, скажем в следующий запуск.
+resolve_alert() {
+  local key="$1" text="$2" last_ts
+  last_ts="$(_state_get_ts "$key")"
+  [ "${last_ts}" -gt 0 ] || return 0
+  DOCKER_BIN="${DOCKER_BIN}" notify_owner "$text" || return 0
+  _state_clear "$key"
 }
 
 docker_compose() {
@@ -234,10 +283,11 @@ recover_telegram_network() {
 }
 
 # 1) Базовый health
-if ! api_get "${API_BASE}/health/detailed" >/dev/null; then
-  send_alert_once "health_detailed_failed" "🔴 AI Verdict Platform: health check failed!"
+if ! api_get_retry "${API_BASE}/health/detailed" >/dev/null; then
+  send_alert_once "health_detailed_failed" "🔴 Ядро AI Verdict не отвечает на проверку здоровья (три попытки за 20 с)."
   exit 1
 fi
+resolve_alert "health_detailed_failed" "🟢 Ядро AI Verdict снова отвечает."
 
 # 1.1) Telegram API должен проходить полноценный TLS-handshake из контейнера.
 if ! telegram_tls_check >/dev/null; then
@@ -340,33 +390,40 @@ fi
 # 5) SLA: есть публикация, которую издатель не забрал за два штатных цикла.
 # Без допуска cron в точное время слота считал пост просроченным раньше пятиминутного опроса издателя.
 DUE_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?due=true&limit=100")"
-DUE_COUNT="$(
+DUE_REPORT="$(
 python3 - "$DUE_JSON" "$DUE_POSTS_GRACE_MINUTES" <<'PY'
 from datetime import datetime, timedelta, timezone
 import json, sys
 
 rows = json.loads(sys.argv[1] or "[]")
 cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(0, int(sys.argv[2])))
-count = 0
+msk = timezone(timedelta(hours=3))
+late = []
 for row in rows:
     raw = str(row.get("publish_at") or "").strip()
-    if not raw:
-        count += 1
-        continue
     try:
-        publish_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        publish_at = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc) if raw else None
     except ValueError:
-        count += 1
-        continue
-    if publish_at.astimezone(timezone.utc) <= cutoff:
-        count += 1
-print(count)
+        publish_at = None
+    if publish_at is None or publish_at <= cutoff:
+        when = publish_at.astimezone(msk).strftime("%d.%m %H:%M") if publish_at else "?"
+        title = str(row.get("title") or "без заголовка").strip()[:60]
+        late.append(f"• {title} — на {when}")
+# Первая строка — число, дальше — до пяти постов: по одному числу не понять,
+# застряла ли свежая публикация или давно закрытый материал (#322).
+print(len(late))
+print("\n".join(late[:5]))
 PY
 )"
+DUE_COUNT="$(printf '%s\n' "${DUE_REPORT}" | head -1)"
+DUE_DETAILS="$(printf '%s\n' "${DUE_REPORT}" | tail -n +2)"
 if [ "${DUE_COUNT}" -gt "${DUE_POSTS_ALERT_THRESHOLD}" ]; then
   send_alert_once \
     "due_posts_threshold_exceeded" \
-    "⚠️ Публикаций, просроченных более чем на ${DUE_POSTS_GRACE_MINUTES} мин: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD})."
+    "⚠️ Публикаций, просроченных более чем на ${DUE_POSTS_GRACE_MINUTES} мин: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD}).
+${DUE_DETAILS}"
+else
+  resolve_alert "due_posts_threshold_exceeded" "🟢 Просроченных публикаций не осталось."
 fi
 
 # 6) Канал: давно не выходило ни одного поста (штатно — дважды в день).
@@ -390,6 +447,8 @@ if [ "${SILENCE_HOURS}" -ge "${CHANNEL_MAX_SILENCE_HOURS}" ]; then
     "channel_silent" \
     "⚠️ В канале ${SILENCE_HOURS} ч не выходило постов (порог: ${CHANNEL_MAX_SILENCE_HOURS} ч). Проверьте издателя и прокси Telegram." \
     21600
+else
+  resolve_alert "channel_silent" "🟢 В канале снова выходят посты."
 fi
 
 # 7) Пост не вышел (failed) за последние двое суток — по одному сообщению на пост.
@@ -430,6 +489,8 @@ if [ -n "${DOCKER_BIN}" ]; then
     send_alert_once \
       "containers_stopped" \
       "🔴 Не запущены контейнеры: ${stopped[*]}."
+  else
+    resolve_alert "containers_stopped" "🟢 Все контейнеры снова запущены."
   fi
 fi
 
@@ -441,4 +502,6 @@ if [ "${site_code}" != "200" ]; then
   send_alert_once \
     "site_unreachable" \
     "🔴 Сайт ${SITE_DOMAIN} отвечает ${site_code:-000} вместо 200. Ответ 000 — порт 443: sudo launchctl print system/ru.legalai.colima-https-tunnel."
+else
+  resolve_alert "site_unreachable" "🟢 Сайт ${SITE_DOMAIN} снова отвечает."
 fi
