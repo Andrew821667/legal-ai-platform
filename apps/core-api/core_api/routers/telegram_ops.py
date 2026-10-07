@@ -49,6 +49,8 @@ def tick(identity: ApiKeyIdentity = Depends(require_scopes(Scope.bot, Scope.admi
     core_tick.run_step(result, "deletions", deletion_log.watch, failed)
     # Бэкап делает ночная задача на хосте; здесь — не пропал ли он.
     core_tick.run_step(result, "backup", backup_health.check, failed)
+    # И ежемесячные учения по восстановлению копии — не пропали ли они.
+    core_tick.run_step(result, "restore_drill", backup_health.check_drill, failed)
     # Персональные данные с истёкшим сроком хранения — обезличить (152-ФЗ).
     core_tick.run_step(result, "anonymized", anonymization.run, failed)
     core_tick.record(failed)

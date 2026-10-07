@@ -90,23 +90,28 @@ os.replace(tmp_path, path)
 PY
 }
 
+# Оповещение уходит из контейнера ядра или бота через прокси
+# (lib/notify_owner.sh): прямой запрос с хоста в api.telegram.org висел до
+# таймаута, и ни одно оповещение сторожа до владельца не доходило.
+# shellcheck source=lib/notify_owner.sh
+. "${PROJECT_DIR}/infra/scripts/lib/notify_owner.sh"
+
+# send_alert_once КЛЮЧ ТЕКСТ [ПАУЗА_С] — не чаще раза за паузу на ключ;
+# не доставлено — не считается отправленным, повторим в следующий запуск.
 send_alert_once() {
   local key="$1"
   local text="$2"
-  if [ -z "$ALERT_BOT_TOKEN" ] || [ -z "$ALERT_CHAT_ID" ]; then
+  local cooldown="${3:-${ALERT_COOLDOWN_SECONDS}}"
+  if [ -z "${ALERT_CHAT_ID:-${ADMIN_TELEGRAM_ID:-}}" ]; then
     return 0
   fi
   local now_ts last_ts
   now_ts="$(date +%s)"
   last_ts="$(_state_get_ts "$key")"
-  if [ $((now_ts - last_ts)) -lt "${ALERT_COOLDOWN_SECONDS}" ]; then
+  if [ $((now_ts - last_ts)) -lt "${cooldown}" ]; then
     return 0
   fi
-  curl -fsS --max-time 20 \
-    --resolve "api.telegram.org:443:${TELEGRAM_API_HOST_IP}" \
-    "https://api.telegram.org/bot${ALERT_BOT_TOKEN}/sendMessage" \
-    -d "chat_id=${ALERT_CHAT_ID}" \
-    --data-urlencode "text=${text}" >/dev/null || return 0
+  DOCKER_BIN="${DOCKER_BIN}" notify_owner "$text" || return 0
   _state_set_ts "$key" "$now_ts"
 }
 
@@ -362,4 +367,78 @@ if [ "${DUE_COUNT}" -gt "${DUE_POSTS_ALERT_THRESHOLD}" ]; then
   send_alert_once \
     "due_posts_threshold_exceeded" \
     "⚠️ Публикаций, просроченных более чем на ${DUE_POSTS_GRACE_MINUTES} мин: ${DUE_COUNT} (порог: ${DUE_POSTS_ALERT_THRESHOLD})."
+fi
+
+# 6) Канал: давно не выходило ни одного поста (штатно — дважды в день).
+CHANNEL_MAX_SILENCE_HOURS="${CHANNEL_MAX_SILENCE_HOURS:-26}"
+POSTED_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=posted&limit=1&newest_first=true")"
+SILENCE_HOURS="$(
+python3 - "$POSTED_JSON" <<'PY'
+from datetime import datetime, timezone
+import json, sys
+rows = json.loads(sys.argv[1] or "[]")
+raw = str((rows[0].get("posted_at") or rows[0].get("publish_at")) if rows else "").strip()
+if not raw:
+    print(-1)
+else:
+    at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    print(int((datetime.now(timezone.utc) - at.astimezone(timezone.utc)).total_seconds() // 3600))
+PY
+)"
+if [ "${SILENCE_HOURS}" -ge "${CHANNEL_MAX_SILENCE_HOURS}" ]; then
+  send_alert_once \
+    "channel_silent" \
+    "⚠️ В канале ${SILENCE_HOURS} ч не выходило постов (порог: ${CHANNEL_MAX_SILENCE_HOURS} ч). Проверьте издателя и прокси Telegram." \
+    21600
+fi
+
+# 7) Пост не вышел (failed) за последние двое суток — по одному сообщению на пост.
+FAILED_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=failed&limit=50&newest_first=true")"
+FAILED_RECENT="$(
+python3 - "$FAILED_JSON" <<'PY'
+from datetime import datetime, timedelta, timezone
+import json, sys
+now = datetime.now(timezone.utc)
+for row in json.loads(sys.argv[1] or "[]"):
+    raw = str(row.get("publish_at") or "").strip()
+    try:
+        at = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        continue
+    if now - timedelta(hours=48) <= at <= now:
+        print(f'{row.get("id")}\t{at.astimezone(timezone(timedelta(hours=3))).strftime("%d.%m %H:%M")}')
+PY
+)"
+while IFS=$'\t' read -r post_id post_time; do
+  [ -n "${post_id}" ] || continue
+  send_alert_once \
+    "post_failed_${post_id}" \
+    "⚠️ Пост на ${post_time} не вышел в канал (статус failed). Причина — в админ-боте новостей." \
+    604800
+done <<<"${FAILED_RECENT}"
+
+# 8) Контейнеры, без которых клиенты и канал молчат.
+REQUIRED_CONTAINERS="${REQUIRED_CONTAINERS:-legal-ai-postgres legal-ai-web legal-ai-caddy legal-ai-lead-bot legal-ai-assistant-api legal-ai-news-admin-bot legal-ai-news-reader-bot}"
+if [ -n "${DOCKER_BIN}" ]; then
+  stopped=()
+  for container in ${REQUIRED_CONTAINERS}; do
+    if [ "$("${DOCKER_BIN}" inspect -f '{{.State.Running}}' "${container}" 2>/dev/null)" != "true" ]; then
+      stopped+=("${container#legal-ai-}")
+    fi
+  done
+  if [ "${#stopped[@]}" -gt 0 ]; then
+    send_alert_once \
+      "containers_stopped" \
+      "🔴 Не запущены контейнеры: ${stopped[*]}."
+  fi
+fi
+
+# 9) Сайт отвечает снаружи — через Caddy и туннель порта 443
+# (служба ru.legalai.colima-https-tunnel; docs/runbook.md, «Порт 443 на Mac mini»).
+SITE_DOMAIN="${SITE_DOMAIN:-ai-verdict.ru}"
+site_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "${SITE_DOMAIN}:443:127.0.0.1" "https://${SITE_DOMAIN}/" || true)"
+if [ "${site_code}" != "200" ]; then
+  send_alert_once \
+    "site_unreachable" \
+    "🔴 Сайт ${SITE_DOMAIN} отвечает ${site_code:-000} вместо 200. Ответ 000 — порт 443: sudo launchctl print system/ru.legalai.colima-https-tunnel."
 fi
