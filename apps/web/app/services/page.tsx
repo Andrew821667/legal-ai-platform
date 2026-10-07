@@ -84,6 +84,16 @@ const engineeringServices = [
     description: "Боты, сайты, Mini App, внутренние программы, AI-модули и интеграции вокруг измеримого бизнес-процесса.",
     href: "/engineering",
   },
+  {
+    title: "Внедрение ИИ в бизнес",
+    description: "Выбор задачи, диагностика данных, ограниченный пилот и проверка результата до рабочего запуска.",
+    href: "/engineering/ai-implementation",
+  },
+  {
+    title: "Интеграции CRM, 1С, сайта и API",
+    description: "Связываем заявки, статусы и документы между системами с контролем ошибок обмена.",
+    href: "/engineering/integrations",
+  },
 ];
 
 const serviceGroups = [

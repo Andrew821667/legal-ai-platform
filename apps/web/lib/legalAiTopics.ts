@@ -14,6 +14,7 @@ export type LegalAiTopic = {
   title: string;
   description: string;
   reviewedAt?: string;
+  updatedAt?: string;
   keywords: string[];
   eyebrow: string;
   intro: string;
@@ -190,6 +191,7 @@ export const legalAiTopics: LegalAiTopic[] = [
     description:
       "Восемь готовых промптов для юристов: договоры, судебная практика, правовой поиск, сравнение редакций и черновики без выдуманных фактов.",
     reviewedAt: "2026-09-11",
+    updatedAt: "2026-10-07",
     keywords: [
       "промпты для юристов",
       "готовые промпты для юристов",

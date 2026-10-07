@@ -9,6 +9,7 @@ const pageTitle = "ИИ для юристов: инструменты, нейр�
 const pageDescription =
   "ИИ для юристов и юридических отделов: как выбрать инструмент для договоров, документов, правового поиска, RAG, судебной работы и безопасного пилота.";
 const reviewedAt = "2026-09-29";
+const updatedAt = "2026-09-30";
 
 export const metadata: Metadata = createPageMetadata({
   title: pageTitle,
@@ -205,7 +206,7 @@ export default function ForLawyersPage() {
         url,
         name: pageTitle,
         description: pageDescription,
-        dateModified: reviewedAt,
+        dateModified: updatedAt,
         inLanguage: "ru-RU",
         about: ["ИИ для юристов", "Legal AI", "нейросеть для юриста"],
         publisher: { "@id": `${SEO_SITE_URL}/#organization` },

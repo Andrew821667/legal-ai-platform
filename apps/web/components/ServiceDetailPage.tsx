@@ -66,7 +66,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         url: canonicalUrl,
         inLanguage: "ru-RU",
         mainEntity: { "@id": `${canonicalUrl}#service` },
-        ...(isEngineeringPractice ? { dateModified: "2026-09-22" } : {}),
+        ...(isEngineeringPractice ? { dateModified: service.updatedAt ?? "2026-09-22" } : {}),
       },
       {
         "@type": "BreadcrumbList",
@@ -133,7 +133,7 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
             <div className="max-w-4xl rounded-2xl border border-amber-200 bg-amber-50 p-7 md:p-8">
               <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">Короткий ответ</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-900">Что делает инженерная практика AI Verdict</h2>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">{service.shortAnswerTitle ?? "Что делает инженерная практика AI Verdict"}</h2>
               <p className="mt-4 text-base leading-7 text-slate-700">{service.shortAnswer}</p>
             </div>
           </div>
@@ -203,6 +203,34 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
               ))}
             </div>
             <p className="mt-5 text-sm leading-6 text-slate-400">{service.example.note}</p>
+          </div>
+        </section>
+      ) : null}
+
+      {service.proof ? (
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto grid max-w-6xl items-center gap-8 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:px-8">
+            <figure className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+              <picture>
+                <source srcSet={`/images/visual-v2/${service.proof.image}.avif`} type="image/avif" />
+                <img
+                  alt={service.proof.alt}
+                  className="aspect-video w-full object-cover object-top"
+                  decoding="async"
+                  height="675"
+                  loading="lazy"
+                  src={`/images/visual-v2/${service.proof.image}.webp`}
+                  width="1200"
+                />
+              </picture>
+              <figcaption className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500">Скриншот собственного интерфейса AI Verdict</figcaption>
+            </figure>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Можно проверить самостоятельно</p>
+              <h2 className="mt-3 text-3xl font-bold text-slate-900">{service.proof.title}</h2>
+              <p className="mt-5 leading-7 text-slate-700">{service.proof.description}</p>
+              <Link href={service.proof.href} className="mt-6 inline-flex font-semibold text-amber-700 hover:text-amber-800">{service.proof.label} →</Link>
+            </div>
           </div>
         </section>
       ) : null}
@@ -282,7 +310,10 @@ export default function ServiceDetailPage({ service, path }: ServiceDetailPagePr
         </p>
       </section>
 
-      <LeadCaptureForm />
+      <LeadCaptureForm
+        defaultOffer={isEngineeringPractice ? "unknown" : "consultation"}
+        defaultPractice={isEngineeringPractice ? "engineering" : "hybrid"}
+      />
     </main>
   );
 }
