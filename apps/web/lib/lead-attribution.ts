@@ -9,7 +9,7 @@ export type LeadAttribution = {
   landing_page?: string;
 };
 
-export type ServiceRoute = "legal_contract_review" | "contract_ai" | "engineering_rag_service";
+export type ServiceRoute = "legal_contract_review" | "contract_ai" | "engineering_diagnostic" | "engineering_rag_service";
 
 declare global {
   interface Window {
