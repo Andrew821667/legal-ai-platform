@@ -23,7 +23,7 @@ from news.llm_writer import LLMNewsWriter
 from news.logging_config import setup_logging
 from news.pipeline import normalize_rubric_to_pillar
 from news.settings import settings
-from news.strategy import build_schedule_window
+from news.strategy import build_schedule_window, publication_kind_from_format_type
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -87,6 +87,12 @@ def _post_datetime(value: Any) -> datetime | None:
 
 
 def _post_exceeds_freshness_limit(row: dict[str, Any], *, now_utc: datetime) -> bool:
+    # Internal service notes are not dated news; keep the news age guard intact.
+    if (
+        publication_kind_from_format_type(str(row.get("format_type") or "")) == "services"
+        and str(row.get("source_url") or "").startswith("internal://services/")
+    ):
+        return False
     created_at = _post_datetime(row.get("created_at"))
     if created_at is None:
         return False

@@ -94,3 +94,24 @@ def test_post_freshness_rejects_old_or_overdelayed_queue_items(monkeypatch) -> N
         },
         now_utc=now_utc,
     )
+
+
+def test_service_editorial_survives_week_ahead_scheduling(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "news_max_source_age_days", 3)
+    now = datetime(2026, 10, 8, 15, tzinfo=UTC)
+    row = {
+        "format_type": "manual_promo_offer",
+        "source_url": "internal://services/claim-response/2026-10-08",
+        "created_at": (now - timedelta(days=6)).isoformat(),
+        "publish_at": now.isoformat(),
+    }
+    assert not _post_exceeds_freshness_limit(row, now_utc=now)
+    assert not _post_exceeds_freshness_limit(
+        {**row, "publish_at": (now + timedelta(days=7)).isoformat()}, now_utc=now
+    )
+    assert _post_exceeds_freshness_limit(
+        {**row, "source_url": "https://example.com/news"}, now_utc=now
+    )
+    assert _post_exceeds_freshness_limit(
+        {**row, "format_type": "daily"}, now_utc=now
+    )

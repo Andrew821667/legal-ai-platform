@@ -687,7 +687,13 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
         logger.info("same_headline_articles_dropped", extra={"count": same_headlines})
         prefiltered_duplicates += same_headlines
 
-    if not selected_articles:
+    publish_plan = build_publish_plan(
+        now_local,
+        top_limit,
+        control_rows=control_rows,
+        occupied_slot_keys=occupied_slot_keys,
+    )
+    if not selected_articles and not any(slot.publication_kind == "services" for slot in publish_plan):
         return GenerationRunResult(
             previews=[],
             fetched=len(articles),
@@ -698,12 +704,6 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             skipped_slots=0,
         )
 
-    publish_plan = build_publish_plan(
-        now_local,
-        top_limit,
-        control_rows=control_rows,
-        occupied_slot_keys=occupied_slot_keys,
-    )
     if not publish_plan:
         return GenerationRunResult(
             previews=[],
@@ -715,8 +715,8 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             skipped_slots=0,
         )
 
-    rag = PostedContentRAG(core_client)
-    writer = LLMNewsWriter()
+    rag = None
+    writer = None
 
     article_queue = interleave_ru_law(list(selected_articles), settings.news_ru_law_every)
     previews: list[dict[str, str]] = []
@@ -759,6 +759,13 @@ def collect_generation_previews(limit: int) -> GenerationRunResult:
             previews.append(preview)
             history_texts.append(preview["text"])
             continue
+
+        if not selected_articles:
+            skipped_slots += 1
+            continue
+        if writer is None:
+            writer = LLMNewsWriter()
+            rag = PostedContentRAG(core_client)
 
         for _ in range(0, 80):
             synthetic_slot = False
