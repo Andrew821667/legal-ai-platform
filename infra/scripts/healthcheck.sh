@@ -428,20 +428,7 @@ fi
 
 # 6) Канал: давно не выходило ни одного поста (штатно — дважды в день).
 CHANNEL_MAX_SILENCE_HOURS="${CHANNEL_MAX_SILENCE_HOURS:-26}"
-POSTED_JSON="$(api_get "${API_BASE}/api/v1/scheduled-posts?status=posted&limit=1&newest_first=true")"
-SILENCE_HOURS="$(
-python3 - "$POSTED_JSON" <<'PY'
-from datetime import datetime, timezone
-import json, sys
-rows = json.loads(sys.argv[1] or "[]")
-raw = str((rows[0].get("posted_at") or rows[0].get("publish_at")) if rows else "").strip()
-if not raw:
-    print(-1)
-else:
-    at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    print(int((datetime.now(timezone.utc) - at.astimezone(timezone.utc)).total_seconds() // 3600))
-PY
-)"
+SILENCE_HOURS="$(python3 "${PROJECT_DIR}/infra/scripts/channel_silence.py" "$API_BASE")"
 if [ "${SILENCE_HOURS}" -ge "${CHANNEL_MAX_SILENCE_HOURS}" ]; then
   send_alert_once \
     "channel_silent" \
